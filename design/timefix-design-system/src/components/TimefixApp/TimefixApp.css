@@ -510,3 +510,64 @@
 .tf-pframe__status { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
 @container tf-app (max-width: 720px) { .tf-pframe__rail { display: none; } }
 @media (max-width: 720px) { .tf-pframe__rail { display: none; } .tf-pframe__host { padding: var(--space-12); } }
+/* Forms, Wave D1: the Live dialog, sync, embed and developers, the submissions table and drawer, After they send, the full preview. */
+.tf-fp__live { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-fp__sendrow { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-fp__qr { display: flex; align-items: center; gap: var(--space-16); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); }
+.tf-fp__qrbtns { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); }
+.tf-fp__filing { display: flex; align-items: center; gap: var(--space-4); margin: 0; }
+.tf-fp__syncline { margin: 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-fp__embed { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-fp__embedgrid { display: grid; grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); gap: var(--space-24); align-items: start; }
+@container tf-app (max-width: 60rem) { .tf-fp__embedgrid { grid-template-columns: minmax(0, 1fr); } }
+.tf-fp__dev { display: flex; flex-direction: column; gap: var(--space-24); padding-top: var(--space-12); }
+.tf-fp__devsec { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-fp__devsec > p { margin: 0; }
+.tf-fp__code { max-height: calc(var(--size-control-lg) * 5); margin: 0; overflow: auto; padding: var(--space-12) var(--space-16); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font: 400 12px/20px var(--font-mono); white-space: pre; outline: none; }
+.tf-fp__code:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-fp__table { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-fp__sub { display: flex; flex-direction: column; gap: var(--space-20); }
+.tf-fp__h { margin: 0 0 var(--space-8); color: var(--text); font: 600 14px/20px var(--font-sans); }
+.tf-fp__answers > p { margin: var(--space-8) 0 0; }
+.tf-fp__alist { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-fp__alist li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: var(--space-8); padding: var(--space-8) 0; }
+.tf-fp__alist li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-fp__aq { color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-fp__av { grid-row: 2; color: var(--text); font: 400 14px/20px var(--font-sans); overflow-wrap: anywhere; }
+.tf-fp__aacts { grid-column: 2; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: var(--space-4); }
+.tf-fp__after { display: flex; flex-direction: column; gap: var(--space-12); margin-top: var(--space-24); padding-top: var(--space-20); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-fp__after > .tf-fp__h { margin: 0; }
+.tf-fp__routes { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.tf-fp__route { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-fp__rif { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
+.tf-fp__rurl { flex-basis: 100%; }
+.tf-fp__endings, .tf-fp__score { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-fp__score > p { margin: 0; }
+.tf-fp__ending { display: flex; flex-direction: column; min-width: 0; }
+.tf-fp__full { display: flex; flex-direction: column; height: 100%; }
+.tf-fp__fullbar { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-12) var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface); }
+.tf-fp__fullroom { flex: 1; min-height: 0; overflow: auto; padding: var(--space-24); }
+.tf-fp__fullroom[data-device='phone'] { display: flex; justify-content: center; }
+.tf-fp__fullroom[data-device='phone'] > .tf-fprev { width: calc(var(--size-menu) * 1.6); }
+.tf-fp__fullroom .tf-fprev__bar { display: none; }
+.tf-forms__look { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-forms__spam { gap: var(--space-8); }
+.tf-fp__rsel { flex: 1 1 calc(var(--size-menu) * 0.55); min-width: 0; }
+/* Grow, Wave D1: the link page's Live switch and claim, the shared Insights page. */
+.tf-gp__live { display: inline-flex; align-items: center; padding-left: var(--space-8); border-left: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-gp__claim { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-12); }
+.tf-gp__claim > span { color: var(--text-secondary); }
+.tf-gp__claim > .tf-field { flex: 1 1 calc(var(--size-menu) * 0.8); }
+.tf-gp__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tf-gp__shared { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--canvas); }
+.tf-gp__sharedbody { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-32) var(--space-16); }
+.tf-gp__sharedcol { display: flex; flex-direction: column; gap: var(--space-20); max-width: calc(var(--size-measure) * 1.6); margin: 0 auto; }
+.tf-gp__sharedcol > .tf-hform__foot { align-self: center; }
+.tf-gp__sharedhead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-12); }
+.tf-gp__sharedtitle { margin: var(--space-4) 0 0; color: var(--text); font: 600 24px/32px var(--font-sans); letter-spacing: -0.01em; }
+.tf-links__tags { display: inline-flex; gap: var(--space-4); }
+/* Copy to another workspace: what comes along and what stays. */
+.tf-cw__along { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
+.tf-cw__along li { display: flex; align-items: flex-start; gap: var(--space-8); color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-cw__along li > svg { flex: none; margin-top: var(--space-2); color: var(--text-tertiary); }
+.tf-cw__along strong { color: var(--text); font-weight: 500; }

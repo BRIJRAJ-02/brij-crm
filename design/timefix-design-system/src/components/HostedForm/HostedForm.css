@@ -87,6 +87,7 @@
 
 /* ---------- Question controls (tf-hq) ---------- */
 .tf-hq__aside { margin: var(--space-8) 0 0; font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-hq__other { margin-top: var(--space-8); }
 
 /* Choice cards: 44px+ rows, a letter key, an accent wash and a drawn tick when picked (25 checkbox check). */
 .tf-hq__choices { display: flex; flex-direction: column; gap: var(--space-8); outline: none; }
@@ -231,3 +232,21 @@
 @container tf-hform (max-width: 34rem) { .tf-hform__brand { margin: calc(var(--space-16) * -1) calc(var(--space-20) * -1) var(--space-16); } .tf-hform__logo { margin-left: var(--space-20); } .tf-hform__from { padding-right: var(--space-20); } }
 /* A look: the form paints its own ground in the look's theme, filling the page or the preview's screen. */
 .tf-hform--look { align-self: stretch; flex: 1; min-height: 100%; padding: var(--space-32) var(--space-16); background: var(--canvas); }
+/* Steps: a page per group, its step line over the questions, Back and Next at the foot. */
+.tf-hform__steps { display: flex; flex-direction: column; }
+.tf-hform__steps > .tf-hform__head { margin-bottom: var(--space-16); }
+.tf-hform__steps > .tf-hform__head[data-hidden] { display: none; }
+.tf-hform__progress--steps { margin-bottom: var(--space-24); }
+.tf-hform__stephead { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-hform__stephead strong { color: var(--text); font: 500 18px/26px var(--font-sans); }
+.tf-hform__stepacts { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); }
+/* The builder's preview: headline, line and button edited in place; they read as text until hovered or focused. */
+.tf-hform__edit { display: block; width: 100%; min-width: 0; margin: calc(var(--space-2) * -1) calc(var(--space-4) * -1); padding: var(--space-2) var(--space-4); border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; letter-spacing: inherit; outline: none; transition: box-shadow var(--duration-quick) var(--ease-out); }
+.tf-hform__edit::placeholder { color: var(--text-tertiary); }
+@media (hover: hover) and (pointer: fine) { .tf-hform__edit:hover { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); } }
+.tf-hform__edit:focus-visible { box-shadow: inset 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-hform__edit-btn { display: inline-flex; width: auto; field-sizing: content; min-width: calc(var(--size-control-lg) * 2); height: var(--size-control-lg); margin: 0; padding: 0 var(--space-20); border-radius: var(--radius-full); background: var(--primary); color: var(--on-primary); font: 500 15px/20px var(--font-sans); text-align: center; }
+.tf-hform__edit-btn::placeholder { color: var(--on-primary); }
+.tf-hform__page-form > .tf-hform__edit-btn { align-self: stretch; width: auto; }
+/* Square corners: the form's own rounding steps down to the smallest radii. */
+.tf-hform[data-corners='square'] { --radius-xl: var(--radius-xs); --radius-lg: var(--radius-xs); --radius-md: var(--radius-xs); --radius-sm: var(--radius-xs); --radius-full: var(--radius-xs); }

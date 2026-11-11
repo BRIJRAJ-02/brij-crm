@@ -33,7 +33,7 @@ import { declinesIn } from './meetings.tsx';
 import { uniqueSlug } from './seed.ts';
 import { TablePreview } from './guest-venue.tsx';
 import {
-  HOST, HOST_ZONE, PLACES, PLACE_ALL, TEAM, ZONES, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
+  HOST, HOST_ZONE, PLACES, PLACE_ALL, TEAM, ZONES, afterSummary, handleOf, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
   type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
 } from './state.ts';
 
@@ -129,7 +129,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         actions={<>
           <OnSwitch page={page} onChange={onToggle} />
           <Button variant="ghost" icon={<Play {...i14} />} onPress={onGuest}>See it as a guest</Button>
-          <ShareMenu page={page} onShare={onShare} />
+          <ShareMenu page={page} onShare={onShare} handle={handleOf(state)} />
           <PageMoreMenu page={page} withEdit={false} withVersions onAction={(k) => { if (k === 'versions') setVersionsOpen(true); else onMore(page, k); }} />
         </>} />
       <div className="tf-bkf__editor">

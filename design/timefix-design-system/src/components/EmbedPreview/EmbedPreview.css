@@ -52,3 +52,8 @@
   .tf-embed__site, .tf-embed__popup-scrim, .tf-embed__popup, .tf-embed__float, .tf-embed__pre { animation: none; }
   .tf-embed__icon > svg { transition: none; }
 }
+/* Clear background: the page sits straight on the site, no card behind it. */
+.tf-embed__inline[data-clear] { border-color: transparent; background: transparent; }
+/* Slide-in: a panel risen from the corner button, the site still in view beside it. */
+.tf-embed__slide { position: absolute; right: var(--space-16); bottom: calc(var(--space-16) + var(--size-control) + var(--space-8)); width: calc(var(--size-menu) - var(--space-32)); max-height: calc(100% - var(--size-control) - var(--space-48)); overflow: hidden; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); animation: tf-embed-rise var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both; }
+@media (prefers-reduced-motion: reduce) { .tf-embed__slide { animation: none; } }

@@ -9,3 +9,5 @@ BookingsFlow is the whole Bookings module as one live, full-screen prototype ove
 **Interaction**: keyboard throughout (Tab, arrows, Enter, Esc; ⌘↵ creates, ⌘S saves). Motion: modal, page side-by-side, card resize, accordion, text morph and soft swap, rows dropping in with a wash, Undo toasts.
 
 **Replaces**: BookingsScreen, BookingsTabs, BookingsTopBar, PageEditor, NewPageDialog, LinksScreen, SharingPanel, ShareTimesCard, EmbedCard, OneOffLinksCard, AvailabilityScreen, TeamWeekScreen, TeamDayView.
+
+**Wave D1**: every page's Share opens the library ShareSheet (link with Copy, Email, WhatsApp, More, the QR code, Put it on your site, and the page's own ways: Offer specific times, One-time link, Add to link page). The menu and the business page publish through PublishBar and share through ShareSheet; their headers read See it as a guest, Share, ⋯. With `onCopyPage`, every page's ⋯ has "Copy to another workspace…"; `incoming` carries pages and looks copied from other workspaces, applied whenever that workspace shows; `openTab.pageId` opens a page's editor.

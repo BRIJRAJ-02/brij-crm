@@ -16,7 +16,7 @@ import { LogoMark } from '../Logo/Logo.tsx';
 import type { Meeting } from '../MeetingList/MeetingList.tsx';
 import { formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay } from '../../lib/format.ts';
-import { WorkspaceItems, i14, i16, type ShareHow, type WorkspaceId } from './parts.tsx';
+import { CopyPageContext, WorkspaceItems, i14, i16, type ShareHow, type WorkspaceId } from './parts.tsx';
 import { CreateSheet } from './create.tsx';
 import { ShareDialogs, type ShareDialogKind } from './share.tsx';
 import { ReservationsTab } from './reservations.tsx';
@@ -67,7 +67,11 @@ export interface BookingsFlowProps {
   /** Hears every change to Bookings' state, for the app around it (Home's agenda, search). */
   readonly onState?: (state: BookingsState) => void;
   /** Opens a Bookings page from outside (the app's Home or search); bump `n` to open it again. */
-  readonly openTab?: { readonly tab: string; readonly n: number; /** Opens this meeting's drawer too (a booking notice in the Inbox). */ readonly meetingId?: string };
+  readonly openTab?: { readonly tab: string; readonly n: number; /** Opens this meeting's drawer too (a booking notice in the Inbox). */ readonly meetingId?: string; /** Opens this page's editor. */ readonly pageId?: string };
+  /** "Copy to another workspace…" on every page's ⋯ menu. */
+  readonly onCopyPage?: (page: BookingPage) => void;
+  /** Pages copied here from another workspace, and looks copied onto pages here; applied whenever that workspace is showing. */
+  readonly incoming?: { readonly n: number; readonly pages: ReadonlyArray<{ readonly ws: WorkspaceId; readonly page: BookingPage }>; readonly looks: ReadonlyArray<{ readonly ws: WorkspaceId; readonly pageId: string; readonly look: BookingPage['look'] }> };
   /** Bookings pages the app has turned off (Settings › Apps), hidden from the sidebar. */
   readonly hiddenSections?: ReadonlyArray<string>;
   /** Who is signed in, for the sidebar's person row. */
@@ -107,7 +111,7 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', guests: 'Clients', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, onSearch, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false, demoItems = [], onDemo }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, onSearch, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false, demoItems = [], onDemo, onCopyPage, incoming }: BookingsFlowProps) {
   const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const readOnlyRef = useRef(isReadOnly); readOnlyRef.current = isReadOnly;
@@ -126,7 +130,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const [profileKey, setProfileKey] = useState<string>();
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   // Opening a page from outside leaves the page editor (its changes are kept as a draft), so the page asked for shows.
-  useEffect(() => { if (openTab) { leaveEditor(); setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openTab) { leaveEditor(); setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); const p = openTab.pageId ? state.pages.find((x) => x.id === openTab.pageId) : undefined; if (p) setEditor({ id: p.id, draft: p }); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!openGuest) return; const p = state.pages.find((x) => x.id === openGuest.pageId) ?? state.pages.find((x) => x.isOn && x.kind !== 'table') ?? state.pages[0]; if (p) setGuest({ scenario: openGuest.scenario ?? 'book', pageId: p.id, prefill: openGuest.prefill }); }, [openGuest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hiddenSections.includes(tab)) setTab('meetings'); }, [hiddenSections.join(','), tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
@@ -188,6 +192,12 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     onWorkspace?.(id);
   };
   useEffect(() => { if (switchWorkspace) switchTo(switchWorkspace.id); }, [switchWorkspace?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Copies from other workspaces land here once this workspace shows, again after each switch back (the demo reloads its seed).
+  useEffect(() => {
+    if (!incoming) return;
+    incoming.pages.filter((x) => x.ws === currentWs && !state.pages.some((p) => p.id === x.page.id)).forEach((x) => dispatch({ type: 'page/upsert', page: x.page }));
+    incoming.looks.filter((x) => x.ws === currentWs).forEach((x) => { const p = state.pages.find((y) => y.id === x.pageId); if (p && JSON.stringify(p.look) !== JSON.stringify(x.look)) dispatch({ type: 'page/upsert', page: { ...p, look: x.look } }); });
+  }, [incoming?.n, currentWs, state.pages.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
   const unread = state.notifications.filter((n) => !n.read).length;
   const flash = (setter: (v: string | undefined) => void, id: string) => { setter(id); window.setTimeout(() => setter(undefined), 1600); };
@@ -529,6 +539,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   // Day-month order in date fields, matching how the app writes dates ("13 Nov"); times stay 12-hour through formatClock.
   return (
     <I18nProvider locale="en-GB">
+    <CopyPageContext.Provider value={onCopyPage}>
     {onboarding ? (
       <Onboarding account="priya@northwind.com" owner={HOST} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo', 'northwind-sales'].includes(slug)), 400); })}
         onFinish={finishSetup} onSignOut={() => { setOnboarding(false); dispatch({ type: 'reset', state: northwind() }); }} />
@@ -694,6 +705,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         }} />
     </AppShell>
     )}
+    </CopyPageContext.Provider>
     </I18nProvider>
   );
 }

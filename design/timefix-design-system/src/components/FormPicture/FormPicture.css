@@ -47,3 +47,5 @@
 /* A form with a look paints the whole screen in it, padding included. */
 .tf-fprev__screen:has(> .tf-hform--look) { display: flex; flex-direction: column; padding: 0; }
 .tf-fprev__frame--phone .tf-fprev__screen:has(> .tf-hform--look) > .tf-hform--look { padding: var(--space-20) var(--space-12); }
+/* The card's status and its ⋯ menu: the menu sits above the name's stretched press. */
+.tf-fcard__end { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: var(--space-4); flex: none; }

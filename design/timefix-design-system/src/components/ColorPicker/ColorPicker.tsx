@@ -80,10 +80,12 @@ export interface AccentPickerProps {
   readonly value: string;
   readonly onChange: (hex: string) => void;
   readonly swatches?: ReadonlyArray<AccentSwatch>;
+  /** `ground`: the colour is a page's background, so the line says whether the page reads light or dark on it. */
+  readonly use?: 'accent' | 'ground';
 }
 
 /** A booking page's brand colour: a few curated swatches plus any hex, with a line saying how readable white text is on it. A hex that doesn't parse goes back to the last good colour when you leave the field. */
-export function AccentPicker({ label, value, onChange, swatches = ACCENT_SWATCHES }: AccentPickerProps) {
+export function AccentPicker({ label, value, onChange, swatches = ACCENT_SWATCHES, use = 'accent' }: AccentPickerProps) {
   const color = parseColor(value);
   const ratio = contrastOnWhiteText(value);
   const readable = ratio >= 4.5;
@@ -105,9 +107,10 @@ export function AccentPicker({ label, value, onChange, swatches = ACCENT_SWATCHE
           <Input className="tf-accent__input" />
         </span>
       </ColorField>
-      <span className={cx('tf-accent__contrast', !readable && 'tf-accent__contrast--low')}>
-        White text {ratio.toFixed(1)}:1 · {readable ? 'readable' : 'too faint, pick a darker colour'}
-      </span>
+      {use === 'ground' ? <span className="tf-accent__contrast">{readable ? 'A dark ground: the page turns dark, with light text.' : 'A light ground: dark text reads on it.'}</span> : (
+        <span className={cx('tf-accent__contrast', !readable && 'tf-accent__contrast--low')}>
+          White text {ratio.toFixed(1)}:1 · {readable ? 'readable' : 'too faint, pick a darker colour'}
+        </span>)}
     </div>
   );
 }

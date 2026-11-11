@@ -2,7 +2,7 @@
 import { copyText } from '../../lib/copy.ts';
 import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Clock, Code2, Copy, CopyPlus, History, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2, X as XIcon } from 'lucide-react';
 import { DatePicker } from '../DatePicker/DatePicker.tsx';
 import { BookingFlow, type BookingFlowProps, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
@@ -14,7 +14,8 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
-import { HOST, PLACES, ZONES, ZONE_OFFSET, HOST_ZONE, guestZone, offsetOf, zonesWithGuest, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind, placeLabel } from './state.ts';
+import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
+import { HOST, PLACES, pageUrl, ZONES, ZONE_OFFSET, HOST_ZONE, guestZone, offsetOf, zonesWithGuest, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind, placeLabel } from './state.ts';
 
 /** 16px and 14px Lucide icons. */
 export const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -112,40 +113,38 @@ export function PagePicture({ page, state }: { readonly page: BookingPage; reado
 /** The ways to share a page. */
 export type ShareHow = 'copy' | 'times' | 'once' | 'embed' | 'linkpage' | 'qr' | 'email' | 'whatsapp' | 'more';
 /** One Share button for a page: one menu, ordered by how often each is used. */
-export function ShareMenu({ page, onShare, size = 'sm' }: { readonly page: BookingPage; readonly onShare: (page: BookingPage, how: ShareHow) => void; readonly size?: 'sm' | 'md' }) {
+export function ShareMenu({ page, onShare, size = 'sm', handle = 'priya' }: { readonly page: BookingPage; readonly onShare: (page: BookingPage, how: ShareHow) => void; readonly size?: 'sm' | 'md'; /** The workspace's handle, for the link and its code. */ readonly handle?: string }) {
+  const [open, setOpen] = useState(false);
+  const live = page.links.filter((l) => !l.revoked).length;
+  const run = (how: ShareHow) => { setOpen(false); onShare(page, how); };
   return (
-    <MenuTrigger>
-      <Button size={size} variant="secondary" icon={<Share2 {...i14} />} aria-label={`Share ${page.name}`}>Share</Button>
-      <Menu aria-label={`Share ${page.name}`} placement="bottom end" onAction={(k: Key) => onShare(page, String(k) as ShareHow)}>
-        <MenuSection>
-          <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy link</MenuItem>
-          <MenuItem id="times" icon={<Clock {...i16} />} description="Pick 2 to 5 times for one guest">Offer specific times</MenuItem>
-          <MenuItem id="once" icon={<Ticket {...i16} />} description={page.links.filter((l) => !l.revoked).length ? `${page.links.filter((l) => !l.revoked).length} active` : 'Works a set number of times'}>One-time links</MenuItem>
-        </MenuSection>
-        <MenuSection title="Send">
-          <MenuItem id="email" icon={<Mail {...i16} />}>Email</MenuItem>
-          <MenuItem id="whatsapp" icon={<MessageCircle {...i16} />}>WhatsApp</MenuItem>
-          <MenuItem id="qr" icon={<QrIcon {...i16} />} description="For print, slides or a desk">QR code</MenuItem>
-          <MenuItem id="more" icon={<Share {...i16} />}>More…</MenuItem>
-        </MenuSection>
-        <MenuSection title="Put it somewhere">
-          <MenuItem id="embed" icon={<Code2 {...i16} />}>Embed on a website</MenuItem>
-          <MenuItem id="linkpage" icon={<LayoutList {...i16} />}>Add to link page</MenuItem>
-        </MenuSection>
-      </Menu>
-    </MenuTrigger>
+    <>
+      <Button size={size} variant="secondary" icon={<Share2 {...i14} />} aria-label={`Share ${page.name}`} onPress={() => setOpen(true)}>Share</Button>
+      <ShareSheet isOpen={open} onOpenChange={setOpen} title={`Share ${page.name}`} url={pageUrl(page.slug, handle)} name={page.name} invite="Pick a time that suits you:" onSite={() => run('embed')}
+        description={page.isOn ? undefined : 'It’s hidden, so guests see that it isn’t taking bookings until you turn it on.'}
+        extra={<>
+          <Button size="sm" variant="ghost" icon={<Clock {...i14} />} onPress={() => run('times')}>Offer specific times</Button>
+          <Button size="sm" variant="ghost" icon={<Ticket {...i14} />} onPress={() => run('once')}>{live ? `One-time links · ${live}` : 'One-time link'}</Button>
+          <Button size="sm" variant="ghost" icon={<LayoutList {...i14} />} onPress={() => run('linkpage')}>Add to link page</Button>
+        </>} />
+    </>
   );
 }
 
 /** The ⋯ menu of a page: Edit, Duplicate, then Delete under a line. */
+/** Copy to another workspace, when the app around Bookings offers it: every page's ⋯ menu then has the item. */
+export const CopyPageContext = createContext<((page: BookingPage) => void) | undefined>(undefined);
+
 export function PageMoreMenu({ page, onAction, withEdit = true, withVersions = false }: { readonly page: BookingPage; readonly onAction: (key: 'edit' | 'duplicate' | 'delete' | 'versions') => void; readonly withEdit?: boolean; readonly withVersions?: boolean }) {
+  const copyWs = useContext(CopyPageContext);
   return (
     <MenuTrigger>
       <IconButton size="sm" label={`More for ${page.name}`}><MoreHorizontal {...i16} /></IconButton>
-      <Menu aria-label={`More for ${page.name}`} placement="bottom end" onAction={(k: Key) => onAction(String(k) as 'edit')}>
+      <Menu aria-label={`More for ${page.name}`} placement="bottom end" onAction={(k: Key) => { if (k === 'copyws') copyWs?.(page); else onAction(String(k) as 'edit'); }}>
         {withEdit && <MenuItem id="edit" icon={<Pencil {...i16} />}>Edit</MenuItem>}
         {withVersions && <MenuItem id="versions" icon={<History {...i16} />} description="Restore an earlier one">Versions</MenuItem>}
         <MenuItem id="duplicate" icon={<CopyPlus {...i16} />}>Duplicate</MenuItem>
+        {copyWs && <MenuItem id="copyws" icon={<Copy {...i16} />}>Copy to another workspace…</MenuItem>}
         <MenuSeparator />
         <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete</MenuItem>
       </Menu>
@@ -153,11 +152,11 @@ export function PageMoreMenu({ page, onAction, withEdit = true, withVersions = f
   );
 }
 
-/** On or Hidden: a switch that takes effect at once, its word swapping. */
+/** Live or Off (the words every publishable thing uses): a switch that takes effect at once, its word swapping. */
 export function OnSwitch({ page, onChange }: { readonly page: BookingPage; readonly onChange: (isOn: boolean) => void }) {
   return (
     <Switch isSelected={page.isOn} onChange={onChange} aria-label={`${page.name} takes bookings`}>
-      <span className="tf-bkf__onword"><TextSwap swapKey={page.isOn ? 'on' : 'off'}>{page.isOn ? 'On' : 'Hidden'}</TextSwap></span>
+      <span className="tf-bkf__onword"><TextSwap swapKey={page.isOn ? 'on' : 'off'}>{page.isOn ? 'Live' : 'Off'}</TextSwap></span>
     </Switch>
   );
 }

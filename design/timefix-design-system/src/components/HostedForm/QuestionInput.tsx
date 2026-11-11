@@ -16,7 +16,7 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { TimeField } from '../TimeField/TimeField.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import {
-  COUNTRIES, isAddress, isBooking, isFiles, isList, isPhone, isText,
+  COUNTRIES, OTHER_PREFIX, dayBound, isAddress, isBooking, isFiles, isList, isPhone, isText,
   type AddressValue, type AnswerValue, type BookingSource, type FileAnswer, type FormQuestion,
 } from './answers.ts';
 
@@ -62,7 +62,7 @@ export function QuestionInput(props: QuestionInputProps) {
     case 'rating':
       return <StarRating value={typeof value === 'number' ? value : undefined} onChange={(n, goOn) => { onChange(n); if (goOn) props.onPicked?.(); }} labelId={labelId} />;
     case 'date':
-      return <DateAnswer value={text} onChange={onChange} labelId={labelId} isInvalid={isInvalid} />;
+      return <DateAnswer value={text} onChange={onChange} labelId={labelId} isInvalid={isInvalid} earliest={dayBound(q.earliest)} latest={dayBound(q.latest)} />;
     case 'file':
       return <FileAnswerInput {...props} />;
     case 'address':
@@ -101,21 +101,29 @@ export function QuestionInput(props: QuestionInputProps) {
   }
 }
 
-/** Choice cards: full width rows with a letter key; the letter on the keyboard picks it. Single picks tick and may go on. */
+/** Choice cards: full width rows with a letter key; the letter on the keyboard picks it. Single picks tick and may go on.
+ *  With `other`, a last "Other" card opens a line to type in; its answer reads "Other: <words>". Multiple choice says its pick limits. */
 function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicked }: QuestionInputProps) {
-  const options = q.options ?? [];
+  const options = q.other ? [...(q.options ?? []), 'Other'] : q.options ?? [];
   const multi = q.kind === 'multi';
-  const picked = isList(value) ? value : [];
-  const single = isText(value) ? value : '';
+  const raw = isList(value) ? value : [];
+  const rawSingle = isText(value) ? value : '';
+  // "Other: words" is shown as the Other card ticked, with its words in the line under the cards.
+  const isOther = (x: string) => x.startsWith(OTHER_PREFIX.trim());
+  const otherWords = (multi ? raw.find(isOther) : isOther(rawSingle) ? rawSingle : undefined)?.replace(/^Other:?\s?/, '') ?? '';
+  const picked = raw.map((x) => (isOther(x) ? 'Other' : x));
+  const single = isOther(rawSingle) ? 'Other' : rawSingle;
+  const otherOn = multi ? picked.includes('Other') : single === 'Other';
   // Only a pick by pointer or letter goes on by itself; arrows just move between the cards.
   const byPointer = useRef(false);
+  const asAnswer = (opt: string, words = otherWords) => (opt === 'Other' && q.other ? `${OTHER_PREFIX}${words}` : opt);
   const choose = (opt: string, goOn: boolean) => {
     byPointer.current = false;
-    if (multi) onChange(picked.includes(opt) ? picked.filter((p) => p !== opt) : [...picked, opt]);
-    else { onChange(opt); if (goOn) onPicked?.(); }
+    if (multi) onChange(picked.includes(opt) ? picked.filter((p) => p !== opt).map((x) => asAnswer(x)) : [...picked, opt].map((x) => asAnswer(x)));
+    else { onChange(asAnswer(opt)); if (goOn && opt !== 'Other') onPicked?.(); }
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1 || (e.target as HTMLElement).tagName === 'INPUT') return;
     const n = LETTERS.indexOf(e.key.toUpperCase());
     const opt = options[n];
     if (opt === undefined) return;
@@ -129,10 +137,13 @@ function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicke
       <svg className="tf-hq__tick" width={18} height={18} viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength={1} /></svg>
     </>
   );
+  const limits = multi && (q.fewest !== undefined || q.most !== undefined)
+    ? q.fewest !== undefined && q.most !== undefined ? (q.fewest === q.most ? `Pick ${q.fewest}. ` : `Pick ${q.fewest} to ${q.most}. `) : q.most !== undefined ? `Pick up to ${q.most}. ` : `Pick at least ${q.fewest ?? 1}. `
+    : multi ? 'Pick as many as fit. ' : '';
   return (
     <div onKeyDown={onKeyDown} onPointerDown={() => { byPointer.current = true; }}>
       {multi ? (
-        <CheckboxGroup aria-labelledby={labelId} value={[...picked]} onChange={(v) => onChange(v)} isInvalid={isInvalid} className="tf-hq__choices">
+        <CheckboxGroup aria-labelledby={labelId} value={[...picked]} onChange={(v) => onChange(v.map((x) => asAnswer(x)))} isInvalid={isInvalid} className="tf-hq__choices">
           {options.map((opt, n) => <AriaCheckbox key={opt} value={opt} className="tf-hq__choice">{card(opt, n)}</AriaCheckbox>)}
         </CheckboxGroup>
       ) : (
@@ -140,7 +151,9 @@ function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicke
           {options.map((opt, n) => <Radio key={opt} value={opt} className="tf-hq__choice">{card(opt, n)}</Radio>)}
         </RadioGroup>
       )}
-      <p className="tf-hq__aside">{multi ? 'Pick as many as fit. ' : ''}Press a letter to pick.</p>
+      {otherOn && <div className="tf-hq__other"><TextField size="lg" aria-label="Other, in your words" value={otherWords} placeholder="Type your answer" autoFocus
+        onChange={(w) => onChange(multi ? picked.map((x) => (x === 'Other' ? `${OTHER_PREFIX}${w}` : x)) : `${OTHER_PREFIX}${w}`)} /></div>}
+      <p className="tf-hq__aside">{limits}Press a letter to pick.</p>
     </div>
   );
 }
@@ -192,11 +205,12 @@ function StarRating({ value, onChange, labelId }: { readonly value?: number; rea
 }
 
 /** A date typed in segments or picked from the shared Calendar, in a 44px filled box. */
-function DateAnswer({ value, onChange, labelId, isInvalid }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly isInvalid?: boolean }) {
+function DateAnswer({ value, onChange, labelId, isInvalid, earliest, latest }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly isInvalid?: boolean; /** YYYY-MM-DD bounds: days outside them can't be picked. */ readonly earliest?: string; readonly latest?: string }) {
   let parsed: CalendarDate | null = null;
   try { parsed = value ? parseDate(value) : null; } catch { parsed = null; }
+  const bound = (b: string | undefined) => { try { return b ? parseDate(b) : undefined; } catch { return undefined; } };
   return (
-    <AriaDatePicker aria-labelledby={labelId} value={parsed} onChange={(d) => onChange(d ? d.toString() : '')} isInvalid={isInvalid} className="tf-hq__date">
+    <AriaDatePicker aria-labelledby={labelId} value={parsed} onChange={(d) => onChange(d ? d.toString() : '')} isInvalid={isInvalid} className="tf-hq__date" minValue={bound(earliest)} maxValue={bound(latest)}>
       <Group className="tf-hq__box">
         <DateInput className="tf-hq__date-input">{(segment) => <DateSegment segment={segment} className="tf-hq__seg" />}</DateInput>
         <AriaButton className="tf-hq__date-btn" aria-label="Open calendar"><CalendarDays {...i16} /></AriaButton>

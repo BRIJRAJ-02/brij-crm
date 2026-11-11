@@ -3,7 +3,7 @@
 import { copyText } from '../../lib/copy.ts';
 import { useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { Copy, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Copy, ExternalLink, Pencil, Plus, Share2 } from 'lucide-react';
 import { Button } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
@@ -13,7 +13,9 @@ import { AvatarGroup } from '../Avatar/Avatar.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { cx } from '../../lib/cx.ts';
 import { OnSwitch, PageMoreMenu, ShareMenu, TabToolbar, i14, type ShareHow } from './parts.tsx';
-import { homeUrl, lengthsText, pageSub, pageUrl, plural, priceText, type BookingPage, type BookingsAction, type BookingsState, type BusinessProfile } from './state.ts';
+import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
+import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
+import { handleOf, homeUrl, lengthsText, pageSub, pageUrl, plural, priceText, type BookingPage, type BookingsAction, type BookingsState, type BusinessProfile } from './state.ts';
 
 /** Props for BusinessPages. */
 export interface BusinessPagesProps {
@@ -36,6 +38,8 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
   const b = state.business;
   const [cat, setCat] = useState('all');
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [publishing, setPublishing] = useState<'publishing' | 'published'>();
   if (!b) return null;
   const cats = state.categories ?? [];
   const services = state.pages.filter((p) => p.kind === 'service');
@@ -54,7 +58,7 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
       {p.kind === 'service' && <span className="tf-bkf-svc__price tf-num">{priceText(p)}</span>}
       <span className="tf-bkf-svc__who">{p.kind !== 'table' && <AvatarGroup names={p.hosts} size={20} max={3} />}</span>
       <OnSwitch page={p} onChange={(on) => onToggle(p.id, on)} />
-      <ShareMenu page={p} onShare={onShare} />
+      <ShareMenu page={p} onShare={onShare} handle={handleOf(state)} />
       <PageMoreMenu page={p} onAction={(k) => { if (k !== 'versions') onMore(p, k); }} />
     </li>
   );
@@ -63,15 +67,14 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
       <section className="tf-bkf-yourpage" aria-label="Your page">
         {b.photos[0] && <img src={b.photos[0]} alt="" className="tf-bkf-yourpage__img" />}
         <div className="tf-bkf-yourpage__text">
-          <span className="tf-bkf-yourpage__eyebrow">Your page<Tag size="sm" hue={b.published ? 'green' : 'gray'}>{b.published ? 'Live' : 'Not live'}</Tag></span>
+          <span className="tf-bkf-yourpage__eyebrow">Your page<Tag size="sm" hue={b.published ? 'green' : 'gray'}>{b.published ? 'Live' : 'Not published'}</Tag></span>
           <strong className="tf-bkf-yourpage__name">{state.workspace}</strong>
           <span className="tf-bkf__muted">{b.kindLabel} · {b.area} · {plural(state.pages.filter((p) => p.isOn).length, b.kind === 'restaurant' ? 'way to book' : 'service')} online</span>
           <span className="tf-bkf-yourpage__url tf-num">{url}</span>
         </div>
         <div className="tf-bkf-yourpage__actions">
-          {!b.published && <Button variant="primary" onPress={() => { dispatch({ type: 'business/set', business: { ...b, published: true } }); toast({ message: 'Your page is live. Share the link.', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'business/set', business: { ...b, published: false } }) } }); }}>Publish</Button>}
-          <Button variant="secondary" icon={<Copy {...i14} />} isDisabled={!b.published} onPress={() => copy(url)}>Copy link</Button>
-          <Button variant="secondary" icon={<ExternalLink {...i14} />} onPress={onSeePage}>See it</Button>
+          <Button variant="ghost" icon={<ExternalLink {...i14} />} onPress={onSeePage}>See it as a guest</Button>
+          <Button variant="ghost" icon={<Share2 {...i14} />} isDisabled={!b.published} onPress={() => setSharing(true)}>Share</Button>
           <Button variant="ghost" icon={<Pencil {...i14} />} onPress={() => setEditing(true)}>Edit page</Button>
         </div>
       </section>
@@ -145,6 +148,9 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
         setEditing(false); toast({ message: 'Page saved', tone: 'success' });
       }} />}
       <p className="tf-bkf__muted tf-bkf-menu__foot">Each one has its own link too, like <span className="tf-num">{pageUrl(services[0]?.slug ?? tablePages[0]?.slug ?? 'book', b.handle)}</span>, that goes straight to booking it.</p>
+      <ShareSheet isOpen={sharing} onOpenChange={setSharing} title={`Share ${state.workspace}`} url={url} name={state.workspace} invite="Book with us:" onSite={() => { setSharing(false); void copyText(`<iframe src="https://${url}?embed=1" style="width:100%;min-height:720px;border:0" title="${state.workspace}"></iframe>`).then((ok) => toast(ok ? { message: 'Embed code copied. Paste it into your site’s HTML.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }} />
+      <PublishBar status={publishing ?? (b.published ? 'live' : 'draft')} changes={1} message="Not published yet"
+        onPublish={() => { setPublishing('publishing'); window.setTimeout(() => { dispatch({ type: 'business/set', business: { ...b, published: true } }); setPublishing('published'); window.setTimeout(() => { setPublishing(undefined); setSharing(true); }, 1200); }, 500); }} />
     </div>
   );
 }

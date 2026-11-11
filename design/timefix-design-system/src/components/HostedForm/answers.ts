@@ -75,7 +75,8 @@ export interface FormQuestion {
   readonly showIf?: { readonly questionId: string; readonly is: string };
   /** Starts a new step (a page of the form) at this question, with the step's title. */
   readonly step?: { readonly title?: string };
-  /** After this question, by answer: go to another question's id, or 'end'. */
+  /** After this question, by answer: go to another question's id, 'end' (the thank you), or 'end:<ending id>' (another thank-you message).
+   *  An `is` of '*' is the Otherwise line: where everyone else goes. */
   readonly jumps?: ReadonlyArray<{ readonly is: string; readonly to: string }>;
   /** Points each choice gives; the answers' total is the score. */
   readonly points?: Readonly<Record<string, number>>;
@@ -83,6 +84,24 @@ export interface FormQuestion {
   readonly insights?: boolean;
   /** The record field the answer fills ("person.title"); unset keeps it with the submission only. */
   readonly saveTo?: string;
+  /** With Save answer to: a new answer replaces what the record already has (on), or only fills it when empty (off, the default). */
+  readonly overwrite?: boolean;
+  /** Date: the earliest and latest day a visitor can pick: 'today', or a day as YYYY-MM-DD. */
+  readonly earliest?: string; readonly latest?: string;
+  /** Multiple choice: the fewest and most picks allowed. */
+  readonly fewest?: number; readonly most?: number;
+  /** Single and multiple choice: an "Other" card that opens a line to type in. */
+  readonly other?: boolean;
+}
+
+/** What "Other" sends: the typed words after this prefix ("Other: a podcast"). */
+export const OTHER_PREFIX = 'Other: ';
+/** A date bound as YYYY-MM-DD: 'today' is today's date. */
+export function dayBound(b: string | undefined): string | undefined {
+  if (!b) return undefined;
+  if (b !== 'today') return /^\d{4}-\d{2}-\d{2}$/.test(b) ? b : undefined;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** A postal address, each part as typed. */
@@ -150,6 +169,17 @@ export function checkAnswer(q: FormQuestion, v: AnswerValue | undefined): string
     if (q.max !== undefined && n > q.max) return `The highest is ${q.max}.`;
   }
   if (q.kind === 'datetime' && isText(v) && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return 'Pick both a day and a time.';
+  if (q.kind === 'date' && isText(v)) {
+    const lo = dayBound(q.earliest); const hi = dayBound(q.latest);
+    if (lo && v < lo) return q.earliest === 'today' ? 'Pick today or a day to come.' : `Pick ${dateLabel(lo)} or later.`;
+    if (hi && v > hi) return `Pick ${dateLabel(hi)} or earlier.`;
+  }
+  if (q.kind === 'multi' && isList(v)) {
+    if (v.some((x) => x === OTHER_PREFIX.trim() || x === OTHER_PREFIX)) return 'Say what “Other” is, or untick it.';
+    if (q.fewest !== undefined && v.length < q.fewest) return `Pick at least ${q.fewest}.`;
+    if (q.most !== undefined && v.length > q.most) return `Pick at most ${q.most}.`;
+  }
+  if (q.kind === 'choice' && isText(v) && (v === OTHER_PREFIX || v === OTHER_PREFIX.trim())) return 'Say what “Other” is, or pick another.';
   return undefined;
 }
 

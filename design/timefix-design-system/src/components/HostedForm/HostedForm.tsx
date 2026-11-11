@@ -16,8 +16,35 @@ import './HostedForm.css';
 export * from './answers.ts';
 export { QuestionInput, type QuestionInputProps, type UploadFile } from './QuestionInput.tsx';
 
-/** One question per screen (Typeform's way) or every question on one card (Tally's page). */
-export type HostedFormMode = 'one' | 'page';
+/** One question per screen (Typeform's way), every question on one card (Tally's page), or steps: a page per group of questions. */
+export type HostedFormMode = 'one' | 'page' | 'steps';
+/** A thank-you message besides the main one: a jump, a rule or a route can end a visit here. `{{score}}` in its words shows the score. */
+export interface FormEnding { readonly id: string; readonly title: string; readonly line?: string; readonly action?: { readonly label: string; readonly href: string } }
+/** The visitor's language for the form's own words (buttons, hints, steps). Question words are the owner's. */
+export type FormLang = 'en' | 'hi' | 'es' | 'fr' | 'de';
+/** What a send carries besides the answers: which ending it reached, the score, and the seconds from first answer to send. */
+export interface SendMeta { readonly ending?: string; readonly score: number; readonly secs: number }
+
+const WORDS: Readonly<Record<FormLang, { readonly ok: string; readonly submit: string; readonly next: string; readonly back: string; readonly press: string; readonly step: (n: number, of: number) => string; readonly thanks: string; readonly prev: string }>> = {
+  en: { ok: 'OK', submit: 'Submit', next: 'Next', back: 'Back', press: 'press', step: (n, of) => `Step ${n} of ${of}`, thanks: 'Thanks, we got it.', prev: 'Previous question' },
+  hi: { ok: 'ठीक है', submit: 'भेजें', next: 'आगे', back: 'पीछे', press: 'दबाएँ', step: (n, of) => `चरण ${n} / ${of}`, thanks: 'धन्यवाद, हमें मिल गया।', prev: 'पिछला सवाल' },
+  es: { ok: 'Vale', submit: 'Enviar', next: 'Siguiente', back: 'Atrás', press: 'pulsa', step: (n, of) => `Paso ${n} de ${of}`, thanks: 'Gracias, lo tenemos.', prev: 'Pregunta anterior' },
+  fr: { ok: 'OK', submit: 'Envoyer', next: 'Suivant', back: 'Retour', press: 'appuyez sur', step: (n, of) => `Étape ${n} sur ${of}`, thanks: 'Merci, c’est reçu.', prev: 'Question précédente' },
+  de: { ok: 'OK', submit: 'Senden', next: 'Weiter', back: 'Zurück', press: 'drücke', step: (n, of) => `Schritt ${n} von ${of}`, thanks: 'Danke, ist angekommen.', prev: 'Vorherige Frage' },
+};
+/** The languages a form can speak, as the picker lists them. */
+export const FORM_LANGS: ReadonlyArray<{ readonly id: FormLang; readonly label: string }> = [{ id: 'en', label: 'English' }, { id: 'hi', label: 'Hindi' }, { id: 'es', label: 'Spanish' }, { id: 'fr', label: 'French' }, { id: 'de', label: 'German' }];
+
+/** The score of some answers: each picked choice adds its points. */
+export function scoreOf(questions: ReadonlyArray<FormQuestion>, answers: FormAnswers): number {
+  return questions.reduce((n, q) => { if (!q.points) return n; const a = answers[q.id]; const picks = Array.isArray(a) ? a.map(String) : a === undefined ? [] : [String(a)]; return n + picks.reduce((m, x) => m + (q.points?.[x] ?? 0), 0); }, 0);
+}
+/** Questions grouped into steps: a new step starts at each question marked `step` (the first always starts one). */
+export function stepsOf(questions: ReadonlyArray<FormQuestion>): ReadonlyArray<ReadonlyArray<number>> {
+  const out: number[][] = [];
+  questions.forEach((q, n) => { if (n === 0 || q.step) out.push([n]); else out[out.length - 1]?.push(n); });
+  return out;
+}
 /** One logic rule, in plain words: "If <question> is <answer>, go to <question>" (or "the end"). One question at a time only. */
 export interface FormRule { readonly id: string; readonly when: string; readonly is: string; readonly goto: string }
 
@@ -27,8 +54,8 @@ export interface HostedFormProps {
   readonly description?: string;
   readonly questions: ReadonlyArray<FormQuestion>;
   readonly mode?: HostedFormMode;
-  /** Resolves once the answers are stored; a rejection keeps the visitor on the form with an alert. */
-  readonly onSubmit: (answers: FormAnswers) => Promise<void>;
+  /** Resolves once the answers are stored; a rejection keeps the visitor on the form with an alert. `meta` says the ending, score and time. */
+  readonly onSubmit: (answers: FormAnswers, meta?: SendMeta) => Promise<void>;
   /** Saves a draft and resolves with the link to come back to. Without it there is no "Finish later". */
   readonly onFinishLater?: (answers: FormAnswers) => Promise<string>;
   /** Open times for a booking question. */
@@ -48,6 +75,16 @@ export interface HostedFormProps {
   readonly logic?: ReadonlyArray<FormRule>;
   /** What the form wears (the same four looks and Custom as booking pages): its accent on buttons and choices, its face, light or dark. */
   readonly look?: GuestLookValue;
+  /** Other thank-you messages a jump ('end:<id>') or `endingFor` can end on. */
+  readonly endings?: ReadonlyArray<FormEnding>;
+  /** Picks the ending for what was answered (the form's After they send routes); undefined is the main thank you. */
+  readonly endingFor?: (answers: FormAnswers, score: number) => string | undefined;
+  /** The form's own words in this language. */
+  readonly lang?: FormLang;
+  /** Square corners on the card, choices and buttons. */
+  readonly corners?: 'rounded' | 'square';
+  /** In the builder's preview: the headline, the line under it and the last button are edited in place. */
+  readonly onEdit?: { readonly title?: (v: string) => void; readonly description?: (v: string) => void; readonly submitLabel?: (v: string) => void };
 }
 
 /** transitions.dev 08 page side-by-side in a box that eases to the showing page's height (01 card resize). */
@@ -199,11 +236,20 @@ function Thanks({ show, title, line, action, children }: { readonly show: boolea
   );
 }
 
+/** A word edited in place in the builder's preview: it reads as the text it stands for until focused. */
+function InPlace({ value, onChange, label, className, placeholder }: { readonly value: string; readonly onChange: (v: string) => void; readonly label: string; readonly className: string; readonly placeholder?: string }) {
+  return <input className={cx('tf-hform__edit', className)} aria-label={label} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />;
+}
+
 /**
- * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), or every question on one
- * card. Required answers and emails are checked; a refused step shakes. Ends on a thank you with the sent answers.
+ * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), every question on one
+ * card, or steps (a page per group). Required answers and emails are checked; a refused step shakes. Ends on a thank you (or one of
+ * the form's endings) with the sent answers.
  */
-export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, onReach, look, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
+export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel, prefill = {}, brand, onReach, look, thanks: thanksIn, endings = [], endingFor, lang = 'en', corners = 'rounded', onEdit }: HostedFormProps) {
+  const w = WORDS[lang];
+  const submitWords = submitLabel ?? w.submit;
+  const thanks = thanksIn ?? { title: w.thanks, line: 'Your answers are in. You can close this page.' };
   // Hidden fields never show: they carry their value (from the link or the default) straight into the answers.
   const questions = allQuestions.filter((q) => q.kind !== 'hidden');
   const hiddenAnswers = Object.fromEntries(allQuestions.filter((q) => q.kind === 'hidden').map((q) => [q.id, prefill[q.id] ?? q.defaultValue ?? '']));
@@ -213,14 +259,24 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const [attempt, setAttempt] = useState(0);
   const [step, setStep] = useState(0);
   const [sent, setSent] = useState(false);
+  const [ended, setEnded] = useState<string>();
+  const firstAt = useRef<number | undefined>(undefined);
   const seen = useRef(new Set<string>());
-  useEffect(() => { const q = questions[step]; if (mode !== 'one' || !q || !onReach || seen.current.has(q.id)) return; seen.current.add(q.id); onReach(q.id); }, [step, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reachOnce = (id: string | undefined) => { if (!id || !onReach || seen.current.has(id)) return; seen.current.add(id); onReach(id); };
+  const groups = stepsOf(questions);
+  useEffect(() => {
+    if (mode === 'one') reachOnce(questions[step]?.id);
+    if (mode === 'steps') (groups[step] ?? []).forEach((n) => reachOnce(questions[n]?.id));
+  }, [step, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const advance = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(advance.current), []);
 
   const setAnswer = (id: string) => (next: AnswerValue | ((cur: AnswerValue | undefined) => AnswerValue)) => {
+    firstAt.current = firstAt.current ?? Date.now();
+    // On one page, a question counts as reached once it has an answer: "Where people stop" works for every layout.
+    if (mode === 'page') reachOnce(id);
     setAnswers((all) => {
       const value = typeof next === 'function' ? next(all[id]) : next;
       return { ...all, [id]: value };
@@ -237,30 +293,45 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   };
 
   const refuse = (found: Readonly<Record<string, string>>) => { setErrors(found); setAttempt((n) => n + 1); };
-  const send = async (only?: ReadonlySet<string>) => {
+  const hasLogic = logic.length > 0 || questions.some((q) => q.showIf || q.jumps?.length);
+  const send = async (only?: ReadonlySet<string>, ending?: string) => {
     if (sending) return;
     setSending(true); setFailed(false);
-    const out = only && (logic.length || questions.some((q) => q.showIf || q.jumps?.length)) ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
-    try { await onSubmit({ ...hiddenAnswers, ...out }); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
+    const out = only && hasLogic ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
+    const all = { ...hiddenAnswers, ...out };
+    const score = scoreOf(questions, all);
+    const end = ending ?? endingFor?.(all, score);
+    try { await onSubmit(all, { ending: end, score, secs: firstAt.current ? Math.max(1, Math.round((Date.now() - firstAt.current) / 1000)) : 0 }); setEnded(end); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
   };
   const last = questions.length - 1;
   /** Whether a question with Show only if is on: its source answer matches (a multi-choice answer that includes it counts). */
   const shown = (q: FormQuestion, all: FormAnswers) => { if (!q.showIf) return true; const a = all[q.showIf.questionId]; return Array.isArray(a) ? a.map(String).includes(q.showIf.is) : a !== undefined && String(a) === q.showIf.is; };
   /** Where the visitor came from, so Back retraces a jump instead of landing on a skipped question. */
   const trail = useRef<number[]>([]);
-  /** The step after this one: a matching rule's target, the end, or simply the next question. */
-  const after = (at: number, all: FormAnswers): number | 'end' => {
-    const q = questions[at]; const a = q ? all[q.id] : undefined;
+  /** A question's jump for what was said: a form rule, then its own jump by answer, then its Otherwise line. */
+  const jumpOf = (q: FormQuestion | undefined, all: FormAnswers): string | undefined => {
+    if (!q) return undefined;
+    const a = all[q.id];
     const said = Array.isArray(a) ? a.map(String) : a === undefined ? [] : [String(a)];
-    // The form's rules, then the question's own jumps by answer.
-    const rule = q ? logic.find((r) => r.when === q.id && said.includes(r.is)) ?? q.jumps?.filter((j) => said.includes(j.is)).map((j) => ({ when: q.id, is: j.is, goto: j.to }))[0] : undefined;
+    const rule = logic.find((r) => r.when === q.id && said.includes(r.is));
+    if (rule) return rule.goto;
+    const own = q.jumps?.find((j) => j.is !== '*' && said.includes(j.is));
+    if (own) return own.to;
+    return said.length ? q.jumps?.find((j) => j.is === '*')?.to : undefined;
+  };
+  /** The step after this one: a matching jump's target, the end (or an ending), or simply the next question. */
+  const after = (at: number, all: FormAnswers): number | 'end' | `end:${string}` => {
+    const goto = jumpOf(questions[at], all);
     let to: number | 'end' = at === last ? 'end' : at + 1;
-    if (rule) { if (rule.goto === 'end') return 'end'; const t = questions.findIndex((x) => x.id === rule.goto); if (t > at) to = t; }
+    if (goto === 'end') return 'end';
+    if (goto?.startsWith('end:')) return goto as `end:${string}`;
+    if (goto) { const t = questions.findIndex((x) => x.id === goto); if (t > at) to = t; }
     // A question shown only for another answer is skipped when that answer wasn't given.
     while (to !== 'end' && questions[to] && !shown(questions[to], all)) to = to === last ? 'end' : to + 1;
     return to;
   };
-  const go = (at: number, all: FormAnswers = answers) => { const to = after(at, all); if (to === 'end') void send(visited(at)); else { trail.current.push(at); setStep(to); } };
+  const endOf = (to: 'end' | `end:${string}`) => (to === 'end' ? undefined : to.slice(4));
+  const go = (at: number, all: FormAnswers = answers) => { const to = after(at, all); if (typeof to !== 'number') void send(visited(at), endOf(to)); else { trail.current.push(at); setStep(to); } };
   /** The questions on the path they took: answers left behind on a branch they backed out of aren't sent. */
   const visited = (at: number) => new Set([...trail.current, at].map((n) => questions[n]?.id).filter((x): x is string => x !== undefined));
   const next = () => {
@@ -277,12 +348,12 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const picked = () => {
     if (step === last) return;
     window.clearTimeout(advance.current);
-    advance.current = window.setTimeout(() => { const to = after(step, answersRef.current); if (to !== 'end') { trail.current.push(step); setStep(to); } }, 450);
+    advance.current = window.setTimeout(() => { const to = after(step, answersRef.current); if (typeof to === 'number') { trail.current.push(step); setStep(to); } }, 450);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter' || e.shiftKey || e.defaultPrevented || e.nativeEvent.isComposing) return;
     const t = e.target as HTMLElement;
-    if (t.closest('button, [role=button], [role=grid], [role=row], [role=listbox], [role=option], [role=spinbutton], a')) return;
+    if (t.closest('button, [role=button], [role=grid], [role=row], [role=listbox], [role=option], [role=spinbutton], a, .tf-hform__edit')) return;
     e.preventDefault();
     next();
   };
@@ -303,23 +374,54 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
     void send(new Set(questions.filter((q) => shown(q, answers)).map((q) => q.id)));
   };
 
+  /* Steps: a page per group; Next checks the group's shown questions, then follows the first jump among them. */
+  const stepTrail = useRef<number[]>([]);
+  const groupOf = (n: number) => groups.findIndex((g) => g.includes(n));
+  const nextStep = () => {
+    const g = groups[step] ?? [];
+    const found: Record<string, string> = {};
+    for (const n of g) { const q = questions[n]; if (!q || !shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id]); if (p) found[q.id] = p; }
+    if (Object.keys(found).length) { refuse(found); return; }
+    setErrors({});
+    const jump = g.map((n) => jumpOf(questions[n], answers)).find((x) => x !== undefined);
+    const sendNow = (ending?: string) => void send(new Set(stepTrail.current.concat(step).flatMap((s) => (groups[s] ?? []).map((n) => questions[n]?.id ?? ''))), ending);
+    if (jump === 'end') { sendNow(); return; }
+    if (jump?.startsWith('end:')) { sendNow(jump.slice(4)); return; }
+    let to = jump ? groupOf(questions.findIndex((x) => x.id === jump)) : step + 1;
+    if (to <= step) to = step + 1;
+    // A step whose every question is hidden by Show only if is skipped.
+    while (to < groups.length && !(groups[to] ?? []).some((n) => { const q = questions[n]; return q !== undefined && shown(q, answers); })) to += 1;
+    if (to >= groups.length) { sendNow(); return; }
+    stepTrail.current.push(step); setStep(to);
+  };
+  const backStep = () => { setErrors({}); const prev = stepTrail.current.pop(); setStep((s) => prev ?? Math.max(0, s - 1)); };
+
   const slot = (q: FormQuestion, n: number, large: boolean) => (
     <QuestionSlot key={q.id} question={q} index={n} value={answers[q.id]} onChange={setAnswer(q.id)} error={errors[q.id]} attempt={attempt}
       large={large} onPicked={large && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating' || q.kind === 'yesno' || q.kind === 'scale' || q.kind === 'country') ? picked : undefined} booking={booking} onUpload={onUpload} />
   );
   const alert = failed && <p className="tf-hform__alert" role="alert"><CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />We couldn't send that. Check your connection and try again.</p>;
   const later = onFinishLater && <FinishLater onSave={() => onFinishLater(answers)} />;
+  const score = scoreOf(questions, answers);
+  const recall = (x: string | undefined) => x?.replace(/\{\{\s*score\s*\}\}/g, String(score));
+  const ending = endings.find((e) => e.id === ended);
   const done = (
-    <Thanks show={sent} title={thanks.title} line={thanks.line} action={thanks.action}>
+    <Thanks show={sent} title={recall(ending?.title ?? thanks.title) ?? ''} line={recall(ending ? ending.line : thanks.line)} action={ending ? ending.action : thanks.action}>
       <SentAnswers questions={questions} answers={answers} booking={booking} />
     </Thanks>
   );
+  const submitButton = (onPress: (() => void) | undefined, isPending: boolean, type?: 'submit') => (onEdit?.submitLabel
+    ? <InPlace className="tf-hform__edit-btn" label="Edit the button" value={submitLabel ?? ''} placeholder={w.submit} onChange={onEdit.submitLabel} />
+    : <Button type={type} variant="primary" size="lg" onPress={onPress} isPending={isPending} className={type ? 'tf-hform__submit' : undefined}>{submitWords}</Button>);
+  const nameLine = onEdit?.title ? <InPlace className="tf-hform__edit-name" label="Edit the headline" value={title} placeholder="Untitled form" onChange={onEdit.title} /> : title;
+  const ledeLine = (cls: string) => (onEdit?.description ? <InPlace className={cx(cls, 'tf-hform__edit-lede')} label="Edit the line under the headline" value={description ?? ''} placeholder="Add a line under it (optional)" onChange={onEdit.description} />
+    : description ? <span className={cls}>{description}</span> : null);
 
   const oneAtATime = (
     <div className="tf-hform__one" onKeyDown={onKeyDown}>
       <div className="tf-hform__bar" data-hidden={sent || undefined}>
-        <IconButton label="Previous question" size="sm" onPress={back} isDisabled={step === 0 || sent}><ArrowLeft size={16} strokeWidth={1.75} /></IconButton>
-        <span className="tf-hform__form-name">{title}{description && step === 0 && !sent ? <span className="tf-hform__lede-one">{description}</span> : null}</span>
+        <IconButton label={w.prev} size="sm" onPress={back} isDisabled={step === 0 || sent}><ArrowLeft size={16} strokeWidth={1.75} /></IconButton>
+        <span className="tf-hform__form-name">{nameLine}{step === 0 && !sent ? ledeLine('tf-hform__lede-one') : null}</span>
         <span className="tf-hform__count tf-num" aria-hidden="true">{Math.min(step + 1, questions.length)} / {questions.length}</span>
       </div>
       <ProgressBar size="sm" aria-label="Progress" value={sent ? questions.length : step} maxValue={questions.length} className="tf-hform__progress" />
@@ -328,11 +430,9 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
           <div key={q.id} className="tf-hform__step">
             {slot(q, n, true)}
             <div className="tf-hform__actions">
-              {(() => { const ends = n === last || after(n, answers) === 'end'; return (
-                <Button variant="primary" size="lg" onPress={next} isPending={sending && n === step} iconEnd={ends ? undefined : <Check size={16} strokeWidth={2} aria-hidden="true" />}>
-                  {ends ? submitLabel : 'OK'}
-                </Button>); })()}
-              <span className="tf-hform__hint" aria-hidden="true">press <Kbd>Enter</Kbd><CornerDownLeft size={12} strokeWidth={1.75} /></span>
+              {(() => { const ends = n === last || typeof after(n, answers) !== 'number'; return ends ? submitButton(next, sending && n === step) : (
+                <Button variant="primary" size="lg" onPress={next} isPending={sending && n === step} iconEnd={<Check size={16} strokeWidth={2} aria-hidden="true" />}>{w.ok}</Button>); })()}
+              <span className="tf-hform__hint" aria-hidden="true">{w.press} <Kbd>Enter</Kbd><CornerDownLeft size={12} strokeWidth={1.75} /></span>
             </div>
             {n === step && alert}
           </div>
@@ -347,27 +447,56 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
     <Pages label={title} page={sent ? 1 : 0} pages={[
       <form className="tf-hform__page-form" onSubmit={submitPage} noValidate>
         <header className="tf-hform__head">
-          <h2 className="tf-hform__name">{title}</h2>
-          {description && <p className="tf-hform__lede">{description}</p>}
+          <h2 className="tf-hform__name">{nameLine}</h2>
+          {ledeLine('tf-hform__lede')}
         </header>
         {questions.map((q, n) => (shown(q, answers) ? slot(q, n, false) : null))}
         {alert}
-        <Button type="submit" variant="primary" size="lg" isPending={sending} className="tf-hform__submit">{submitLabel}</Button>
+        {submitButton(undefined, sending, 'submit')}
         {later}
       </form>,
       done,
     ]} />
   );
 
+  const steps = (
+    <div className="tf-hform__steps">
+      <header className="tf-hform__head" data-hidden={sent || undefined}>
+        <h2 className="tf-hform__name">{nameLine}</h2>
+        {step === 0 ? ledeLine('tf-hform__lede') : null}
+      </header>
+      <ProgressBar size="sm" aria-label="Progress" value={sent ? groups.length : step} maxValue={groups.length} className="tf-hform__progress tf-hform__progress--steps" />
+      <Pages label={title} page={sent ? groups.length : step} pages={[
+        ...groups.map((g, s) => {
+          const head = questions[g[0] ?? 0]?.step?.title;
+          const isLast = s === groups.length - 1;
+          return (
+            <form key={s} className="tf-hform__page-form" noValidate onSubmit={(e) => { e.preventDefault(); nextStep(); }}>
+              <p className="tf-hform__stephead"><span className="tf-num">{w.step(s + 1, groups.length)}</span>{head ? <strong>{head}</strong> : null}</p>
+              {g.map((n) => { const q = questions[n]; return q && shown(q, answers) ? slot(q, n, false) : null; })}
+              {s === step && alert}
+              <div className="tf-hform__stepacts">
+                {s > 0 && <Button variant="ghost" size="lg" onPress={backStep} icon={<ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />}>{w.back}</Button>}
+                {isLast ? submitButton(undefined, sending, 'submit') : <Button type="submit" variant="primary" size="lg" iconEnd={<ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />}>{w.next}</Button>}
+              </div>
+            </form>
+          );
+        }),
+        done,
+      ]} />
+      {!sent && later}
+    </div>
+  );
+
   return (
-    <div className={look ? 'tf-hform tf-hform--look' : 'tf-hform'} {...(look ? guestLookProps(look) : {})}>
+    <div className={look ? 'tf-hform tf-hform--look' : 'tf-hform'} data-corners={corners === 'square' ? 'square' : undefined} {...(look ? guestLookProps(look) : {})}>
       <div className="tf-hform__card">
         {brand && <div className="tf-hform__brand">
           <span className="tf-hform__cover" aria-hidden="true" />
           {brand.logoSrc ? <img className="tf-hform__logo" src={brand.logoSrc} alt="" /> : <span className="tf-hform__logo tf-hform__logo--initial" aria-hidden="true">{brand.name.slice(0, 1).toUpperCase()}</span>}
           <span className="tf-hform__from"><strong>{brand.name}</strong>{brand.line && <span>{brand.line}</span>}</span>
         </div>}
-        {mode === 'one' ? oneAtATime : onePage}
+        {mode === 'one' ? oneAtATime : mode === 'steps' ? steps : onePage}
       </div>
       <a className="tf-hform__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
     </div>

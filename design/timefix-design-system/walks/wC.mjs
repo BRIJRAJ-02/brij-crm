@@ -138,7 +138,7 @@ await t('5 guest: invitation only, share specific times copy text', async () => 
   await p.getByRole('button', { name: 'Back to Bookings' }).click(); await p.waitForTimeout(600);
   await nav('Booking pages'); await p.waitForTimeout(500);
   await main().getByRole('button', { name: /^Share/ }).nth(1).click(); await p.waitForTimeout(300);
-  await p.getByRole('menuitem', { name: /specific times|Offer/ }).first().click(); await p.waitForTimeout(500);
+  await p.getByRole('menuitem', { name: /specific times|Offer/ }).or(p.getByRole('button', { name: 'Offer specific times' })).first().click(); await p.waitForTimeout(500);
   const chips = dialog().locator('[role=checkbox], .tf-chip, [role=button]').filter({ hasText: /·/ });
   await chips.nth(0).click(); await chips.nth(1).click(); await p.waitForTimeout(200);
   await dialog().getByRole('button', { name: /Create link/ }).click(); await p.waitForTimeout(500);
@@ -293,7 +293,7 @@ await t('12 partner frame: start screen, link page, states', async () => {
   await p.getByRole('button', { name: 'Demo', exact: true }).click(); await p.waitForTimeout(300);
   await p.getByRole('menuitem', { name: /partner’s app/ }).click(); await p.waitForTimeout(300);
   await need(p.getByRole('status').filter({ hasText: 'Opening' }), 'start screen'); await shot('120-partner-opening');
-  await p.waitForTimeout(1500); await need(p.getByRole('region', { name: 'Link page frame' }).getByRole('button', { name: /Copy link/ }), 'link page in frame');
+  await p.waitForTimeout(1500); await need(p.getByRole('region', { name: 'Link page frame' }).getByRole('button', { name: 'Share', exact: true }), 'link page in frame');
   if (await p.getByRole('region', { name: 'Link page frame' }).getByRole('button', { name: 'Links', exact: true }).count()) throw new Error('frame links back into the app');
   await shot('121-partner-linkpage');
   await p.getByRole('radio', { name: 'Timed out' }).click(); await p.waitForTimeout(300); await need(p.getByText('This timed out'), 'timed out'); await shot('122-partner-timeout');

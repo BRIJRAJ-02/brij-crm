@@ -37,6 +37,7 @@ import { DisclosureDemo } from './components/Disclosure/Disclosure.demo.tsx';
 import { DragHandleDemo } from './components/DragHandle/DragHandle.demo.tsx';
 import { DrawerDemo } from './components/Drawer/Drawer.demo.tsx';
 import { EmbedPreviewDemo } from './components/EmbedPreview/EmbedPreview.demo.tsx';
+import { ShareSheetDemo } from './components/ShareSheet/ShareSheet.demo.tsx';
 import { EmptyStateDemo } from './components/EmptyState/EmptyState.demo.tsx';
 import { FieldDemo } from './components/Field/Field.demo.tsx';
 import { FileDropDemo } from './components/FileDrop/FileDrop.demo.tsx';
@@ -140,6 +141,7 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   DragHandle: DragHandleDemo,
   Drawer: DrawerDemo,
   EmbedPreview: EmbedPreviewDemo,
+  ShareSheet: ShareSheetDemo,
   EmptyState: EmptyStateDemo,
   Field: FieldDemo,
   FileDrop: FileDropDemo,

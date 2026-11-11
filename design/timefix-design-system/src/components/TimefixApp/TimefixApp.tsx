@@ -24,6 +24,11 @@ import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
 import { ListScreen, NewListDialog } from './lists.tsx';
 import { FormsScreen } from './forms.tsx';
 import { InsightsScreen, LinkPageScreen, LinksScreen, STARTER, handleFor } from './grow.tsx';
+import { SharedInsights } from './growparts.tsx';
+import { CopyToWorkspace, wsName, type CopySubject, type WorkspaceKey } from './copyws.tsx';
+import { guessFor } from './forms.tsx';
+import { BUILT_IN_ATTRIBUTES, type AppForm } from './data.ts';
+import { lumen as lumenSeed, olive as oliveSeed, northwind as northwindSeed, type BookingPage } from '../BookingsFlow/BookingsFlow.tsx';
 import { NewObjectDialog, SettingsScreen, groupsFor } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import { useAssemble } from '../../lib/assemble.ts';
@@ -36,7 +41,7 @@ import './TimefixApp.css';
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 
 /** Where the app is: a module, and for Records which object. */
-export type AppPage = `object:${string}` | 'home' | 'more' | 'links' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | `list:${string}` | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
+export type AppPage = `object:${string}` | `linkpage:${string}` | 'home' | 'more' | 'links' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | `list:${string}` | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
 
 const OBJECTS: ReadonlyArray<{ readonly id: ObjectId; readonly label: string; readonly icon: ReactNode }> = [
   { id: 'people', label: 'People', icon: <Users {...i16} /> }, { id: 'companies', label: 'Companies', icon: <Building2 {...i16} /> }, { id: 'deals', label: 'Deals', icon: <CircleDollarSign {...i16} /> },
@@ -93,6 +98,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [search, setSearch] = useState(false);
   /** The demo of the link page inside a partner's app. */
   const [partner, setPartner] = useState(false);
+  /** The demo of a shared Insights link, as the person it was sent to sees it. */
+  const [sharedInsights, setSharedInsights] = useState(false);
   const searchButton = <Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
   const [help, setHelp] = useState(false);
   const [newList, setNewList] = useState(false);
@@ -119,6 +126,11 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [switchWs, setSwitchWs] = useState<{ readonly id: 'northwind' | 'lumen' | 'olive'; readonly n: number }>();
   const [bookGuest, setBookGuest] = useState<{ readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number }>();
   const kind = bookings?.business?.kind ?? 'team';
+  /** The workspace showing, by its kind: the team is Northwind, the salon Lumen, the restaurant Olive. */
+  const ws: WorkspaceKey = kind === 'salon' ? 'lumen' : kind === 'restaurant' ? 'olive' : 'northwind';
+  /** Copy to another workspace: what's being copied, and booking pages and looks waiting for their workspace to show. */
+  const [copying, setCopying] = useState<{ readonly kind: 'form' | 'link'; readonly id: string } | { readonly kind: 'booking'; readonly page: BookingPage }>();
+  const [incoming, setIncoming] = useState<{ readonly n: number; readonly pages: ReadonlyArray<{ readonly ws: WorkspaceKey; readonly page: BookingPage }>; readonly looks: ReadonlyArray<{ readonly ws: WorkspaceKey; readonly pageId: string; readonly look: BookingPage['look'] }> }>({ n: 0, pages: [], looks: [] });
   const me = state.members.find((m) => m.name === state.me);
 
   // Theme: the app's own choice wins; "Match my device" hands back to whatever the page had.
@@ -283,7 +295,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       </NavSection>}
       {bookingsSection}
       <NavSection title="Grow">
-        <NavItem label="Links" icon={<Link2 {...i16} />} isCurrent={page === 'links' || page === 'link'} onPress={() => go('links')} />
+        <NavItem label="Links" icon={<Link2 {...i16} />} isCurrent={page === 'links' || page === 'link' || page.startsWith('linkpage:')} onPress={() => go('links')} />
         {!hiddenNav.has('forms') && <NavItem label="Forms" icon={<FileText {...i16} />} isCurrent={page === 'forms'} onPress={() => go('forms')} />}
         {!hiddenNav.has('insights') && <NavItem label="Insights" icon={<BarChart3 {...i16} />} isCurrent={page === 'insights'} onPress={() => go('insights')} />}
       </NavSection>
@@ -291,9 +303,65 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     </>
   );
 
+  /* Copy to another workspace: what the dialog says about the thing, then making the copy (or moving its look) there. */
+  const seedPages = (to: WorkspaceKey): ReadonlyArray<BookingPage> => [...(to === 'lumen' ? lumenSeed() : to === 'olive' ? oliveSeed() : northwindSeed()).pages, ...incoming.pages.filter((x) => x.ws === to).map((x) => x.page)];
+  const linkPagesIn = (to: WorkspaceKey) => (state.linkPages ?? []).filter((x) => (x.workspace ?? 'northwind') === to);
+  const copySubject = (c: NonNullable<typeof copying>): CopySubject => {
+    if (c.kind === 'booking') return { kind: 'booking', name: c.page.name, looksIn: (to) => seedPages(to).filter((p) => p.kind !== 'table').map((p) => ({ id: p.id, label: p.name })) };
+    if (c.kind === 'link') { const lp = (state.linkPages ?? []).find((x) => x.id === c.id); return { kind: 'link', name: lp?.name ?? 'Your link page', looksIn: (to) => [...(to === 'northwind' && c.id !== 'me' ? [{ id: 'me', label: 'Your link page' }] : []), ...linkPagesIn(to).filter((x) => x.id !== c.id).map((x) => ({ id: x.id, label: x.name }))] }; }
+    const f = state.forms.find((x) => x.id === c.id);
+    return { kind: 'form', name: f?.name ?? 'Form',
+      // Another workspace's own fields aren't Northwind's: answers saved to a field this workspace made have nowhere to go there yet.
+      unmatched: (to) => (to === 'northwind' || !f ? [] : f.questions.filter((q) => { const a = (f.mapping ?? {})[q.id] ?? guessFor(f.saveTo, q); return a !== 'none' && !BUILT_IN_ATTRIBUTES.has(a); }).map((q) => q.title || 'Untitled question')),
+      looksIn: (to) => state.forms.filter((x) => x.workspace === to && x.id !== c.id).map((x) => ({ id: x.id, label: x.name })) };
+  };
+  /** After a copy: say where it went, and Open switches workspace and opens it. */
+  const announce = (message: string, to: WorkspaceKey, open: () => void) => toast({ message, tone: 'success', action: { label: 'Open', onAction: () => { if (to !== ws) setSwitchWs((w) => ({ id: to, n: (w?.n ?? 0) + 1 })); window.setTimeout(open, to !== ws ? 700 : 0); } } });
+  const copyTo = (c: NonNullable<typeof copying>, to: WorkspaceKey, name: string) => {
+    setCopying(undefined);
+    if (c.kind === 'form') {
+      const f = state.forms.find((x) => x.id === c.id); if (!f) return;
+      const unmatched = new Set(copySubject(c).unmatched?.(to) ?? []);
+      let slug = `${f.slug}-${to}`; let n = 2; while (state.forms.some((x) => x.slug === slug)) { slug = `${f.slug}-${to}-${n}`; n += 1; }
+      const copy: AppForm = { ...f, id: newId('f'), name, slug, status: 'paused', workspace: to, live: f.questions, liveConfig: undefined, responses: [], views: 0, seen: 0, reached: undefined, updated: new Date(),
+        mapping: Object.fromEntries(f.questions.map((q) => [q.id, unmatched.has(q.title || 'Untitled question') ? 'none' : (f.mapping ?? {})[q.id] ?? guessFor(f.saveTo, q)])) };
+      dispatch({ type: 'form/set', form: copy });
+      announce(`Copied to ${wsName(to)}`, to, () => launchAt('form', 'forms', copy.id));
+    } else if (c.kind === 'booking') {
+      const id = newId('page');
+      const page: BookingPage = { ...c.page, id, name, slug: `${c.page.slug}-copy`, isOn: false, links: [], offers: [], stats: { views: 0, bookings: 0, showRate: 0 } };
+      setIncoming((x) => ({ ...x, n: x.n + 1, pages: [...x.pages, { ws: to, page }] }));
+      announce(`Copied to ${wsName(to)}`, to, () => { setOpenTab((o) => ({ tab: 'pages', n: (o?.n ?? 0) + 1, pageId: id })); setPage('bookings'); setRecord(undefined); setTrail([]); setSub(undefined); });
+    } else {
+      const src = c.id === 'me' ? undefined : (state.linkPages ?? []).find((x) => x.id === c.id);
+      const page = src ? src.draft ?? src.page : state.linkDraft ?? state.linkPage ?? STARTER;
+      const base = src?.handle ?? handleFor(state, bookings); let handle = `${base}-${to}`; let n = 2; while ((state.linkPages ?? []).some((x) => x.handle === handle)) { handle = `${base}-${to}-${n}`; n += 1; }
+      const copy = { id: newId('lp'), kind: src?.kind ?? 'me' as const, name, handle, members: src?.members ?? [state.me], editors: [state.me], page: { ...page, profile: { ...page.profile, name: src ? name : page.profile.name } }, live: false, made: new Date(), workspace: to };
+      dispatch({ type: 'linkpage/set', page: copy });
+      announce(`Copied to ${wsName(to)}`, to, () => go(`linkpage:${copy.id}`));
+    }
+  };
+  const copyLook = (c: NonNullable<typeof copying>, to: WorkspaceKey, target: string) => {
+    setCopying(undefined);
+    if (c.kind === 'form') {
+      const f = state.forms.find((x) => x.id === c.id); const t = state.forms.find((x) => x.id === target); if (!f || !t) return;
+      dispatch({ type: 'form/patch', id: t.id, patch: () => ({ look: f.look, corners: f.corners, useBrand: f.useBrand, lang: t.lang, updated: new Date() }) });
+      announce(`The look of ${f.name} is on ${t.name} in ${wsName(to)}`, to, () => launchAt('form', 'forms', t.id));
+    } else if (c.kind === 'booking') {
+      const t = seedPages(to).find((p) => p.id === target);
+      setIncoming((x) => ({ ...x, n: x.n + 1, looks: [...x.looks.filter((y) => !(y.ws === to && y.pageId === target)), { ws: to, pageId: target, look: c.page.look }] }));
+      announce(`The look of ${c.page.name} is on ${t?.name ?? 'the page'} in ${wsName(to)}`, to, () => { setOpenTab((o) => ({ tab: 'pages', n: (o?.n ?? 0) + 1, pageId: target })); setPage('bookings'); });
+    } else {
+      const src = c.id === 'me' ? state.linkPage ?? STARTER : (state.linkPages ?? []).find((x) => x.id === c.id)?.page; if (!src) return;
+      const dress = (p: typeof src) => ({ ...p, look: src.look, accent: src.accent, profile: { ...p.profile, cover: src.profile.cover, ground: src.profile.ground, groundColour: src.profile.groundColour, shape: src.profile.shape } });
+      if (target === 'me') { dispatch({ type: 'link/publish', page: dress(state.linkPage ?? STARTER) }); announce('The look is on your link page', to, () => go('link')); }
+      else { const t = (state.linkPages ?? []).find((x) => x.id === target); if (!t) return; dispatch({ type: 'linkpage/patch', id: t.id, patch: { page: dress(t.page), draft: t.draft ? dress(t.draft) : undefined } }); announce(`The look is on ${t.name} in ${wsName(to)}`, to, () => go(`linkpage:${t.id}`)); }
+    }
+  };
+
   const listOpen = page.startsWith('list:') ? state.lists.find((l) => `list:${l.id}` === page) : undefined;
   const custom = page.startsWith('object:') ? state.objects.find((o) => `object:${o.id}` === page) : undefined;
-  const head = page === 'more' ? { label: 'More', icon: <Menu {...i16} /> } : custom ? { label: custom.many, icon: <Boxes {...i16} /> } : listOpen ? { label: listOpen.name, icon: <ListChecks {...i16} /> } : TITLES[page];
+  const head = page === 'more' ? { label: 'More', icon: <Menu {...i16} /> } : custom ? { label: custom.many, icon: <Boxes {...i16} /> } : listOpen ? { label: listOpen.name, icon: <ListChecks {...i16} /> } : page.startsWith('linkpage:') ? TITLES.link : TITLES[page];
   const lk = launch ? `${launch.kind}-${launch.n}` : 'plain';
   const main: ReactNode = page === 'home' ? <HomeScreen recent={recent} onOpenRecord={(o, id) => openRecord(o, id)} state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} onImport={() => { go('records:people'); setSub('import'); }} onSettings={(at) => openSettings(at)} onNewTask={() => launchAt('task', 'tasks')} onReports={(rid) => launchAt('report', 'insights', rid)} />
     : page === 'more' ? <MoreScreen state={state} bookings={bookings} kind={kind} unread={unread} onGo={go} onBookings={openBookings} onSettings={openSettings} onSignOut={() => setSigningOut(true)} onNewList={() => setNewList(true)} />
@@ -301,11 +369,12 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} newFor={taskFor} />
     : page === 'notes' ? <NotesScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} openNote={launch?.kind === 'note' ? launch.value : undefined} />
     : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenTrashed={(o, rid) => { setRecord({ object: o, id: rid, trashed: true }); }} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} page={settingsPage} onPage={setSettingsPage} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
-    : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onBack={() => go('links')} />
-    : page === 'links' ? <LinksScreen state={state} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
+    : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onBack={() => go('links')} onCopyToWorkspace={() => setCopying({ kind: 'link', id: 'me' })} />
+    : page.startsWith('linkpage:') ? <LinkPageScreen key={page} pageId={page.slice(9)} state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onBack={() => go('links')} onCopyToWorkspace={() => setCopying({ kind: 'link', id: page.slice(9) })} />
+    : page === 'links' ? <LinksScreen state={state} dispatch={dispatch} workspace={ws} onOpenPage={(id) => go(`linkpage:${id}`)} onCopy={(id) => setCopying({ kind: 'link', id })} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
     : page === 'insights' ? <InsightsScreen key={lk} state={state} dispatch={dispatch} bookings={bookings} startTab={launch?.kind === 'report' ? 'reports' : undefined} startReport={launch?.kind === 'report' ? launch.value : undefined} />
-    : page === 'forms' ? <FormsScreen key={lk} start={launch && (launch.kind === 'form' || launch.kind === 'visit') && launch.value ? { id: launch.value, visit: launch.kind === 'visit' } : undefined} state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onOpenRecord={(object, id) => { if (object === 'people' || object === 'companies' || object === 'deals') openRecord(object, id); else go(`object:${object}`); }} onBookings={openBookings} onBookGuest={(w) => setBookGuest((g) => ({ prefill: w.name || w.email ? { name: w.name || w.email, email: w.email } : undefined, n: (g?.n ?? 0) + 1 }))} />
+    : page === 'forms' ? <FormsScreen key={lk} workspace={ws} onCopy={(id) => setCopying({ kind: 'form', id })} start={launch && (launch.kind === 'form' || launch.kind === 'visit') && launch.value ? { id: launch.value, visit: launch.kind === 'visit' } : undefined} state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onOpenRecord={(object, id) => { if (object === 'people' || object === 'companies' || object === 'deals') openRecord(object, id); else go(`object:${object}`); }} onBookings={openBookings} onBookGuest={(w) => setBookGuest((g) => ({ prefill: w.name || w.email ? { name: w.name || w.email, email: w.email } : undefined, n: (g?.n ?? 0) + 1 }))} />
     : custom ? <RecordsScreen key={`${custom.id}-${lk}`} state={state} dispatch={dispatch} object={custom.id} onOpen={openRecord} startNew={launch?.kind === 'create' ? launch.value ?? '' : undefined} startView={launch?.kind === 'view' ? launch.value : undefined} startNaming={launch?.kind === 'newview'}
       onImport={() => setSub('import')} onDuplicates={() => setSub('dupes')} onAttributes={() => openSettings(`objects:${custom.id}`)} onTrash={() => openSettings(`trash:${custom.id}`)} onExportReady={(f) => { exportView.current = f; }} />
     : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} onRestored={(lid) => go(`list:${lid}`)} />
@@ -331,13 +400,13 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     </>
   );
   const moreIds = ['more', 'tasks', 'notes', 'forms', 'link', 'links', 'insights', 'settings'];
-  const tabCurrent = page.startsWith('records') || page.startsWith('object:') ? 'records' : moreIds.includes(page) || page.startsWith('list:') ? 'more' : page;
+  const tabCurrent = page.startsWith('records') || page.startsWith('object:') ? 'records' : moreIds.includes(page) || page.startsWith('list:') || page.startsWith('linkpage:') ? 'more' : page;
 
   return (
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
       <div ref={shellRef} className="tf-app__keep" inert={door !== undefined || undefined}>
-      <BookingsFlow showDemoMenu demoItems={[{ id: 'partner', label: 'Your link page in a partner’s app', description: 'The embedded frame: its start screen, then the page' }]} onDemo={(id) => { if (id === 'partner') setPartner(true); }} onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
+      <BookingsFlow showDemoMenu demoItems={[{ id: 'partner', label: 'Your link page in a partner’s app', description: 'The embedded frame: its start screen, then the page' }, { id: 'insights', label: 'A shared Insights link', description: 'What someone you sent the numbers to sees' }]} onDemo={(id) => { if (id === 'partner') setPartner(true); else if (id === 'insights') setSharedInsights(true); }} onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} onCopyPage={(p) => setCopying({ kind: 'booking', page: p })} incoming={incoming} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
           if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
@@ -368,6 +437,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); setAssembling((n) => n + 1); }} />}
+      {copying && <CopyToWorkspace subject={copySubject(copying)} current={ws} onClose={() => setCopying(undefined)} onCopy={(to, name) => copyTo(copying, to, name)} onCopyLook={(to, target) => copyLook(copying, to, target)} />}
+      {sharedInsights && <SharedInsights state={state} bookings={bookings} onClose={() => setSharedInsights(false)} />}
       {partner && <PartnerFrame state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onClose={() => setPartner(false)} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={[...here, ...commands]} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
         placeholder="Search records, views, notes, or type a command…" />

@@ -2,9 +2,9 @@ LinkEditor is where a person builds their link page: blocks on the left, a live 
 
 **Use it for**: the link page editor. **Don't use it for** settings that take effect at once; this page drafts and publishes.
 
-**The consumer provides**: `live` (the page guests see: profile, socials, blocks, look, accent), `onPublish(draft)`, a promise, and `booking` for the preview's booking block. The editor keeps the draft itself.
+**The consumer provides**: `live` (the page guests see: profile, socials, blocks, look, accent, and `details`: site title, closing line, share image, search indexing), `onPublish(draft)`, a promise, and `booking` for the preview's booking block. The editor keeps the draft itself.
 
-**States**: the look picker (Calm, Bold, Soft, Night, Custom, which opens the colour picker), the profile row, blocks with a grip, a tile, title and address, click counts and a show switch (hidden blocks dim). A deleted block leaves "Deleted · Undo". PublishBar counts unpublished changes, then publishes and says so.
+**States**: the profile row (photo with crop, name, title, bio, photo shape), Design (template, own colour, cover and background photos, each cropped) and Details beside each other, Import (paste links or a page's text; review the links found; it never fetches another site), blocks with a grip, a tile, title and address, click counts and a show switch (hidden blocks dim). A deleted block leaves "Deleted · Undo". Every block but dividers and social icons has More options: show from and until (a row says "Not showing today" outside them), size (small sits two to a row), and for links and media Ask first (sensitive, 18+, 21+). Archive takes a block off the page and keeps it in Archived, where Restore brings it back and Delete asks first. New kinds: Next times, Video or music, Picture, Gallery, Banner, and a Header that folds shut. PublishBar counts unpublished changes, then publishes and says so.
 
 **Interaction**: drag a grip, or focus it and press Enter, arrows and Enter, to reorder; the row lifts, its source fades and the drop slot opens dashed. Enter or a click on a row opens it in the side panel; the list and panel slide side by side (8px. Typing updates the preview at once. New blocks drop in at the top and open for editing; an edited row gets a brief accent wash. Pasting a social link swaps in the network's mark.
 

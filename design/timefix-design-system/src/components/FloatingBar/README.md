@@ -9,3 +9,6 @@ A floating bar is a pill at the bottom of a region that holds the actions for wh
 **Interaction**: the bar is a toolbar, so Tab enters it once and arrows move between buttons; Esc clears a selection; ⌘S saves. It rises with transitions.dev toast motion (16px, 0.97, 350ms) and leaves in 250ms; labels crossfade so the pill never jumps; the count rolls.
 
 **Replaces**: FloatingBar, BulkActionBar, SaveBar, PublishBar, VisitorBar.
+
+
+**One publish system**: every editor that drafts (forms, booking pages, the link page and team pages, menus, the business page) uses PublishBar with the same words: never published "Not published yet · Publish" (`message`), changes "N unpublished changes · Discard · Publish", then the spinner and "Guests see the new page". No editor keeps its own Publish button beside it. A first publish opens ShareSheet.

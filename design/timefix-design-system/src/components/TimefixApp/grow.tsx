@@ -7,7 +7,12 @@ import { Link } from '../Link/Link.tsx';
 import { DialogTrigger } from 'react-aria-components';
 import { Popover } from '../Popover/Popover.tsx';
 import { SearchField } from '../SearchField/SearchField.tsx';
-import { ArrowLeft, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, BarChart3, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, Users, UtensilsCrossed } from 'lucide-react';
+import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
+import { Switch } from '../Checkbox/Checkbox.tsx';
+import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
+import { SocialMark } from '../SocialLinks/SocialLinks.tsx';
+import { SharedInsights, ClaimHandle, InsightsNumbers, InsightsShareDialog, LinkInsightsDrawer, SessionsTable, TeamPagesDialog, inScope, sessionsCsv, sessionsOf } from './growparts.tsx';
 import { LinkEditor, type LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { demoBlocks, demoBooking, demoProfile, demoSocials } from '../LinkPage/LinkPage.demo.tsx';
@@ -25,7 +30,9 @@ import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { lengthOf, placeLabel } from '../BookingsFlow/state.ts';
-import { dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type ObjectId, type Report } from './data.ts';
+import { dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type ObjectId, type Report, type SharedLinkPage } from './data.ts';
+import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
+import { TileGrid } from '../Card/Card.tsx';
 import { isOpenDeal, kindOf, oddsOf, ownFields, stagesOf, viewRows, wordsOf } from './model.tsx';
 import { Stat } from '../Chart/Chart.tsx';
 
@@ -36,17 +43,30 @@ export const STARTER: LinkPageDraft = { profile: demoProfile, socials: demoSocia
 /** Copies text, and says honestly whether it worked. */
 const copyText = (text: string) => navigator.clipboard.writeText(text).then(() => true, () => false);
 /** Whose address the links live under: the business's handle, or the host's own name on a team. */
-export const handleFor = (state: AppState, bookings: BookingsState | undefined) => bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase() || 'me';
+export const handleFor = (state: AppState, bookings: BookingsState | undefined) => bookings?.business?.handle || state.linkHandle || state.me.split(' ')[0]?.toLowerCase() || 'me';
 
 /** The link page editor: edit beside the phone; Publish keeps it in the workspace. Unpublished work is kept in the app, so See it and leaving never lose it. */
-export function LinkPageScreen({ state, dispatch, handle, onBack, bookings, isEmbedded = false }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void; readonly bookings?: BookingsState; /** Inside a partner's frame: no way back into the rest of Timefix. */ readonly isEmbedded?: boolean }) {
+export function LinkPageScreen({ state, dispatch, handle: ownHandle, onBack, bookings, isEmbedded = false, pageId, onCopyToWorkspace }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void; readonly bookings?: BookingsState; /** Inside a partner's frame: no way back into the rest of Timefix. */ readonly isEmbedded?: boolean;
+  /** A team's or company's page instead of your own. */ readonly pageId?: string; /** "Copy to another workspace…" in the ⋯ menu. */ readonly onCopyToWorkspace?: () => void }) {
   const { toast } = useToast();
-  const live = state.linkPage ?? STARTER;
-  const published = (state.linkPage !== undefined || state.setupDone.includes('link')) && !state.linkOffline;
+  const shared = pageId ? (state.linkPages ?? []).find((x) => x.id === pageId) : undefined;
+  const live = shared ? shared.page : state.linkPage ?? STARTER;
+  const draft = shared ? shared.draft : state.linkDraft;
+  const handle = shared ? shared.handle : ownHandle;
+  const isPrivate = shared ? !shared.live : Boolean(state.linkOffline);
+  const published = shared ? shared.live : (state.linkPage !== undefined || state.setupDone.includes('link')) && !state.linkOffline;
+  const setLive = (on: boolean) => { if (shared) dispatch({ type: 'linkpage/patch', id: shared.id, patch: { live: on } }); else dispatch({ type: 'link/offline', offline: !on }); };
   const [offlineAsk, setOfflineAsk] = useState(false);
   const [seeing, setSeeing] = useState(false);
   const [qr, setQr] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [stats, setStats] = useState(false);
+  const [team, setTeam] = useState(false);
+  const [people, setPeople] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const url = `timefix.com/${handle}`;
+  const name = shared ? `the ${shared.name} page` : 'your link page';
+  const members = shared && shared.kind !== 'me' ? shared.members.map((m) => ({ name: m, title: state.members.find((x) => x.name === m)?.title })) : undefined;
   const copy = () => { void copyText(`https://${url}`).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. Your link is ${url}`, tone: 'danger' })); };
   /** A visitor joins the list: they're filed in People (matched by email), tagged with the signup's heading. */
   const signup = (email: string, heading: string) => {
@@ -60,32 +80,110 @@ export function LinkPageScreen({ state, dispatch, handle, onBack, bookings, isEm
       {seeing && (
         <div className="tf-grow__see">
           <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setSeeing(false)}>Back to editing</Button><span className="tf-rec__muted">{url}</span>
-            {state.linkDraft && <Tag size="sm" hue="orange">This is the live page; your changes aren’t published yet</Tag>}</div>
-          <LinkPage {...live} booking={demoBooking} onSignup={signup} />
+            {draft && <Tag size="sm" hue="orange">This is the live page; your changes aren’t published yet</Tag>}</div>
+          <LinkPage {...live} booking={demoBooking} onSignup={signup} closing={live.details?.closing} members={members} />
         </div>
       )}
       <div className="tf-grow" hidden={seeing}>
         <div className="tf-rec__bar">
           {!isEmbedded && <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>}
-          <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : state.linkOffline ? 'Offline' : 'Not published'}</Tag>
+          <span className="tf-grow__url tf-num">{url}</span>
+          {shared && <Tag size="sm" hue="purple">{shared.kind === 'company' ? 'Company' : shared.kind === 'team' ? 'Team' : 'Me'}</Tag>}
+          <Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : isPrivate ? 'Private' : 'Not published'}</Tag>
           <span className="tf-rec__spacer" />
-          <Button variant="ghost" icon={<Copy {...i14} />} isDisabled={!published} onPress={copy}>Copy link</Button>
-          <Button variant="ghost" icon={<QrIcon {...i14} />} isDisabled={!published} onPress={() => setQr(true)}>QR code</Button>
-          <Button variant="secondary" icon={<ExternalLink {...i14} />} isDisabled={!published} onPress={() => setSeeing(true)}>See it</Button>
-          {state.linkPage && (state.linkOffline
-            ? <Button variant="ghost" onPress={() => { dispatch({ type: 'link/offline', offline: false }); toast({ message: 'Your page is back online', tone: 'success' }); }}>Put back online</Button>
-            : <Button variant="ghost" onPress={() => setOfflineAsk(true)}>Take offline</Button>)}
-          {offlineAsk && <Dialog isOpen onOpenChange={(o) => { if (!o) setOfflineAsk(false); }} title="Take your page offline?" description={`Visitors to ${url} see that it’s not available. Nothing is deleted, and you can put it back any time.`}
-            actions={<><Button variant="ghost" slot="close">Keep it live</Button><Button variant="danger" onPress={() => { setOfflineAsk(false); dispatch({ type: 'link/offline', offline: true }); toast({ message: 'Your page is offline', action: { label: 'Undo', onAction: () => dispatch({ type: 'link/offline', offline: false }) } }); }}>Take offline</Button></>} />}
+          {/* The same header as every editor's: see it as a guest, Share, ⋯. */}
+          <Button variant="ghost" icon={<ExternalLink {...i14} />} isDisabled={!published} onPress={() => setSeeing(true)}>See it as a guest</Button>
+          <Button variant="ghost" icon={<Share2 {...i14} />} isDisabled={!published} onPress={() => setSharing(true)}>Share</Button>
+          <MenuTrigger>
+            <IconButton label="More for this link page"><MoreHorizontal {...i16} /></IconButton>
+            <Menu aria-label="Link page" placement="bottom end" onAction={(k) => { if (k === 'qr') setQr(true); else if (k === 'copy') copy(); else if (k === 'insights') setStats(true); else if (k === 'team') setTeam(true); else if (k === 'people') setPeople(true); else if (k === 'copyws') onCopyToWorkspace?.(); else if (k === 'delete') setDropping(true); }}>
+              <MenuItem id="copy" icon={<Copy {...i16} />} isDisabled={!published}>Copy link</MenuItem>
+              <MenuItem id="qr" icon={<QrIcon {...i16} />} isDisabled={!published}>QR code</MenuItem>
+              <MenuItem id="insights" icon={<BarChart3 {...i16} />} description="Views, clicks and sources">Insights</MenuItem>
+              {shared && shared.kind !== 'me' && <MenuItem id="people" icon={<Users {...i16} />} description="Who shows on it, and who can edit it">Members and editors</MenuItem>}
+              {!shared && !isEmbedded && <MenuItem id="team" icon={<Users {...i16} />}>Team pages</MenuItem>}
+              {onCopyToWorkspace && !isEmbedded && <MenuItem id="copyws" icon={<Copy {...i16} />}>Copy to another workspace…</MenuItem>}
+              {shared && <MenuSeparator />}
+              {shared && <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete page</MenuItem>}
+            </Menu>
+          </MenuTrigger>
+          {(shared || state.linkPage) && <span className="tf-gp__live"><Switch aria-label="Live" isSelected={!isPrivate} onChange={(on) => { if (on) { setLive(true); toast({ message: 'Your page is live', tone: 'success' }); } else setOfflineAsk(true); }}>{isPrivate ? 'Private' : 'Live'}</Switch></span>}
+          {offlineAsk && <Dialog isOpen onOpenChange={(o) => { if (!o) setOfflineAsk(false); }} title="Make this page private?" description={`Visitors to ${url} see that it’s not available. Nothing is deleted, and you can turn on Live any time.`}
+            actions={<><Button variant="ghost" slot="close">Keep it live</Button><Button variant="danger" onPress={() => { setOfflineAsk(false); setLive(false); toast({ message: 'Private. Turn on Live to share it.', action: { label: 'Undo', onAction: () => setLive(true) } }); }}>Make private</Button></>} />}
         </div>
-        <LinkEditor live={live} booking={demoBooking} initialDraft={state.linkDraft} neverPublished={!published}
+        {!shared && !state.linkHandle && !bookings?.business && !isEmbedded && <ClaimHandle state={state} dispatch={dispatch} suggestion={handle} />}
+        <ShareSheet isOpen={sharing} onOpenChange={setSharing} title={`Share ${shared ? shared.name : 'your page'}`} url={url} name={name}
+          onSite={() => { void copyText(`<iframe src="https://${url}?embed=1" style="width:100%;min-height:640px;border:0" title="${shared?.name ?? 'Link page'}"></iframe>`).then((ok) => toast(ok ? { message: 'Embed code copied. Paste it into your site’s HTML.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}
+          extra={<>{(['x', 'linkedin', 'facebook'] as const).map((n) => <Button key={n} size="sm" variant="ghost" icon={<SocialMark network={n} size={14} />} onPress={() => window.open(n === 'x' ? `https://x.com/intent/post?url=${encodeURIComponent(`https://${url}`)}` : n === 'linkedin' ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`https://${url}`)}` : `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://${url}`)}`, '_blank', 'noopener')}>{n === 'x' ? 'X' : n === 'linkedin' ? 'LinkedIn' : 'Facebook'}</Button>)}</>} />
+        {stats && <LinkInsightsDrawer state={state} page={live} pageKey={shared ? `link:${shared.id}` : 'link'} onClose={() => setStats(false)} />}
+        {team && <TeamPagesDialog state={state} dispatch={dispatch} onClose={() => setTeam(false)} />}
+        {people && shared && <MembersDialog state={state} page={shared} onClose={() => setPeople(false)} onSave={(patch) => { dispatch({ type: 'linkpage/patch', id: shared.id, patch }); setPeople(false); toast({ message: 'Saved. It’s on the page now.', tone: 'success' }); }} />}
+        {dropping && shared && <Dialog isOpen onOpenChange={(o) => { if (!o) setDropping(false); }} title={`Delete the ${shared.name} page?`} description={`${url} stops working at once, and its blocks go with it.`}
+          actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="danger" onPress={() => { const was = shared; dispatch({ type: 'linkpage/remove', id: shared.id }); onBack(); toast({ message: `Deleted the ${was.name} page.`, action: { label: 'Undo', onAction: () => dispatch({ type: 'linkpage/set', page: was }) } }); }}>Delete page</Button></>} />}
+        <LinkEditor key={pageId ?? 'me'} live={live} booking={demoBooking} initialDraft={draft} neverPublished={!published && !isPrivate} members={members}
           forms={state.forms.map((f) => ({ slug: f.slug, name: f.name, live: f.status === 'live' }))}
           bookingPages={(bookings?.pages ?? []).filter((p) => p.kind !== 'table' && p.isOn).map((p) => { const where = p.places?.[0] ?? 'video'; return { slug: p.slug, name: p.name, minutes: lengthOf(p), location: { kind: where === 'phone' ? 'phone' as const : where === 'in-person' ? 'place' as const : 'video' as const, label: placeLabel(p, where) } }; })}
-          onDraftChange={(d) => { if (JSON.stringify(d) !== JSON.stringify(state.linkDraft)) dispatch({ type: 'link/draft', page: d }); }}
-          onPublish={(page) => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'link/publish', page }); resolve(); }, 500); })} />
-        {qr && <QrSheet url={url} name="your link page" onClose={() => setQr(false)} />}
+          onDraftChange={(d) => { if (JSON.stringify(d) === JSON.stringify(draft)) return; if (shared) dispatch({ type: 'linkpage/patch', id: shared.id, patch: { draft: d } }); else dispatch({ type: 'link/draft', page: d }); }}
+          onPublish={(page) => new Promise<void>((resolve) => { window.setTimeout(() => { if (shared) dispatch({ type: 'linkpage/patch', id: shared.id, patch: { page, draft: undefined } }); else dispatch({ type: 'link/publish', page }); resolve(); }, 500); })} />
+        {qr && <QrSheet url={url} name={name} onClose={() => setQr(false)} />}
       </div>
     </>
+  );
+}
+
+/** Who shows on a team's or company's page, and who can edit it. */
+function MembersDialog({ state, page, onClose, onSave }: { readonly state: AppState; readonly page: SharedLinkPage; readonly onClose: () => void; readonly onSave: (p: Partial<SharedLinkPage>) => void }) {
+  const [members, setMembers] = useState<ReadonlySet<string>>(new Set(page.members));
+  const [editors, setEditors] = useState<ReadonlySet<string>>(new Set(page.editors));
+  const people = state.members.filter((m) => m.role !== 'Guest');
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Members and editors" description={`Members show on timefix.com/${page.handle}. Editors can change the page; owners and admins always can.`}
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={members.size === 0} onPress={() => onSave({ members: [...members], editors: [...editors] })}>Save</Button></>}>
+      <div className="tf-rec__form">
+        <ChoiceChips label="Shown on the page" selectionMode="multiple" size="sm" selectedKeys={members} items={people.map((m) => ({ id: m.name, label: m.name }))} onSelectionChange={setMembers} />
+        <ChoiceChips label="Can edit it" selectionMode="multiple" size="sm" selectedKeys={editors} items={people.map((m) => ({ id: m.name, label: m.name }))} onSelectionChange={setEditors} />
+      </div>
+    </Dialog>
+  );
+}
+
+/** New page: which kind (you, a team, the company), then its name, address, members and editors. It starts Private. */
+export function NewLinkPage({ state, bookings, workspace, onClose, onMade, onMine }: { readonly state: AppState; readonly bookings: BookingsState | undefined; readonly workspace: string; readonly onClose: () => void; readonly onMade: (p: SharedLinkPage) => void; readonly onMine: () => void }) {
+  const [kind, setKind] = useState<'me' | 'team' | 'company'>('team');
+  const teams = state.prefs.teams;
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? 'new');
+  const companyName = state.prefs.workspace.name;
+  const team = teams.find((t) => t.id === teamId);
+  const [name, setName] = useState(team?.name ?? '');
+  const slugify = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+  const [handle, setHandle] = useState(slugify(`${companyName}-${team?.name ?? 'team'}`));
+  const [members, setMembers] = useState<ReadonlySet<string>>(new Set(team?.members ?? []));
+  const [editors, setEditors] = useState<ReadonlySet<string>>(new Set([state.me]));
+  const people = state.members.filter((m) => m.role !== 'Guest');
+  const taken = new Set([handleFor(state, bookings), ...(state.linkPages ?? []).map((x) => x.handle), ...(state.teamPages ?? []).map((x) => x.handle)]);
+  const bad = !/^[a-z0-9-]{2,30}$/.test(handle); const isTaken = taken.has(handle);
+  const pick = (k: string) => {
+    const nk = k === 'me' ? 'me' : k === 'company' ? 'company' : 'team'; setKind(nk);
+    if (nk === 'company') { setName(companyName); setHandle(slugify(`${companyName}-${workspace === 'northwind' ? 'hq' : 'team'}`)); setMembers(new Set(people.map((m) => m.name))); }
+    if (nk === 'team') { setName(team?.name ?? ''); setHandle(slugify(`${companyName}-${team?.name ?? 'team'}`)); setMembers(new Set(team?.members ?? [])); }
+  };
+  return (
+    <Dialog isOpen size="wide" onOpenChange={(o) => { if (!o) onClose(); }} title="New page" description="A link page for you, a team or the whole company. Each has its own address; all of them list here in Links."
+      actions={kind === 'me' ? <><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={onMine}>Open your page</Button></>
+        : <><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || bad || isTaken || members.size === 0} onPress={() => onMade({ id: newId('lp'), kind, name: name.trim(), handle, members: [...members], editors: [...editors], live: false, made: new Date(), workspace,
+          page: { profile: { name: name.trim(), bio: kind === 'company' ? `Everyone at ${companyName}, in one place.` : `The ${name.trim()} team at ${companyName}.` }, socials: [], blocks: [{ kind: 'next', id: newId('lb'), title: kind === 'company' ? 'Talk to us' : `Book the ${name.trim()} team`, durationMinutes: 30, location: { kind: 'video', label: 'Google Meet' } }], look: 'calm', accent: '#0F766E' } })}>Create page</Button></>}>
+      <div className="tf-rec__form">
+        <TileGrid label="Whose page" columns={3} value={kind} onChange={pick} items={[{ id: 'me', title: 'Me', description: 'Your own page', icon: <IdCard {...i16} /> }, { id: 'team', title: 'A team', description: 'Its people, booked by whoever is free', icon: <Users {...i16} /> }, { id: 'company', title: 'The company', description: `${companyName}, for everyone`, icon: <Store {...i16} /> }]} />
+        {kind === 'me' ? <p className="tf-rec__muted">You have one already at timefix.com/{handleFor(state, bookings)}. It opens in the same editor.</p> : <>
+          {kind === 'team' && teams.length > 0 && <Select label="Team" value={teamId} onChange={(v) => { const t = teams.find((x) => x.id === v); setTeamId(v ?? 'new'); if (t) { setName(t.name); setMembers(new Set(t.members)); setHandle(slugify(`${companyName}-${t.name}`)); } else setName(''); }} items={[...teams.map((t) => ({ id: t.id, label: t.name, description: `${t.members.length} ${t.members.length === 1 ? 'person' : 'people'}` })), { id: 'new', label: 'Another team…' }]} />}
+          <div className="tf-bkf__pair"><TextField label="Name" value={name} onChange={setName} placeholder="Sales" />
+            <TextField label="Link" value={handle} onChange={(v) => setHandle(v.toLowerCase().replace(/[^a-z0-9-]/g, ''))} icon={<span className="tf-rec__muted tf-num">timefix.com/</span>} isInvalid={bad || isTaken} errorMessage={isTaken ? 'Taken. Pick another.' : 'Use 2 to 30 letters, numbers or hyphens.'} description={!bad && !isTaken ? `/${handle} is available.` : undefined} /></div>
+          <ChoiceChips label="Shown on the page" selectionMode="multiple" size="sm" selectedKeys={members} items={people.map((m) => ({ id: m.name, label: m.name }))} onSelectionChange={setMembers} />
+          <ChoiceChips label="Can edit it" selectionMode="multiple" size="sm" selectedKeys={editors} items={people.map((m) => ({ id: m.name, label: m.name }))} onSelectionChange={setEditors} />
+          <p className="tf-rec__muted">It starts Private. Turn on Live to share it.</p>
+        </>}
+      </div>
+    </Dialog>
   );
 }
 
@@ -103,29 +201,40 @@ export function QrSheet({ url, name, onClose }: { readonly url: string; readonly
 }
 
 /** One thing you share. */
-interface ShareRow { readonly id: string; readonly icon: ReactNode; readonly name: string; readonly url: string; readonly live: boolean; readonly off?: string; readonly numbers: string; readonly open: () => void; readonly edit: () => void; readonly editLabel: string }
+interface ShareRow { /** Me, Team or Company, on link pages. */ readonly kind?: string; /** Copy to another workspace. */ readonly copyWs?: () => void; readonly id: string; readonly icon: ReactNode; readonly name: string; readonly url: string; readonly live: boolean; readonly off?: string; readonly numbers: string; readonly open: () => void; readonly edit: () => void; readonly editLabel: string; /** One more thing its ⋯ menu offers ("Submissions"). */ readonly extra?: { readonly label: string; readonly run: () => void } }
 
 /** Links: everything you share, in one place. */
-export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPage, onBookings, onForm }: {
+export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, onBookingPage, onBookings, onForm, onOpenPage, workspace = 'northwind', onCopy }: {
   readonly state: AppState; readonly bookings: BookingsState | undefined; readonly appsMenu: boolean;
   readonly onLinkPage: () => void; readonly onBookingPage: (pageId: string | undefined, scenario: 'book' | 'profile' | 'menu') => void; readonly onBookings: (tab: string) => void;
   readonly onForm: (id: string, visit: boolean) => void;
+  /** Team and company pages: dispatch makes one, onOpenPage edits it. */
+  readonly dispatch?: (a: AppAction) => void; readonly onOpenPage?: (id: string) => void;
+  /** The workspace shown: pages copied elsewhere stay there. */ readonly workspace?: string;
+  /** "Copy to another workspace…" on a link page's ⋯ ('me' is your own). */ readonly onCopy?: (pageId: string) => void;
 }) {
   const { toast } = useToast();
+  const [making, setMaking] = useState(false);
+  const shared = (state.linkPages ?? []).filter((x) => (x.workspace ?? 'northwind') === workspace);
   const [qr, setQr] = useState<ShareRow>();
   const [query, setQuery] = useState('');
   const handle = handleFor(state, bookings);
   const business = bookings?.business;
   const now = new Date();
   const upcoming = (pageId?: string) => (bookings?.meetings ?? []).filter((m) => (pageId === undefined || m.pageId === pageId) && m.status !== 'cancelled' && m.start > now).length;
+  const sharedRows: ReadonlyArray<ShareRow> = shared.map((x) => ({ id: x.id, kind: x.kind === 'company' ? 'Company' : x.kind === 'team' ? 'Team' : 'Me', icon: x.kind === 'company' ? <Store {...i16} /> : x.kind === 'team' ? <Users {...i16} /> : <IdCard {...i16} />, name: x.name, url: `timefix.com/${x.handle}`, live: x.live, off: 'Private',
+          numbers: `${x.page.blocks.filter((b) => !b.archived).length} blocks · ${x.members.length} ${x.members.length === 1 ? 'person' : 'people'}`, open: () => onOpenPage?.(x.id), edit: () => onOpenPage?.(x.id), editLabel: 'Edit page', copyWs: onCopy ? () => onCopy(x.id) : undefined }));
   const rows: ReadonlyArray<{ readonly title: string; readonly rows: ReadonlyArray<ShareRow> }> = [
-    { title: 'Your page', rows: business
+    { title: business ? 'Your page' : 'Link pages', rows: business
       ? [{ id: 'home', icon: <Store {...i16} />, name: bookings?.workspace ?? 'Your business page', url: `timefix.com/${handle}`, live: business.published, off: 'Not published', numbers: `${upcoming()} upcoming bookings`, open: () => onBookingPage(undefined, 'profile'), edit: () => onBookings('pages'), editLabel: 'Edit page' }]
-      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: (() => { const blocks = (state.linkPage ?? STARTER).blocks; const n = blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length; const clicks = blocks.reduce((t, b) => t + (b.kind === 'link' ? b.clicks ?? 0 : 0), 0); return `${n} links${clicks ? ` · ${clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks} clicks` : ''}`; })(), open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
+      : [{ id: 'link', kind: 'Me', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: (() => { const blocks = (state.linkPage ?? STARTER).blocks; const n = blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length; const clicks = blocks.reduce((t, b) => t + (b.kind === 'link' ? b.clicks ?? 0 : 0), 0); return `${n} links${clicks ? ` · ${clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks} clicks` : ''}`; })(), open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page', copyWs: onCopy ? () => onCopy('me') : undefined },
+        ...sharedRows] },
+    ...(business && sharedRows.length ? [{ title: 'Link pages', rows: sharedRows }] : []),
     { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
       numbers: `${upcoming(p.id)} upcoming`, open: () => onBookingPage(p.id, 'book'), edit: () => onBookings('pages'), editLabel: 'Edit in Bookings' })) },
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),
-    { title: 'Forms', rows: state.forms.map((f) => ({ id: f.id, icon: <FileText {...i16} />, name: f.name, url: `timefix.com/f/${f.slug}`, live: f.status === 'live', off: f.status === 'draft' ? 'Draft' : 'Paused', numbers: `${f.responses.filter((r) => !r.spam).length} responses`, open: () => onForm(f.id, true), edit: () => onForm(f.id, false), editLabel: 'Edit form' })) },
+    { title: 'Forms', rows: state.forms.filter((f) => !f.workspace || f.workspace === workspace).map((f) => ({ id: f.id, icon: <FileText {...i16} />, name: f.name, url: `timefix.com/f/${f.slug}`, live: f.status === 'live', off: f.status === 'draft' ? 'Not published' : 'Paused', numbers: `${f.responses.filter((r) => !r.spam).length} responses`, open: () => onForm(f.id, true), edit: () => onForm(f.id, false), editLabel: 'Edit form' })) },
+    { title: 'Managed pages', rows: (state.teamPages ?? []).map((t) => ({ id: t.id, icon: <Users {...i16} />, name: t.name, url: `timefix.com/${t.handle}`, live: t.status === 'live', off: 'Invited', numbers: t.status === 'live' ? `${t.blocks} blocks` : 'Waiting for them', open: onLinkPage, edit: onLinkPage, editLabel: 'Team pages' })) },
   ].filter((g) => g.rows.length > 0);
   const q = query.trim().toLowerCase();
   const total = rows.reduce((n, g) => n + g.rows.length, 0);
@@ -136,6 +245,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
     <div className="tf-links">
       <div className="tf-you__bar">
         <SearchField label="Search links" placeholder="Search links" size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
+        {dispatch && !business && <Button size="sm" variant="primary" icon={<Plus {...i14} />} onPress={() => setMaking(true)}>New page</Button>}
         <span className="tf-rec__muted tf-num">{total} links · {live} live</span>
       </div>
       {shown.length === 0 && <NoResults size="sm" query={query} noun="links" onClearFilters={() => setQuery('')} />}
@@ -148,12 +258,23 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
                 <span className="tf-links__icon" aria-hidden>{r.icon}</span>
                 <span className="tf-links__what"><strong>{r.name}</strong><span className="tf-rec__muted tf-num">{r.url}</span></span>
                 <span className="tf-links__nums tf-rec__muted tf-num">{r.numbers}</span>
-                <Tag size="sm" hue={r.live ? 'green' : 'gray'}>{r.live ? 'Live' : r.off ?? 'Off'}</Tag>
+                <span className="tf-links__tags">{r.kind && <Tag size="sm" hue="purple">{r.kind}</Tag>}<Tag size="sm" hue={r.live ? 'green' : 'gray'}>{r.live ? 'Live' : r.off ?? 'Off'}</Tag></span>
                 <span className="tf-links__acts">
                   <Button size="sm" variant="ghost" icon={<Copy {...i14} />} isDisabled={!r.live} onPress={() => copy(r)}>Copy</Button>
-                  <IconButton size="sm" label={`QR code for ${r.name}`} isDisabled={!r.live} onPress={() => setQr(r)}><QrIcon {...i14} /></IconButton>
                   <IconButton size="sm" label={`Open ${r.name}`} onPress={r.open}><ExternalLink {...i14} /></IconButton>
-                  <IconButton size="sm" label={`${r.editLabel}: ${r.name}`} onPress={r.edit}><Pencil {...i14} /></IconButton>
+                  <MenuTrigger>
+                    <IconButton size="sm" label={`More for ${r.name}`}><MoreHorizontal {...i14} /></IconButton>
+                    <Menu aria-label={`Actions for ${r.name}`} placement="bottom end" onAction={(k) => { if (k === 'edit') r.edit(); else if (k === 'qr') setQr(r); else if (k === 'copy') copy(r); else if (k === 'email') window.open(`mailto:?subject=${encodeURIComponent(r.name)}&body=${encodeURIComponent(`https://${r.url}`)}`, '_blank', 'noopener'); else if (k === 'open') r.open(); else if (k === 'copyws') r.copyWs?.(); }}>
+                      <MenuItem id="edit" icon={<Pencil {...i16} />}>{r.editLabel}</MenuItem>
+                      <MenuItem id="open" icon={<ExternalLink {...i16} />}>Open</MenuItem>
+                      <MenuSeparator />
+                      <MenuItem id="copy" icon={<Copy {...i16} />} isDisabled={!r.live}>Copy link</MenuItem>
+                      <MenuItem id="qr" icon={<QrIcon {...i16} />} isDisabled={!r.live}>QR code</MenuItem>
+                      <MenuItem id="email" icon={<Share2 {...i16} />} isDisabled={!r.live}>Send by email</MenuItem>
+                      {r.copyWs && <MenuSeparator />}
+                      {r.copyWs && <MenuItem id="copyws" icon={<Copy {...i16} />}>Copy to another workspace…</MenuItem>}
+                    </Menu>
+                  </MenuTrigger>
                 </span>
               </li>
             ))}
@@ -161,6 +282,8 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
         </section>
       ))}
       {qr && <QrSheet url={qr.url} name={qr.name} onClose={() => setQr(undefined)} />}
+      {making && dispatch && <NewLinkPage state={state} bookings={bookings} workspace={workspace} onClose={() => setMaking(false)} onMine={() => { setMaking(false); onLinkPage(); }}
+        onMade={(p) => { dispatch({ type: 'linkpage/set', page: p }); setMaking(false); toast({ message: `Made /${p.handle}. It starts Private; turn on Live to share it.`, tone: 'success' }); onOpenPage?.(p.id); }} />}
     </div>
   );
 }
@@ -199,38 +322,7 @@ export function reportPoints(state: AppState, r: Report): ReadonlyArray<{ readon
   });
 }
 
-/** Insights: Pages (from real bookings and form answers) and Reports (saved charts: one tab each, new, change, delete). */
-/** Share Insights by a view-only link: its own key, an expiry, Copy, and Stop sharing (the link dies at once; Undo brings it back). Numbers only, never names. */
-function ShareInsights({ state, dispatch, query }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly query: string }) {
-  const { toast } = useToast();
-  const link = state.insightsLink;
-  const live = link && (!link.expires || link.expires > new Date()) ? link : undefined;
-  const url = live ? `https://timefix.com/insights/${state.prefs.workspace.slug}?k=${live.key}&${query}` : '';
-  const copy = (u: string) => { void copyText(u).then((ok) => toast(ok ? { message: 'View-only link copied', tone: 'success' } : { message: `Copy didn’t work. The link is ${u}`, tone: 'danger' })); };
-  const make = (days: number) => dispatch({ type: 'insights/link', link: { key: Math.random().toString(36).slice(2, 10), made: new Date(), expires: days ? new Date(Date.now() + days * 86_400_000) : undefined } });
-  return (
-    <DialogTrigger>
-      <Button variant="ghost" icon={<Share2 {...i14} />}>{live ? 'Shared' : 'Share'}</Button>
-      <Popover label="Share Insights" placement="bottom end" offset={6}>
-        <div className="tf-grow__share">
-          <span className="tf-grow__share-title">Share a view-only link</span>
-          <span className="tf-rec__muted">Anyone with it sees these numbers and charts, never names or answers.</span>
-          {live ? <>
-            <div className="tf-grow__share-link"><span className="tf-num">{url.replace('https://', '')}</span><Button size="sm" variant="secondary" icon={<Copy {...i14} />} onPress={() => copy(url)}>Copy</Button></div>
-            <span className="tf-rec__muted tf-num">{live.expires ? `Stops working ${live.expires.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Works until you stop sharing'}</span>
-            <Button size="sm" variant="ghost" onPress={() => { const was = link; dispatch({ type: 'insights/link', link: undefined }); toast({ message: 'The link stopped working', action: { label: 'Undo', onAction: () => dispatch({ type: 'insights/link', link: was }) } }); }}>Stop sharing</Button>
-          </> : <>
-            <span className="tf-bkf__row">
-              <Button size="sm" variant="primary" onPress={() => { make(30); }}>Share for 30 days</Button>
-              <Button size="sm" variant="ghost" onPress={() => { make(0); }}>No end date</Button>
-            </span>
-          </>}
-        </div>
-      </Popover>
-    </DialogTrigger>
-  );
-}
-
+/** Insights: Pages (visits to forms, booking pages and the link page: figures, sources, where people stop, sessions, named share links) and Reports. */
 export function InsightsScreen({ state, dispatch, bookings, startTab, startReport }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly bookings: BookingsState | undefined; readonly startTab?: 'pages' | 'reports'; readonly startReport?: string }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<string>(startTab ?? 'pages');
@@ -246,23 +338,15 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
   const days = Math.max(1, Math.round((until.getTime() - from.getTime()) / 86_400_000));
   const before = new Date(from.getTime() - days * 86_400_000);
   // One page or form, or a whole kind. Everything counted comes from real bookings and answers.
-  const pageId = kind.startsWith('page:') ? kind.slice(5) : undefined; const formId = kind.startsWith('form:') ? kind.slice(5) : undefined;
-  const events = (a: Date, b: Date) => [
-    ...(kind === 'all' || kind === 'booking' || pageId ? (bookings?.meetings ?? []).filter((m) => m.pageId && (!pageId || m.pageId === pageId) && m.status !== 'cancelled').map((m) => ({ at: m.start, what: 'booking' as const })) : []),
-    ...(kind === 'all' || kind === 'forms' || formId ? state.forms.filter((f) => !formId || f.id === formId).flatMap((f) => f.responses.filter((r) => !r.spam).map((r) => ({ at: r.at, what: 'form' as const }))) : []),
-  ].filter((e) => e.at >= a && e.at < b);
-  const cur = events(from, until);
-  const prev = events(before, from);
-  const delta = (a: number, b: number) => (range === 'all' ? { value: 'all time', direction: 'flat' as const } : b === 0 ? { value: a ? 'up from 0' : 'none yet', direction: 'flat' as const } : { value: `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`, direction: a > b ? 'up' as const : a < b ? 'down' as const : 'flat' as const, note: 'vs the period before', isGood: a >= b });
-  const buckets = Math.min(days, 30);
-  const step = Math.max(1, Math.round(days / buckets));
-  const perDay = Array.from({ length: Math.ceil(days / step) }, (_, i) => { const a = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i * step); const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + step); return { label: a.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), value: cur.filter((e) => e.at >= a && e.at < b).length }; });
-  const booked = cur.filter((e) => e.what === 'booking').length; const answered = cur.filter((e) => e.what === 'form').length;
-  const byPage = [...(bookings?.pages ?? []).filter((p) => !pageId || p.id === pageId).filter(() => !formId && kind !== 'forms').map((p) => ({ id: p.id, label: p.name, value: (bookings?.meetings ?? []).filter((m) => m.pageId === p.id && m.status !== 'cancelled' && m.start >= from && m.start < until).length })),
-    ...state.forms.filter((f) => !formId || f.id === formId).filter(() => !pageId && kind !== 'booking').map((f) => ({ id: f.id, label: f.name, value: f.responses.filter((r) => !r.spam && r.at >= from && r.at < until).length }))].filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 6);
-  const formsShown = state.forms.filter((f) => (formId ? f.id === formId : kind === 'all' || kind === 'forms'));
-  const funnel = formsShown.length ? [{ id: 'views', label: 'Opened', value: formsShown.reduce((n, f) => n + f.views, 0) }, { id: 'sent', label: 'Sent', value: formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0) }, { id: 'filed', label: 'Filed in People', value: formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam && r.personId).length, 0) }] : [];
-  const exportCsv = async () => { const csv = ['Date,Bookings and answers', ...perDay.map((d) => `${d.label},${d.value}`)].join('\n'); const o = await saveFile(`insights-${range}.csv`, new Blob([csv], { type: 'text/csv' })); if (o === 'saved') toast({ message: 'Exported', tone: 'success' }); };
+  const sessions = sessionsOf(state, bookings, from, until).filter((x) => inScope(x, kind));
+  const prevSessions = sessionsOf(state, bookings, before, from).filter((x) => inScope(x, kind));
+  const [sharing, setSharing] = useState(false);
+  const [openShare, setOpenShare] = useState<string>();
+  const exportCsv = async () => { const o = await saveFile(`insights-${range}.csv`, new Blob([sessionsCsv(sessions)], { type: 'text/csv' })); if (o === 'saved') toast({ message: 'Exported what the screen shows.', tone: 'success' }); };
+  // How they heard about you: questions marked for Insights, tallied over the period's answers.
+  const heard = state.forms.filter((f) => kind === 'all' || kind === 'forms' || kind === `form:${f.id}`).flatMap((f) => (f.live ?? f.questions).filter((q) => q.insights).map((q) => ({ f, q })));
+  const heardCounts = [...heard.flatMap(({ f, q }) => f.responses.filter((r) => !r.spam && r.at >= from && r.at < until).map((r) => r.answers[q.id] ?? '').filter(Boolean)).reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>())].sort((x, y) => y[1] - x[1]).map(([v, n]) => ({ id: v, label: v, value: n }));
+  const kinds = [{ id: 'forms', label: 'All forms' }, { id: 'booking', label: 'All booking pages' }, { id: 'link', label: 'Link page' }, ...state.forms.map((f) => ({ id: `form:${f.id}`, label: f.name })), ...(bookings?.pages ?? []).map((p) => ({ id: `page:${p.id}`, label: p.name }))];
 
   const reports = state.reports;
   const [report, setReport] = useState(startReport ?? reports[0]?.id ?? '');
@@ -275,7 +359,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
         <TabPanel id="pages" className="tf-forms__panel">
           <div className="tf-rec__bar">
             <Select label="What" isLabelHidden className="tf-rec__view" value={kind} onChange={(v) => setKind(v ?? 'all')}
-              items={[{ id: 'all', label: 'Everything' }, { id: 'booking', label: 'All booking pages' }, { id: 'forms', label: 'All forms' },
+              items={[{ id: 'all', label: 'All pages' }, { id: 'booking', label: 'All booking pages' }, { id: 'forms', label: 'All forms' }, { id: 'link', label: 'Link page', description: `timefix.com/${handleFor(state, bookings)}` },
                 ...(bookings?.pages ?? []).map((p) => ({ id: `page:${p.id}`, label: p.name, description: 'Booking page' })), ...state.forms.map((f) => ({ id: `form:${f.id}`, label: f.name, description: 'Form' }))]} />
             <Select label="When" isLabelHidden className="tf-you__select" value={range} onChange={(v) => setRange(v ?? '30')}
               items={[{ id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }, { id: '365', label: 'Last 12 months' }, { id: 'all', label: 'All time' }, { id: 'custom', label: 'Pick dates…' }]} />
@@ -285,21 +369,15 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
             </>}
             <span className="tf-rec__spacer" />
             <Button variant="ghost" icon={<Download {...i14} />} onPress={() => { void exportCsv(); }}>Export CSV</Button>
-            <ShareInsights state={state} dispatch={dispatch} query={new URLSearchParams({ tab, show: kind, ...(range === 'custom' ? { from: ymdOf(from), to: ymdOf(new Date(until.getTime() - 86_400_000)) } : { days: range }) }).toString()} />
+            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => setSharing(true)}>{(state.insightsShares ?? []).some((x) => !x.revoked && (!x.expires || x.expires > new Date())) ? 'Shared' : 'Share'}</Button>
           </div>
-          <div className="tf-home__stats">
-            <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />
-            <StatCard label="Meetings in this period" value={booked} delta={delta(booked, prev.filter((e) => e.what === 'booking').length)} />
-            <StatCard label="Form answers" value={answered} delta={delta(answered, prev.filter((e) => e.what === 'form').length)} />
-            <StatCard label="Form views, all time" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: `${formsShown.reduce((n, f) => n + f.views, 0) ? Math.round((formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0) / formsShown.reduce((n, f) => n + f.views, 0)) * 100) : 0}% answered`, direction: 'flat' }} />
-          </div>
-          <div className="tf-home__grid">
-            <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" look="dots" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>
-            <ChartCard title={funnel.length && (formId || kind === 'forms') ? 'Where people stop (all time)' : 'Which pages and forms'}>
-              {funnel.length && (formId || kind === 'forms') ? <BarList label="From opening to filed" items={funnel} /> : byPage.length ? <BarList label="By page" items={byPage} /> : <p className="tf-rec__muted">Nothing came in yet in this period.</p>}
-            </ChartCard>
-          </div>
-          <p className="tf-rec__muted">Counts bookings, form answers and form opens. Page visits and where people came from appear here once your pages have visitors.</p>
+          {sessions.length === 0 && prevSessions.length === 0 ? <EmptyState icon={<BarChart3 size={20} strokeWidth={1.75} />} title="No visits in this period" description="Try a longer period, or share a form, a booking page or your link page." /> : <>
+            <InsightsNumbers state={state} sessions={sessions} prev={prevSessions} kind={kind} days={days} />
+            {heardCounts.length > 0 && <section className="tf-recp__sec"><h3>How they heard about you</h3><BarList label="How they heard about you" items={heardCounts} /></section>}
+            <SessionsTable key={`${kind}-${range}`} sessions={sessions} />
+          </>}
+          {sharing && <InsightsShareDialog state={state} dispatch={dispatch} kinds={kinds} onClose={() => setSharing(false)} onOpen={(id) => { setSharing(false); setOpenShare(id); }} />}
+          {openShare && <SharedInsights state={state} bookings={bookings} shareId={openShare} onClose={() => setOpenShare(undefined)} />}
         </TabPanel>
         <TabPanel id="reports" className="tf-forms__panel">
           {reports.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No reports yet" description="Chart your deals, people or companies, and keep it for the team." action={<Button size="sm" variant="primary" onPress={() => setMaking('new')}>New report</Button>} /> : (

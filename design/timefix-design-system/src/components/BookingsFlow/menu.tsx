@@ -3,7 +3,9 @@
 import { copyText } from '../../lib/copy.ts';
 import { Link } from '../Link/Link.tsx';
 import { useRef, useState } from 'react';
-import { Copy, Download, Eye, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, UtensilsCrossed, X } from 'lucide-react';
+import { Copy, Download, Eye, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, Share2, UtensilsCrossed, X } from 'lucide-react';
+import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
+import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Callout } from '../Callout/Callout.tsx';
@@ -67,7 +69,10 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
   };
   const moveSection = (i: number, by: number) => { if (!menu) return; const s = [...menu.sections]; const [x] = s.splice(i, 1); if (x) s.splice(i + by, 0, x); setMenu({ ...menu, sections: s }); };
   const moveDish = (sec: MenuSection, i: number, by: number) => { if (!menu) return; const ids = [...sec.dishIds]; const [x] = ids.splice(i, 1); if (x) ids.splice(i + by, 0, x); setMenu({ ...menu, sections: menu.sections.map((s) => (s.id === sec.id ? { ...s, dishIds: ids } : s)) }); };
-  const publish = () => { dispatch({ type: 'menu/publish' }); toast({ message: 'Published. Guests see the new menu now.', tone: 'success' }); };
+  const [barState, setBarState] = useState<'publishing' | 'published'>();
+  const [sharing, setSharing] = useState(false);
+  const publish = () => { setBarState('publishing'); window.setTimeout(() => { dispatch({ type: 'menu/publish' }); setBarState('published'); window.setTimeout(() => setBarState(undefined), 1400); }, 500); };
+  const menuUrl = `timefix.com/${state.business?.handle ?? 'menu'}/menu`;
 
   return (
     <div className="tf-bkf__tab">
@@ -78,10 +83,10 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
           <SegmentedControl aria-label="View" size="sm" selectedKey={view} onSelectionChange={(k) => setView(k === 'qr' ? 'qr' : 'dishes')}
             items={[{ id: 'dishes', label: 'Dishes', icon: <UtensilsCrossed {...i14} /> }, { id: 'qr', label: 'QR codes', icon: <QrIcon {...i14} /> }]} />
         </>}
-        count={changes.length > 0 ? `Not published: ${changes.join(', ')}` : 'Guests see what’s here'}
+        count={`${book.dishes.length} dishes · ${book.menus.filter((m) => m.isLive).length} live ${book.menus.filter((m) => m.isLive).length === 1 ? 'menu' : 'menus'}`}
         action={<span className="tf-bkf-res__actions">
-          <Button variant="secondary" icon={<Eye {...i14} />} onPress={() => onGuest()}>See it</Button>
-          <Button variant="primary" isDisabled={changes.length === 0} onPress={publish}>Publish</Button>
+          <Button variant="ghost" icon={<Eye {...i14} />} onPress={() => onGuest()}>See it as a guest</Button>
+          <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => setSharing(true)}>Share</Button>
           {menu && (
             <MenuTrigger>
               <IconButton label="More for this menu"><MoreHorizontal {...i16} /></IconButton>
@@ -217,6 +222,8 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
         const m: MenuT = { id: nextId('mn'), name, isLive: true, sections: [], tax: menu?.tax, service: menu?.service };
         set({ menus: [...book.menus, m] }); setMenuId(m.id); setNaming(false);
       }} />}
+      <ShareSheet isOpen={sharing} onOpenChange={setSharing} title="Share your menu" url={menuUrl} name="Menu" invite="Our menu:" description="For your site and socials. Each table has its own code under QR codes." onSite={() => { setSharing(false); void copyText(`<iframe src="https://${menuUrl}?embed=1" style="width:100%;min-height:720px;border:0" title="Menu"></iframe>`).then((ok) => toast(ok ? { message: 'Embed code copied. Paste it into your site’s HTML.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }} />
+      <PublishBar status={barState ?? (changes.length > 0 ? 'draft' : 'live')} changes={changes.length} onPublish={publish} onDiscard={() => { const was = book; dispatch({ type: 'menu/discard' }); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => dispatch({ type: 'menu/draft', menu: was }) } }); }} />
     </div>
   );
 }

@@ -20,7 +20,7 @@ import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import { PlaceIcon } from '../MeetingList/MeetingList.tsx';
 import { cx } from '../../lib/cx.ts';
 import { OnSwitch, PageMoreMenu, PagePicture, ShareMenu, TabToolbar, i14, i16, type ShareHow } from './parts.tsx';
-import { HOST, PLACES, noHostsFree, openDaysAhead, pageSub, placeOf, type BookingPage, type BookingsAction, type BookingsState } from './state.ts';
+import { HOST, PLACES, handleOf, noHostsFree, openDaysAhead, pageSub, placeOf, type BookingPage, type BookingsAction, type BookingsState } from './state.ts';
 import { BusinessPages } from './pages-business.tsx';
 
 /** Props for PagesTab. */
@@ -122,7 +122,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                       </Tooltip>
                     ) : <span aria-hidden="true" />}
                     <OnSwitch page={p} onChange={(on) => onToggle(p.id, on)} />
-                    <ShareMenu page={p} onShare={onShare} />
+                    <ShareMenu page={p} onShare={onShare} handle={handleOf(state)} />
                     <PageMoreMenu page={p} onAction={(k) => { if (k !== 'versions') onMore(p, k); }} />
                     {noTimes && (
                       <p className="tf-bkf__pagerow-warn" role="status">

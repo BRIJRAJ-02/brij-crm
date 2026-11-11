@@ -13,9 +13,9 @@ import './FormPicture.css';
 export type FormStatus = 'draft' | 'live' | 'closed';
 
 const STATUS = {
-  draft: { label: 'Draft', hue: 'gray', shape: 'draft' },
+  draft: { label: 'Not published', hue: 'gray', shape: 'draft' },
   live: { label: 'Live', hue: 'green', shape: 'done' },
-  closed: { label: 'Closed', hue: 'gray', shape: 'failed' },
+  closed: { label: 'Paused', hue: 'gray', shape: 'failed' },
 } as const;
 
 /** A form's status as the shared Tag: a dashed circle for Draft, a green check for Live, a crossed circle for Closed. */
@@ -57,10 +57,14 @@ export interface FormCardProps {
   readonly questions: ReadonlyArray<FormQuestion>;
   readonly href?: string;
   readonly onPress?: () => void;
+  /** A mark beside the count, like "2 new" since the owner last looked. */
+  readonly badge?: ReactNode;
+  /** The card's ⋯ menu (Open, Copy link, Pause, Duplicate, Delete); it sits above the card's own press. */
+  readonly menu?: ReactNode;
 }
 
-/** A form on the forms list: its picture, name, status and a response count whose digits roll as answers arrive. The whole card opens the form. */
-export function FormCard({ name, status, responses, updated, questions, href, onPress }: FormCardProps) {
+/** A form on the forms list: its picture, name, status and a response count whose digits roll as answers arrive. The whole card opens the form; the ⋯ menu sits above it. */
+export function FormCard({ name, status, responses, updated, questions, href, onPress, badge, menu }: FormCardProps) {
   return (
     <article className="tf-fcard">
       <FormPicture title={name} questions={questions} />
@@ -69,10 +73,10 @@ export function FormCard({ name, status, responses, updated, questions, href, on
           {/* The name is the card's one link; its hit area stretches over the whole card. */}
           <Link className="tf-fcard__name" href={href} onPress={onPress}>{name}</Link>
           <span className="tf-fcard__sub">
-            <span className="tf-num"><NumberRoll value={responses} /></span> {responses === 1 ? 'response' : 'responses'}{updated ? ` · ${updated}` : ''}
+            <span className="tf-num"><NumberRoll value={responses} /></span> {responses === 1 ? 'response' : 'responses'}{badge}{updated ? ` · ${updated}` : ''}
           </span>
         </span>
-        <FormStatusTag status={status} />
+        <span className="tf-fcard__end"><FormStatusTag status={status} />{menu}</span>
       </span>
     </article>
   );

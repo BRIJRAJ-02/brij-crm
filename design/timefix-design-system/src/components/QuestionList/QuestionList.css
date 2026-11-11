@@ -102,3 +102,32 @@
 .tf-qset__jumps { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
 .tf-qset__jump { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: var(--space-8); }
 .tf-qset__jump-if { overflow: hidden; color: var(--text); font: 400 13px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+/* A card's chips under its grey line: Shown if, and what to check in its logic. */
+.tf-qlist__chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
+.tf-qlist__step { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-qset__note { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qset__warn { display: flex; align-items: flex-start; gap: var(--space-6); margin: 0; color: var(--warning); font: 500 13px/20px var(--font-sans); }
+.tf-qset__warn > svg { flex: none; margin-top: var(--space-2); }
+/* The type picker: search pinned on top, a compact list beside a live preview of the active type. */
+.tf-qpick__pop { width: min(40rem, calc(100vw - var(--space-32))); padding: 0; overflow: hidden; }
+.tf-qpick { display: flex; flex-direction: column; max-height: min(34rem, calc(100vh - var(--space-64) * 2)); }
+.tf-qpick__search { flex: none; padding: var(--space-12) var(--space-12) var(--space-8); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-qpick__panes { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); min-height: 0; flex: 1; }
+.tf-qpick__list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4) var(--space-6) var(--space-8); border-right: var(--border-width-hairline) solid var(--border-subtle); outline: none; }
+.tf-qpick__head { padding: var(--space-8) var(--space-6) var(--space-4); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
+.tf-qpick__item { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-6); border-radius: var(--radius-md); color: var(--text); font: 500 13px/20px var(--font-sans); cursor: default; }
+.tf-qpick__item[data-active] { background: var(--surface-hover); }
+.tf-qpick__icon { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-qpick__item[data-group='ready'] .tf-qpick__icon { background: var(--accent-soft); color: var(--accent-text); }
+.tf-qpick__item[data-active] .tf-qpick__icon { background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-qpick__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-qpick__none { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); padding: var(--space-12) var(--space-6); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__none p { margin: 0; }
+.tf-qpick__side { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; min-height: 0; overflow-y: auto; padding: var(--space-16); }
+.tf-qpick__preview { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); pointer-events: none; }
+.tf-qpick__ptitle { margin: 0; color: var(--text); font: 500 16px/24px var(--font-sans); }
+.tf-qpick__what { margin: var(--space-4) 0 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__what strong { color: var(--text); font-weight: 500; }
+.tf-qpick__fills { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__keys { display: inline-flex; align-items: center; gap: var(--space-4); margin-top: auto; color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
+@media (max-width: 40rem) { .tf-qpick__panes { grid-template-columns: minmax(0, 1fr); } .tf-qpick__side { display: none; } .tf-qpick__list { border-right: 0; } }

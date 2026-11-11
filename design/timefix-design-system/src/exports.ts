@@ -36,6 +36,7 @@ export * from './components/Disclosure/Disclosure.tsx';
 export * from './components/DragHandle/DragHandle.tsx';
 export * from './components/Drawer/Drawer.tsx';
 export * from './components/EmbedPreview/EmbedPreview.tsx';
+export * from './components/ShareSheet/ShareSheet.tsx';
 export * from './components/EmptyState/EmptyState.tsx';
 export * from './components/Field/Field.tsx';
 export * from './components/FileDrop/FileDrop.tsx';

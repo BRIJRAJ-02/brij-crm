@@ -9,3 +9,5 @@ ColorPicker picks a colour: one of the nine data hues for options, objects and c
 **Interaction**: Tab reaches the chosen swatch; arrows move and choose. The check swaps in from 0.25 scale over 250ms (transitions.dev 09 icon swap); nothing moves on press. In a popover, the pick shows its check, then closes 120ms later.
 
 **Replaces**: HuePicker, AccentPicker.
+
+`AccentPicker` takes `use="ground"` for a page's background colour: its line then says whether the page reads light or dark on it instead of white text's contrast.

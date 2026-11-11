@@ -124,10 +124,36 @@ export interface CrmList { readonly id: string; readonly name: string; readonly 
 
 /** A form: its questions as you edit them, the live ones guests answer, where answers go and what happens after. */
 export interface FormResponse { readonly id: string; readonly at: Date; readonly answers: Readonly<Record<string, string>>; readonly spam?: boolean; readonly personId?: string;
-  /** The record it was filed as (a person, company, deal or an owner-made object's record). */ readonly record?: { readonly object: string; readonly id: string } }
+  /** The record it was filed as (a person, company, deal or an owner-made object's record). */ readonly record?: { readonly object: string; readonly id: string };
+  /** Doubtful sends wait for a person (Needs review); a send the CRM refused to take can be retried (Failed). */
+  readonly state?: 'review' | 'failed';
+  /** Why the spam check stopped it, or why it failed. */
+  readonly why?: string;
+  /** Where it came from: the source, its UTM tags, the page it was sent on and how (the form's own page, an embed, your own HTML). */
+  readonly from?: { readonly source: string; readonly medium?: string; readonly campaign?: string; readonly page?: string; readonly via?: 'page' | 'inline' | 'popup' | 'slide' | 'own' };
+  /** Seconds from the first answer to Send. */
+  readonly secs?: number;
+  /** The score from the answers' points, and the ending it reached. */
+  readonly score?: number; readonly ending?: string;
+  /** Consent questions ticked: the exact words agreed to, by question id. */
+  readonly consent?: Readonly<Record<string, string>>;
+  /** Answers the record kept its own different value for (Replace was off), by question id. */
+  readonly kept?: ReadonlyArray<string> }
+/** One visit to a public page: a form ('form:<id>'), the link page ('link') or a booking page ('booking:<id>'); how far it got and whether it finished. */
+export interface Visit { readonly id: string; readonly at: Date; readonly page: string; readonly source: string; readonly medium?: string; readonly campaign?: string;
+  /** How many steps it reached past the view (0: only looked; for a form, questions reached). */ readonly reached: number; readonly finished: boolean; readonly secs?: number;
+  /** The submission or booking it made, when it finished. */ readonly ref?: string }
+/** A link page besides your own: one for a team or the company (or your page copied into another workspace), with its own handle,
+ *  the members shown on it and who can edit it. Live or Private; a draft waits until Publish. */
+export interface SharedLinkPage { readonly id: string; readonly kind: 'me' | 'team' | 'company'; readonly name: string; readonly handle: string; readonly members: ReadonlyArray<string>; readonly editors: ReadonlyArray<string>;
+  readonly page: LinkPageDraft; readonly draft?: LinkPageDraft; readonly live: boolean; readonly made: Date; readonly workspace?: string }
+/** A thank-you message besides the main one. */
+export interface FormEnding { readonly id: string; readonly title: string; readonly line?: string; readonly button?: { readonly label: string; readonly url: string } }
+/** An After they send route: when a question has an answer, send them to an ending, a booking page or a link instead. */
+export interface FormRoute { readonly id: string; readonly when: string; readonly is: string; readonly to: 'ending' | 'booking' | 'link'; readonly ending?: string; readonly url?: string }
 export interface AppForm {
   readonly id: string; readonly name: string; readonly slug: string; readonly status: 'draft' | 'live' | 'paused';
-  readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page';
+  readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page' | 'steps';
   /** What each response becomes: 'people', 'companies', 'deals', an owner-made object's id, or 'none' (answers stay on the form). */
   readonly saveTo: string; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking' | 'redirect'; readonly message: string; /** Redirect: where they go after sending. */ readonly url?: string; /** Say thanks: an optional button under the message ("See our pricing"). */ readonly button?: { readonly label: string; readonly url: string } };
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
@@ -159,6 +185,30 @@ export interface AppForm {
   readonly confirmEmail?: { readonly subject: string; readonly line: string };
   /** The last button's words. */
   readonly submitLabel?: string;
+  /** The workspace it belongs to when it was copied there ('lumen', 'olive'); unset shows in every workspace (the seed). */
+  readonly workspace?: string;
+  /** The headline visitors read over the form; the form's name until changed on the preview. */
+  readonly headline?: string;
+  /** How many submissions there were when the owner last looked: newer ones show "New" on the list. */
+  readonly seen?: number;
+  /** Other thank-you messages, and the After they send routes that pick one (or booking, or a link) by answer. */
+  readonly endings?: ReadonlyArray<FormEnding>; readonly routes?: ReadonlyArray<FormRoute>;
+  /** The record field the score is saved to ("score" on People), or nowhere. */
+  readonly scoreTo?: string;
+  /** The visitor's language for the form's own words. */
+  readonly lang?: 'en' | 'hi' | 'es' | 'fr' | 'de';
+  /** Visitors can save and come back with a link (Finish later). */
+  readonly saveProgress?: boolean;
+  /** Square corners, and the workspace's brand (logo and colour) instead of the form's own look. */
+  readonly corners?: 'rounded' | 'square'; readonly useBrand?: boolean;
+  /** A round robin group (a team's id) owns new records instead of one person: each goes to the next teammate. */
+  readonly ownerGroup?: string;
+  /** The spam check: how sure it must be before a send goes to Spam rather than Needs review. */
+  readonly spamLevel?: 'relaxed' | 'normal' | 'strict';
+  /** How it sits on someone's site: style, clear background, no title, button words and colour. */
+  readonly embed?: { readonly style: 'inline' | 'popup' | 'slide'; readonly clear: boolean; readonly hideTitle: boolean; readonly words: string; readonly colour: string };
+  /** Developers: sites your own HTML may post from, refusing unsigned posts, and the signing secret. */
+  readonly sites?: ReadonlyArray<string>; readonly signedOnly?: boolean; readonly secret?: string;
 }
 
 /** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
@@ -299,6 +349,16 @@ export interface AppState {
   readonly reports: ReadonlyArray<Report>;
   /** Insights shared by a view-only link: its own key (stopping sharing kills it) and when it stops working, if ever. */
   readonly insightsLink?: { readonly key: string; readonly expires?: Date; readonly made: Date };
+  /** Named view-only links to Insights: what they cover (all, or chosen pages), when they stop, and whether they were revoked. */
+  readonly insightsShares?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly key: string; readonly pages: ReadonlyArray<string>; readonly days: string; readonly made: Date; readonly expires?: Date; readonly revoked?: boolean }>;
+  /** Visits to the public pages: forms and the link page (bookings come from meetings). */
+  readonly visits?: ReadonlyArray<Visit>;
+  /** Link pages for a team or the company. */
+  readonly linkPages?: ReadonlyArray<SharedLinkPage>;
+  /** The link page's address, once claimed. */
+  readonly linkHandle?: string;
+  /** Teammates' link pages you manage: invited, or live. */
+  readonly teamPages?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly email: string; readonly handle: string; readonly status: 'invited' | 'live'; readonly blocks: number; readonly at: Date }>;
   /** Records of objects owners made (Projects, Vendors), by object id. */
   readonly customRecords: Readonly<Record<string, ReadonlyArray<CustomRecord>>>;
   /** "Preview as": see the app as a member or guest would, read only where they can't change things. */
@@ -342,6 +402,14 @@ export type AppAction =
   | { readonly type: 'link/draft'; readonly page: LinkPageDraft | undefined }
   | { readonly type: 'report/set'; readonly report: Report }
   | { readonly type: 'insights/link'; readonly link: AppState['insightsLink'] }
+  | { readonly type: 'insights/shares'; readonly shares: NonNullable<AppState['insightsShares']> }
+  | { readonly type: 'visit/add'; readonly visit: Visit }
+  | { readonly type: 'visit/patch'; readonly id: string; readonly patch: Partial<Visit> }
+  | { readonly type: 'link/handle'; readonly handle: string }
+  | { readonly type: 'linkpage/set'; readonly page: SharedLinkPage }
+  | { readonly type: 'linkpage/patch'; readonly id: string; readonly patch: Partial<SharedLinkPage> }
+  | { readonly type: 'linkpage/remove'; readonly id: string }
+  | { readonly type: 'team/pages'; readonly pages: NonNullable<AppState['teamPages']> }
   | { readonly type: 'report/remove'; readonly id: string }
   | { readonly type: 'custom/set'; readonly object: string; readonly record: CustomRecord }
   | { readonly type: 'custom/remove'; readonly object: string; readonly ids: ReadonlyArray<string> }
@@ -468,6 +536,14 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'link/offline': return { ...state, linkOffline: a.offline, history: [line(`${state.me} took the link page ${a.offline ? 'offline' : 'back online'}`), ...state.history] };
     case 'link/publish': return { ...state, linkPage: a.page, linkOffline: false, linkDraft: undefined, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
     case 'insights/link': return { ...state, insightsLink: a.link };
+    case 'insights/shares': return { ...state, insightsShares: a.shares };
+    case 'visit/add': return { ...state, visits: [a.visit, ...(state.visits ?? [])] };
+    case 'visit/patch': return { ...state, visits: (state.visits ?? []).map((v) => (v.id === a.id ? { ...v, ...a.patch } : v)) };
+    case 'link/handle': return { ...state, linkHandle: a.handle, history: [line(`${state.me} claimed timefix.com/${a.handle}`), ...state.history] };
+    case 'team/pages': return { ...state, teamPages: a.pages };
+    case 'linkpage/set': return { ...state, linkPages: [...(state.linkPages ?? []).filter((x) => x.id !== a.page.id), a.page] };
+    case 'linkpage/patch': return { ...state, linkPages: (state.linkPages ?? []).map((x) => (x.id === a.id ? { ...x, ...a.patch } : x)) };
+    case 'linkpage/remove': return { ...state, linkPages: (state.linkPages ?? []).filter((x) => x.id !== a.id) };
     case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
     case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
     case 'custom/set': { const list = state.customRecords[a.object] ?? []; return { ...state, customRecords: { ...state.customRecords, [a.object]: list.some((r) => r.id === a.record.id) ? list.map((r) => (r.id === a.record.id ? a.record : r)) : [a.record, ...list] } }; }
@@ -660,6 +736,12 @@ export function northwindCrm(now = new Date()): AppState {
         ] },
     ],
     forms: [contactForm(now), feedbackForm(now)],
+    visits: seedVisits(now),
+    linkPages: [{ id: 'lp-company', kind: 'company', name: 'Northwind', handle: 'northwind', members: members.map((m) => m.name), editors: ['Priya Raman', 'Sam Kim'], live: true, made: dayAt(now, -20),
+      page: { profile: { name: 'Northwind', title: 'Sales software for small teams', bio: 'Book a call with whoever is free, or find one of us below.' }, socials: [{ id: 's1', network: 'linkedin', url: 'https://linkedin.com/company/northwind' }, { id: 's2', network: 'website', url: 'https://northwind.com' }],
+        blocks: [{ kind: 'booking', id: 'c1', title: 'Talk to sales', durationMinutes: 30, location: { kind: 'video', label: 'Google Meet' } }, { kind: 'link', id: 'c2', title: 'Pricing', href: 'https://northwind.com/pricing', icon: 'globe', clicks: 318 }, { kind: 'link', id: 'c3', title: 'Read the guide', href: 'https://northwind.com/guide', icon: 'book', clicks: 96 }],
+        look: 'calm', accent: '#0F766E' } }],
+    teamPages: [{ id: 'tp-sam', name: 'Sam Kim', email: 'sam@northwind.com', handle: 'sam', status: 'live', blocks: 4, at: dayAt(now, -12) }, { id: 'tp-ava', name: 'Ava Chen', email: 'ava@northwind.com', handle: 'ava', status: 'invited', blocks: 0, at: dayAt(now, -1) }],
     objects: builtInObjects(members.map((m) => ({ id: m.id, name: m.name }))),
     trash: [{ id: 'tr-old', object: 'companies', record: { id: 'c-old', name: 'Vandelay Imports', domain: 'vandelay.com', industry: 'Retail', size: '11–50', city: 'Pune', owner: 'Sam Kim', created: dayAt(now, -200) }, at: dayAt(now, -4), by: 'Sam Kim' }],
     history: [
@@ -731,14 +813,45 @@ function contactForm(now: Date): AppForm {
   return { id: 'f-contact', name: 'Talk to sales', slug: 'talk-to-sales', status: 'live', questions: q, live: q, mode: 'one', saveTo: 'people', owner: 'Priya Raman', views: 1284, updated: new Date(now.getTime() - 2 * 86_400_000),
     reached: { 'q-name': 64, 'q-email': 41, 'q-company': 33, 'q-size': 14, 'q-need': 9 },
     after: { kind: 'booking', message: 'Thanks! Pick a time and we’ll walk you through it.' },
+    seen: 6,
     responses: [
-      r('r1', 35, 'Pepper Potts', 'pepper@stark.store', 'Stark Retail', '51–200', 'Our stores book demos by phone. We lose half of them.', { personId: 'p-pepper' }),
-      r('r2', 300, 'Arjun Mehta', 'arjun@zylo.in', 'Zylo', '11–50', 'Need round robin across 6 reps.'),
-      r('r3', 1500, 'Sana Iqbal', 'sana@brightpath.org', 'Brightpath', '2–10', 'Want booking pages for our counsellors.'),
-      r('r4', 2900, 'Buy cheap followers', 'promo@spam.biz', '', 'Just me', 'click here', { spam: true }),
-      r('r5', 4300, 'Neel Bhatt', 'neel@orbit.dev', 'Orbit', '200+', 'Replacing our old CRM this quarter.'),
+      r('r1', 35, 'Pepper Potts', 'pepper@stark.store', 'Stark Retail', '51–200', 'Our stores book demos by phone. We lose half of them.', { personId: 'p-pepper', record: { object: 'people', id: 'p-pepper' }, secs: 74, from: { source: 'Google', medium: 'cpc', campaign: 'demo-q4', page: 'northwind.com/pricing', via: 'popup' } }),
+      r('r2', 300, 'Arjun Mehta', 'arjun@zylo.in', 'Zylo', '11–50', 'Need round robin across 6 reps.', { secs: 52, from: { source: 'LinkedIn', medium: 'social', campaign: 'launch', page: 'timefix.com/f/talk-to-sales', via: 'page' } }),
+      r('r3', 1500, 'Sana Iqbal', 'sana@brightpath.org', 'Brightpath', '2–10', 'Want booking pages for our counsellors.', { state: 'review', why: 'It looked doubtful, so it waits for you to say.', secs: 9, from: { source: 'Direct', page: 'northwind.com/contact', via: 'inline' } }),
+      r('r4', 2900, 'Buy cheap followers', 'promo@spam.biz', '', 'Just me', 'click here', { spam: true, why: 'It is full of links.', secs: 2, from: { source: 'Direct', via: 'own', page: 'northwind.com/contact' } }),
+      r('r5', 4300, 'Neel Bhatt', 'neel@orbit.dev', 'Orbit', '200+', 'Replacing our old CRM this quarter.', { secs: 118, from: { source: 'Newsletter', medium: 'email', campaign: 'oct-digest', page: 'timefix.com/f/talk-to-sales', via: 'page' } }),
+      r('r6', 6100, 'Lena Fox', 'lena@quill.co', 'Quill', '11–50', 'Moving off spreadsheets.', { state: 'failed', why: 'The record couldn’t be saved: its email is on two people.', secs: 63, from: { source: 'Google', medium: 'organic', page: 'northwind.com/blog/crm-guide', via: 'slide' } }),
+      r('r7', 8800, 'Omar Haddad', 'omar@dune.ae', 'Dune', '51–200', 'Round robin for a sales team in Dubai.', { secs: 81, from: { source: 'Instagram', medium: 'social', page: 'timefix.com/f/talk-to-sales', via: 'page' } }),
+      r('r8', 12000, 'Mia Wong', 'mia@kite.sg', 'Kite', '2–10', 'Booking pages for two founders.', { secs: 47, from: { source: 'Google', medium: 'organic', page: 'timefix.com/f/talk-to-sales', via: 'page' } }),
+      r('r9', 17000, 'Ravi Shah', 'ravi@lumen.in', 'Lumen', '11–50', 'Forms that file into our CRM.', { secs: 95, from: { source: 'LinkedIn', medium: 'social', campaign: 'launch', page: 'northwind.com/pricing', via: 'popup' } }),
     ] };
 }
+/** A month of visits to the contact form and the link page, the same every load: sources, how far each got, and finishes that match the submissions. */
+function seedVisits(now: Date): ReadonlyArray<Visit> {
+  let x = 7;
+  const rnd = () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
+  const pick = <T,>(xs: ReadonlyArray<T>, fallback: T): T => xs[Math.floor(rnd() * xs.length)] ?? fallback;
+  const sources: ReadonlyArray<readonly [string, string | undefined]> = [['Google', 'organic'], ['Google', 'organic'], ['Google', 'cpc'], ['Direct', undefined], ['Direct', undefined], ['LinkedIn', 'social'], ['Instagram', 'social'], ['Newsletter', 'email']];
+  const out: Visit[] = [];
+  for (let d = 0; d < 45; d++) {
+    const formViews = 2 + Math.floor(rnd() * 4); const linkViews = 5 + Math.floor(rnd() * 9);
+    for (let i = 0; i < formViews; i++) {
+      const [source, medium] = pick(sources, ['Direct', undefined] as const);
+      const reached = rnd() < 0.3 ? 0 : 1 + Math.floor(rnd() * 5);
+      out.push({ id: `vf-${d}-${i}`, at: new Date(now.getTime() - (d * 24 + rnd() * 20) * 3_600_000), page: 'form:f-contact', source, medium, reached: Math.min(reached, 4), finished: false });
+    }
+    for (let i = 0; i < linkViews; i++) {
+      const [source, medium] = pick(sources, ['Direct', undefined] as const);
+      const pressed = rnd() < 0.42;
+      out.push({ id: `vl-${d}-${i}`, at: new Date(now.getTime() - (d * 24 + rnd() * 20) * 3_600_000), page: 'link', source: source === 'Newsletter' ? 'Instagram' : source, medium, reached: pressed ? 1 : 0, finished: pressed, secs: pressed ? 4 + Math.floor(rnd() * 40) : undefined });
+    }
+  }
+  // The submissions finished their visits.
+  const fin: ReadonlyArray<readonly [string, number, string, number]> = [['r1', 35, 'Google', 74], ['r2', 300, 'LinkedIn', 52], ['r3', 1500, 'Direct', 9], ['r5', 4300, 'Newsletter', 118], ['r6', 6100, 'Google', 63], ['r7', 8800, 'Instagram', 81], ['r8', 12000, 'Google', 47], ['r9', 17000, 'LinkedIn', 95]];
+  fin.forEach(([ref, mins, source, secs]) => out.push({ id: `vr-${ref}`, at: new Date(now.getTime() - (mins + 2) * 60_000), page: 'form:f-contact', source, reached: 5, finished: true, secs, ref }));
+  return out.sort((a, b) => b.at.getTime() - a.at.getTime());
+}
+
 /** "Event feedback": a draft, not shared yet. */
 function feedbackForm(now: Date): AppForm {
   const q: ReadonlyArray<FormQuestion> = [
