@@ -8,7 +8,7 @@
 .tf-bpp__title { max-width: 100%; font: 500 13px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-bpp__len { font: 400 11px/16px var(--font-sans); color: var(--text-secondary); }
 .tf-bpp__week { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-4); width: 100%; margin-top: var(--space-8); }
-.tf-bpp__day { display: grid; place-items: center; aspect-ratio: 1; border-radius: var(--radius-full); font: 500 11px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-bpp__day { display: grid; place-items: center; aspect-ratio: 1; border-radius: var(--radius-sm); font: 500 11px/16px var(--font-sans); color: var(--text-tertiary); }
 .tf-bpp__day[data-open] { background: var(--tf-bpp-soft); color: var(--tf-bpp-ink); }
 .tf-bpp__day[data-picked] { background: var(--tf-bpp-solid); color: var(--on-accent); }
 

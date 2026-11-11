@@ -396,3 +396,4 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Tasks: priority (high flag, high first) and repeat (next task added on tick, once). Walk w9task.
 - Owner reference (Osmo events calendar): held. Restyling the booking calendar touches every booking page; asked owner: embed restyle vs events calendar.
 - Moved to wave 10: inbox snooze, Insights share link controls.
+- Calendar embed (owner: "whatever is best"): BookingFlow month days become rounded-square tiles, today a dot, nearly full days (1-3 left) carry a corner count read as "N times left"; BookingPagePicture and GuestLook preview days match. Walk w9cal. regress "taken clears" needs two free times today: fails after ~11:00 (minimum notice), time-dependent like "manage move".

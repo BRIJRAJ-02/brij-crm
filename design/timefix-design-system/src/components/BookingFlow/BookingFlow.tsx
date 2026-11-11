@@ -407,7 +407,15 @@ export function BookingFlow({ host, title, durationMinutes, location, today, tim
         <div ref={gridWrap} className="tf-booking__grid-wrap">
           <CalendarGrid className="tf-booking__grid" weekdayStyle="short">
             <CalendarGridHeader>{(d) => <CalendarHeaderCell className="tf-booking__weekday">{d}</CalendarHeaderCell>}</CalendarGridHeader>
-            <CalendarGridBody>{(d) => <CalendarCell date={d} className="tf-booking__day" />}</CalendarGridBody>
+            <CalendarGridBody>{(d) => (
+              <CalendarCell date={d} className="tf-booking__day">
+                {({ formattedDate, isUnavailable, isDisabled, isOutsideMonth }) => {
+                  // A nearly full day says how many times are left (1 to 3); a day with plenty says nothing.
+                  const left = isUnavailable || isDisabled || isOutsideMonth ? 0 : slotsFor(d as CalendarDate).length;
+                  return <>{formattedDate}{left > 0 && left <= 3 ? <span className="tf-booking__left" aria-label={`, ${left} ${left === 1 ? 'time' : 'times'} left`}>{left}</span> : null}</>;
+                }}
+              </CalendarCell>
+            )}</CalendarGridBody>
           </CalendarGrid>
         </div>
       </Calendar>
