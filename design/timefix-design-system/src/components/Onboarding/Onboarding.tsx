@@ -103,6 +103,7 @@ export function WorkspacePreview({ workspace, slug, owner, hours, invites = [], 
   const summary = summarizeSimpleHours(hours);
   return (
     <div className="tf-wsprev" data-focus={focus} data-kind={kind}>
+      <p className="tf-wsprev__caption"><span className="tf-wsprev__dot" />{kind === 'restaurant' ? 'Your table booking page' : 'Your booking page'}<span className="tf-wsprev__caption-note">Updates as you go</span></p>
       <div className="tf-wsprev__window">
         <div className="tf-wsprev__bar">
           <span className="tf-wsprev__url" data-part="link">timefix.com/<span className="tf-wsprev__slug">{slug || 'your-link'}</span></span>
@@ -239,7 +240,7 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
               <Button size="sm" variant="secondary" icon={<Copy size={14} strokeWidth={1.75} />} onPress={() => { void navigator.clipboard?.writeText(`https://${liveLink}`).catch(() => undefined); }}>Copy link</Button>
               <Button size="sm" variant="ghost" icon={<ArrowUpRight size={14} strokeWidth={1.75} />} onPress={() => window.open(`https://${liveLink}`, '_blank', 'noopener')}>Open</Button>
             </div>
-            <Button variant="primary" className="tf-onb__next" isPending={finishing} onPress={() => { setFinishing(true); void Promise.resolve(onFinish(values())).finally(() => setFinishing(false)); }}>Go to dashboard</Button>
+            <Button size="lg" variant="primary" className="tf-onb__next" isPending={finishing} onPress={() => { setFinishing(true); void Promise.resolve(onFinish(values())).finally(() => setFinishing(false)); }}>Go to dashboard</Button>
           </div>
         ) : (
         <div className="tf-onb">
@@ -355,11 +356,16 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
                 }
               })}
             </AuthPages>
+            {/* One clear next move: the primary button spans the column; Back and Skip sit quietly under it. */}
             <div className="tf-onb__actions">
-              {step > 0 && <Button variant="ghost" icon={<ArrowLeft size={16} strokeWidth={1.75} />} onPress={() => setStep(step - 1)} isDisabled={finishing}>Back</Button>}
-              {last && invites.length === 0 && <Button variant="ghost" className="tf-onb__skip" onPress={() => { void finish(); }} isDisabled={finishing}>Skip for now</Button>}
-              {focus === 'calendar' && !calendar && <Button variant="ghost" className="tf-onb__skip" onPress={() => setStep(step + 1)} isDisabled={connecting !== undefined}>Skip for now</Button>}
-              <Button type="submit" variant="primary" className="tf-onb__next" isDisabled={!can} isPending={finishing}>{nextLabel}</Button>
+              <Button type="submit" size="lg" variant="primary" className="tf-onb__next" isDisabled={!can} isPending={finishing}>{nextLabel}</Button>
+              {(step > 0 || (last && invites.length === 0) || (focus === 'calendar' && !calendar)) && (
+                <div className="tf-onb__aside">
+                  {step > 0 && <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setStep(step - 1)} isDisabled={finishing}>Back</Button>}
+                  {last && invites.length === 0 && <Button size="sm" variant="ghost" className="tf-onb__skip" onPress={() => { void finish(); }} isDisabled={finishing}>Skip for now</Button>}
+                  {focus === 'calendar' && !calendar && <Button size="sm" variant="ghost" className="tf-onb__skip" onPress={() => setStep(step + 1)} isDisabled={connecting !== undefined}>Skip for now</Button>}
+                </div>
+              )}
             </div>
           </form>
         </div>

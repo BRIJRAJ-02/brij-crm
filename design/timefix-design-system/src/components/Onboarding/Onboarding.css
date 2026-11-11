@@ -39,11 +39,16 @@
 .tf-onb__kind-tick { display: grid; place-items: center; flex: none; width: var(--space-20); height: var(--space-20); border-radius: var(--radius-full); border: var(--border-width-hairline) solid var(--border-strong); color: transparent; transition: background-color var(--duration-quick) var(--ease-smooth-out); }
 .tf-onb__kind[aria-checked='true'] .tf-onb__kind-tick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 @media (prefers-reduced-motion: reduce) { .tf-onb__seg::before, .tf-onb__kind, .tf-onb__kind-tick { transition: none; } }
-.tf-onb__actions { display: flex; align-items: center; gap: var(--space-8); }
-.tf-onb__next { margin-inline-start: auto; }
+.tf-onb__actions { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-onb__next { width: 100%; justify-content: center; }
+.tf-onb__aside { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-onb__aside > :only-child.tf-onb__skip { margin-inline-start: auto; }
 
-/* WorkspacePreview: a booking page in a quiet window plus the team, wider than the panel so it bleeds off its edge. */
-.tf-wsprev { display: flex; flex-direction: column; gap: var(--space-16); width: calc(var(--size-dialog) + var(--space-64)); font: 400 14px/20px var(--font-sans); color: var(--text); }
+/* WorkspacePreview: a booking page in a quiet window plus the team, named by a caption, as wide as the half allows. */
+.tf-wsprev { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; max-width: calc(var(--size-dialog) * 1.5); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-wsprev__caption { display: flex; align-items: center; gap: var(--space-8); margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-wsprev__dot { width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: var(--success); }
+.tf-wsprev__caption-note { margin-inline-start: auto; font-weight: 400; color: var(--text-tertiary); }
 .tf-wsprev__window { background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); overflow: hidden; }
 .tf-wsprev__bar { display: flex; align-items: center; padding: var(--space-12) var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-wsprev__url { display: inline-flex; align-items: center; height: var(--size-control-sm); padding: 0 var(--space-12); border-radius: var(--radius-full); background: var(--surface-subtle); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); max-width: 100%; overflow: hidden; white-space: nowrap; }
@@ -101,7 +106,8 @@
 .tf-onb__connect > .tf-btn { justify-content: center; }
 .tf-onb__live { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
 .tf-onb__live-icon { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); }
-.tf-onb__live-text { display: flex; flex-direction: column; flex: 1 1 14rem; min-width: 0; font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__live-text { display: flex; flex-direction: column; flex: 1 1 calc(100% - var(--size-control) - var(--space-12)); min-width: 0; font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__live > .tf-btn:first-of-type { margin-inline-start: calc(var(--size-control) + var(--space-12)); }
 .tf-onb__live-text strong { color: var(--text); font: 500 15px/22px var(--font-sans); }
 .tf-onb--live { animation: tf-onb-live var(--duration-slow) var(--ease-smooth-out) both; }
 @keyframes tf-onb-live { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }

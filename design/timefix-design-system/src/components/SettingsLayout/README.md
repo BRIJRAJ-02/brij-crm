@@ -1,4 +1,4 @@
-The settings layout pairs a grey icon list of settings pages with a readable column of section cards, each a title, a grey one-liner, rows with their control on the right, and a footer with a note and Save.
+The settings layout pairs a grey icon list of settings pages with section cards that span the content area (full width, like every app page), each a title, a grey one-liner, rows with their control on the right, and a footer with a note and Save.
 
 **Use it for**: every page under Settings (Profile, General, Members, Calendars, Billing) inside the app shell's surface. **Don't use it for**: per-record or per-view options (use a popover or the aside panel).
 

@@ -7,10 +7,11 @@
 .tf-auth--split .tf-auth__main { background: var(--surface); }
 .tf-auth__top { display: flex; align-items: center; height: var(--size-control); flex: none; }
 
-/* The card sits a little above the middle; in the split the task hangs from a fixed offset, so the field under the pointer stays put while pages change height. */
+/* The card sits a little above the middle; in the split the task hangs from a fixed offset near the middle, so the field under the pointer stays put while pages change height. */
 .tf-auth__body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: var(--space-32) 0 var(--space-64); }
-.tf-auth--split .tf-auth__body { justify-content: flex-start; padding-top: var(--space-64); }
+.tf-auth--split .tf-auth__body { justify-content: flex-start; padding-top: max(var(--space-32), calc(50dvh - var(--size-panel) * 0.6)); }
 .tf-auth__task { width: 100%; max-width: calc(var(--size-panel) - var(--space-32)); margin-inline: auto; }
+.tf-auth--split .tf-auth__task { max-width: var(--size-dialog); }
 .tf-auth--card .tf-auth__task {
   max-width: var(--size-panel); padding: var(--space-32);
   background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);
@@ -28,14 +29,15 @@
 .tf-auth__link:hover { color: var(--text); }
 .tf-auth__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
-/* The preview half: soft canvas, a hairline between, the sketch anchored top-start and bleeding off the end and foot. */
-.tf-auth__preview { position: relative; overflow: hidden; min-height: 0; background: var(--canvas); border-inline-start: var(--border-width-hairline) solid var(--border-subtle); padding: var(--space-64) 0 0 var(--space-48); }
+/* The preview half: soft canvas, a hairline between, the sketch centred in the half and as wide as it allows. */
+.tf-auth__preview { position: relative; overflow: hidden; min-height: 0; display: grid; place-items: center; background: var(--canvas); border-inline-start: var(--border-width-hairline) solid var(--border-subtle); padding: var(--space-64) var(--space-48); }
 
 /* Below a laptop width the preview leaves and the task takes the window. */
 @container (max-width: 760px) {
   .tf-auth--split .tf-auth__frame { grid-template-columns: minmax(0, 1fr); }
   .tf-auth__preview { display: none; }
   .tf-auth__main { padding: var(--space-16); }
+  .tf-auth--split .tf-auth__body { padding-top: var(--space-32); }
   .tf-auth--card .tf-auth__task { padding: var(--space-24); }
 }
 

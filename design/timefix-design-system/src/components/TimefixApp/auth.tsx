@@ -1,6 +1,5 @@
 // The doors into the app, as full screens: sign in (an emailed code, or Google), two factor, the first run, accepting an invitation,
 // asking to join by company email, a deleted workspace, and email preferences. Each ends back in the app or says what happens next.
-import { useGuestScale } from '../../lib/guest-scale.ts';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Building2, MailCheck, RotateCcw } from 'lucide-react';
 import { AuthLayout, AuthHeading, AuthFooterLink } from '../AuthLayout/AuthLayout.tsx';
@@ -38,7 +37,6 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
   /** The first run's one question: what this business books. Salons and restaurants land in their own workspace. */ readonly onFormat?: (kind: 'team' | 'salon' | 'restaurant') => void;
   /** The first run's answers, to set the workspace up. */ readonly onFinish?: (v: OnboardingValues) => void; readonly onRestore?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  useGuestScale(true);
   /** A new address that just got past the code: setup runs under its name. */
   const [signer, setSigner] = useState<string>();
   useEffect(() => {

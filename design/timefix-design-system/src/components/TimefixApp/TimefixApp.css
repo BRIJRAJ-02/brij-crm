@@ -355,7 +355,7 @@
 .tf-grow__share-link { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); }
 .tf-grow__share-link > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; user-select: all; }
 /* With the sidebar holding the settings groups, the page drops its own nav column (a phone keeps its list, where the sidebar steps aside). */
-@media (min-width: 40.0625rem) { .tf-set--sidenav .tf-set__nav { display: none; } }
+@media (min-width: 40.0625rem) { .tf-set--sidenav .tf-set__nav { display: none; } .tf-set--sidenav .tf-settings__content { padding-inline: 0; } }
 
 /* A form's publish bar floats at the foot of the window while the page scrolls under it, as on a booking page. */
 /* A strip kept clear at the foot, so the bar never sits over the last field. */
