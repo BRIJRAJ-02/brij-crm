@@ -1,0 +1,13 @@
+import { open, out } from './head.mjs';
+const theme = process.argv[2] ?? 'light';
+const { p, t, nav, done } = await open(theme);
+const shot = (n) => p.screenshot({ path: `${out}w14-${theme}-${n}.png` });
+await t('home scaled', async () => { await shot('01-home'); });
+await t('booking editor', async () => { await nav('Booking pages'); await p.waitForTimeout(600); await p.getByRole('button', { name: /Edit/ }).first().click().catch(async () => { await p.locator('.tf-bkf-pagecard, [class*=pagecard]').first().click(); }); await p.waitForTimeout(800); await shot('02-editor');
+  await p.getByRole('tab', { name: /Who/ }).click(); await p.waitForTimeout(400); await shot('03-who');
+  await p.getByRole('tab', { name: /Questions/ }).click(); await p.waitForTimeout(400); await shot('04-questions');
+  await p.locator('.tf-qlist__row').first().click(); await p.waitForTimeout(400); await shot('05-question-open');
+  await p.getByRole('textbox', { name: 'Question' }).fill('Company name'); await p.waitForTimeout(400); await shot('06-dirty');
+  await p.getByRole('tab', { name: /Look/ }).click(); await p.waitForTimeout(400); await shot('07-look'); });
+await t('forms editor', async () => { await p.getByRole('toolbar', { name: 'Publish' }).getByRole('button', { name: 'Discard' }).click().catch(() => undefined); await p.waitForTimeout(500); await shot('07b-left'); await nav('Forms'); await p.waitForTimeout(600); await shot('07c-forms'); await p.getByText('Talk to sales', { exact: true }).locator('visible=true').last().click(); await p.waitForTimeout(800); await shot('08-form'); await p.locator('.tf-qlist__row').first().click(); await p.waitForTimeout(400); await p.getByRole('textbox', { name: 'Question' }).fill('Team size'); await p.waitForTimeout(500); await shot('09-form-dirty'); });
+await done();

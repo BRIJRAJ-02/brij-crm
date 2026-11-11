@@ -2,7 +2,7 @@ A floating bar is a pill at the bottom of a region that holds the actions for wh
 
 **Use it for**: `BulkActionBar` (ink) when rows are selected: "3 selected", up to three actions, ×. `SaveBar` (ink) on settings pages and editors with unsaved changes: Discard and Save. `PublishBar` (white) when a public page has a draft guests have not seen. `FloatingBar` itself for other bars (the visitor bar on a public page), with `BarButton` for actions on ink. **Don't** show two bars in one region, or use a bar for a message with no action (use a toast).
 
-**The consumer provides**: a region with `position: relative`; BulkActionBar takes `count`, the actions and `onClear`; SaveBar takes `status` (`hidden`, `unsaved`, `saving`, `saved`), `onSave`, `onDiscard`, an optional `note`; PublishBar takes `status`, `changes`, `onPublish`, optional `onPreview` and `onDiscard`.
+**The consumer provides**: a region with `position: relative`; BulkActionBar takes `count`, the actions and `onClear`; SaveBar takes `status` (`hidden`, `unsaved`, `saving`, `saved`), `onSave`, `onDiscard`, an optional `note`; PublishBar takes `status`, `changes`, `onPublish`, optional `onPreview`, `onDiscard`, `message` ("Not published yet") and `isPublishDisabled` (a taken link, no name). Every editor with a public page uses it (booking pages, forms, the link page): one header row above, this bar at the foot.
 
 **States**: hidden, shown, busy (spinner in the main action), done (drawn tick and "Saved" / "Published", then the bar drops away).
 

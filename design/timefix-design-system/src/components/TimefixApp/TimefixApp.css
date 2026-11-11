@@ -32,10 +32,14 @@
 .tf-app__body:has(> .tf-app__keep:not([hidden]) > .tf-rec) { display: flex; flex-direction: column; padding-bottom: var(--space-16); }
 .tf-rec { display: flex; flex: 1; flex-direction: column; gap: var(--space-12); min-height: 0; }
 .tf-rec__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
-.tf-rec__view { width: calc(var(--size-menu) * 0.85); }
+.tf-rec__view { max-width: calc(var(--size-menu) * 1.2); }
+.tf-rec__view > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The filter row: filters, sort and view on the left and right, then the view's unsaved changes at its end. */
+.tf-rec__filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-rec__filters > :first-child { flex: 1; min-width: 0; }
 .tf-rec__search { width: calc(var(--size-menu) * 0.9); }
 .tf-rec__spacer { flex: 1; }
-.tf-rec__draft { display: inline-flex; align-items: center; gap: var(--space-4); padding-left: var(--space-12); border-radius: var(--radius-full); background: var(--accent-soft); }
+.tf-rec__draft { display: inline-flex; align-items: center; gap: var(--space-4); padding-inline-start: var(--space-8); border-inline-start: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-rec__muted { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
 .tf-rec__split { display: flex; flex: 1; gap: var(--space-16); min-height: 0; }
 .tf-rec__grid, .tf-rec__board { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
@@ -188,7 +192,7 @@
 .tf-dup { display: flex; flex-direction: column; gap: var(--space-12); margin: 0; padding: 0; list-style: none; }
 .tf-dup__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: var(--space-8) var(--space-16); }
 .tf-dup__who { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
-.tf-dup__who > span { display: flex; flex-direction: column; min-width: 0; }
+.tf-dup__text { display: flex; flex-direction: column; min-width: 0; }
 .tf-dup__why { grid-column: 1 / 3; }
 .tf-dup__acts { grid-column: 3; grid-row: 1 / span 2; display: flex; gap: var(--space-8); }
 .tf-dup__grid { display: flex; flex-direction: column; gap: var(--space-8); }
@@ -350,3 +354,10 @@
 .tf-grow__share-title { color: var(--text); font: 600 14px/20px var(--font-sans); }
 .tf-grow__share-link { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); }
 .tf-grow__share-link > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+/* With the sidebar holding the settings groups, the page drops its own nav column (a phone keeps its list, where the sidebar steps aside). */
+@media (min-width: 40.0625rem) { .tf-set--sidenav .tf-set__nav { display: none; } }
+
+/* A form's publish bar floats at the foot of the window while the page scrolls under it, as on a booking page. */
+/* A strip kept clear at the foot, so the bar never sits over the last field. */
+.tf-forms__publish { position: sticky; bottom: 0; flex: none; height: calc(var(--space-64) + var(--space-8)); margin-top: auto; pointer-events: none; z-index: var(--z-sticky); }
+.tf-forms--edit { min-height: 100%; }

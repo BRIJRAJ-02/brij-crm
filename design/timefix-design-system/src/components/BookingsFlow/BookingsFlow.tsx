@@ -55,6 +55,8 @@ export interface BookingsFlowProps {
   /** Inside the whole Timefix app: the app's own sidebar items around the Bookings section, its content when another module is open,
    *  its phone tab bar, and a call when a Bookings item is picked. Bookings stays mounted, so its state is kept. */
   readonly appNav?: (bookings: ReactNode) => ReactNode;
+  /** Inside the whole Timefix app: opens search from the sidebar's Search row, which shares its line with the collapse button. */
+  readonly onSearch?: () => void;
   readonly appContent?: ReactNode;
   /** Inside the app: the top bar's own actions (Search), in place of Bookings' bell; the app's Inbox already carries bookings. */
   readonly appActions?: ReactNode;
@@ -102,7 +104,7 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', guests: 'Clients', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, onSearch, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
   const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const readOnlyRef = useRef(isReadOnly); readOnlyRef.current = isReadOnly;
@@ -437,7 +439,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       </NavSection>
   );
   const sidebar = (
-    <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
+    <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed} onSearch={onSearch}
       header={<WorkspaceSwitcher name={workspaceName ?? state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); else if (id === 'settings' || id === 'create') onMenu?.(id); }}>
         {showDemoMenu ? <WorkspaceItems current={currentWs} /> : null}
         {showDemoMenu ? <MenuSeparator /> : null}

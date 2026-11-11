@@ -131,6 +131,13 @@ function RowActions({ m, onReschedule, onCancel, onCopyLink, onNoShow, onNote, o
   );
 }
 
+/** A meeting's length: "45 min", "1 hr", "1 hr 30 min". */
+function length(start: Date, end: Date): string {
+  const m = Math.round((end.getTime() - start.getTime()) / 60_000);
+  const h = Math.floor(m / 60); const r = m % 60;
+  return h === 0 ? `${r} min` : r === 0 ? `${h} hr` : `${h} hr ${r} min`;
+}
+
 /** How long a cancelled row offers Undo before the guest is emailed. */
 export const CANCEL_UNDO_MS = 8_000;
 
@@ -192,10 +199,11 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
       const isToday = !g.title && sameDay(g.day, now);
       const nowAt = isToday ? g.items.findIndex((m) => m.start >= now) : -1;
       return (
-        <section key={g.key} className="tf-meetings__group" aria-label={t.main}>
+        <section key={g.key} className={cx('tf-meetings__group', g.title && 'tf-meetings__group--ask')} aria-label={t.main}>
           <h3 className="tf-meetings__day">
             {t.chip ? <span className={cx('tf-meetings__rel', isToday && 'tf-meetings__rel--today')}>{t.chip}</span> : null}
             <span className={cx(t.chip && 'tf-meetings__date')}>{t.main}</span>
+            <span className="tf-meetings__count tf-num" aria-label={`${g.items.length} ${g.items.length === 1 ? 'meeting' : 'meetings'}`}>{g.items.length}</span>
           </h3>
           <ul className="tf-meetings__rows">
             {g.items.map((m, n) => {
@@ -214,10 +222,11 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
                     tabIndex={onOpen && !strip ? 0 : undefined} aria-label={onOpen && !strip ? `${m.title} with ${m.invitee.name}, ${span(m.start, m.end, hour12)}` : undefined}
                     aria-haspopup={onOpen && !strip ? 'dialog' : undefined} onClick={press(m, strip)} onKeyDown={key(m, strip)}>
                     <div className="tf-meetings__main" inert={strip}>
-                      <span className="tf-meetings__time tf-num">{g.title && <span className="tf-meetings__time-day">{formatDay(m.start)}</span>}<span className="tf-meetings__time-start">{clock(m.start, hour12)}</span><span className="tf-meetings__time-end">{clock(m.end, hour12)}</span></span>
+                      {/* When, then what: the start in ink with its length under it (a request leads with its day); the meeting's name, then who and where. */}
+                      <span className="tf-meetings__time tf-num">{g.title ? <><span className="tf-meetings__time-start">{formatDay(m.start)}</span><span className="tf-meetings__time-end">{clock(m.start, hour12)} · {length(m.start, m.end)}</span></> : <><span className="tf-meetings__time-start">{clock(m.start, hour12)}</span><span className="tf-meetings__time-end">{length(m.start, m.end)}</span></>}</span>
                       <span className="tf-meetings__what">
-                        <span className="tf-meetings__title">{m.title} <span className="tf-meetings__with">with {m.invitee.name}</span></span>
-                        <span className="tf-meetings__place"><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</span>
+                        <span className="tf-meetings__title">{m.title}</span>
+                        <span className="tf-meetings__place"><span className="tf-meetings__with">{m.invitee.name}</span><span aria-hidden="true">·</span><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</span>
                       </span>
                       <span className="tf-meetings__status">{m.status !== 'confirmed' && m.status !== 'pending' && <MeetingStatusTag status={m.status} />}{conflictIds?.has(m.id) && <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} aria-hidden />}>Clash</Tag>}</span>
                       <RowActions m={m} onReschedule={onReschedule} onCancel={cancel} onCopyLink={onCopyLink} onNoShow={onNoShow} onNote={onNote} onConfirm={onConfirm} onDecline={onDecline} />

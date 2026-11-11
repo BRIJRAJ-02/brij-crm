@@ -1,8 +1,10 @@
-/* QuestionList: question cards that reorder by their grip, beside the selected question's settings. */
-.tf-qbuilder { display: flex; flex-wrap: wrap; gap: var(--space-16); align-items: flex-start; font: 400 14px/20px var(--font-sans); color: var(--text); }
-/* The list keeps 22rem; when the panel can't fit beside it, the panel drops below. */
-.tf-qbuilder > :first-child { flex: 1 1 22rem; min-width: 0; }
-.tf-qbuilder > :last-child { flex: 1 1 calc(var(--size-menu) + var(--space-64)); max-width: 100%; }
+/* QuestionList: question cards that reorder by their grip; a question opens in the list's place (page side-by-side, 08). */
+.tf-qbuilder { display: flex; flex-direction: column; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-qbuilder__open { display: flex; flex-direction: column; gap: var(--space-12); animation: tf-qbuilder-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-qbuilder__nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-qbuilder__pos { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+@keyframes tf-qbuilder-in { from { opacity: 0; transform: translateX(var(--distance-base)); } }
+@media (prefers-reduced-motion: reduce) { .tf-qbuilder__open { animation: none; } }
 
 .tf-qtile { display: inline-grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
 .tf-qtile--sm { width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); }

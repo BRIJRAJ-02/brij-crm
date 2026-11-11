@@ -32,6 +32,9 @@ ${fontLinks}
 ${tokens}
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${themed('dark')} color-scheme: dark; } }
 [data-theme="dark"] { color-scheme: dark; }
+/* The dashboard draws at 80% (owner, 11 Nov: smaller type and padding across); public pages and sign in step back to 100%. */
+html { zoom: 0.8; }
+html[data-guest] { zoom: 1; }
 html, body { height: 100%; overflow: hidden; }
 body { margin: 0; background: var(--canvas); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }

@@ -59,6 +59,12 @@
 .tf-attributesettings__current .tf-attributesettings__icon { background: var(--surface); }
 .tf-attributesettings__lock { margin-left: auto; color: var(--text-tertiary); flex: none; }
 .tf-attributesettings__default { display: flex; align-items: center; min-height: var(--size-control); padding: 0 var(--space-12); border-radius: var(--radius-md); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); }
+/* The value fills the box; while it edits, the editor becomes the box (one field, never a box inside a box). */
+.tf-attributesettings__default > .tf-attr { flex: 1; }
+.tf-attributesettings__default:has(.tf-attr-input) { padding: 0; box-shadow: none; }
+.tf-attributesettings__default .tf-attr-input { margin: 0; }
+.tf-attributesettings__default .tf-attr-input__box { min-height: var(--size-control); border-radius: var(--radius-md); }
+.tf-attributesettings__default .tf-attr-input__control { height: var(--size-control); padding: 0 var(--space-12); }
 .tf-attributesettings__rules { display: flex; flex-direction: column; border-top: var(--border-width-hairline) solid var(--border-subtle); }
 
 /* ---------- type picker: cards, two to a row ---------- */
@@ -83,3 +89,6 @@
   .tf-attributesettings__row, .tf-attributesettings__grip, .tf-attributesettings__chev, .tf-attributesettings__slot, .tf-attributesettings-typepick__card, .tf-attributesettings-typepick__icon { transition: none; }
   .tf-attributesettings__row.is-settling, .tf-attributesettings__wash { animation: none; }
 }
+
+/* Archive sits at the start of the dialog's actions, away from Save. */
+.tf-attributesettings__archive { margin-inline-end: auto; }

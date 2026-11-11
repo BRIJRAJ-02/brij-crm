@@ -2,7 +2,7 @@ import {
   Button as AriaButton, DialogTrigger, DropIndicator, GridList, GridListItem, Header, ListBox, ListBoxItem, ListBoxSection, useDragAndDrop, type Key, type Selection,
 } from 'react-aria-components';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CopyPlus, Ellipsis, GripVertical, MousePointerClick, Plus, Trash, X } from 'lucide-react';
+import { ArrowLeft, CopyPlus, Ellipsis, GripVertical, MousePointerClick, Plus, Trash, X } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
@@ -268,9 +268,9 @@ export interface QuestionBuilderProps {
   readonly title?: string;
 }
 
-/** The builder's Questions tab: the list beside the selected question's settings. Delete collapses to "Deleted · Undo" for 6s. */
+/** The builder's Questions tab: the list, and a question opens in its place with "All questions" to go back, so the page keeps one editor column beside its one preview. Delete collapses to "Deleted · Undo" for 6s. */
 export function QuestionBuilder({ questions, onChange, kinds, title }: QuestionBuilderProps) {
-  const [selected, setSelected] = useState<string | undefined>(questions[0]?.id);
+  const [selected, setSelected] = useState<string | undefined>(undefined);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const [undo, setUndo] = useState<{ readonly question: FormQuestion; readonly index: number }>();
   const timer = useRef<number | undefined>(undefined);
@@ -300,22 +300,33 @@ export function QuestionBuilder({ questions, onChange, kinds, title }: QuestionB
       </div>
     </div>
   );
+  const open = questions.find((q) => q.id === selected);
+  const at = open ? questions.indexOf(open) : -1;
   return (
     <div className="tf-qbuilder">
-      <QuestionList
-        questions={questions}
-        selectedId={selected}
-        onSelect={setSelected}
-        onReorder={onChange}
-        onDuplicate={(id) => { const n = questions.findIndex((q) => q.id === id); const q = questions[n]; if (q) insert({ ...q, id: newId(), title: q.title ? `${q.title} (copy)` : '' }, n + 1); }}
-        onDelete={remove}
-        onAdd={(kind) => insert(blank(kind), questions.length)}
-        freshIds={fresh}
-        notice={notice}
-        kinds={kinds}
-        title={title}
-      />
-      <QuestionSettings question={questions.find((q) => q.id === selected)} onChange={(next) => onChange(questions.map((q) => (q.id === next.id ? next : q)))} onClose={() => setSelected(undefined)} />
+      {open ? (
+        <div className="tf-qbuilder__open" key={open.id}>
+          <div className="tf-qbuilder__nav">
+            <Button size="sm" variant="ghost" icon={<ArrowLeft {...i16} />} onPress={() => setSelected(undefined)}>All questions</Button>
+            <span className="tf-qbuilder__pos tf-num">{at + 1} of {questions.length}</span>
+          </div>
+          <QuestionSettings question={open} onChange={(next) => onChange(questions.map((q) => (q.id === next.id ? next : q)))} />
+        </div>
+      ) : (
+        <QuestionList
+          questions={questions}
+          selectedId={selected}
+          onSelect={setSelected}
+          onReorder={onChange}
+          onDuplicate={(id) => { const n = questions.findIndex((q) => q.id === id); const q = questions[n]; if (q) insert({ ...q, id: newId(), title: q.title ? `${q.title} (copy)` : '' }, n + 1); }}
+          onDelete={remove}
+          onAdd={(kind) => insert(blank(kind), questions.length)}
+          freshIds={fresh}
+          notice={notice}
+          kinds={kinds}
+          title={title}
+        />
+      )}
     </div>
   );
 }

@@ -68,7 +68,7 @@ export function DuplicatesScreen({ state, dispatch, onDone, object = 'people' }:
         <ul className="tf-dup">
           {pairs.map(([a, b, why]) => (
             <li key={`${a.id}|${b.id}`} className="tf-bkf-card tf-dup__pair">
-              {[a, b].map((p) => <span key={p.id} className="tf-dup__who"><Avatar name={p.name} size={36} shape={people ? 'round' : 'square'} /><span><strong>{p.name}</strong><span className="tf-rec__muted">{line(p)}</span></span></span>)}
+              {[a, b].map((p) => <span key={p.id} className="tf-dup__who"><Avatar name={p.name} size={36} shape={people ? 'round' : 'square'} /><span className="tf-dup__text"><strong>{p.name}</strong><span className="tf-rec__muted">{line(p)}</span></span></span>)}
               <span className="tf-dup__why tf-rec__muted">{why}</span>
               <span className="tf-dup__acts">
                 <Button size="sm" variant="ghost" onPress={() => { const key = [a.id, b.id].sort().join('|'); dispatch({ type: 'dupes/dismiss', key, on: true }); toast({ message: 'Marked as not a duplicate. We won’t suggest them again.', action: { label: 'Undo', onAction: () => dispatch({ type: 'dupes/dismiss', key, on: false }) } }); }}>Not a duplicate</Button>
@@ -100,6 +100,8 @@ export function DuplicatesScreen({ state, dispatch, onDone, object = 'people' }:
               dispatch({ type: 'trash/merged', id: drop.id, into: keep.id });
               dispatch({ type: 'history/add', text: `${state.me} merged ${drop.name} into ${keep.name}` });
               setMerging(undefined);
+              // Back to the list straight away: the merged record is there, and Undo rides on the toast.
+              onDone();
               toast({ message: `Merged into ${String(patch.name ?? keep.name)}`, action: { label: 'Undo', onAction: () => {
                 dispatch({ type: 'records/untrash', ids: [drop.id] });
                 dispatch({ type: 'records/relink', from: { object, id: keep.id }, to: { object, id: drop.id }, only: moved });

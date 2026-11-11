@@ -1,11 +1,12 @@
 // The doors into the app, as full screens: sign in (an emailed code, or Google), two factor, the first run, accepting an invitation,
 // asking to join by company email, a deleted workspace, and email preferences. Each ends back in the app or says what happens next.
+import { useGuestScale } from '../../lib/guest-scale.ts';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Building2, CalendarDays, MailCheck, RotateCcw, Scissors, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, Building2, MailCheck, RotateCcw } from 'lucide-react';
 import { AuthLayout, AuthHeading, AuthFooterLink } from '../AuthLayout/AuthLayout.tsx';
 import { SignInForm } from '../SignInForm/SignInForm.tsx';
 import { CodeInput } from '../CodeInput/CodeInput.tsx';
-import { Onboarding, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
+import { Onboarding, nameFromEmail, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -13,11 +14,6 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { TextField } from '../Field/Field.tsx';
 
 /** The three kinds of business, as the first run asks. */
-const FORMATS = [
-  { id: 'team', title: 'Meetings', line: 'Calls and demos with you or your team', icon: <CalendarDays size={20} strokeWidth={1.75} /> },
-  { id: 'salon', title: 'Appointments', line: 'Services with staff and prices: a salon, clinic or studio', icon: <Scissors size={20} strokeWidth={1.75} /> },
-  { id: 'restaurant', title: 'Tables', line: 'Reservations, walk-ins and a menu: a restaurant or café', icon: <UtensilsCrossed size={20} strokeWidth={1.75} /> },
-] as const;
 
 /** Which door. */
 export type Door = 'signin' | 'twofactor' | 'welcome' | 'invite' | 'join' | 'deleted' | 'email' | 'expired' | 'setup2fa' | 'invite-wrong' | 'invite-used';
@@ -42,7 +38,9 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
   /** The first run's one question: what this business books. Salons and restaurants land in their own workspace. */ readonly onFormat?: (kind: 'team' | 'salon' | 'restaurant') => void;
   /** The first run's answers, to set the workspace up. */ readonly onFinish?: (v: OnboardingValues) => void; readonly onRestore?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [format, setFormat] = useState<'team'>();
+  useGuestScale(true);
+  /** A new address that just got past the code: setup runs under its name. */
+  const [signer, setSigner] = useState<string>();
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
@@ -55,23 +53,11 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
   const back = <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={onDone}>Back to the app</Button>;
   // After the code: someone new sets up their own workspace; a workspace that asks for two factor gets it set up first; otherwise straight in.
   const signedIn = (email?: string) => {
-    if (email && ctx.memberEmails && !ctx.memberEmails.includes(email.trim().toLowerCase())) { onDoor('welcome'); return; }
+    if (email && ctx.memberEmails && !ctx.memberEmails.includes(email.trim().toLowerCase())) { setSigner(email.trim().toLowerCase()); onDoor('welcome'); return; }
     if (ctx.twoFactor) onDoor('twofactor'); else if (ctx.require2fa) onDoor('setup2fa'); else onDone();
   };
-  if (door === 'welcome' && !format) return (
-    <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="What do you book?" className="tf-door"><div className="tf-door__back">{back}</div>
-      <AuthLayout aria-label="What do you book?">
-        <div className="tf-door__card tf-door__card--left">
-          <AuthHeading title="What do people book with you?" description="One answer sets up the right pages. You can add the others later." />
-          <ul className="tf-door__choices">
-            {FORMATS.map((f) => <li key={f.id}><button type="button" className="tf-door__choice" onClick={() => { if (f.id === 'team') setFormat('team'); else { onFormat?.(f.id); onDone(); } }}>
-              <span className="tf-door__choice-icon" aria-hidden>{f.icon}</span><span><strong>{f.title}</strong><span className="tf-rec__muted">{f.line}</span></span></button></li>)}
-          </ul>
-        </div>
-      </AuthLayout>
-    </div>
-  );
-  if (door === 'welcome') return <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up your workspace" className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={ctx.email} owner={ctx.name} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { onFinish?.(v); onFormat?.('team'); onDone(); }} onSignOut={() => onDoor('signin')} /></div>;
+  // First run: one flow in the split screen, from what you book to You're live, under the name of whoever just signed in.
+  if (door === 'welcome') return <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up your workspace" className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={signer ?? ctx.email} owner={signer ? nameFromEmail(signer) : ctx.name} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { if (v.kind === 'team') onFinish?.(v); onFormat?.(v.kind); onDone(); }} onSignOut={() => onDoor('signin')} /></div>;
   return (
     <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={DOORS.find((d) => d.id === door)?.label ?? 'Timefix'} className="tf-door">
       <div className="tf-door__back">{back}</div>

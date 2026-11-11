@@ -24,7 +24,7 @@
 .tf-dialog__close { position: absolute; top: var(--space-16); right: var(--space-16); }
 .tf-dialog__title { margin: 0; padding-right: var(--space-32); font: 500 16px/24px var(--font-sans); color: var(--text); }
 .tf-dialog__desc { margin: var(--space-4) 0 0; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
-.tf-dialog__body { margin-top: var(--space-16); }
+.tf-dialog__body { display: flex; flex-direction: column; gap: var(--space-16); margin-top: var(--space-16); }
 .tf-dialog__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); margin-top: var(--space-24); }
 
 /* Field for overlay forms. */

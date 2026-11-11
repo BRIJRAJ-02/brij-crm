@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, GripVertical, Lock, Plus } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { ATTRIBUTE_TYPES, AttributeIcon, AttributeField, type Attribute, type AttributeType, type AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { Drawer, type DrawerSaveState } from '../Drawer/Drawer.tsx';
+import { Dialog } from '../Dialog/Dialog.tsx';
 import { Button } from '../Button/Button.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -165,8 +165,8 @@ export function AttributeTypePicker({ value, onChange, types = PICKABLE_TYPES, i
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'SGD'].map((c) => ({ id: c, label: c, description: new Intl.DisplayNames('en', { type: 'currency' }).of(c) }));
 const FORMATS = [{ id: 'plain', label: '1,240', description: 'Whole numbers' }, { id: 'decimal', label: '1,240.00', description: 'Two decimals' }, { id: 'compact', label: '1.2K', description: 'Short' }];
 
-/** Props for AttributeDrawer. */
-export interface AttributeDrawerProps {
+/** Props for AttributeDialog. */
+export interface AttributeDialogProps {
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
   /** The object it belongs to, singular ("Deal"). */
@@ -184,8 +184,8 @@ export interface AttributeDrawerProps {
 const blank = (): SchemaAttribute => ({ id: `attr-${Date.now().toString(36)}`, name: '', type: 'text' });
 const same = (a: SchemaAttribute, b: SchemaAttribute) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Creates or edits one attribute in a side drawer: name, type (cards with a line each), the type's own settings, its options, the default, Required and Unique. Changing an existing type warns first. */
-export function AttributeDrawer({ isOpen, onOpenChange, objectName, attribute, valueCount, onSave, onArchive }: AttributeDrawerProps) {
+/** Creates or edits one attribute in a dialog (the same surface as New object): name, type (cards with a line each), the type's own settings, its options, the default, Required and Unique. Changing an existing type warns first. */
+export function AttributeDialog({ isOpen, onOpenChange, objectName, attribute, valueCount, onSave, onArchive }: AttributeDialogProps) {
   const start = useRef(attribute ?? blank()).current;
   const [draft, setDraft] = useState<SchemaAttribute>(start);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -194,7 +194,6 @@ export function AttributeDrawer({ isOpen, onOpenChange, objectName, attribute, v
   const isNew = attribute === undefined;
   const set = (patch: Partial<SchemaAttribute>) => setDraft((d) => ({ ...d, ...patch }));
   const dirty = !same(draft, start);
-  const saveState: DrawerSaveState = phase === 'saving' ? 'saving' : phase === 'saved' ? 'saved' : dirty ? 'dirty' : 'clean';
   const typeChanged = !isNew && draft.type !== start.type;
 
   const pickType = (type: AttributeType) => setDraft((d) => ({
@@ -205,21 +204,20 @@ export function AttributeDrawer({ isOpen, onOpenChange, objectName, attribute, v
   const save = () => {
     if (draft.name.trim() === '') { setNameError(true); return; }
     setPhase('saving');
-    window.setTimeout(() => { onSave({ ...draft, name: draft.name.trim() }); setPhase('saved'); }, 600);
-    window.setTimeout(() => onOpenChange(false), 1500);
+    window.setTimeout(() => { onSave({ ...draft, name: draft.name.trim() }); setPhase('saved'); onOpenChange(false); }, 400);
   };
   const live = draft.options?.filter((o) => !o.archived);
   const fieldAttr: Attribute = { id: `${draft.id}-default`, name: 'Default value', type: draft.type, options: live, currency: draft.currency };
 
   return (
-    <Drawer
-      isOpen={isOpen} onOpenChange={onOpenChange} width="lg"
+    <Dialog
+      isOpen={isOpen} onOpenChange={onOpenChange} size="wide"
       title={isNew ? `New ${objectName.toLowerCase()} attribute` : draft.name || start.name}
-      subtitle={isNew ? 'Every record of this object gets it.' : `${ATTRIBUTE_TYPES[start.type].label} attribute on ${objectName}`}
-      leading={<span className="tf-attributesettings__icon tf-attributesettings__icon--lg"><AttributeIcon type={draft.type} size={20} /></span>}
-      saveState={saveState} onSave={save} onDiscard={() => { setDraft(start); setShowTypes(isNew); setNameError(false); }}
-      saveLabel={isNew ? 'Create attribute' : 'Save changes'}
-      footerStart={!isNew && !start.isSystem && onArchive ? <Button variant="ghost" onPress={() => { onArchive(start.id); onOpenChange(false); }}>Archive attribute</Button> : undefined}
+      actions={<>
+        {!isNew && !start.isSystem && onArchive ? <Button variant="ghost" className="tf-attributesettings__archive" onPress={() => { onArchive(start.id); onOpenChange(false); }}>Archive</Button> : null}
+        <Button variant="ghost" slot="close">Cancel</Button>
+        <Button variant="primary" isPending={phase === 'saving'} isDisabled={!isNew && !dirty} onPress={save}>{isNew ? 'Create attribute' : 'Save'}</Button>
+      </>}
     >
       <TextField
         label="Name" value={draft.name} autoFocus={isNew} placeholder="Deal value" isRequired
@@ -279,7 +277,7 @@ export function AttributeDrawer({ isOpen, onOpenChange, objectName, attribute, v
           <SettingsRow title="Unique" description={`No two ${objectName.toLowerCase()}s share a value. Imports match on it.`} control={<Switch aria-label="Unique" isSelected={draft.isUnique === true} onChange={(v) => set({ isUnique: v })} />} />
         )}
       </div>
-    </Drawer>
+    </Dialog>
   );
 }
 
@@ -338,7 +336,7 @@ export function AttributeSettings({ objectName, objectPlural, attributes, onChan
         label={`${objectPlural} attributes`} attributes={attributes} changedId={changed} onEdit={openFor}
         onReorder={(ids) => onChange(ids.map((id) => attributes.find((a) => a.id === id)).filter((a): a is SchemaAttribute => a !== undefined))}
       />
-      <AttributeDrawer
+      <AttributeDialog
         key={session} isOpen={open} onOpenChange={setOpen} objectName={objectName} attribute={current}
         valueCount={editing ? valueCounts?.[editing] : undefined}
         onArchive={(id) => {

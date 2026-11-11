@@ -27,7 +27,7 @@ import type { Attribute } from '../AttributeField/AttributeField.tsx';
 import type { BookedMeeting } from '../BookingsFlow/state.ts';
 import { formatDay } from '../../lib/format.ts';
 import { LOST_REASONS } from './deals.tsx';
-import { STAGES, dayFrom, inr, isEmptyNote, newId, recordName, ymdOf, type AppAction, type AppState, type ObjectId, type Stage } from './data.ts';
+import { STAGES, dayFrom, inr, isEmptyNote, newId, recordName, ymdOf, type AppAction, type AppState, type ObjectId, type Stage, LISTS_ON } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
@@ -131,10 +131,10 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
           toast({ message: `${a.name} saved`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: { [a.id]: was } } }] }) } });
         }} />
       ))}
-      <RecordSection title="Lists" count={lists.length}>
+      {LISTS_ON && <RecordSection title="Lists" count={lists.length}>
         {lists.map((l) => <span key={l.id} className="tf-rec__rel tf-rec__rel--static">{l.name}<span className="tf-rec__muted">{l.entries.find((e) => e.recordId === id)?.stage}</span></span>)}
         {canEdit && <Button size="sm" variant="ghost" icon={<ListPlus {...i14} />} onPress={() => setListing(true)}>Add to a list</Button>}
-      </RecordSection>
+      </RecordSection>}
       {company && object !== 'companies' && <RecordSection title="Company" count={1}><button type="button" className="tf-rec__rel" onClick={() => onOpen('companies', company.id)}><Avatar name={company.name} size={20} shape="square" />{company.name}</button></RecordSection>}
       {object === 'companies' && <RecordSection title="People" count={state.people.filter((p) => p.companyId === id).length}>{state.people.filter((p) => p.companyId === id).map((p) => <button key={p.id} type="button" className="tf-rec__rel" onClick={() => onOpen('people', p.id)}><Avatar name={p.name} size={20} />{p.name}</button>)}</RecordSection>}
       {(() => {
@@ -170,7 +170,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
         onEmail={person?.email ? () => setEmailing(true) : undefined}
         moreActions={<>
           <MenuItem id="copy" icon={<Link2 size={16} strokeWidth={1.75} />}>Copy link</MenuItem>
-          {canEdit ? <MenuItem id="list" icon={<ListPlus size={16} strokeWidth={1.75} />}>Add to a list</MenuItem> : null}
+          {canEdit && LISTS_ON ? <MenuItem id="list" icon={<ListPlus size={16} strokeWidth={1.75} />}>Add to a list</MenuItem> : null}
           {canEdit ? <MenuSeparator /> : null}
           {canEdit ? <MenuItem id="delete" icon={<Trash2 size={16} strokeWidth={1.75} />} isDanger>Delete</MenuItem> : null}
         </>}

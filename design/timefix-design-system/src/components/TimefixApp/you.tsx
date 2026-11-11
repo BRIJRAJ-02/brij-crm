@@ -17,7 +17,7 @@ import { TextArea, TextField } from '../Field/Field.tsx';
 import { DatePicker } from '../DatePicker/DatePicker.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { parseDate } from '@internationalized/date';
-import { Inbox, CheckSquare, ChevronRight, NotebookPen } from 'lucide-react';
+import { Inbox, CheckSquare, ChevronRight, NotebookPen, UserRound, Building2, CircleDollarSign } from 'lucide-react';
 import { Button as AriaButton, Disclosure, DisclosurePanel } from 'react-aria-components';
 import { NOTE_TEMPLATES, REPEATS, isEmptyNote, newId, noteFromTemplate, type TaskRepeat, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
 
@@ -205,10 +205,10 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
   const [noteQuery, setNoteQuery] = useState('');
   const note = state.notes.find((n) => n.id === openId);
   if (note) {
-    const r = recordName(state, note.record);
+    const on = note.record;
     return (
       <div className="tf-you tf-you--note">
-        <button type="button" className="tf-rec__link" onClick={() => onOpenRecord(note.record.object, note.record.id)}>On {r.name}</button>
+        {on && <button type="button" className="tf-rec__link" onClick={() => onOpenRecord(on.object, on.id)}>On {recordName(state, on).name}</button>}
         <NotePage note={{ id: note.id, title: note.title, body: note.body, doc: note.doc, author: note.author, updated: ago(note.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
           onBack={(l) => { setOpenId(undefined); if (isEmptyNote(l.title, l.body)) dispatch({ type: 'note/remove', id: note.id }); }}
           onDelete={() => { const n = note; setOpenId(undefined); dispatch({ type: 'note/remove', id: n.id }); toast({ message: 'Note deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'note/set', note: n }) } }); }}
@@ -218,7 +218,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
   }
   const all = [...state.notes].sort((a, b) => b.updated.getTime() - a.updated.getTime());
   const q = noteQuery.trim().toLowerCase();
-  const notes = q ? all.filter((n) => `${n.title} ${n.body} ${recordName(state, n.record).name}`.toLowerCase().includes(q)) : all;
+  const notes = q ? all.filter((n) => `${n.title} ${n.body} ${n.record ? recordName(state, n.record).name : ''}`.toLowerCase().includes(q)) : all;
   return (
     <div className="tf-you">
       {all.length > 0 && <div className="tf-you__bar">
@@ -229,19 +229,19 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
       </div>}
       {all.length > 0 && notes.length === 0 ? <p className="tf-rec__muted">No notes match. <button type="button" className="tf-rec__link" onClick={() => setNoteQuery('')}>Clear search</button></p> : null}
       {all.length === 0 ? <EmptyState icon={<NotebookPen size={20} strokeWidth={1.75} />} title="No notes yet" description="Notes sit on a person, company or deal." action={<Button size="sm" variant="primary" onPress={() => setPicking(true)}>New note</Button>} />
-        : notes.length === 0 ? null : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: `${ago(n.updated)} · ${recordName(state, n.record).name}` }))} onOpen={setOpenId} isHeadless />}
+        : notes.length === 0 ? null : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: n.record ? `${ago(n.updated)} · ${recordName(state, n.record).name}` : ago(n.updated) }))} onOpen={setOpenId} isHeadless />}
       {picking && (
-        <Dialog isOpen onOpenChange={(o) => { if (!o) setPicking(false); }} title="New note" description="Every note sits on a record, so the team finds it there too."
-          actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!rec} onPress={() => {
+        <Dialog isOpen onOpenChange={(o) => { if (!o) setPicking(false); }} title="New note"
+          actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => {
             const [o, i] = rec.split(':') as [ObjectId, string];
             const tpl = NOTE_TEMPLATES.find((x) => x.id === template);
-            const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, record: { object: o, id: i }, updated: new Date(), ...(tpl ? noteFromTemplate(tpl) : {}) };
+            const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, ...(rec ? { record: { object: o, id: i } } : {}), updated: new Date(), ...(tpl ? noteFromTemplate(tpl) : {}) };
             dispatch({ type: 'note/set', note: n }); setPicking(false); setOpenId(n.id);
           }}>Start writing</Button></>}>
           <ChoiceChips label="Start from" selectionMode="single" size="sm" selectedKeys={[template]} onSelectionChange={(k) => setTemplate([...k][0] ?? 'blank')}
             items={[{ id: 'blank', label: 'Blank' }, ...NOTE_TEMPLATES.map((t) => ({ id: t.id, label: t.label }))]} />
-          <Select label="On" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="Pick a person, company or deal"
-            items={[...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))]} />
+          <Select label="On a record" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="None" description="Optional. The note shows on that record too."
+            items={[...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, icon: <UserRound size={16} strokeWidth={1.75} aria-label="Person" /> })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, icon: <Building2 size={16} strokeWidth={1.75} aria-label="Company" /> })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, icon: <CircleDollarSign size={16} strokeWidth={1.75} aria-label="Deal" /> }))]} />
         </Dialog>
       )}
     </div>

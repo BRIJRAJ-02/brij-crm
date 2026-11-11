@@ -380,14 +380,14 @@
 .tf-bkf-group__member + .tf-bkf-group__member { border-top: var(--border-width-hairline) solid var(--border-subtle); }
 
 /* ---------------------------------------------------------------- The editor */
-.tf-bkf__editor { display: flex; flex-direction: column; flex: 1; min-height: 0; container: tf-bkf-editor / inline-size; }
+.tf-bkf__editor { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; container: tf-bkf-editor / inline-size; }
 .tf-bkf__stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-16); width: 100%; padding: var(--space-8) var(--space-24); border: 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle);
   background: none; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); text-align: left; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
 .tf-bkf__stats strong { margin-right: var(--space-2); color: var(--text); font-weight: 600; }
 .tf-bkf__stats[data-hovered] { background: var(--surface-hover); }
 .tf-bkf__stats[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -1); }
 .tf-bkf__stats-go { display: inline-flex; align-items: center; gap: var(--space-4); margin-left: auto; color: var(--link); font-weight: 500; }
-.tf-bkf__editor-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-24); }
+.tf-bkf__editor-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-24) var(--space-24) calc(var(--space-64) + var(--space-32)); }
 .tf-bkf__editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--size-panel) - var(--space-32))); gap: var(--space-24); align-items: start; }
 .tf-bkf__sections { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
 .tf-bkf-sheet__preview { flex: 1; padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--canvas); overflow: hidden; }
@@ -415,6 +415,9 @@
 .tf-bkf-copies__text { display: flex; flex: 1; flex-direction: column; min-width: 0; font: 400 12px/16px var(--font-sans); }
 .tf-bkf-copies__text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-bkf-settings--ruled { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+/* A ruled group's line sits with a row's spacing on both sides, the same as the lines between rows; straight after another group it closes the stack gap. */
+.tf-bkf-settings--ruled > .tf-bkf-setting:first-child { padding-top: var(--space-16); }
+.tf-bkf-settings + .tf-bkf-settings--ruled { margin-top: calc(var(--space-16) * -1); }
 .tf-bkf__editor-preview { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
 .tf-bkf__checks { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-bkf__weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-control-lg) * 4), 1fr)); gap: var(--space-12); }

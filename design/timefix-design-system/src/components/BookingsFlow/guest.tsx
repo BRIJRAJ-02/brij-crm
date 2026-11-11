@@ -1,5 +1,6 @@
 // Step 6, the guest's side, full screen (Desktop or Phone): the booking page, a request waiting, Manage booking, an expired one-time link,
 // a hidden page, a page offering only picked times, and the booking chat.
+import { useGuestScale } from '../../lib/guest-scale.ts';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CalendarDate } from '@internationalized/date';
 import { ArrowLeft, CalendarClock, CalendarPlus, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
@@ -68,6 +69,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
   }, [onClose]);
   useEffect(() => { back.current?.focus(); }, []);
   const page = state.pages.find((p) => p.id === play?.pageId);
+  useGuestScale(Boolean(play && page));
   if (!play || !page) return null;
   const scenario = play.scenario;
   return (

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { AlertTriangle, ArrowRight, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, RotateCcw, Settings2, Users } from 'lucide-react';
+import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { TopBar } from '../AppShell/AppShell.tsx';
 import { Breadcrumbs } from '../Breadcrumbs/Breadcrumbs.tsx';
@@ -22,7 +23,7 @@ import { Meter } from '../Progress/Progress.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Button } from '../Button/Button.tsx';
-import { NumberRoll, SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
+import { NumberRoll } from '../Motion/Motion.tsx';
 import { formatDate, formatDay } from '../../lib/format.ts';
 import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
 import { uniqueSlug } from './seed.ts';
@@ -472,7 +473,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                 </Section></TabPanel>
                 <TabPanel id="look" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Look" description={lookSummary(draft)}>
                   <div className="tf-bkf__stack" data-section="look">
-                    <GuestLook value={draft.look} onChange={(look) => set({ look })} host={draft.owner} title={draft.name} />
+                    <GuestLook value={draft.look} onChange={(look) => set({ look })} host={draft.owner} title={draft.name} isPreviewHidden />
                     <Switch isSelected={draft.showPhoto} onChange={(showPhoto) => set({ showPhoto })}>Show your photo on the page</Switch>
                     <div>
                       <span className="tf-bkf__label">Social links</span>
@@ -494,16 +495,10 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
             </aside>
           </div>
         </div>
-        <footer className="tf-bkf__savefoot">
-          <span className="tf-bkf__savenote" aria-live="polite">
-            <Tag hue={dirty ? 'orange' : 'green'}>{dirty ? 'Unpublished changes' : 'Live'}</Tag>
-            <TextSwap swapKey={dirty ? 'dirty' : 'clean'}>{dirty ? 'Guests still see the live version until you publish.' : 'Guests see what’s here.'}</TextSwap>
-          </span>
-          {(dirty || kept) && save !== 'saving' && <Button variant="ghost" onPress={() => { onDraft(page); onKeepDraft(page); }}>Discard</Button>}
-          <Button variant="primary" isDisabled={!dirty || taken || nameless} isPending={save === 'saving'} onPress={doSave} aria-keyshortcuts="Meta+S">
-            <TextSwap swapKey={save === 'saved' && !dirty ? 'saved' : 'save'}>{save === 'saved' && !dirty ? <span className="tf-bkf__saved"><SuccessCheck size={16} />Published</span> : 'Publish'}</TextSwap>
-          </Button>
-        </footer>
+        {/* The one publish bar every editor shares: it rises when guests would see something new, and leaves once they do. */}
+        <PublishBar status={save === 'saving' ? 'publishing' : save === 'saved' && !dirty ? 'published' : dirty || kept ? 'draft' : 'live'} changes={1}
+          message={dirty ? 'Unpublished changes' : 'A draft is kept'} isPublishDisabled={!dirty || taken || nameless} onPublish={doSave}
+          onDiscard={() => { onDraft(page); onKeepDraft(page); }} />
       </div>
       <Drawer isOpen={versionsOpen} onOpenChange={setVersionsOpen} title="Versions" subtitle="Each time you publish, the page before is kept here.">
         <ol className="tf-bkf-versions" aria-label="Versions">

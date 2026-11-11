@@ -50,7 +50,8 @@
 @keyframes tf-auth-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
 
 /* AuthPages: transitions.dev 08 page side-by-side, with 01 card resize on the box. */
-.tf-auth-pages { position: relative; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-auth-pages { position: relative; }
+.tf-auth-pages[data-switching] { transition: height var(--duration-fast) var(--ease-smooth-out); }
 .tf-auth-pages__page {
   position: absolute; inset: 0 0 auto 0; opacity: 0; pointer-events: none;
   transform: translateX(var(--tf-page-from, 0)); filter: blur(var(--blur-medium));

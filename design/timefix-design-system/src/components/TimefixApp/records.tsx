@@ -2,7 +2,7 @@
 // or a board you drag, bulk actions with Undo, and a record panel beside the list. A changed view is a draft: Save it or Discard it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Selection, SortDescriptor } from 'react-aria-components';
-import { Building2, CircleDollarSign, Copy, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, PenLine, Pencil, Plus, Star, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { Building2, ChevronDown, CircleDollarSign, Copy, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, PenLine, Pencil, Plus, Star, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { DataGrid, type ColumnAction, type GridColumn, type GridRecord } from '../DataGrid/DataGrid.tsx';
 import { Board, type BoardColumn } from '../Board/Board.tsx';
 import { FilterBar, type FilterField, type FilterRule, type SortRule, type ViewColumn } from '../FilterBar/FilterBar.tsx';
@@ -15,7 +15,7 @@ import { Button, IconButton } from '../Button/Button.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
-import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
+import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { useToast } from '../Toast/Toast.tsx';
@@ -24,7 +24,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { companyPairs, duplicatePairs } from './duplicates.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { Attribute, AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { BUILT_IN_ATTRIBUTES, STAGES, STAGE_ODDS, STALE_DAYS, daysInStage, liveEntries, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
+import { BUILT_IN_ATTRIBUTES, STAGES, STAGE_ODDS, STALE_DAYS, daysInStage, liveEntries, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage, LISTS_ON } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -228,41 +228,40 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   return (
     <div className="tf-rec">
       <div className="tf-rec__bar">
-        <Select label="View" isLabelHidden className="tf-rec__view" value={view.id} onChange={(v) => {
-          if (v === 'new') { setNaming(true); return; }
-          if (!v || v === view.id) return;
-          const was = draft; const wasId = viewId; setViewId(v); setDraft(undefined); setSelected(new Set());
-          if (was) toast({ message: `Unsaved changes to ${was.name} discarded`, action: { label: 'Undo', onAction: () => { setViewId(wasId); setDraft(was); } } });
-        }}
-          items={[...views.map((v, n) => ({ id: v.id, label: v.name, description: [n === 0 ? 'Default' : '', v.isPrivate ? 'Only you' : ''].filter(Boolean).join(' · ') || undefined })), { id: 'new', label: 'New view…' }]} />
+        {/* One view menu: pick a view, or act on this one. Layout and search sit beside it; the view's unsaved changes sit with the filters below. */}
         <MenuTrigger>
-          <IconButton label={`More for the ${view.name} view`} size="md"><PenLine {...i16} /></IconButton>
-          <Menu aria-label="View" placement="bottom start" onAction={(k) => {
-            if (k === 'rename') setRenaming(true);
-            else if (k === 'duplicate') { const v: SavedView = { ...view, id: newId('v'), name: `${view.name} copy` }; dispatch({ type: 'views/set', object, views: [...views, v] }); setViewId(v.id); setDraft(undefined); toast({ message: `${v.name} made`, tone: 'success' }); }
-            else if (k === 'default') { const was = views; dispatch({ type: 'views/set', object, views: [saved ?? view, ...views.filter((v) => v.id !== view.id)] }); toast({ message: `${view.name} opens first now`, action: { label: 'Undo', onAction: () => dispatch({ type: 'views/set', object, views: was }) } }); }
-            else if (k === 'group-stage' || k === 'group-owner') edit({ groupBy: k === 'group-owner' ? 'owner' : 'stage', layout: 'board' });
-            else if (k === 'delete') { const was = views; const gone = view; dispatch({ type: 'views/set', object, views: others }); setViewId(others[0]?.id ?? ''); setDraft(undefined); toast({ message: `${gone.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'views/set', object, views: was }); setViewId(gone.id); } } }); }
+          <Button variant="secondary" className="tf-rec__view" iconEnd={<ChevronDown {...i16} />}>{view.name}</Button>
+          <Menu aria-label="Views" placement="bottom start" onAction={(k) => {
+            const id = String(k);
+            if (id === 'new') setNaming(true);
+            else if (id === 'rename') setRenaming(true);
+            else if (id === 'duplicate') { const v: SavedView = { ...view, id: newId('v'), name: `${view.name} copy` }; dispatch({ type: 'views/set', object, views: [...views, v] }); setViewId(v.id); setDraft(undefined); toast({ message: `${v.name} made`, tone: 'success' }); }
+            else if (id === 'default') { const was = views; dispatch({ type: 'views/set', object, views: [saved ?? view, ...views.filter((v) => v.id !== view.id)] }); toast({ message: `${view.name} opens first now`, action: { label: 'Undo', onAction: () => dispatch({ type: 'views/set', object, views: was }) } }); }
+            else if (id === 'group-stage' || id === 'group-owner') edit({ groupBy: id === 'group-owner' ? 'owner' : 'stage', layout: 'board' });
+            else if (id === 'delete') { const was = views; const gone = view; dispatch({ type: 'views/set', object, views: others }); setViewId(others[0]?.id ?? ''); setDraft(undefined); toast({ message: `${gone.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'views/set', object, views: was }); setViewId(gone.id); } } }); }
           }}>
-            <MenuItem id="rename" icon={<Pencil {...i16} />}>Rename view</MenuItem>
-            <MenuItem id="duplicate" icon={<Copy {...i16} />}>Duplicate view</MenuItem>
-            {views[0]?.id !== view.id ? <MenuItem id="default" icon={<Star {...i16} />}>Open this view first</MenuItem> : null}
-            {object === 'deals' && view.layout === 'board' ? <MenuItem id={byOwner ? 'group-stage' : 'group-owner'} icon={<LayoutGrid {...i16} />}>{byOwner ? 'Board by stage' : 'Board by owner'}</MenuItem> : null}
-            {others.length > 0 ? <MenuSeparator /> : null}
-            {others.length > 0 ? <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete view</MenuItem> : null}
+            <MenuSection title="Views" selectionMode="single" selectedKeys={[view.id]} onSelectionChange={(keys) => {
+              const v = [...(keys === 'all' ? [] : keys)][0]; if (v === undefined || v === view.id) return;
+              const was = draft; const wasId = viewId; setViewId(String(v)); setDraft(undefined); setSelected(new Set());
+              if (was) toast({ message: `Unsaved changes to ${was.name} discarded`, action: { label: 'Undo', onAction: () => { setViewId(wasId); setDraft(was); } } });
+            }}>
+              {views.map((v, n) => <MenuItem key={v.id} id={v.id} description={[n === 0 ? 'Opens first' : '', v.isPrivate ? 'Only you' : ''].filter(Boolean).join(' · ') || undefined}>{v.name}</MenuItem>)}
+            </MenuSection>
+            <MenuSeparator />
+            <MenuSection>
+              <MenuItem id="new" icon={<Plus {...i16} />}>New view</MenuItem>
+              <MenuItem id="rename" icon={<Pencil {...i16} />}>Rename {view.name}</MenuItem>
+              <MenuItem id="duplicate" icon={<Copy {...i16} />}>Duplicate</MenuItem>
+              {views[0]?.id !== view.id ? <MenuItem id="default" icon={<Star {...i16} />}>Open this view first</MenuItem> : null}
+              {object === 'deals' && view.layout === 'board' ? <MenuItem id={byOwner ? 'group-stage' : 'group-owner'} icon={<LayoutGrid {...i16} />}>{byOwner ? 'Board by stage' : 'Board by owner'}</MenuItem> : null}
+              {others.length > 0 ? <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete view</MenuItem> : null}
+            </MenuSection>
           </Menu>
         </MenuTrigger>
-        {<SegmentedControl aria-label="Layout" size="sm" selectedKey={view.layout} onSelectionChange={(k) => edit({ layout: k === 'board' ? 'board' : 'table' })}
-          items={[{ id: 'table', label: 'Table', icon: <LayoutList {...i14} /> }, { id: 'board', label: 'Board', icon: <LayoutGrid {...i14} /> }]} />}
-        <SearchField label={`Search ${def.many}`} placeholder={`Search ${def.many}`} size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
+        <SegmentedControl aria-label="Layout" size="sm" selectedKey={view.layout} onSelectionChange={(k) => edit({ layout: k === 'board' ? 'board' : 'table' })}
+          items={[{ id: 'table', label: 'Table', icon: <LayoutList {...i14} /> }, { id: 'board', label: 'Board', icon: <LayoutGrid {...i14} /> }]} />
         <span className="tf-rec__spacer" />
-        {draft && (
-          <span className="tf-rec__draft">
-            <span className="tf-rec__muted">View changed</span>
-            <Button size="sm" variant="ghost" onPress={() => { const was = draft; setDraft(undefined); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => setDraft(was) } }); }}>Discard</Button>
-            <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'views/set', object, views: views.map((v) => (v.id === draft.id ? draft : v)) }); setDraft(undefined); toast({ message: `${draft.name} saved`, tone: 'success' }); }}>Save view</Button>
-          </span>
-        )}
+        <SearchField label={`Search ${def.many}`} placeholder={`Search ${def.many}`} size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
         <MenuTrigger>
           <IconButton label={`More for ${def.many}`} size="md"><MoreHorizontal {...i16} /></IconButton>
           <Menu aria-label={`More for ${def.many}`} placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'export-all') void exportCsv(undefined, true); else if (k === 'import') onImport?.(); else if (k === 'dupes') onDuplicates?.(); else if (k === 'attrs') onAttributes?.(); }}>
@@ -278,8 +277,16 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       </div>
       {!canEdit && <Callout tone="info">You’re previewing as a {state.previewRole?.toLowerCase()}: you can look, but not change {def.many}.</Callout>}
       {pairs > 0 && onDuplicates && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{pairs === 1 ? `1 pair of ${def.many} looks like a duplicate.` : `${pairs} pairs of ${def.many} look like duplicates.`}</Callout>}
+      <div className="tf-rec__filters">
       <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} match={view.match ?? 'all'} onMatchChange={(match) => edit({ match })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
         columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} startFilter={startFilter} />
+      {draft && (
+        <span className="tf-rec__draft">
+          <Button size="sm" variant="ghost" onPress={() => { const was = draft; setDraft(undefined); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => setDraft(was) } }); }}>Discard</Button>
+          <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'views/set', object, views: views.map((v) => (v.id === draft.id ? draft : v)) }); setDraft(undefined); toast({ message: `${draft.name} saved`, tone: 'success' }); }}>Save view</Button>
+        </span>
+      )}
+      </div>
       <div className="tf-rec__split">
       {view.layout === 'board' ? (
         <div className="tf-rec__board">
@@ -315,7 +322,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             setMany(ids, 'owner', String(k), `${ids.length} ${ids.length === 1 ? def.one : def.many} now owned by ${String(k)}`); setSelected(new Set()); refocus();
           }}>{state.members.map((m) => <MenuItem key={m.id} id={m.name}>{m.name}</MenuItem>)}</Menu>
         </MenuTrigger>}
-        {canEdit && <MenuTrigger>
+        {canEdit && LISTS_ON && <MenuTrigger>
           <BarButton icon={<ListPlus {...i16} />}>Add to list</BarButton>
           <Menu aria-label="Add to list" onAction={(k) => {
             const l = state.lists.find((x) => x.id === String(k)); if (!l) return;

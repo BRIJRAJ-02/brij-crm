@@ -28,7 +28,8 @@ import type { BookingsAction, BookingsState } from '../BookingsFlow/BookingsFlow
 import { ListSettings } from './lists.tsx';
 import { STARTER, handleFor } from './grow.tsx';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { newId, type AppAction, type AppState, type Member, type ObjectSchema, type Prefs } from './data.ts';
+import { cx } from '../../lib/cx.ts';
+import { newId, type AppAction, type AppState, type Member, type ObjectSchema, type Prefs, LISTS_ON } from './data.ts';
 import type { Door } from './auth.tsx';
 import { RenameDialog } from './records.tsx';
 import { HOME_SECTIONS } from './home.tsx';
@@ -37,8 +38,8 @@ const i16 = { size: 16, strokeWidth: 1.75 } as const;
 type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'brand' | 'members' | 'roles' | 'apps' | 'history' | 'jobs'
   | 'availability' | 'roundrobin' | 'routing' | 'schedaccess' | 'business' | 'services' | 'staff' | 'tables' | 'menu' | 'objects' | 'lists' | 'trash' | 'developer';
 type NavItem = { readonly id: Page; readonly label: string; readonly icon: ReactNode; readonly words?: string };
-/** The settings tree for this workspace: Business shows only for a salon or a restaurant. */
-const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<Omit<SettingsNavGroup, 'items'> & { readonly items: ReadonlyArray<NavItem> }> => [
+/** The settings tree for this workspace: Business shows only for a salon or a restaurant. The app's sidebar draws it while Settings is open. */
+export const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<Omit<SettingsNavGroup, 'items'> & { readonly items: ReadonlyArray<NavItem> }> => [
   { title: 'Account', items: [{ id: 'profile', label: 'Profile', icon: <User {...i16} />, words: 'name photo handle bio social links public delete account' }, { id: 'preferences', label: 'Preferences', icon: <SlidersHorizontal {...i16} />, words: 'theme dark time zone date format week start page home sidebar' },
     { id: 'notifications', label: 'Notifications', icon: <Bell {...i16} />, words: 'email digest mentions replies' }, { id: 'security', label: 'Sign in and security', icon: <Shield {...i16} />, words: 'two factor 2fa backup codes devices sessions activity' }, { id: 'calendars', label: 'Calendars', icon: <CalendarDays {...i16} />, words: 'google outlook icloud connect conflicts sync colour' }] },
   { title: 'Workspace', items: [{ id: 'general', label: 'General', icon: <Building2 {...i16} />, words: 'name address web currency country time zone retention delete workspace' }, { id: 'brand', label: 'Brand', icon: <Palette {...i16} />, words: 'logo colour dark template look preview' },
@@ -48,7 +49,7 @@ const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<Omit<Se
     { id: 'schedaccess', label: 'Scheduling access', icon: <Eye {...i16} />, words: 'who can see manage hours calendar' }] },
   ...(kind === 'team' ? [] : [{ title: 'Business', items: [{ id: 'business' as const, label: 'Business page', icon: <Store {...i16} />, words: 'public page photos address' }, { id: 'services' as const, label: kind === 'restaurant' ? 'Table bookings' : 'Services', icon: <Scissors {...i16} />, words: 'prices categories' },
     { id: 'staff' as const, label: 'Staff and shifts', icon: <UserCog {...i16} />, words: 'roster shifts' }, ...(kind === 'restaurant' ? [{ id: 'tables' as const, label: 'Places and tables', icon: <LayoutGrid {...i16} />, words: 'areas seats floor' }, { id: 'menu' as const, label: 'Menu', icon: <UtensilsCrossed {...i16} />, words: 'dishes qr codes' }] : [])] }]),
-  { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, { id: 'lists', label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }, { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
+  { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, ...(LISTS_ON ? [{ id: 'lists' as const, label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }] : []), { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
   { title: 'Developer', items: [{ id: 'developer', label: 'API keys', icon: <Code2 {...i16} />, words: 'api keys tokens' }] },
 ];
 
@@ -65,12 +66,16 @@ export interface SettingsScreenProps {
   /** A change to Bookings made here (calendars, who changes whose hours). */ readonly onBookingsAction?: (a: BookingsAction) => void;
   /** Opens the CSV import. */ readonly onImport?: () => void;
   /** Opens the link page editor (bio, social links). */ readonly onLinkPage?: () => void;
+  /** The page showing, when the app's sidebar holds the settings nav. */ readonly page?: string;
+  /** Called when a page inside Settings opens another (Objects from Lists, and so on). */ readonly onPage?: (page: string) => void;
 }
 
 /** Settings. */
-export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage }: SettingsScreenProps) {
+export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage, page: shownPage, onPage }: SettingsScreenProps) {
   const GROUPS = groupsFor(kind);
-  const [page, setPage] = useState<Page>(((start ?? '').split(':')[0] as Page | '') || 'profile');
+  const [ownPage, setOwnPage] = useState<Page>(((start ?? '').split(':')[0] as Page | '') || 'profile');
+  const page = (shownPage as Page | undefined) ?? ownPage;
+  const setPage = (p: Page) => { setOwnPage(p); onPage?.(p); };
   const [find, setFind] = useState('');
   /** Phone: the list of settings first, then one page with a way back (a start page opens straight on it). */
   const [picked, setPicked] = useState(start !== undefined);
@@ -83,7 +88,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => !q || `${x.label} ${x.words ?? ''}`.toLowerCase().includes(q)) })).filter((g) => g.items.length > 0);
   const item = GROUPS.flatMap((g) => g.items).find((x) => x.id === page);
   return (
-    <div className={picked ? 'tf-set tf-set--page' : 'tf-set'}>
+    <div className={cx('tf-set', picked && 'tf-set--page', shownPage !== undefined && 'tf-set--sidenav')}>
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
@@ -179,7 +184,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         <Select label="Open the app on" value={p.startPage} onChange={(v) => v && set({ startPage: v })} items={[{ id: 'home', label: 'Home' }, { id: 'inbox', label: 'Inbox' }, { id: 'bookings', label: kind === 'restaurant' ? 'Reservations' : 'Meetings' }, { id: 'records:people', label: 'People' }]} />
       </div></SettingsSection>
       <SettingsSection title="In the sidebar" description="Hide what you don’t use. Nothing is deleted.">
-        {[['tasks', 'Tasks'], ['notes', 'Notes'], ['lists', 'Lists'], ['forms', 'Forms'], ['insights', 'Insights']].map(([id, label]) => sw(label ?? '', !p.sidebarHidden.includes(id ?? ''), (on) => set({ sidebarHidden: on ? p.sidebarHidden.filter((x) => x !== id) : [...p.sidebarHidden, id ?? ''] })))}
+        {[['tasks', 'Tasks'], ['notes', 'Notes'], ...(LISTS_ON ? [['lists', 'Lists']] : []), ['forms', 'Forms'], ['insights', 'Insights']].map(([id, label]) => sw(label ?? '', !p.sidebarHidden.includes(id ?? ''), (on) => set({ sidebarHidden: on ? p.sidebarHidden.filter((x) => x !== id) : [...p.sidebarHidden, id ?? ''] })))}
       </SettingsSection>
       <SettingsSection title="On Home">
         {HOME_SECTIONS.map((h) => sw(h.label, !(p.homeHidden ?? []).includes(h.id), (on) => set({ homeHidden: on ? (p.homeHidden ?? []).filter((x) => x !== h.id) : [...(p.homeHidden ?? []), h.id] })))}
@@ -551,13 +556,28 @@ function CommitField({ label, value, onCommit, description, prefix, clean = (v) 
 }
 
 
+/** New object: its name, one and many. The same dialog from Settings › Objects and the sidebar's Records +. */
+export function NewObjectDialog({ onClose, onCreate }: { readonly onClose: () => void; readonly onCreate: (object: ObjectSchema) => void }) {
+  const [one, setOne] = useState('');
+  const [many, setMany] = useState('');
+  return (
+    <Dialog isOpen onOpenChange={(v) => { if (!v) onClose(); }} title="New object" description="Like Projects or Vendors."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!one.trim() || !many.trim()} onPress={() => {
+        onCreate({ id: newId('obj'), one: one.trim(), many: many.trim(), custom: true, attributes: [{ id: 'name', name: 'Name', type: 'text', isSystem: true, isRequired: true }, { id: 'created', name: 'Created at', type: 'timestamp', isSystem: true, readOnlyReason: 'Set by the system' }] });
+      }}>Create object</Button></>}>
+      <div className="tf-bkf__pair">
+        <TextField label="One" value={one} onChange={(v) => { setOne(v); if (!many || many === `${one}s`) setMany(v ? `${v}s` : ''); }} placeholder="Project" autoFocus />
+        <TextField label="Many" value={many} onChange={setMany} placeholder="Projects" />
+      </div>
+    </Dialog>
+  );
+}
+
 /** Settings › Objects: the list, one object's attributes (add, edit, reorder, archive), and New object. */
 function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly startMaking?: boolean; readonly startOpen?: string }) {
   const { toast } = useToast();
   const [openId, setOpenId] = useState<string | undefined>(startOpen);
   const [making, setMaking] = useState(startMaking);
-  const [one, setOne] = useState('');
-  const [many, setMany] = useState('');
   const counts: Readonly<Record<string, number>> = { people: state.people.length, companies: state.companies.length, deals: state.deals.length };
   const o = state.objects.find((x) => x.id === openId);
   /** One change to this object, with Undo. */
@@ -580,7 +600,7 @@ function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { read
     );
   }
   return (
-    <SettingsSection title="Objects" description="What your workspace keeps records of. Open one to add or change its attributes." action={<Button variant="secondary" onPress={() => { setOne(''); setMany(''); setMaking(true); }}>New object</Button>}>
+    <SettingsSection title="Objects" description="What your workspace keeps records of. Open one to add or change its attributes." action={<Button variant="secondary" onPress={() => setMaking(true)}>New object</Button>}>
       <ul className="tf-set__list">
         {state.objects.map((x) => (
           <li key={x.id}><button type="button" className="tf-set__open" onClick={() => setOpenId(x.id)}>
@@ -588,18 +608,7 @@ function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { read
           </button></li>
         ))}
       </ul>
-      {making && (
-        <Dialog isOpen onOpenChange={(v) => { if (!v) setMaking(false); }} title="New object" description="Like Projects, Vendors or Properties. It shows under Records in the sidebar."
-          actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!one.trim() || !many.trim()} onPress={() => {
-            const obj: ObjectSchema = { id: newId('obj'), one: one.trim(), many: many.trim(), custom: true, attributes: [{ id: 'name', name: 'Name', type: 'text', isSystem: true, isRequired: true }, { id: 'created', name: 'Created at', type: 'timestamp', isSystem: true, readOnlyReason: 'Set by the system' }] };
-            dispatch({ type: 'object/set', object: obj }); setMaking(false); setOpenId(obj.id); toast({ message: `${obj.many} made. Add its attributes next.`, tone: 'success' });
-          }}>Create object</Button></>}>
-          <div className="tf-bkf__pair">
-            <TextField label="One" value={one} onChange={(v) => { setOne(v); if (!many || many === `${one}s`) setMany(v ? `${v}s` : ''); }} placeholder="Project" autoFocus />
-            <TextField label="Many" value={many} onChange={setMany} placeholder="Projects" />
-          </div>
-        </Dialog>
-      )}
+      {making && <NewObjectDialog onClose={() => setMaking(false)} onCreate={(obj) => { dispatch({ type: 'object/set', object: obj }); setMaking(false); setOpenId(obj.id); toast({ message: `${obj.many} made. Add its attributes next.`, tone: 'success' }); }} />}
     </SettingsSection>
   );
 }

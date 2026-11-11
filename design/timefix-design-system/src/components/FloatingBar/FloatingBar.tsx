@@ -148,20 +148,24 @@ export interface PublishBarProps {
   /** Throws the draft away and goes back to the live page. */
   readonly onDiscard?: () => void;
   readonly onPreview?: () => void;
+  /** Says it in other words ("Not published yet" for a page that was never live). */
+  readonly message?: string;
+  /** Holds Publish back while something on the page needs fixing (a taken link, no name). */
+  readonly isPublishDisabled?: boolean;
 }
 
 /** A page's draft against its live version: "3 unpublished changes", Preview, Publish. White, so it reads as status rather than alarm. */
-export function PublishBar({ status, changes, onPublish, onDiscard, onPreview }: PublishBarProps) {
+export function PublishBar({ status, changes, onPublish, onDiscard, onPreview, message, isPublishDisabled = false }: PublishBarProps) {
   const busy = status === 'publishing' || status === 'published';
   return (
     <FloatingBar isVisible={status !== 'live'} tone="white" aria-label="Publish">
       <span className="tf-floatbar__msg" aria-live="polite">
         <span className="tf-floatbar__dot tf-floatbar__dot--draft" data-saved={status === 'published' || undefined} aria-hidden="true" />
-        <TextSwap swapKey={status === 'published' ? 'p' : 'd'}>{status === 'published' ? 'Guests see the new page' : `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`}</TextSwap>
+        <TextSwap swapKey={status === 'published' ? 'p' : 'd'}>{status === 'published' ? 'Guests see the new page' : message ?? `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`}</TextSwap>
       </span>
       {onDiscard && <Button variant="ghost" onPress={onDiscard} isDisabled={busy}>Discard</Button>}
       {onPreview && <Button variant="secondary" onPress={onPreview}>Preview</Button>}
-      <Button variant="primary" onPress={onPublish} isDisabled={busy}>
+      <Button variant="primary" onPress={onPublish} isDisabled={busy || isPublishDisabled} aria-keyshortcuts="Meta+S">
         <TextSwap swapKey={status}>{status === 'publishing' ? <><Spinner size={14} label="Publishing" />Publishing</> : status === 'published' ? <><SuccessCheck size={14} />Published</> : 'Publish'}</TextSwap>
       </Button>
     </FloatingBar>

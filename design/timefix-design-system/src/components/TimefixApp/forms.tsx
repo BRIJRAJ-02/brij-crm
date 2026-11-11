@@ -1,8 +1,10 @@
 // Forms: a list of cards, New form from a gallery, and one editor with five tabs: Questions (builder beside the live preview),
 // Settings (layout, where answers go, what happens after), Share (link and embeds), Responses (with Add to People, spam, delete + Undo),
 // Results (views, finishes, where people stop). Edits are a draft until Publish; the visitor's page is HostedForm itself.
+import { useGuestScale } from '../../lib/guest-scale.ts';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Palette, ChevronDown, ChevronUp, Copy, Download, ExternalLink, FileText, MoreHorizontal, Pause, Play, Plus, QrCode as QrIcon, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
+import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
+import { ArrowLeft, Palette, ChevronDown, ChevronUp, Copy, Download, FileText, MoreHorizontal, Pause, Play, Plus, QrCode as QrIcon, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
 import { saveFile } from '../../lib/saveFile.ts';
 import { QrSheet } from './grow.tsx';
 import { FormCard, FormStatusTag, HostedFormPreview } from '../FormPicture/FormPicture.tsx';
@@ -23,7 +25,7 @@ import { SearchField } from '../SearchField/SearchField.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
-import { STAGES, formWho, newId, type AppAction, type AppForm, type AppState, type FormResponse, type ObjectId } from './data.ts';
+import { STAGES, formWho, newId, type AppAction, type AppForm, type AppState, type FormResponse, type ObjectId, LISTS_ON } from './data.ts';
 import { SettingsSection } from '../SettingsLayout/SettingsLayout.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
 import { DialogTrigger } from 'react-aria-components';
@@ -179,6 +181,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
   const finishes = form.responses.filter((r) => !r.spam).length;
   const live = form.status === 'live';
   // A visit to the live page counts as a view; each question reached feeds "Where people stop".
+  useGuestScale(guest);
   useEffect(() => { if (guest && live && !closedNow(form) && form.status === 'live') dispatch({ type: 'form/patch', id: form.id, patch: (f) => ({ views: f.views + 1 }) }); }, [guest]); // eslint-disable-line react-hooks/exhaustive-deps
   const reach = (qid: string) => dispatch({ type: 'form/patch', id: form.id, patch: (f) => ({ reached: { ...(f.reached ?? {}), [qid]: (f.reached?.[qid] ?? 0) + 1 } }) });
   if (guest && toBooking) return <BookingCountdown name={toBooking.name} onGo={() => { const w = toBooking; setToBooking(undefined); setGuest(false); onBookGuest?.(w); }} onStay={() => { setToBooking(undefined); setGuest(false); }} />;
@@ -214,11 +217,10 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
         <IconButton label="All forms" onPress={onBack}><ArrowLeft {...i16} /></IconButton>
         <TextField aria-label="Form name" value={form.name} onChange={(name) => set({ name })} onBlur={() => { if (!form.name.trim()) set({ name: 'Untitled form' }); }} className="tf-forms__name" />
         <FormStatusTag status={statusOf(form)} />
-        {edited(form) && <Tag size="sm" hue="orange">Edited, not published</Tag>}
         <span className="tf-rec__spacer" />
+        {/* The same header as a booking page's: see it as a visitor, share, more. Publish lives in the bar at the foot. */}
+        <Button variant="ghost" icon={<Play {...i14} />} onPress={() => setGuest(true)}>See it as a visitor</Button>
         <Button variant="ghost" icon={<Copy {...i14} />} onPress={copy} isDisabled={form.status === 'draft'}>Copy link</Button>
-        <Button variant="secondary" icon={<ExternalLink {...i14} />} onPress={() => setGuest(true)}>{live ? 'Open as a visitor' : 'Preview'}</Button>
-        <Button variant="primary" isDisabled={form.status !== 'draft' && !edited(form)} onPress={publish}>{form.status === 'draft' ? 'Publish' : 'Publish changes'}</Button>
         <MenuTrigger>
           <IconButton label="More for this form"><MoreHorizontal {...i16} /></IconButton>
           <Menu aria-label="Form" placement="bottom end" onAction={(k) => {
@@ -411,6 +413,10 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
       </Tabs>
       {discarding && <Dialog isOpen onOpenChange={(o) => { if (!o) setDiscarding(false); }} title="Discard your changes?" description="The form goes back to what visitors see now. You can undo this."
         actions={<><Button variant="ghost" slot="close">Keep editing</Button><Button variant="danger" onPress={() => { setDiscarding(false); const was = { questions: form.questions, name: form.name, mode: form.mode, after: form.after, subtitle: form.subtitle, mapping: form.mapping, logic: form.logic }; const cfg = form.liveConfig ? (JSON.parse(form.liveConfig) as Pick<AppForm, 'name' | 'mode' | 'after'>) : {}; set({ questions: form.live ?? form.questions, ...cfg }); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => set(was) } }); }}>Discard changes</Button></>} />}
+      <div className="tf-forms__publish">
+        <PublishBar status={form.status === 'draft' || edited(form) ? 'draft' : 'live'} changes={1} message={form.status === 'draft' ? 'Not published yet' : 'Unpublished changes'}
+          onPublish={publish} onDiscard={form.status === 'draft' ? undefined : () => setDiscarding(true)} />
+      </div>
     </div>
   );
 }
@@ -612,7 +618,7 @@ function RecordsPanel({ state, form, dispatch, set, attrOf, unfiled, onFileEarli
           {target === 'people' && <div className="tf-set__switch"><span><strong>Tag them with the form’s name</strong><span className="tf-rec__muted">So you can filter People by “{form.name}”.</span></span><Switch aria-label="Tag with the form's name" isSelected={form.tagWith !== false} onChange={(on) => set({ tagWith: on })} /></div>}
           {target === 'people' && <div className="tf-set__switch"><span><strong>Open a deal for each new person</strong><span className="tf-rec__muted">Named after them and the form, owned by {form.owner.split(' ')[0]}.</span></span><Switch aria-label="Open a deal" isSelected={Boolean(form.alsoDeal)} onChange={(on) => set({ alsoDeal: on ? { stage: 'Lead' } : undefined })} /></div>}
           {target === 'people' && form.alsoDeal && <div className="tf-rec__form tf-set__narrow"><Select label="In stage" value={form.alsoDeal.stage} onChange={(v) => { if (v) set({ alsoDeal: { stage: v } }); }} items={STAGES.filter((x) => x !== 'Won' && x !== 'Lost').map((x) => ({ id: x, label: x }))} /></div>}
-          <div className="tf-rec__form tf-set__narrow"><Select label="Add to a list" value={form.toList ?? 'none'} onChange={(v) => set({ toList: v && v !== 'none' ? v : undefined })} items={[{ id: 'none', label: 'No list' }, ...lists.map((l) => ({ id: l.id, label: l.name }))]} description={lists.length === 0 ? `No ${objectWord(state, target, 2).toLowerCase()} lists yet.` : 'Each record goes in its first stage.'} /></div>
+          <div className="tf-rec__form tf-set__narrow">{LISTS_ON && <Select label="Add to a list" value={form.toList ?? 'none'} onChange={(v) => set({ toList: v && v !== 'none' ? v : undefined })} items={[{ id: 'none', label: 'No list' }, ...lists.map((l) => ({ id: l.id, label: l.name }))]} description={lists.length === 0 ? `No ${objectWord(state, target, 2).toLowerCase()} lists yet.` : 'Each record goes in its first stage.'} />}</div>
         </SettingsSection>
       )}
       <Callout tone="neutral">{summary}</Callout>

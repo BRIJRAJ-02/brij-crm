@@ -87,14 +87,19 @@ export interface AuthPagesProps {
 export function AuthPages({ index, children, 'aria-label': ariaLabel }: AuthPagesProps) {
   const refs = useRef<Array<HTMLElement | null>>([]);
   const [height, setHeight] = useState<number | undefined>(undefined);
+  // The box eases only while pages change; growth inside a page (a row added) follows its content at once, so nothing below jumps.
+  const [switching, setSwitching] = useState(false);
   const first = useRef(true);
+  const shown = useRef(index);
   useLayoutEffect(() => {
     const el = refs.current[index];
     if (!el) return;
+    let t: number | undefined;
+    if (shown.current !== index) { shown.current = index; setSwitching(true); t = window.setTimeout(() => setSwitching(false), 300); }
     setHeight(el.offsetHeight);
     const ro = new ResizeObserver(() => setHeight(el.offsetHeight));
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); window.clearTimeout(t); };
   }, [index]);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
@@ -103,7 +108,7 @@ export function AuthPages({ index, children, 'aria-label': ariaLabel }: AuthPage
     target?.focus({ preventScroll: true });
   }, [index]);
   return (
-    <div className="tf-auth-pages" style={{ height } as CSSProperties} role="group" aria-label={ariaLabel}>
+    <div className="tf-auth-pages" data-switching={switching || undefined} style={{ height } as CSSProperties} role="group" aria-label={ariaLabel}>
       {children.map((page, i) => (
         <section key={i} ref={(el) => { refs.current[i] = el; }} className="tf-auth-pages__page"
           data-state={i < index ? 'before' : i > index ? 'after' : 'current'} inert={i !== index} aria-hidden={i !== index}>

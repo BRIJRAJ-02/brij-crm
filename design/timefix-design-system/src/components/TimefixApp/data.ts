@@ -61,7 +61,7 @@ export function nextDue(due: Date, r: TaskRepeat): Date {
   if (r === 'weekday') while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
   return d;
 }
-export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly record: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
+export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; /** The record it sits on; a note can stand on its own. */ readonly record?: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
 /** One thing for you in the Inbox. */
 export interface InboxItem {
   readonly id: string; readonly kind: 'mention' | 'reply' | 'assignment' | 'booking'; readonly actor: string; readonly text: string; readonly excerpt?: string;
@@ -680,3 +680,6 @@ export const liveEntries = (state: AppState, l: CrmList): ReadonlyArray<ListEntr
   const ids = new Set(pool.map((r) => r.id));
   return l.entries.filter((e) => ids.has(e.recordId));
 };
+
+/** Lists are parked for now (owner, 11 Nov): every way in is hidden while this is false; the data stays so they can return. */
+export const LISTS_ON = false;

@@ -1,7 +1,7 @@
 // The whole Timefix app as one prototype: the sidebar from app-ia.md (You, Records, Lists, Bookings, Forms, Link page, Insights),
 // ⌘K over everything, Home, and each module as it's rebuilt. Bookings is the module already built: it stays mounted inside, so its state is kept.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { Boxes, BarChart3, Building2, CalendarDays, CalendarRange, CheckSquare, ChevronRight, CircleDollarSign, Clock, Contact, FileText, Home, IdCard, Inbox, Link2, ListChecks, LogOut, Menu, NotebookPen, Plus, Route, Search, Settings, UserPlus, UserRound, Users, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, Boxes, BarChart3, Building2, CalendarDays, CalendarRange, CheckSquare, ChevronRight, CircleDollarSign, Clock, Contact, FileText, Home, IdCard, Inbox, Link2, ListChecks, LogOut, Menu, NotebookPen, Plus, Route, Search, Settings, UserPlus, UserRound, Users, UtensilsCrossed } from 'lucide-react';
 import { NavItem, NavSection } from '../Sidebar/Sidebar.tsx';
 import { TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -10,7 +10,7 @@ import { CommandPalette, ShortcutHelp, useCommandK, type CommandItem } from '../
 import { ToastProvider, useToast } from '../Toast/Toast.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { BookingsFlow, type BookingsAction, type BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { appReducer, liveEntries, newId, northwindCrm, type AppAction, type AppState, type ObjectId } from './data.ts';
+import { appReducer, liveEntries, newId, northwindCrm, type AppAction, type AppState, type ObjectId, LISTS_ON } from './data.ts';
 import { HomeScreen } from './home.tsx';
 import { RecordsScreen } from './records.tsx';
 import { RecordPage } from './record.tsx';
@@ -18,7 +18,7 @@ import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
 import { ListScreen, NewListDialog } from './lists.tsx';
 import { FormsScreen } from './forms.tsx';
 import { InsightsScreen, LinkPageScreen, LinksScreen, STARTER, handleFor } from './grow.tsx';
-import { SettingsScreen } from './settings.tsx';
+import { NewObjectDialog, SettingsScreen, groupsFor } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
@@ -83,9 +83,13 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const searchButton = <Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
   const [help, setHelp] = useState(false);
   const [newList, setNewList] = useState(false);
+  const [newObject, setNewObject] = useState(false);
   const [door, setDoor] = useState<Door>();
   const [signingOut, setSigningOut] = useState(false);
   const [settingsStart, setSettingsStart] = useState<{ readonly page?: string; readonly n: number }>({ n: 0 });
+  /** While Settings is open its groups take the sidebar; this is the page showing and where Back to app returns. */
+  const [settingsPage, setSettingsPage] = useState('profile');
+  const [beforeSettings, setBeforeSettings] = useState<AppPage>('home');
   const [sub, setSub] = useState<'import' | 'dupes'>();
   const [record, setRecord] = useState<Rec>();
   /** Records opened from other records: Back walks this, then shows the page underneath, untouched. */
@@ -127,7 +131,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     const m = who ? [...(bookings?.meetings ?? [])].filter((x) => x.invitee.name === who).sort((a, b) => Math.abs(a.start.getTime() - Date.now()) - Math.abs(b.start.getTime() - Date.now()))[0] : undefined;
     setOpenTab((o) => ({ tab, n: (o?.n ?? 0) + 1, meetingId: m?.id })); setPage('bookings'); setRecord(undefined); setTrail([]); setSub(undefined);
   };
-  const openSettings = (at?: string) => { setSettingsStart((s) => ({ page: at, n: s.n + 1 })); go('settings'); };
+  const openSettings = (at?: string) => { if (page !== 'settings') setBeforeSettings(page); setSettingsPage((at ?? '').split(':')[0] || 'profile'); setSettingsStart((s) => ({ page: at, n: s.n + 1 })); go('settings'); };
   const goStart = () => { const s = state.prefs.startPage; if (s === 'bookings') openBookings('meetings'); else go(s as AppPage); };
   const launchAt = (kindOf: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report', target: AppPage, value?: string) => { go(target); setLaunch((l) => ({ kind: kindOf, value, n: (l?.n ?? 0) + 1 })); };
   const unread = state.inbox.filter((x) => !x.read && !x.done).length;
@@ -154,7 +158,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     ...(['home', 'inbox', 'tasks', 'notes'] as const).map((id) => ({ id, label: TITLES[id]?.label ?? id, icon: TITLES[id]?.icon })),
     ...OBJECTS.map((o) => ({ id: `records:${o.id}`, label: o.label, icon: o.icon })),
     ...state.objects.filter((o) => o.custom && !o.archived).map((o) => ({ id: `object:${o.id}`, label: o.many, icon: <Boxes {...i16} /> })),
-    ...state.lists.filter((l) => !l.archived).map((l) => ({ id: `list:${l.id}`, label: l.name, icon: <ListChecks {...i16} />, keywords: 'list' })),
+    ...state.lists.filter((l) => LISTS_ON && !l.archived).map((l) => ({ id: `list:${l.id}`, label: l.name, icon: <ListChecks {...i16} />, keywords: 'list' })),
     ...(['links', 'link', 'forms', 'insights', 'settings'] as const).map((id) => ({ id, label: TITLES[id]?.label ?? id, icon: TITLES[id]?.icon, keywords: id === 'links' ? 'share qr copy' : undefined })),
   ];
   const commands = useMemo<ReadonlyArray<CommandItem>>(() => [
@@ -174,7 +178,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     { id: 'set:trash', label: 'Settings › Trash', group: 'Go to', kind: 'action' as const, icon: <Settings {...i16} />, keywords: 'deleted restore' },
     { id: 'new:person', label: 'New person', group: 'Actions', kind: 'action' as const, icon: <UserPlus {...i16} />, keywords: 'create contact add' },
     { id: 'new:task', label: 'New task', group: 'Actions', kind: 'action' as const, icon: <CheckSquare {...i16} />, keywords: 'create todo add' },
-    { id: 'new:list', label: 'New list', group: 'Actions', kind: 'action' as const, icon: <ListChecks {...i16} />, keywords: 'create pipeline' },
+    ...(LISTS_ON ? [{ id: 'new:list', label: 'New list', group: 'Actions', kind: 'action' as const, icon: <ListChecks {...i16} />, keywords: 'create pipeline' }] : []),
     { id: 'new:booking', label: kind === 'team' ? 'New booking page' : 'Add a service', group: 'Actions', kind: 'action' as const, icon: <Plus {...i16} />, keywords: 'create link meeting' },
     { id: 'imp:people', label: 'Import people from a CSV', group: 'Actions', kind: 'action' as const, icon: <UserPlus {...i16} />, keywords: 'upload spreadsheet' },
     ...DOORS.map((d) => ({ id: `door:${d.id}`, label: d.label, group: 'Screens', kind: 'action' as const, icon: <IdCard {...i16} />, keywords: 'auth login onboarding public' })),
@@ -204,18 +208,26 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     else if (id === 'imp:people') { go('records:people'); setSub('import'); }
   };
 
-  const nav = (bookingsSection: ReactNode) => (
+  const nav = (bookingsSection: ReactNode) => page === 'settings' ? (
     <>
-      <NavItem label="Search" icon={<Search {...i16} />} shortcut="⌘K" onPress={() => setSearch(true)} />
+      <NavItem label="Back to app" icon={<ArrowLeft {...i16} />} onPress={() => go(beforeSettings === 'settings' ? 'home' : beforeSettings)} />
+      {groupsFor(kind).map((g) => (
+        <NavSection key={g.title} title={g.title}>
+          {g.items.map((x) => <NavItem key={x.id} label={x.label} icon={x.icon} isCurrent={settingsPage === x.id} onPress={() => setSettingsPage(x.id)} />)}
+        </NavSection>
+      ))}
+    </>
+  ) : (
+    <>
       <NavItem label="Home" icon={<Home {...i16} />} isCurrent={page === 'home'} onPress={() => go('home')} />
       <NavItem label="Inbox" icon={<Inbox {...i16} />} badge={unread || undefined} isCurrent={page === 'inbox'} onPress={() => go('inbox')} />
       {!hiddenNav.has('tasks') && <NavItem label="Tasks" icon={<CheckSquare {...i16} />} count={myOpen || undefined} isCurrent={page === 'tasks'} onPress={() => go('tasks')} />}
       {!hiddenNav.has('notes') && <NavItem label="Notes" icon={<NotebookPen {...i16} />} isCurrent={page === 'notes'} onPress={() => go('notes')} />}
-      <NavSection title="Records" addLabel="New object" onAdd={() => openSettings('objects:new')}>
+      <NavSection title="Records" addLabel="New object" onAdd={() => setNewObject(true)}>
         {OBJECTS.map((o) => <NavItem key={o.id} label={o.label} icon={o.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />)}
         {state.objects.filter((o) => o.custom && !o.archived).map((o) => <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />)}
       </NavSection>
-      {!hiddenNav.has('lists') && <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
+      {LISTS_ON && !hiddenNav.has('lists') && <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
         {state.lists.filter((l) => !l.archived).map((l) => <NavItem key={l.id} label={l.name} icon={<ListChecks {...i16} />} count={liveEntries(state, l).length || undefined} isCurrent={page === `list:${l.id}`} onPress={() => go(`list:${l.id}`)} />)}
       </NavSection>}
       {bookingsSection}
@@ -224,7 +236,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         {!hiddenNav.has('forms') && <NavItem label="Forms" icon={<FileText {...i16} />} isCurrent={page === 'forms'} onPress={() => go('forms')} />}
         {!hiddenNav.has('insights') && <NavItem label="Insights" icon={<BarChart3 {...i16} />} isCurrent={page === 'insights'} onPress={() => go('insights')} />}
       </NavSection>
-      <NavItem label="Settings" icon={<Settings {...i16} />} shortcut="⌘," isCurrent={page === 'settings'} onPress={() => openSettings()} />
+      <NavItem label="Settings" icon={<Settings {...i16} />} shortcut="⌘," onPress={() => openSettings()} />
     </>
   );
 
@@ -237,7 +249,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
     : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} newFor={taskFor} />
     : page === 'notes' ? <NotesScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} openNote={launch?.kind === 'note' ? launch.value : undefined} />
-    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
+    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} page={settingsPage} onPage={setSettingsPage} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
     : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onBack={() => go('links')} />
     : page === 'links' ? <LinksScreen state={state} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
@@ -272,7 +284,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
       <div className="tf-app__keep" inert={door !== undefined || undefined}>
-      <BookingsFlow showDemoMenu appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
+      <BookingsFlow showDemoMenu onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
           if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
@@ -288,6 +300,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       </div>
       {lostAsk && <LostReasonDialog names={lostAsk.map((id) => state.deals.find((d) => d.id === id)?.name ?? 'A deal')} onSkip={() => setLostAsk(undefined)}
         onSave={(reason, note) => { dispatch({ type: 'records/fields', object: 'deals', changes: lostAsk.map((id) => ({ id, patch: { lostReason: reason, lostNote: note || undefined } })) }); setLostAsk(undefined); toast({ message: `Saved: ${reason.toLowerCase()}`, tone: 'success' }); }} />}
+      {newObject && <NewObjectDialog onClose={() => setNewObject(false)} onCreate={(o) => { dispatch({ type: 'object/set', object: o }); setNewObject(false); go(`object:${o.id}`); toast({ message: `${o.many} made`, tone: 'success', action: { label: 'Add attributes', onAction: () => openSettings(`objects:${o.id}`) } }); }} />}
       {newList && <NewListDialog onClose={() => setNewList(false)} onCreate={(l) => { dispatch({ type: 'list/set', list: l }); setNewList(false); go(`list:${l.id}`); }} />}
       {signingOut && <Dialog isOpen onOpenChange={(o) => { if (!o) setSigningOut(false); }} title="Sign out?" description={`You can sign back in to ${state.prefs.workspace.name} with your email.`}
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => { setSigningOut(false); setDoor('signin'); }}>Sign out</Button></>} />}
@@ -324,7 +337,7 @@ function MoreScreen({ state, bookings, kind, unread, onGo, onBookings, onSetting
     <div className="tf-more">
       {group('You', [...(hide.has('tasks') ? [] : [row('tasks', 'Tasks', <CheckSquare {...i16} />, () => onGo('tasks'), myOpen)]), ...(hide.has('notes') ? [] : [row('notes', 'Notes', <NotebookPen {...i16} />, () => onGo('notes'))])])}
       {group('Records', [...OBJECTS.map((o) => row(o.id, o.label, o.icon, () => onGo(`records:${o.id}`))), ...state.objects.filter((o) => o.custom && !o.archived).map((o) => row(o.id, o.many, <Boxes {...i16} />, () => onGo(`object:${o.id}`)))])}
-      {!hide.has('lists') && group('Lists', [...state.lists.filter((l) => !l.archived).map((l) => row(l.id, l.name, <ListChecks {...i16} />, () => onGo(`list:${l.id}`), liveEntries(state, l).length)), row('new-list', 'New list', <Plus {...i16} />, onNewList)])}
+      {LISTS_ON && !hide.has('lists') && group('Lists', [...state.lists.filter((l) => !l.archived).map((l) => row(l.id, l.name, <ListChecks {...i16} />, () => onGo(`list:${l.id}`), liveEntries(state, l).length)), row('new-list', 'New list', <Plus {...i16} />, onNewList)])}
       {group('Bookings', [
         row('meetings', kind === 'restaurant' ? 'Reservations' : 'Meetings', <CalendarDays {...i16} />, () => onBookings('meetings')),
         ...(team ? [] : [row('guests', kind === 'restaurant' ? 'Guests' : 'Clients', <Contact {...i16} />, () => onBookings('guests'))]),
