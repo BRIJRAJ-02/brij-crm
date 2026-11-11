@@ -15,7 +15,7 @@
 }
 .tf-codeinput--lg .tf-codeinput__box { border-radius: var(--radius-lg); font-size: 24px; line-height: 32px; }
 .tf-codeinput__box[data-half] { margin-left: var(--space-12); }
-.tf-codeinput__boxes:hover .tf-codeinput__box { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .tf-codeinput__boxes:hover .tf-codeinput__box { background: var(--surface-hover); } }
 .tf-codeinput__boxes[data-focused] .tf-codeinput__box[data-next] { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
 .tf-codeinput__caret { display: none; width: var(--border-width-focus); height: 1lh; border-radius: var(--radius-full); background: var(--text); animation: tf-codeinput-blink calc(var(--duration-very-slow) * 2) var(--ease-linear) infinite; }
 .tf-codeinput__boxes[data-focused] .tf-codeinput__box[data-next] .tf-codeinput__caret { display: block; }
@@ -23,7 +23,7 @@
 
 /* Each digit pops in as it lands (transitions.dev 02, one character). */
 .tf-codeinput__digit { display: inline-block; animation: tf-codeinput-pop var(--duration-very-slow) var(--ease-bounce) both; }
-@keyframes tf-codeinput-pop { from { transform: translateY(var(--distance-base)); opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-codeinput-pop { from { transform: translateY(var(--distance-base)); opacity: 0; } }
 
 .tf-codeinput[data-invalid] .tf-codeinput__box { border-color: var(--danger); transition-duration: var(--duration-medium); }
 .tf-codeinput[data-invalid] .tf-codeinput__boxes[data-focused] .tf-codeinput__box[data-next] { box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft); }

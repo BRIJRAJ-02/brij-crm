@@ -107,10 +107,10 @@ export function TextMorph({ text }: { readonly text: string }) {
   );
 }
 
-/** Settles the soft swap after both its 200ms cross-blur and 240ms width ease, plus a frame of slack. */
+/** Settles the soft swap after both its 200ms crossfade and 240ms width ease, plus a frame of slack. */
 const SOFT_SETTLE_MS = 280;
 
-/** A value recomputed in place (a chart's total, a price after a currency change): the old text blurs out as the new blurs in, and the width eases so neighbours glide (transitions.dev 34 text swap soft). `align` keeps right-aligned figures on their edge. */
+/** A value recomputed in place (a chart's total, a price after a currency change): the old text fades out as the new fades in, and the width eases so neighbours glide (transitions.dev 34 text swap soft). `align` keeps right-aligned figures on their edge. */
 export function SoftText({ children, align = 'start' }: { readonly children: string; readonly align?: 'start' | 'end' | 'center' }) {
   const ref = useRef<HTMLSpanElement>(null);
   const timer = useRef(0);
@@ -163,7 +163,7 @@ export function Collapse({ open, children }: { readonly open: boolean; readonly 
 
 /* ---------- icons ---------- */
 
-/** Two icons in one slot that cross-fade with blur and scale (transitions.dev 09 icon swap). `isB` shows the second. */
+/** Two icons in one slot that cross-fade with fade and scale (transitions.dev 09 icon swap). `isB` shows the second. */
 export function IconSwap({ a, b, isB }: { readonly a: ReactNode; readonly b: ReactNode; readonly isB: boolean }) {
   return (
     <span className="tf-iconswap" data-state={isB ? 'b' : 'a'} aria-hidden="true">

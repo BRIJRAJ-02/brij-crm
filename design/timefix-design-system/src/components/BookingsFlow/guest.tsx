@@ -1,6 +1,7 @@
 // Step 6, the guest's side, full screen (Desktop or Phone): the booking page, a request waiting, Manage booking, an expired one-time link,
 // a hidden page, a page offering only picked times, and the booking chat.
 import { useGuestScale } from '../../lib/guest-scale.ts';
+import { Link } from '../Link/Link.tsx';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CalendarDate } from '@internationalized/date';
 import { ArrowLeft, CalendarClock, CalendarPlus, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
@@ -134,7 +135,7 @@ function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMe
   if (chosen) {
     return (
       <div className="tf-bkf__profile-back-wrap">
-        <AriaButton className="tf-bkf__textbtn tf-bkf__profile-back" onPress={() => setOpen(undefined)}><ArrowLeft {...i14} aria-hidden="true" />All of {first(owner)}’s meetings</AriaButton>
+        <Link onPress={() => setOpen(undefined)} weight="strong" className="tf-bkf__profile-back"><ArrowLeft {...i14} aria-hidden="true" />All of {first(owner)}’s meetings</Link>
         <Book page={chosen} state={state} onBooked={onBooked} onBookedChange={onBookedChange} />
       </div>
     );

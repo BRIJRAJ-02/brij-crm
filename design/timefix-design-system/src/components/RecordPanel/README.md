@@ -6,6 +6,6 @@ The peek drawer: a record opened beside its list so people can read and edit it 
 
 **States**: closed (inert), open, switching records, sections collapsed or open, first and last record.
 
-**Interaction**: the panel rises in from 60px right through a 2px blur (panel reveal, 400ms in, 350ms out) and takes focus; Esc closes and hands focus back. J and K move between records; the body leaves 8px one way while the next arrives from the other through a 3px blur (page side-by-side, 250ms). Sections fold on React Aria's measured height with a 2px cross-blur (accordion, 250ms).
+**Interaction**: the panel rises in from 60px right through (panel reveal, 400ms in, 350ms out) and takes focus; Esc closes and hands focus back. J and K move between records; the body leaves 8px one way while the next arrives from the other through (page side-by-side, 250ms). Sections fold on React Aria's measured height (accordion, 250ms).
 
 **Replaces**: RecordPanel, the side column of RecordLayout, RelatedRecords.

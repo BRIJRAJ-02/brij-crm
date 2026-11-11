@@ -10,7 +10,7 @@
 .tf-drag-handle[data-lifted] { color: var(--accent); }
 .tf-drag-handle[data-focus-visible] { opacity: 1; color: var(--text-secondary); outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
 .tf-drag-handle--hover { opacity: 0; }
-:where(:hover, [data-hovered], [data-focus-visible], [data-dragging], :focus-within) > .tf-drag-handle--hover, .tf-drag-handle--hover[data-lifted] { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { :where(:hover, [data-hovered], [data-focus-visible], [data-dragging], :focus-within) > .tf-drag-handle--hover, .tf-drag-handle--hover[data-lifted] { opacity: 1; } }
 @media (hover: none) { .tf-drag-handle--hover { opacity: 1; } }
 
 /* SortableList: 44px rows that wash on hover; the dragged row leaves a faint ghost, the slot opens dashed, the drop settles. */

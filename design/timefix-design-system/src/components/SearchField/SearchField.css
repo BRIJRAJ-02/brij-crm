@@ -7,7 +7,7 @@
   transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out);
 }
 .tf-search--sm { --tf-search-h: var(--size-control-sm); padding-left: var(--space-8); gap: var(--space-6); font-size: 13px; }
-.tf-search:hover { border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .tf-search:hover { border-color: var(--border-strong); } }
 .tf-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
 .tf-search[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 .tf-search__icon { flex: none; color: var(--text-tertiary); }
@@ -35,7 +35,6 @@
 }
 .tf-search--sm .tf-search__clear { width: calc(var(--tf-search-h) - var(--space-8)); height: calc(var(--tf-search-h) - var(--space-8)); }
 .tf-search__clear[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-search__clear[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-search__clear[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-search[data-empty] .tf-search__clear { opacity: 0; pointer-events: none; }
 

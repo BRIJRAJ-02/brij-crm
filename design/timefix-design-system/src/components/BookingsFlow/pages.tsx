@@ -1,5 +1,6 @@
 // Pages: booking pages as rows (picture, name, length · place, who hosts, On/Hidden, Share, ⋯), Mine / Team.
 import { copyText } from '../../lib/copy.ts';
+import { Link } from '../Link/Link.tsx';
 import { useState } from 'react';
 import type { EditorSection } from './editor.tsx';
 import { Button as AriaButton } from 'react-aria-components';
@@ -107,13 +108,13 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                     {noTimes && (
                       <p className="tf-bkf__pagerow-warn" role="status">
                         <AlertTriangle {...i14} aria-hidden="true" /><span>Guests can’t book: no open times in the next two months</span><span aria-hidden="true">·</span>
-                        <AriaButton className="tf-bkf__textbtn" onPress={() => onFix(p.id, 'when')} aria-label={`Check times for ${p.name}`}>Check</AriaButton>
+                        <Link onPress={() => onFix(p.id, 'when')} weight="strong" label={`Check times for ${p.name}`}>Check</Link>
                       </p>
                     )}
                     {stuck && (
                       <p className="tf-bkf__pagerow-warn" role="status">
                         <AlertTriangle {...i14} aria-hidden="true" /><span>Guests can't book: no hosts available</span><span aria-hidden="true">·</span>
-                        <AriaButton className="tf-bkf__textbtn" onPress={() => onFix(p.id)} aria-label={`Fix hosts for ${p.name}`}>Fix</AriaButton>
+                        <Link onPress={() => onFix(p.id)} weight="strong" label={`Fix hosts for ${p.name}`}>Fix</Link>
                       </p>
                     )}
                   </div>

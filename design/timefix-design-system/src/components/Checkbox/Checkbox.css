@@ -3,7 +3,6 @@
 .tf-check[data-disabled], .tf-switch[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 .tf-check__box { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--control-border); border-radius: var(--radius-xs); background: var(--surface); transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out); }
 .tf-check[data-hovered] .tf-check__box { border-color: var(--text-secondary); }
-.tf-check[data-pressed] .tf-check__box { transform: scale(0.9); }
 .tf-check[data-focus-visible] .tf-check__box, .tf-switch[data-focus-visible] .tf-switch__track { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-check__box svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .tf-check__tick { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset var(--duration-quick) var(--ease-smooth-out); }

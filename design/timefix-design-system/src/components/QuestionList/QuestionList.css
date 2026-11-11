@@ -47,7 +47,7 @@
 /* Deleted · Undo opens and closes in place (21 accordion). */
 .tf-qlist__undo { display: grid; grid-template-rows: 0fr; margin-bottom: calc(var(--space-12) * -1); transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), margin var(--duration-fast) var(--ease-smooth-out); }
 .tf-qlist__undo[data-open] { grid-template-rows: 1fr; margin-bottom: 0; }
-.tf-qlist__undo-clip { min-height: 0; overflow: hidden; opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-qlist__undo-clip { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 .tf-qlist__undo[data-open] .tf-qlist__undo-clip { opacity: 1; filter: none; }
 .tf-qlist__undo-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); margin: 0; min-height: var(--size-control); padding: 0 var(--space-4) 0 var(--space-16); border: var(--border-width-hairline) dashed var(--border); border-radius: var(--radius-lg); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 
@@ -77,9 +77,9 @@
 .tf-qset--empty { padding: 0; }
 .tf-qset__head { display: flex; align-items: center; gap: var(--space-12); }
 .tf-qset__title { flex: 1; margin: 0; font: 500 15px/22px var(--font-sans); }
-/* 34 text swap soft: another question's settings fade in from a 2px blur. */
+/* 34 text swap soft: another question's settings fade in from. */
 .tf-qset__body { display: flex; flex-direction: column; gap: var(--space-16); animation: tf-qset-swap var(--duration-fast) var(--ease-in-out) both; }
-@keyframes tf-qset-swap { from { opacity: 0; filter: blur(var(--blur-small)); transform: translateY(var(--distance-micro)); } }
+@keyframes tf-qset-swap { from { opacity: 0; transform: translateY(var(--distance-micro)); } }
 .tf-qset__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-qset__row-text { display: flex; flex-direction: column; min-width: 0; }
 .tf-qset__row-label { font: 500 13px/20px var(--font-sans); color: var(--text); }

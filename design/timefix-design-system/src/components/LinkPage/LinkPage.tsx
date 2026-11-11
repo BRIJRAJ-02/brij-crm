@@ -101,7 +101,7 @@ function BookingBlock({ block, host, booking }: { readonly block: Extract<LinkBl
           <TextSwap swapKey={open ? 'close' : 'book'}>{open ? 'Close' : 'Book'}</TextSwap>
         </Button>
       </div>
-      {/* 21 accordion: the booking card opens in place under the block (0fr to 1fr, 2px blur). */}
+      {/* 21 accordion: the booking card opens in place under the block (0fr to 1fr. */}
       <div className="tf-linkpage__booking-panel" id={panelId} inert={!open}>
         <div className="tf-linkpage__booking-clip">
           {mounted && booking && <BookingFlow host={{ name: host }} title={block.title} durationMinutes={block.durationMinutes} location={block.location} {...booking} />}

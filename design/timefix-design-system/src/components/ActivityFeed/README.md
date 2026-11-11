@@ -6,6 +6,6 @@ A record's timeline: what happened, newest first, grouped by day.
 
 **States**: one change, several changes (first shown, "Show all n changes" pill), comment inline as a grey card, email with a two-line preview, meetings with a blue calendar well (blue marks time), empty day groups never render.
 
-**Interaction**: new events drop in at the top: the row opens from 0 height and rises 12px into place (250ms). "Show all changes" and "Show n older" fold open on the measured height with a 2px blur (accordion), and their labels flip to Hide.
+**Interaction**: new events drop in at the top: the row opens from 0 height and rises 12px into place (250ms). "Show all changes" and "Show n older" fold open on the measured height (accordion), and their labels flip to Hide.
 
 **Replaces**: ActivityFeed, BookingChanges.

@@ -32,11 +32,13 @@ export interface LinkProps {
   readonly isExternal?: boolean;
   /** A name for screen readers when the words alone are ambiguous ("12 submissions to Contact us"). */
   readonly label?: string;
+  /** Placement only (margins, alignment); the look stays the library's. */
+  readonly className?: string;
 }
 
 /** An inline text link: link colour, underline easing in on hover. Links out open in a new tab with an arrow and say so. */
-export function Link({ href, children, onPress, variant = 'default', weight = 'regular', isExternal: external, label }: LinkProps) {
-  const cls = cx('tf-link', `tf-link--${variant}`, weight === 'strong' && 'tf-link--strong');
+export function Link({ href, children, onPress, variant = 'default', weight = 'regular', isExternal: external, label, className }: LinkProps) {
+  const cls = cx('tf-link', `tf-link--${variant}`, weight === 'strong' && 'tf-link--strong', className);
   if (onPress) return <AriaLink className={cls} onPress={onPress} aria-label={label}>{children}</AriaLink>;
   const safe = href === undefined ? undefined : safeHref(href);
   if (safe === undefined) return <span>{children}</span>;

@@ -6,6 +6,6 @@ Steps show where the user is in a flow of three to six steps, and what is done.
 
 **States**: upcoming (grey ring, grey number), current (blue ring with a soft halo, label in ink, `aria-current="step"`), done (blue disc with a white tick), done and pressable (row washes on hover).
 
-**Interaction**: only done steps are buttons, so Tab visits them and Enter goes back; steps ahead never take focus. A step turning done draws its tick with transitions.dev success check (500ms: rotate, rise, blur and stroke draw) while the connector after it fills blue from the start over 400ms. Reduced motion shows the end state at once.
+**Interaction**: only done steps are buttons, so Tab visits them and Enter goes back; steps ahead never take focus. A step turning done draws its tick with transitions.dev success check (500ms: rotate, rise, fade and stroke draw) while the connector after it fills blue from the start over 400ms. Reduced motion shows the end state at once.
 
 **Replaces**: Steps, Stepper, the hosted form's step header.

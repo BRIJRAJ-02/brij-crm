@@ -10,8 +10,8 @@
 /* Month change: the new page slides in a small step from the side it came from (transitions.dev 08). */
 .tf-cal__page--next { animation: tf-cal-next var(--duration-fast) var(--ease-smooth-out); }
 .tf-cal__page--prev { animation: tf-cal-prev var(--duration-fast) var(--ease-smooth-out); }
-@keyframes tf-cal-next { from { opacity: 0; transform: translateX(var(--distance-base)); filter: blur(var(--blur-medium)); } }
-@keyframes tf-cal-prev { from { opacity: 0; transform: translateX(calc(var(--distance-base) * -1)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-cal-next { from { opacity: 0; transform: translateX(var(--distance-base)); } }
+@keyframes tf-cal-prev { from { opacity: 0; transform: translateX(calc(var(--distance-base) * -1)); } }
 
 .tf-cal__cell { display: grid; place-items: center; width: var(--tf-day); height: var(--tf-day); outline: none; cursor: pointer; font-variant-numeric: tabular-nums; }
 .tf-cal__day {
@@ -56,7 +56,6 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-date__btn[data-hovered], .tf-date__btn[aria-expanded='true'] { background: var(--surface-selected); color: var(--text); }
-.tf-date__btn[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-date__btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
 .tf-date__pop { padding: var(--space-6); }
 .tf-date__foot { display: flex; justify-content: flex-end; padding: var(--space-6) var(--space-6) 0; margin-top: var(--space-2); border-top: var(--border-width-hairline) solid var(--border-subtle); }

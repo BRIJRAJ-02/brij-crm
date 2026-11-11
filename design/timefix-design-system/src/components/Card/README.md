@@ -6,6 +6,6 @@ Cards hold one block of related content on a white surface; a `Shell` groups rel
 
 **States**: stat loading ("—", a dotted placeholder line, empty bars, no layout shift), delta good (green) or bad (red); tile rest, hover, selected (accent edge, tinted icon, check badge), focus-visible, disabled.
 
-**Interaction**: a stat's changed digits rise into place with a blur (transitions.dev 02, number pop-in) on mount and whenever the period changes. `CardLink`'s chevron slides 2px and opens 8° into an arrow over 350ms (24, learn more hover). Tiles are one radio group: arrows move and select, and the check badge pops in on the bounce curve (03's pop).
+**Interaction**: a stat's changed digits rise into place with a fade (transitions.dev 02, number pop-in) on mount and whenever the period changes. `CardLink`'s chevron slides 2px and opens 8° into an arrow over 350ms (24, learn more hover). Tiles are one radio group: arrows move and select, and the check badge pops in on the bounce curve (03's pop).
 
 **Replaces**: Card, Stats, RecordStats, TileGrid.

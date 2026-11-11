@@ -131,7 +131,7 @@ export interface RelativeTimeProps {
   readonly hour12?: boolean;
 }
 
-/** A moment as "2 min ago", kept current; the value cross-blurs as it ticks over, and the exact time is in a Tooltip and read after it. */
+/** A moment as "2 min ago", kept current; the value crossfades as it ticks over, and the exact time is in a Tooltip and read after it. */
 export function RelativeTime({ value, now, hour12 = true }: RelativeTimeProps) {
   const live = useNow();
   const at = value instanceof Date ? value : new Date(value);

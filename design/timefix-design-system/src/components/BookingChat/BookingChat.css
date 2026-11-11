@@ -11,12 +11,12 @@
 .tf-chat__thread { display: flex; flex-direction: column; gap: var(--space-4); height: calc(var(--size-row) * 9); padding: var(--space-16) var(--space-16) var(--space-20); overflow-y: auto; overscroll-behavior: contain; outline: none; }
 .tf-chat__thread:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -1); }
 
-/* A new line rises in 6px through a small blur (250ms). */
+/* A new line rises in 6px through a small fade (250ms). */
 .tf-chat__line { display: flex; align-items: flex-start; gap: var(--space-8); animation: tf-chat-in var(--duration-fast) var(--ease-smooth-out) both; }
 .tf-chat__line--start { margin-top: var(--space-12); }
 .tf-chat__line--start:first-child { margin-top: 0; }
 .tf-chat__line--guest { justify-content: flex-end; }
-@keyframes tf-chat-in { from { opacity: 0; transform: translateY(var(--distance-small)); filter: blur(var(--blur-small)); } }
+@keyframes tf-chat-in { from { opacity: 0; transform: translateY(var(--distance-small)); } }
 .tf-chat__face { flex: none; width: var(--size-avatar); }
 .tf-chat__stack { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; max-width: 85%; }
 .tf-chat__line--guest .tf-chat__stack { align-items: flex-end; }
@@ -34,7 +34,7 @@
 /* Offers: each day's times as round chips that book in place, rising in 40ms apart once the reply is whole. */
 .tf-chat__offers { display: flex; flex-direction: column; gap: var(--space-12); }
 .tf-chat__day, .tf-chat__suggest { animation: tf-chat-rise var(--duration-fast) var(--ease-smooth-out) both; animation-delay: calc(var(--duration-stagger) * var(--tf-chat-i, 0)); }
-@keyframes tf-chat-rise { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-small)); } }
+@keyframes tf-chat-rise { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 .tf-chat__day { display: flex; flex-direction: column; gap: var(--space-6); }
 .tf-chat__day-name { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
 .tf-chat__times, .tf-chat__suggest { display: flex; flex-wrap: wrap; gap: var(--space-8); }
@@ -44,11 +44,10 @@
 .tf-chat__time[data-pending] { border-color: transparent; background: var(--primary); color: var(--on-primary); cursor: progress; }
 .tf-chat__chip { border: var(--border-width-hairline) solid var(--border); background: transparent; color: var(--text-secondary); }
 .tf-chat__chip[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-chat__time[data-pressed], .tf-chat__chip[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-chat__time[data-focus-visible], .tf-chat__chip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-chat__time[data-disabled], .tf-chat__chip[data-disabled] { opacity: var(--opacity-disabled); cursor: default; }
 
-/* Booked: 10 success check (fade, rotate, blur, bob, draw), then the lines reveal 40ms apart. */
+/* Booked: 10 success check (fade, rotate, fade, bob, draw), then the lines reveal 40ms apart. */
 .tf-chat__booked { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); margin-top: var(--space-20); padding: var(--space-20) var(--space-16); border-radius: var(--radius-lg); border: var(--border-width-hairline) solid var(--border-subtle); text-align: center; }
 .tf-chat__check { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); animation: tf-chat-bob var(--duration-very-slow) var(--ease-bounce) both; }
 @keyframes tf-chat-bob { from { opacity: 0; translate: 0 var(--distance-large); } }
@@ -56,7 +55,7 @@
 .tf-chat__booked > .tf-chat__booked-sub { animation-delay: calc(var(--duration-quick) + var(--duration-stagger)); }
 .tf-chat__booked > .tf-chat__summary { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 2); }
 .tf-chat__booked > .tf-chat__add { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 3); }
-@keyframes tf-chat-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-chat-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 .tf-chat__booked-title { margin: var(--space-4) 0 0; font: 500 18px/26px var(--font-sans); }
 .tf-chat__booked-sub { margin: 0; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
 .tf-chat__summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-6) var(--space-16); width: 100%; margin: var(--space-8) 0 0; padding: var(--space-12) var(--space-16); border-radius: var(--radius-md); background: var(--surface-subtle); text-align: left; }
@@ -75,7 +74,7 @@
 .tf-chat__send { flex: none; }
 
 .tf-chat__foot { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
-.tf-chat__foot:hover { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .tf-chat__foot:hover { background: var(--surface-hover); } }
 .tf-chat__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {

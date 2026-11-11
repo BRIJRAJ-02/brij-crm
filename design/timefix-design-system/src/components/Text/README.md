@@ -6,6 +6,6 @@ Small text utilities every screen leans on: a cut name that explains itself, a l
 
 **States**: TruncatedText is focusable and shows its Tooltip only while it is actually cut (measured with a ResizeObserver). RelativeTime reads "just now", "5 min ago", "3 hours ago", "Yesterday", "4 days ago", then a date.
 
-**Interaction**: RelativeTime is focusable; the exact time ("Mon 9 Nov 2026, 9:30 AM") shows in a Tooltip and is read after the relative words. When the words tick over they cross-blur in place (`SoftText`, transitions.dev 34 text swap soft: 150ms blur, width easing over 250ms), so neighbours glide instead of jumping. Path is heard as "Company, then Owner".
+**Interaction**: RelativeTime is focusable; the exact time ("Mon 9 Nov 2026, 9:30 AM") shows in a Tooltip and is read after the relative words. When the words tick over they crossfade in place (`SoftText`, transitions.dev 34 text swap soft: 150ms fade, width easing over 250ms), so neighbours glide instead of jumping. Path is heard as "Company, then Owner".
 
 **Replaces**: TruncatedText, RelativeTime, Separator, VisuallyHidden, Path.

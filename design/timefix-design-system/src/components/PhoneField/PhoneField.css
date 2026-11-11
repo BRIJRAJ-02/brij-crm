@@ -10,7 +10,6 @@
 .tf-phone__code:is(.tf-field--lg *) { font-size: 16px; line-height: 24px; border-radius: var(--radius-md); }
 .tf-phone__code svg { color: var(--text-tertiary); }
 .tf-phone__code[data-hovered], .tf-phone__code[aria-expanded='true'] { background: var(--surface-selected); }
-.tf-phone__code[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-phone__code[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
 .tf-phone__rule { flex: none; width: var(--border-width-hairline); height: calc(var(--tf-field-h) / 2); background: var(--border-strong); }
 .tf-phone__input { font-variant-numeric: tabular-nums; }

@@ -10,7 +10,6 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-cmd__clear[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-cmd__clear[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-cmd__clear[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-cmd__list { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-8) var(--space-8); outline: none; }
 .tf-cmd__section + .tf-cmd__section { margin-top: var(--space-4); }

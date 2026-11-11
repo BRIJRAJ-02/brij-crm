@@ -6,6 +6,6 @@ Disclosure rows fold content away under a 44px head that opens a panel below it,
 
 **States**: closed, hover (row washes), open (chevron points up), focus-visible (ring inside the row), disabled.
 
-**Interaction**: the head is a button inside a heading; Enter or Space toggles it. The panel's height tweens over 250ms on the smooth-out curve while its content fades in and unblurs from 2px, and the chevron flips vertically through a flat line (transitions.dev 21, accordion). `ShowMore` crossfades its label (Show ↔ Hide). Collapsed content stays findable with the browser's find in page.
+**Interaction**: the head is a button inside a heading; Enter or Space toggles it. The panel's height tweens over 250ms on the smooth-out curve while its content fades in and fades in from 2px, and the chevron flips vertically through a flat line (transitions.dev 21, accordion). `ShowMore` crossfades its label (Show ↔ Hide). Collapsed content stays findable with the browser's find in page.
 
 **Replaces**: Disclosure.

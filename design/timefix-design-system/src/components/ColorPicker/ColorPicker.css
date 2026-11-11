@@ -15,13 +15,13 @@
 .tf-swatch[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
 .tf-swatch[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 
-/* transitions.dev 09 icon swap: the check comes in from 0.25 and a 2px blur over 250ms, and leaves the same way. */
+/* transitions.dev 09 icon swap: the check comes in from 0.25 over 250ms, and leaves the same way. */
 .tf-swatch__check {
   display: grid; place-items: center; color: var(--surface); pointer-events: none;
-  opacity: 0; transform: scale(0.25); filter: blur(var(--blur-small));
-  transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out);
+  opacity: 0; transform: scale(0.25); 
+  transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
 }
-.tf-swatch[data-selected] .tf-swatch__check { opacity: 1; transform: scale(1); filter: blur(0); }
+.tf-swatch[data-selected] .tf-swatch__check { opacity: 1; transform: scale(1); }
 
 /* AccentPicker: swatches, then the hex field with a live preview, then the readability line. */
 .tf-accent { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }

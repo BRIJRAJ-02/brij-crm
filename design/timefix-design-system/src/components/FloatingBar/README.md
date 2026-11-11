@@ -6,6 +6,6 @@ A floating bar is a pill at the bottom of a region that holds the actions for wh
 
 **States**: hidden, shown, busy (spinner in the main action), done (drawn tick and "Saved" / "Published", then the bar drops away).
 
-**Interaction**: the bar is a toolbar, so Tab enters it once and arrows move between buttons; Esc clears a selection; ⌘S saves. It rises with transitions.dev toast motion (16px, 0.97, 2px blur, 350ms) and leaves in 250ms; labels crossfade so the pill never jumps; the count rolls.
+**Interaction**: the bar is a toolbar, so Tab enters it once and arrows move between buttons; Esc clears a selection; ⌘S saves. It rises with transitions.dev toast motion (16px, 0.97, 350ms) and leaves in 250ms; labels crossfade so the pill never jumps; the count rolls.
 
 **Replaces**: FloatingBar, BulkActionBar, SaveBar, PublishBar, VisitorBar.

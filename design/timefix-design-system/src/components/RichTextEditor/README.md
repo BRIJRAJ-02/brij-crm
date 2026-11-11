@@ -2,7 +2,7 @@ RichTextEditor is where people write: notes, comments and descriptions, drawn as
 
 **Use it for**: a record's notes (`NoteEditor`, a title over the text), comments and long descriptions that need headings, lists, to-dos, links and @mentions. **Don't use it for** one line answers or form questions: use TextField or TextArea.
 
-**The consumer provides**: `label` (the text's accessible name), `defaultContent` (HTML or Tiptap JSON; remount with a new `key` to show another document), `onChange(doc)` (Tiptap JSON, 300ms after typing pauses and on blur, never HTML), `people` for `@`, `placeholder`, `isReadOnly` with `readOnlyReason`, `autoFocus`. `NoteEditor` adds `title`, `onTitleChange` and `autoFocusOn` (`title` for a new note, `text` for one opened again). `SLASH_BLOCKS` lists the `/` menu.
+**The consumer provides**: `label` (the text's accessible name), `defaultContent` (HTML or Tiptap JSON; remount with a new `key` to show another document), `onChange(doc)` (Tiptap JSON, 300ms after typing pauses and when the editor loses focus, never HTML), `people` for `@`, `placeholder`, `isReadOnly` with `readOnlyReason`, `autoFocus`. `NoteEditor` adds `title`, `onTitleChange` and `autoFocusOn` (`title` for a new note, `text` for one opened again). `SLASH_BLOCKS` lists the `/` menu.
 
 **States**: empty (placeholder, then "Press / for blocks" on an empty line), writing, a selection (format bar), `@` and `/` lists (filtered, nothing matching), read only with its reason.
 

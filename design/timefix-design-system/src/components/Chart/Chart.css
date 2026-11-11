@@ -73,7 +73,7 @@
   display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: var(--space-12); height: var(--size-control-sm);
   padding: 0 var(--space-6); border-radius: var(--radius-sm); outline: none; transition: opacity var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out);
 }
-.tf-donut__row:hover { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .tf-donut__row:hover { background: var(--surface-hover); } }
 .tf-donut__row:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
 .tf-donut__row.is-dim { opacity: 0.45; }
 .tf-donut__row--ghost { grid-template-columns: 1fr auto; color: var(--text-tertiary); }

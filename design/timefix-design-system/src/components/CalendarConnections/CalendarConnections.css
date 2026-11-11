@@ -24,11 +24,11 @@
 .tf-calconn__add-label { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
 .tf-calconn__providers { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .tf-calconn__label { display: inline-block; animation: tf-calconn-swap var(--duration-quick) var(--ease-in-out); }
-@keyframes tf-calconn-swap { from { opacity: 0; filter: blur(var(--blur-small)); } }
-/* 10 success check: fade, turn from 80deg, unblur and draw. */
+@keyframes tf-calconn-swap { from { opacity: 0; } }
+/* 10 success check: fade, turn from 80deg, fades in and draw. */
 .tf-calconn__check { display: block; overflow: visible; color: var(--success); animation: tf-calconn-check-in var(--duration-very-slow) var(--ease-smooth-out) both; }
 .tf-calconn__check path { stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: tf-calconn-draw var(--duration-very-slow) var(--ease-smooth-out) var(--duration-micro) forwards; }
-@keyframes tf-calconn-check-in { from { opacity: 0; transform: rotate(80deg); filter: blur(var(--blur-small)); } }
+@keyframes tf-calconn-check-in { from { opacity: 0; transform: rotate(80deg); } }
 @keyframes tf-calconn-draw { to { stroke-dashoffset: 0; } }
 
 @container (max-width: 34rem) {

@@ -23,7 +23,7 @@
 .tf-fbar__seg[data-focus-visible], .tf-fbar__x[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-full); }
 .tf-fbar__x { padding: 0 var(--space-8) 0 var(--space-6); color: var(--text-tertiary); border-left: var(--border-width-hairline) solid var(--border-subtle); }
 
-/* transitions.dev 13 input clear with dissolve: the chip flies down 12px, blurs 2px and fades over 400ms
+/* transitions.dev 13 input clear with dissolve: the chip flies down 12px, fade 2px and fades over 400ms
    while a soft streak rises under it (50ms delay, peak at 15%, 1000ms in all). */
 .tf-fbar__chipwrap::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; border-radius: var(--radius-full);
@@ -35,22 +35,22 @@
 .tf-fbar__chipwrap.is-clearing { pointer-events: none; }
 .tf-fbar__chipwrap.is-clearing .tf-fbar__chip { animation: tf-fbar-out var(--duration-slow) var(--ease-smooth-out) forwards; }
 .tf-fbar__chipwrap.is-clearing::after { animation: tf-fbar-glow calc(var(--duration-very-slow) * 2) var(--ease-linear) forwards; }
-@keyframes tf-fbar-out { to { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-small)); } }
+@keyframes tf-fbar-out { to { opacity: 0; transform: translateY(var(--distance-medium)); } }
 @keyframes tf-fbar-glow { 0%, 5% { opacity: 0; } 19% { opacity: 0.42; } 100% { opacity: 0; } }
 
 /* Sort pill: the arrow swaps (09 icon swap) when the direction flips. */
 .tf-fbar__arrow { display: inline-grid; }
 .tf-fbar__arrow svg {
-  grid-area: 1 / 1; opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25);
-  transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
+  grid-area: 1 / 1; opacity: 0; transform: scale(0.25);
+  transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
 }
 .tf-fbar__arrow[data-state='ascending'] svg[data-icon='ascending'],
-.tf-fbar__arrow[data-state='descending'] svg[data-icon='descending'] { opacity: 1; filter: blur(0); transform: scale(1); }
+.tf-fbar__arrow[data-state='descending'] svg[data-icon='descending'] { opacity: 1; transform: scale(1); }
 
 /* "14 companies hidden by filters · Clear", and the line that falls in once they are cleared. */
 .tf-fbar__line { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
 .tf-fbar__line--in { animation: tf-fbar-in var(--duration-slow) var(--ease-smooth-out) both; }
-@keyframes tf-fbar-in { from { opacity: 0.9; transform: translateY(calc(var(--distance-medium) * -1)); filter: blur(var(--blur-small)); } to { opacity: 1; } }
+@keyframes tf-fbar-in { from { opacity: 0.9; transform: translateY(calc(var(--distance-medium) * -1)); } to { opacity: 1; } }
 .tf-fbar__link {
   padding: 0; border: 0; background: none; color: var(--text); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none;
   text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: var(--space-2);

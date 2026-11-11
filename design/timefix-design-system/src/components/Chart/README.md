@@ -6,6 +6,6 @@ Stats and small charts for reports and dashboards: figures, bars, a sparkline, a
 
 **States**: loaded, loading (undefined data: Mercury's dotted placeholder bars, ring, line and "—" values, in the final layout so nothing shifts), empty (`emptyText`), hover or focus (tooltip, others dim).
 
-**Interaction**: switching the period morphs every bar, line and donut segment from the old values to the new (35 donut morph, 400ms smooth-out) while the figures swap softly (34 text swap soft: the old value blurs out as the new blurs in and the width eases). Dot columns fade in left to right, 12ms apart, each time the numbers change (none with reduced motion). Bars and dot columns are focusable with Tab and show their tooltip (17 tooltip motion). A legend row dims the other segments.
+**Interaction**: switching the period morphs every bar, line and donut segment from the old values to the new (35 donut morph, 400ms smooth-out) while the figures swap softly (34 text swap soft: the old value fades out as the new fades in and the width eases). Dot columns fade in left to right, 12ms apart, each time the numbers change (none with reduced motion). Bars and dot columns are focusable with Tab and show their tooltip (17 tooltip motion). A legend row dims the other segments.
 
 **Replaces**: Chart, BarStrip.

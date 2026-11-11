@@ -8,9 +8,9 @@
 .tf-embed__dots > span { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--border-strong); }
 .tf-embed__url { flex: 1; max-width: var(--size-menu); height: calc(var(--size-control-sm) - var(--space-6)); padding: 0 var(--space-12); border-radius: var(--radius-full); background: var(--surface); font: 400 12px/22px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The site: grey lines for its words; a new mode slides in 8px through a 3px blur (08 page side-by-side). */
+/* The site: grey lines for its words; a new mode slides in 8px through (08 page side-by-side). */
 .tf-embed__site { position: relative; display: flex; flex-direction: column; gap: var(--space-8); min-height: calc(var(--size-control-lg) * 6); padding: var(--space-16) var(--space-20) var(--space-20); animation: tf-embed-page var(--duration-fast) var(--ease-smooth-out) both; }
-@keyframes tf-embed-page { from { opacity: 0; transform: translateX(var(--distance-base)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-embed-page { from { opacity: 0; transform: translateX(var(--distance-base)); } }
 .tf-embed__nav { display: flex; align-items: center; gap: var(--space-12); margin-bottom: var(--space-8); }
 .tf-embed__brand { width: var(--space-20); height: var(--space-20); border-radius: var(--radius-sm); background: var(--border-strong); }
 .tf-embed__line { display: block; width: 100%; height: var(--space-8); border-radius: var(--radius-full); background: var(--surface-selected); }
@@ -40,12 +40,12 @@
 .tf-embed__codetitle { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
 .tf-embed__pre { margin: 0; padding: var(--space-12) var(--space-16); background: var(--surface-subtle); font: 400 12px/20px var(--font-mono); color: var(--text); white-space: pre-wrap; word-break: break-all; outline: none; animation: tf-embed-soft calc(var(--duration-quick) + var(--duration-stagger) * 1.25) var(--ease-in-out) both; }
 .tf-embed__pre[data-focus-visible], .tf-embed__pre:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-@keyframes tf-embed-soft { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-embed-soft { from { opacity: 0; } }
 
 /* 09 icon swap: copy becomes a check. */
 .tf-embed__icon { display: inline-grid; }
-.tf-embed__icon > svg { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
-.tf-embed__icon-b, .tf-embed__icon[data-copied] .tf-embed__icon-a { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+.tf-embed__icon > svg { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
+.tf-embed__icon-b, .tf-embed__icon[data-copied] .tf-embed__icon-a { opacity: 0; transform: scale(0.25); }
 .tf-embed__icon[data-copied] .tf-embed__icon-b { opacity: 1; filter: none; transform: none; color: var(--success); }
 
 @media (prefers-reduced-motion: reduce) {

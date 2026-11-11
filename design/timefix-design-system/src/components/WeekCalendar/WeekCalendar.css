@@ -83,7 +83,7 @@
 @keyframes tf-week-settle { from { transform: scale(1.02); box-shadow: 0 0 0 1px var(--surface), var(--shadow-md); } }
 .tf-week__resize { position: absolute; left: var(--space-4); right: var(--space-4); bottom: 0; z-index: 1; height: var(--space-6); cursor: ns-resize; touch-action: none; border-radius: var(--radius-xs); }
 .tf-week__resize::after { content: ''; position: absolute; left: 50%; bottom: var(--space-2); width: var(--space-16); height: 2px; margin-left: calc(var(--space-8) * -1); border-radius: var(--radius-full); background: var(--text-secondary); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
-.tf-week__item:hover .tf-week__resize::after { opacity: 0.4; }
+@media (hover: hover) and (pointer: fine) { .tf-week__item:hover .tf-week__resize::after { opacity: 0.4; } }
 
 /* The event's details open in the shared Popover (05 menu dropdown from the event); it pads a little more for its title. */
 .tf-week__pop { width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-16); }

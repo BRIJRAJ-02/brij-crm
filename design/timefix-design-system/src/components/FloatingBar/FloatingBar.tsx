@@ -59,7 +59,7 @@ export interface FloatingBarProps {
   readonly onEscape?: () => void;
 }
 
-/** A pill that floats at the bottom of its region (the region sets `position: relative`). Rises in with the toast motion (350ms, 16px, 2px blur) and drops away in 250ms. Arrow keys move between its buttons. */
+/** A pill that floats at the bottom of its region (the region sets `position: relative`). Rises in with the toast motion (350ms, 16px and drops away in 250ms. Arrow keys move between its buttons. */
 export function FloatingBar({ isVisible, tone = 'ink', placement = 'center', 'aria-label': ariaLabel, children, onEscape }: FloatingBarProps) {
   const { isMounted, isExiting } = usePresence(isVisible);
   if (!isMounted) return null;

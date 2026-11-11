@@ -1,5 +1,6 @@
 // Steps 2 and 3: the Create sheet (name, length, where, when; nothing else), then "Your page is live".
-import { Dialog as AriaDialog, Heading, Modal, ModalOverlay, Radio as AriaRadio, RadioGroup as AriaRadioGroup, Label, Button as AriaButton } from 'react-aria-components';
+import { Radio as AriaRadio, RadioGroup as AriaRadioGroup, Label, Button as AriaButton } from 'react-aria-components';
+import { Link } from '../Link/Link.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { CalendarDays, Check, Code2, LayoutList, Mail, MapPin, Phone, Play, Video, Webcam } from 'lucide-react';
 import { Select } from '../Select/Select.tsx';
@@ -10,8 +11,8 @@ import { HoursEditor, summarizeHours } from '../HoursEditor/HoursEditor.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { Button } from '../Button/Button.tsx';
 import { Kbd } from '../Kbd/Kbd.tsx';
+import { Dialog } from '../Dialog/Dialog.tsx';
 import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
-import { cx } from '../../lib/cx.ts';
 import { CopyButton, SlidePages, i14, i16 } from './parts.tsx';
 import { newPage, uniqueSlug } from './seed.ts';
 import { PLACES, PLACE_ORDER, hoursFor, lengthOf, pageUrl, placeOf, slugify, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
@@ -174,36 +175,25 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
             <Button variant="secondary" icon={<LayoutList {...i14} />} onPress={() => onAfter(draft, 'linkpage')}>Add to link page</Button>
           </div>
         </div>
-        <AriaButton className="tf-bkf__textbtn tf-bkf__guestlink" onPress={() => onAfter(draft, 'guest')}><Play {...i14} aria-hidden="true" />See it as a guest</AriaButton>
+        <Link onPress={() => onAfter(draft, 'guest')} weight="strong" className="tf-bkf__guestlink"><Play {...i14} aria-hidden="true" />See it as a guest</Link>
       </div>
     </div>
   );
 
+  // The library Dialog (one modal design everywhere); ⌘↵ creates from any field inside.
   return (
-    <ModalOverlay isOpen={isOpen} onOpenChange={(o) => { if (!o) close(); }} isDismissable className="tf-bkf-scrim tf-overlay">
-      <Modal className="tf-bkf-sheet">
-        <AriaDialog className="tf-bkf-sheet__dialog" aria-label={step === 0 ? (kind === 'service' ? 'New service' : 'New booking page') : 'Your page is live'}>
-          <div className="tf-bkf-sheet__inner" onKeyDown={keys}>
-          <header className="tf-bkf-sheet__head">
-            <div className="tf-bkf-sheet__titles">
-              <Heading slot="title" className="tf-bkf-sheet__title"><TextSwap swapKey={String(step)}>{step === 0 ? (kind === 'service' ? 'New service' : 'New booking page') : kind === 'service' ? 'Your service is live' : 'Your page is live'}</TextSwap></Heading>
-              <p className="tf-bkf-sheet__desc">{step === 0 ? (kind === 'service' ? 'Guests book it from your business page. You can change everything later.' : 'You can change everything later.') : 'Share the link anywhere. Changes you make later show up at once.'}</p>
-            </div>
-          </header>
-          <div className="tf-bkf-sheet__body">
-            <SlidePages step={step} pages={[<div key="create">{form}</div>, <div key="live">{live}</div>]} />
-          </div>
-          <footer className={cx('tf-bkf-sheet__foot')}>
-            {step === 0 ? (
-              <>
-                <Button variant="ghost" slot="close">Cancel</Button>
-                <Button variant="primary" isDisabled={!canCreate} onPress={create} aria-keyshortcuts="Meta+Enter" iconEnd={<span className="tf-bkf__kbd"><Kbd>⌘↵</Kbd></span>}>{kind === 'service' ? 'Add service' : 'Create page'}</Button>
-              </>
-            ) : <Button variant="primary" onPress={close}>Done</Button>}
-          </footer>
-          </div>
-        </AriaDialog>
-      </Modal>
-    </ModalOverlay>
+    <Dialog isOpen={isOpen} onOpenChange={(o) => { if (!o) close(); }}
+      title={step === 0 ? (kind === 'service' ? 'New service' : 'New booking page') : kind === 'service' ? 'Your service is live' : 'Your page is live'}
+      description={step === 0 ? (kind === 'service' ? 'Guests book it from your business page. You can change everything later.' : 'You can change everything later.') : 'Share the link anywhere. Changes you make later show up at once.'}
+      actions={step === 0 ? (
+        <>
+          <Button variant="ghost" slot="close">Cancel</Button>
+          <Button variant="primary" isDisabled={!canCreate} onPress={create} aria-keyshortcuts="Meta+Enter" iconEnd={<span className="tf-bkf__kbd"><Kbd>⌘↵</Kbd></span>}>{kind === 'service' ? 'Add service' : 'Create page'}</Button>
+        </>
+      ) : <Button variant="primary" onPress={close}>Done</Button>}>
+      <div onKeyDown={keys}>
+        <SlidePages step={step} pages={[<div key="create">{form}</div>, <div key="live">{live}</div>]} />
+      </div>
+    </Dialog>
   );
 }

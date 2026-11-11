@@ -27,6 +27,14 @@
 .tf-dialog__body { display: flex; flex-direction: column; gap: var(--space-16); margin-top: var(--space-16); }
 .tf-dialog__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); margin-top: var(--space-24); }
 
+/* FullScreenDialog: the whole window, canvas ground, a plain fade (no scale: it is a place, not a card). */
+.tf-fullscreen { position: fixed; inset: 0; z-index: var(--z-modal); background: var(--canvas); transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-fullscreen[data-entering] { opacity: 0; }
+.tf-fullscreen[data-exiting] { opacity: 0; transition-duration: var(--duration-quick); }
+.tf-fullscreen__modal { height: 100%; outline: none; }
+.tf-fullscreen__dialog { position: relative; height: 100%; overflow-y: auto; outline: none; }
+@media (prefers-reduced-motion: reduce) { .tf-fullscreen { transition: none; } }
+
 /* Field for overlay forms. */
 .tf-dfield { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; flex: 1; }
 .tf-dfield__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
@@ -53,12 +61,12 @@
 .tf-stepdlg__pages { position: relative; transition: height var(--duration-fast) var(--ease-smooth-out); }
 .tf-stepdlg__page {
   position: absolute; inset: 0 0 auto 0; opacity: 0; pointer-events: none;
-  transform: translateX(var(--tf-page-from, 0)); filter: blur(var(--blur-medium));
-  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out);
+  transform: translateX(var(--tf-page-from, 0)); 
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out);
 }
 .tf-stepdlg__page[data-state='before'] { --tf-page-from: calc(var(--distance-base) * -1); }
 .tf-stepdlg__page[data-state='after'] { --tf-page-from: var(--distance-base); }
-.tf-stepdlg__page[data-state='current'] { opacity: 1; pointer-events: auto; transform: translateX(0); filter: blur(0); }
+.tf-stepdlg__page[data-state='current'] { opacity: 1; pointer-events: auto; transform: translateX(0); }
 .tf-stepdlg__content { margin-top: var(--space-16); }
 .tf-stepdlg__count { margin-right: auto; font: 500 13px/20px var(--font-sans); color: var(--text-tertiary); }
 

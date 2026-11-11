@@ -17,7 +17,7 @@
   .tf-linklist__btn[data-hovered] { background: var(--tf-lp-btn-hover, var(--surface)); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-btn-edge, var(--border)), var(--shadow-sm); }
   .tf-linkgrid__tile[data-hovered], .tf-linkcard[data-hovered] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-card-edge, var(--border)), var(--shadow-sm); }
 }
-.tf-linklist__btn[data-pressed], .tf-linkgrid__tile[data-pressed], .tf-linkcard[data-pressed] { --tf-ll-lift: 0px; --tf-ll-scale: var(--scale-medium); }
+.tf-linklist__btn[data-pressed], .tf-linkgrid__tile[data-pressed], .tf-linkcard[data-pressed] { --tf-ll-lift: 0px; }
 .tf-linklist__btn[data-focus-visible], .tf-linkgrid__tile[data-focus-visible], .tf-linkcard[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* A pill: icon | title centred | end slot, the icon and end slots the same width so the title stays centred. */

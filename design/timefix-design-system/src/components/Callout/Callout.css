@@ -1,8 +1,8 @@
-/* transitions.dev 21 accordion, collapse only: the 1fr track eases to 0fr while the content fades and blurs (250ms). */
+/* transitions.dev 21 accordion, collapse only: the 1fr track eases to 0fr while the content fades and fades (250ms). */
 .tf-callout-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
-.tf-callout-clip { min-height: 0; overflow: hidden; opacity: 1; filter: blur(0); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-callout-clip { min-height: 0; overflow: hidden; opacity: 1; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 .tf-callout-wrap[data-closing] { grid-template-rows: 0fr; }
-.tf-callout-wrap[data-closing] .tf-callout-clip { opacity: 0; filter: blur(var(--blur-small)); }
+.tf-callout-wrap[data-closing] .tf-callout-clip { opacity: 0; }
 
 .tf-callout {
   --tf-callout-bg: var(--accent-soft); --tf-callout-icon: var(--accent);

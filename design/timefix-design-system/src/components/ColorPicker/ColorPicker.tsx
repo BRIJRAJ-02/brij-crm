@@ -15,7 +15,7 @@ export const HUE_NAMES: Readonly<Record<Hue, string>> = {
 };
 const HUES = Object.keys(HUE_NAMES) as ReadonlyArray<Hue>;
 
-/** The check that appears in a chosen swatch (black or white on a brand colour, by its luminance, since a theme token can't know it): it swaps in from small and blurred (transitions.dev 09 icon swap). */
+/** The check that appears in a chosen swatch (black or white on a brand colour, by its luminance, since a theme token can't know it): it swaps in from small and faded (transitions.dev 09 icon swap). */
 function SwatchCheck({ ink }: { readonly ink?: string }) {
   return <span className="tf-swatch__check" style={ink ? { color: ink } : undefined} aria-hidden="true"><Check size={14} strokeWidth={2.5} /></span>;
 }
@@ -82,7 +82,7 @@ export interface AccentPickerProps {
   readonly swatches?: ReadonlyArray<AccentSwatch>;
 }
 
-/** A booking page's brand colour: a few curated swatches plus any hex, with a line saying how readable white text is on it. A hex that doesn't parse goes back to the last good colour on blur. */
+/** A booking page's brand colour: a few curated swatches plus any hex, with a line saying how readable white text is on it. A hex that doesn't parse goes back to the last good colour when you leave the field. */
 export function AccentPicker({ label, value, onChange, swatches = ACCENT_SWATCHES }: AccentPickerProps) {
   const color = parseColor(value);
   const ratio = contrastOnWhiteText(value);

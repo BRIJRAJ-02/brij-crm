@@ -6,6 +6,6 @@ NumberField takes a number you type or step: counts, money and percentages, with
 
 **States**: rest, hover, focus (accent edge and ring), invalid (red edge, message), disabled; a stepper turns off at its limit.
 
-**Interaction**: up and down arrows step by `step`, Page Up/Down by more, Home/End go to the limits, and the minus/plus buttons step on press. Typing is free; the value formats when you leave the field or press Enter. Each committed value plays transitions.dev number pop-in: only the digits that changed rise 8px out of a 2px blur over 500ms on the bounce curve, the last two 80ms apart. Digits are tabular, so the width never jumps.
+**Interaction**: up and down arrows step by `step`, Page Up/Down by more, Home/End go to the limits, and the minus/plus buttons step on press. Typing is free; the value formats when you leave the field or press Enter. Each committed value plays transitions.dev number pop-in: only the digits that changed rise 8px out of over 500ms on the bounce curve, the last two 80ms apart. Digits are tabular, so the width never jumps.
 
 **Replaces**: the Number and Currency editors, the Currency atom's formatting and NumberPop.

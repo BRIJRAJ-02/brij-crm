@@ -39,7 +39,7 @@ function DescriptionRow({ item, onChange }: { readonly item: DescriptionItem; re
   const [draft, setDraft] = useState(item.value ?? '');
   const [copied, setCopied] = useState(false);
   const valueRef = useRef<HTMLButtonElement>(null);
-  // Enter commits, then the field unmounts and blurs: only the first finish counts.
+  // Enter commits, then the field unmounts and loses focus: only the first finish counts.
   const live = useRef(false);
   const type = item.type ?? 'text';
   const editable = !item.isReadOnly && item.display === undefined && onChange !== undefined;

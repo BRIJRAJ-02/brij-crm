@@ -8,7 +8,7 @@ import './Pagination.css';
 const fmt = (n: number) => n.toLocaleString('en-US');
 
 /**
- * A number whose changed characters pop in from below with a blur (transitions.dev 02, number pop-in).
+ * A number whose changed characters pop in from below with a fade (transitions.dev 02, number pop-in).
  * The leading characters the old and new text share stay still; the last two ride in a stagger behind.
  */
 export function PopNumber({ value, format = fmt, animateOnMount = false, className }: { readonly value: number | string; readonly format?: (n: number) => string; readonly animateOnMount?: boolean; readonly className?: string }) {

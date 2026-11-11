@@ -6,6 +6,6 @@ ChoiceChips pick one or several visible options as pills: a meeting length, what
 
 **States**: rest (white, hairline), hover (wash, border darkens), pressed (0.97), selected (ink with a check), selected hover, focus-visible ring, disabled.
 
-**Interaction**: Tab reaches the group; arrows move between chips; Space or Enter toggles. In single mode one stays chosen once picked. A chosen chip turns ink while its check swaps in with transitions.dev icon swap (250ms, from 0.25 and a 2px blur), the slot opening as it comes; a chip with a hue dot swaps the dot for the check in place.
+**Interaction**: Tab reaches the group; arrows move between chips; Space or Enter toggles. In single mode one stays chosen once picked. A chosen chip turns ink while its check swaps in with transitions.dev icon swap (250ms, from 0.25, the slot opening as it comes; a chip with a hue dot swaps the dot for the check in place.
 
 **Replaces**: ChoiceChips and GuestChips' picking.

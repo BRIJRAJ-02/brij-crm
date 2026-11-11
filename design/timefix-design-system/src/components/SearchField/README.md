@@ -6,6 +6,6 @@ SearchField narrows a list or opens search: an outlined pill with a search icon,
 
 **States**: empty (placeholder, shortcut keycap), hover (border darkens), focus (accent edge and 2px accent-border ring; the keycap hides), with text (round clear button), disabled.
 
-**Interaction**: type to filter; Esc or the clear button empties it and keeps focus in the field. Clearing plays transitions.dev input clear with dissolve: the text falls 12px and blurs out over 400ms, the placeholder drops in from above, and a soft streak glows under each word (multiply in light, screen in dark). With reduced motion it clears at once. The shortcut focuses and selects the field from anywhere outside another input.
+**Interaction**: type to filter; Esc or the clear button empties it and keeps focus in the field. Clearing plays transitions.dev input clear with dissolve: the text falls 12px and fades out over 400ms, the placeholder drops in from above, and a soft streak glows under each word (multiply in light, screen in dark). With reduced motion it clears at once. The shortcut focuses and selects the field from anywhere outside another input.
 
 **Replaces**: Field `variant="search"`, the Toolbar and CommandPalette search triggers.

@@ -10,8 +10,8 @@
 }
 @media (hover: hover) {
   .tf-social__item:hover { --tf-social-shift: calc(var(--distance-micro) * -1); --tf-social-scale: calc(2 - var(--scale-large)); transition-timing-function: var(--ease-smooth-out); }
-  .tf-social__item:hover + .tf-social__item, .tf-social__item:has(+ .tf-social__item:hover) { --tf-social-shift: calc(var(--distance-micro) * -0.45); transition-timing-function: var(--ease-smooth-out); }
-  .tf-social__item:hover + .tf-social__item + .tf-social__item, .tf-social__item:has(+ .tf-social__item + .tf-social__item:hover) { --tf-social-shift: calc(var(--distance-micro) * -0.2); transition-timing-function: var(--ease-smooth-out); }
+  @media (hover: hover) and (pointer: fine) { .tf-social__item:hover + .tf-social__item, .tf-social__item:has(+ .tf-social__item:hover) { --tf-social-shift: calc(var(--distance-micro) * -0.45); transition-timing-function: var(--ease-smooth-out); } }
+  @media (hover: hover) and (pointer: fine) { .tf-social__item:hover + .tf-social__item + .tf-social__item, .tf-social__item:has(+ .tf-social__item + .tf-social__item:hover) { --tf-social-shift: calc(var(--distance-micro) * -0.2); transition-timing-function: var(--ease-smooth-out); } }
 }
 .tf-social__link {
   display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full);
@@ -19,16 +19,15 @@
   transition: background-color var(--duration-quick) var(--ease-out);
 }
 .tf-social__link[data-hovered] { background: var(--tf-lp-hover, var(--surface-hover)); }
-.tf-social__link[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-social__link[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* Editor */
 .tf-socialed { container-type: inline-size; display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
 .tf-socialed__add { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-menu) * 0.6) auto; gap: var(--space-8); align-items: start; }
 .tf-socialed__submit { margin-top: var(--space-24); }
-/* 09 icon swap: the detected mark swaps in from small and blurred. */
+/* 09 icon swap: the detected mark swaps in from small and faded. */
 .tf-socialed__detected { display: grid; place-items: center; animation: tf-socialed-swap var(--duration-fast) var(--ease-in-out) both; }
-@keyframes tf-socialed-swap { from { opacity: 0; transform: scale(0.25); filter: blur(var(--blur-small)); } }
+@keyframes tf-socialed-swap { from { opacity: 0; transform: scale(0.25); } }
 .tf-socialed__empty { margin: 0; padding: var(--space-12); border-radius: var(--radius-lg); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); text-align: center; }
 
 .tf-socialed__list { display: flex; flex-direction: column; gap: var(--space-4); outline: none; }
@@ -56,7 +55,7 @@
 .tf-socialed__slot { height: 0; border-radius: var(--radius-md); outline: none; transition: height var(--duration-fast) var(--ease-smooth-out); }
 .tf-socialed__slot[data-drop-target] { height: var(--size-row); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
 .tf-socialed__undo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin: 0; padding: 0 var(--space-4) 0 var(--space-12); min-height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); animation: tf-socialed-fade var(--duration-quick) var(--ease-in-out); }
-@keyframes tf-socialed-fade { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-socialed-fade { from { opacity: 0; } }
 
 @container (max-width: 30rem) {
   .tf-socialed__add { grid-template-columns: minmax(0, 1fr) auto; }

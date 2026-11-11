@@ -11,19 +11,19 @@
 .tf-hours__day { display: flex; align-items: center; min-height: var(--size-control); font-weight: 500; }
 .tf-hours__ranges { display: flex; flex-direction: column; min-width: 0; }
 .tf-hours__off { display: flex; align-items: center; min-height: var(--size-control); color: var(--text-tertiary); }
-/* The on/off swap: the box clips while its height glides; the incoming side rises 4px out of a 2px blur. */
+/* The on/off swap: the box clips while its height glides; the incoming side rises 4px out of. */
 .tf-hours__swap { overflow: clip; overflow-clip-margin: var(--space-4); }
 .tf-hours__layer { display: flex; flex-direction: column; }
 .tf-hours__layer.is-entering { animation: tf-hours-enter var(--duration-fast) var(--ease-smooth-out) both; }
-@keyframes tf-hours-enter { from { opacity: 0; transform: translateY(calc(var(--distance-micro) * -1)); filter: blur(var(--blur-small)); } }
+@keyframes tf-hours-enter { from { opacity: 0; transform: translateY(calc(var(--distance-micro) * -1)); } }
 .tf-hours__day { transition: color var(--duration-quick) var(--ease-out); }
 .tf-hours__row--off .tf-hours__day { color: var(--text-secondary); }
-@keyframes tf-hours-fade { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-hours-fade { from { opacity: 0; } }
 
 /* Each range is a grid track that opens from 0fr; leaving, it closes back (same 250ms both ways). */
-.tf-hours__range-wrap { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out), filter var(--duration-quick) var(--ease-smooth-out); }
+.tf-hours__range-wrap { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out); }
 .tf-hours__range-wrap.is-new { animation: tf-hours-grow var(--duration-fast) var(--ease-smooth-out); }
-.tf-hours__range-wrap.is-leaving { grid-template-rows: 0fr; opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
+.tf-hours__range-wrap.is-leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 @keyframes tf-hours-grow { from { grid-template-rows: 0fr; opacity: 0; } }
 /* The clipped track carries no padding (transitions.dev 21): spacing lives on the inner row, so 0fr really is zero. */
 .tf-hours__range-clip { min-height: 0; overflow: clip; overflow-clip-margin: var(--space-4); }

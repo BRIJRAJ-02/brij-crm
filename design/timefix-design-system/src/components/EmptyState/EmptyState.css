@@ -8,11 +8,11 @@
 .tf-empty__desc { margin: var(--space-4) 0 0; max-width: calc(var(--size-measure) / 2); color: var(--text-secondary); }
 .tf-empty__actions { display: flex; gap: var(--space-8); justify-content: center; margin-top: var(--space-16); }
 
-/* transitions.dev 18 texts reveal: each line rises 12px out of a 3px blur over 500ms, 40ms after the one before. */
+/* transitions.dev 18 texts reveal: each line rises 12px out of over 500ms, 40ms after the one before. */
 .tf-empty__line { animation: tf-empty-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
 .tf-empty__title { animation-delay: var(--duration-stagger); }
 .tf-empty__desc { animation-delay: calc(var(--duration-stagger) * 2); }
 .tf-empty__actions { animation-delay: calc(var(--duration-stagger) * 3); }
-@keyframes tf-empty-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-empty-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 
 @media (prefers-reduced-motion: reduce) { .tf-empty__line { animation: none; } }

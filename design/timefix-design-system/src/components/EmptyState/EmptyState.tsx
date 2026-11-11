@@ -19,7 +19,7 @@ export interface EmptyStateProps {
   readonly className?: string;
 }
 
-/** What a list, table or panel shows when it has nothing yet: an icon well, a title, one sentence and one action. The lines reveal in a 40ms stagger (12px rise, 3px blur, 500ms). */
+/** What a list, table or panel shows when it has nothing yet: an icon well, a title, one sentence and one action. The lines reveal in a 40ms stagger (12px rise, 500ms). */
 export function EmptyState({ icon, title, description, action, size = 'md', className }: EmptyStateProps) {
   return (
     <div className={cx('tf-empty', `tf-empty--${size}`, className)}>

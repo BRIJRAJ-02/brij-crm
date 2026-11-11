@@ -1,6 +1,7 @@
 // The "You" pages: Inbox (mentions, replies, assignments and booking notices; Done keeps the handled ones), Tasks (grouped by when
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
 import { useEffect, useState } from 'react';
+import { Link } from '../Link/Link.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { Plus, X } from 'lucide-react';
 import { SearchField } from '../SearchField/SearchField.tsx';
@@ -181,7 +182,7 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
           <Select label="Priority" value={priority} onChange={(v) => setPriority(v ?? 'normal')} items={[{ id: 'high', label: 'High' }, { id: 'normal', label: 'Normal' }, { id: 'low', label: 'Low' }]} />
         </div>
         <Select label="About" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="A person, company or deal" items={records} />
-        {rec && onOpenRecord && <button type="button" className="tf-rec__link tf-you__open" onClick={() => { const l = link(); if (!l) return; if (title.trim()) save(); else onClose(); onOpenRecord(l.object, l.id); }}>Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</button>}
+        {rec && onOpenRecord && <Link onPress={() => { const l = link(); if (!l) return; if (title.trim()) save(); else onClose(); onOpenRecord(l.object, l.id); }} className="tf-you__open">Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</Link>}
         {/* More records it's about (Attio links a task to several): the task shows on each one's page. */}
         {rec && <div className="tf-bkf__group">
           <Select label="Also about" searchable value={null} onChange={(v) => { if (v && v !== rec && !also.includes(v)) setAlso((a) => [...a, v]); }} placeholder="Add another record" items={records.filter((r) => r.id !== rec && !also.includes(r.id))} />
@@ -208,7 +209,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
     const on = note.record;
     return (
       <div className="tf-you tf-you--note">
-        {on && <button type="button" className="tf-rec__link" onClick={() => onOpenRecord(on.object, on.id)}>On {recordName(state, on).name}</button>}
+        {on && <Link onPress={() => onOpenRecord(on.object, on.id)}>On {recordName(state, on).name}</Link>}
         <NotePage note={{ id: note.id, title: note.title, body: note.body, doc: note.doc, author: note.author, updated: ago(note.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
           onBack={(l) => { setOpenId(undefined); if (isEmptyNote(l.title, l.body)) dispatch({ type: 'note/remove', id: note.id }); }}
           onDelete={() => { const n = note; setOpenId(undefined); dispatch({ type: 'note/remove', id: n.id }); toast({ message: 'Note deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'note/set', note: n }) } }); }}
@@ -227,7 +228,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
         <span className="tf-rec__spacer" />
         <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setPicking(true)}>New note</Button>
       </div>}
-      {all.length > 0 && notes.length === 0 ? <p className="tf-rec__muted">No notes match. <button type="button" className="tf-rec__link" onClick={() => setNoteQuery('')}>Clear search</button></p> : null}
+      {all.length > 0 && notes.length === 0 ? <p className="tf-rec__muted">No notes match. <Link onPress={() => setNoteQuery('')}>Clear search</Link></p> : null}
       {all.length === 0 ? <EmptyState icon={<NotebookPen size={20} strokeWidth={1.75} />} title="No notes yet" description="Notes sit on a person, company or deal." action={<Button size="sm" variant="primary" onPress={() => setPicking(true)}>New note</Button>} />
         : notes.length === 0 ? null : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: n.record ? `${ago(n.updated)} · ${recordName(state, n.record).name}` : ago(n.updated) }))} onOpen={setOpenId} isHeadless />}
       {picking && (

@@ -14,8 +14,8 @@
 
 /* The card: picture on top, words, then the switch and actions. */
 .tf-bpcard { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
-.tf-bpcard:hover { border-color: var(--border); box-shadow: var(--shadow-xs); }
-.tf-bpcard__picture { height: calc(var(--size-control-lg) * 3 + var(--space-4)); border-bottom: var(--border-width-hairline) solid var(--border-subtle); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) and (pointer: fine) { .tf-bpcard:hover { border-color: var(--border); box-shadow: var(--shadow-xs); } }
+.tf-bpcard__picture { height: calc(var(--size-control-lg) * 3 + var(--space-4)); border-bottom: var(--border-width-hairline) solid var(--border-subtle); transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 .tf-bpcard--hidden .tf-bpcard__picture { opacity: var(--opacity-disabled); filter: grayscale(1); }
 .tf-bpcard__body { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-12) var(--space-16) var(--space-8); min-width: 0; }
 .tf-bpcard__name { margin: 0; font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

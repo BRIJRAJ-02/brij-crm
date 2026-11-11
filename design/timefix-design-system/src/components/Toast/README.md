@@ -6,6 +6,6 @@ A toast confirms something that just happened, and offers Undo when it can be un
 
 **States**: one (ink pill, bottom centre), several (newest in front, two older ones peek above), spread (hovered or focused), leaving.
 
-**Interaction**: 5 seconds, 8 with an action; timers pause while the stack is hovered or focused. F6 reaches the region; Tab moves through Undo and ×. Arrivals follow transitions.dev banner stacking: the new pill rises 60px from 0.97 with a 2px blur over 350ms while older ones step back 12px, shrink 6% and fade; hover spreads them a pill apart. Dismissing drops the pill 16px on the 250ms clock. Success ticks draw in.
+**Interaction**: 5 seconds, 8 with an action; timers pause while the stack is hovered or focused. F6 reaches the region; Tab moves through Undo and ×. Arrivals follow transitions.dev banner stacking: the new pill rises 60px from 0.97 over 350ms while older ones step back 12px, shrink 6% and fade; hover spreads them a pill apart. Dismissing drops the pill 16px on the 250ms clock. Success ticks draw in.
 
 **Replaces**: ToastRegion, toasts (createToasts, useToasts).

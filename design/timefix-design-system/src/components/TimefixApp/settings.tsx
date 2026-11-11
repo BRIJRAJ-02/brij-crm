@@ -544,7 +544,7 @@ const CODES = ['4F7Q-29KD', 'M2XT-8LPA', 'Q9RB-3VCE', 'ZK6W-1HNY', 'T4GJ-7PUM', 
 /** Copies text; resolves false when the browser refuses, so the toast never lies. */
 async function copy(text: string): Promise<boolean> { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } }
 
-/** A text field that saves once, on blur or Enter, and only when the value really changed and isn't empty. */
+/** A text field that saves once, when you leave the field or press Enter, and only when the value really changed and isn't empty. */
 function CommitField({ label, value, onCommit, description, prefix, clean = (v) => v.trim(), check }: { readonly label: string; readonly value: string; readonly onCommit: (v: string) => void; readonly description?: string; readonly prefix?: string; readonly clean?: (v: string) => string; /** Why a value can't be used, or undefined. */ readonly check?: (v: string) => string | undefined }) {
   const [v, setV] = useState(value);
   const [was, setWas] = useState(value);

@@ -6,6 +6,6 @@ The top of a record page: who or what the record is, its tags, the actions on it
 
 **States**: read only name, renaming (filled input with the accent edge), starred, Ask AI open (button stays pressed), first and last record (the matching arrow disables).
 
-**Interaction**: press the name to rename; Enter saves, Esc cancels. The star swaps outline for filled through a 2px blur from .25 scale (icon swap, 250ms). The stage opens the status list. "7 of 70" rolls its digits as you move; K and J are shown on the arrows' tooltips.
+**Interaction**: press the name to rename; Enter saves, Esc cancels. The star swaps outline for filled through from .25 scale (icon swap, 250ms). The stage opens the status list. "7 of 70" rolls its digits as you move; K and J are shown on the arrows' tooltips.
 
 **Replaces**: RecordHeader.

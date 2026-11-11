@@ -75,7 +75,7 @@ export function SearchField({ label = 'Search', placeholder = 'Search', size = '
     return () => window.removeEventListener('keydown', onKey);
   }, [shortcut]);
 
-  // transitions.dev 13 input clear with dissolve: the old text falls 12px and blurs out, the placeholder drops in from above,
+  // transitions.dev 13 input clear with dissolve: the old text falls 12px and fades out, the placeholder drops in from above,
   // and a streak glows under each word (out and in 400ms on smooth-out, glow over 1000ms peaking at 15%).
   const dissolve = (old: string) => {
     const clip = clipRef.current, mirror = mirrorRef.current, ph = phRef.current, glow = glowRef.current, input = inputRef.current;
@@ -84,7 +84,6 @@ export function SearchField({ label = 'Search', placeholder = 'Search', size = '
     const slow = num(clip, '--duration-slow', 400);
     const total = slow * 2.5;
     const fly = num(clip, '--distance-medium', 12);
-    const blur = num(clip, '--blur-small', 2);
     const delay = num(clip, '--duration-stagger', 40);
     const peak = num(clip, '--tf-search-glow-peak', 0.42);
     const ease = bezier(getComputedStyle(clip).getPropertyValue('--ease-smooth-out'));
@@ -97,10 +96,8 @@ export function SearchField({ label = 'Search', placeholder = 'Search', size = '
       const e = ease(Math.min(1, el / slow));
       mirror.style.transform = `translateY(${(e * fly).toFixed(1)}px)`;
       mirror.style.opacity = (1 - e).toFixed(3);
-      mirror.style.filter = `blur(${(e * blur).toFixed(1)}px)`;
       ph.style.transform = `translateY(${(-fly + e * fly).toFixed(1)}px)`;
       ph.style.opacity = (0.9 + e * 0.1).toFixed(3);
-      ph.style.filter = `blur(${(blur - e * blur).toFixed(1)}px)`;
       let g = 0;
       if (el > delay) {
         const gp = Math.min(1, (el - delay) / Math.max(1, total - delay));

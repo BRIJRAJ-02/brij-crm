@@ -6,6 +6,6 @@ Pagination moves through a long list one page at a time and says where you are, 
 
 **States**: first page (previous disabled), middle (first, last, current and its neighbours, gaps as "…"), last page (next disabled), current page (white raised pill with a hairline), empty ("0 of 0", both arrows disabled).
 
-**Interaction**: every arrow and number is a tab stop; Enter or Space goes there. The range is a polite live region. When it changes, only the characters that changed rise 8px into place with a 2px blur over 500ms on the bounce curve, the last two 80ms and 160ms behind (transitions.dev 02, number pop-in); the shared leading characters stay still. Reduced motion swaps instantly.
+**Interaction**: every arrow and number is a tab stop; Enter or Space goes there. The range is a polite live region. When it changes, only the characters that changed rise 8px into place over 500ms on the bounce curve, the last two 80ms and 160ms behind (transitions.dev 02, number pop-in); the shared leading characters stay still. Reduced motion swaps instantly.
 
 **Replaces**: Pagination.

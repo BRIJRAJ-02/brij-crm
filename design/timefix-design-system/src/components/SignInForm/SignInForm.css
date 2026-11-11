@@ -24,7 +24,7 @@
   background: var(--success-soft); color: var(--success);
   animation: tf-signin-fade var(--duration-very-slow) var(--ease-smooth-out) both, tf-signin-bob var(--duration-very-slow) var(--ease-bounce) both;
 }
-@keyframes tf-signin-fade { from { opacity: 0; filter: blur(var(--blur-large)); } }
+@keyframes tf-signin-fade { from { opacity: 0; } }
 @keyframes tf-signin-bob { from { translate: 0 var(--distance-large); } }
 
 @media (prefers-reduced-motion: reduce) {

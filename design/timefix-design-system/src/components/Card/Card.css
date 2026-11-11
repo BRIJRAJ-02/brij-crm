@@ -51,7 +51,6 @@
   transition: border-color var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-tile[data-hovered] { border-color: var(--border-strong); background: var(--surface-hover); }
-.tf-tile[data-pressed] { transform: scale(var(--scale-tiny)); }
 .tf-tile[data-selected] { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--accent); }
 .tf-tile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-tile[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
@@ -59,16 +58,16 @@
 .tf-tile[data-selected] .tf-tile__icon { background: var(--accent-soft); color: var(--accent-text); }
 .tf-tile__title { font: 500 14px/20px var(--font-sans); color: var(--text); padding-right: var(--space-24); }
 .tf-tile__desc { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
-/* The check badge pops like transitions.dev 03: scale from 0 with a 2px blur on the bounce curve, 500ms in, 150ms out. */
+/* The check badge pops like transitions.dev 03: scale from 0 on the bounce curve, 500ms in, 150ms out. */
 .tf-tile__badge {
   position: absolute; top: var(--space-12); right: var(--space-12); display: grid; place-items: center; width: var(--space-20); height: var(--space-20);
   border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent);
-  transform: scale(0); opacity: 0; filter: blur(var(--blur-small));
-  transition: transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out), filter var(--duration-quick) var(--ease-smooth-out);
+  transform: scale(0); opacity: 0; 
+  transition: transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-tile[data-selected] .tf-tile__badge {
-  transform: scale(1); opacity: 1; filter: blur(0);
-  transition: transform var(--duration-very-slow) var(--ease-bounce), opacity var(--duration-slow) var(--ease-bounce), filter var(--duration-very-slow) var(--ease-bounce);
+  transform: scale(1); opacity: 1; 
+  transition: transform var(--duration-very-slow) var(--ease-bounce), opacity var(--duration-slow) var(--ease-bounce);
 }
 @media (prefers-reduced-motion: reduce) {
   .tf-card-link, .tf-card-link__chev, .tf-card-link__arm, .tf-stat__bar-fill, .tf-tile, .tf-tile__icon, .tf-tile__badge, .tf-tile[data-selected] .tf-tile__badge { transition: none; }

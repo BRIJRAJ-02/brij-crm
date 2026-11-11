@@ -34,7 +34,7 @@
 .tf-pickfield-help { display: block; margin-top: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
 .tf-pickfield-error { display: block; margin-top: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--danger); }
 
-/* PopoverSearch: a bare filter row across the top of the surface, over a hairline. */
+/* PopoverSearch: a bare over a hairline. */
 .tf-popover__search { display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-8); margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) var(--space-6); border-bottom: var(--border-width-hairline) solid var(--border-subtle); color: var(--text-tertiary); flex: none; }
 .tf-popover__search-input { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0 var(--space-4) 0 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
 .tf-popover__search-input::placeholder { color: var(--text-tertiary); }
@@ -47,7 +47,6 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-infotip[data-hovered], .tf-infotip[aria-expanded='true'] { background: var(--surface-hover); color: var(--text); }
-.tf-infotip[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-infotip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-infotip__pop { max-width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-12); border-radius: var(--radius-lg); }
 .tf-infotip__text { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text); }

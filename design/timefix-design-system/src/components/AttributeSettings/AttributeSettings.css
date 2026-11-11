@@ -75,7 +75,6 @@
   transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-attributesettings-typepick__card[data-hovered] { background: var(--surface-hover); }
-.tf-attributesettings-typepick__card[data-pressed] { transform: scale(var(--scale-small)); }
 .tf-attributesettings-typepick__card[data-selected] { background: var(--accent-soft); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); }
 .tf-attributesettings-typepick__card[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-attributesettings-typepick__card[data-disabled] { opacity: var(--opacity-disabled); cursor: default; }

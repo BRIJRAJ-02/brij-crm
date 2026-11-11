@@ -29,13 +29,13 @@
 
 /* Copy on hover (or focus): Copy swaps to Check (transitions.dev 09 icon swap). */
 .tf-dl__copy { justify-self: end; align-self: center; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
-.tf-dl__row:hover .tf-dl__copy, .tf-dl__row:focus-within .tf-dl__copy { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .tf-dl__row:hover .tf-dl__copy, .tf-dl__row:focus-within .tf-dl__copy { opacity: 1; } }
 @media (hover: none) { .tf-dl__copy { opacity: 1; } }
 .tf-dl__swap { display: inline-grid; }
 .tf-dl__swap svg {
-  grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
+  grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
 }
-.tf-dl__swap[data-state='a'] svg[data-icon='b'], .tf-dl__swap[data-state='b'] svg[data-icon='a'] { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+.tf-dl__swap[data-state='a'] svg[data-icon='b'], .tf-dl__swap[data-state='b'] svg[data-icon='a'] { opacity: 0; transform: scale(0.25); }
 .tf-dl__swap[data-state='b'] svg[data-icon='b'] { color: var(--success); }
 
 @media (prefers-reduced-motion: reduce) {

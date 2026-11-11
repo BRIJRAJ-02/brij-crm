@@ -15,7 +15,6 @@
 .tf-sentence__pill[data-hovered] { background: var(--surface-hover); }
 /* The pill stays pressed while its picker is open. */
 .tf-sentence__pill[data-pressed], .tf-sentence__pill[aria-expanded='true'] { background: var(--surface-selected); }
-.tf-sentence__pill[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-sentence__pill[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-sentence__pill--op { padding: 0 var(--space-8); background: transparent; color: var(--text-secondary); font-weight: 400; }
 .tf-sentence__pill--op[data-hovered] { background: var(--surface-hover); color: var(--text); }
@@ -34,12 +33,11 @@
   transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-sentence__conj[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-sentence__conj[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-sentence__conj[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-sentence__conj[data-disabled] { cursor: default; box-shadow: none; }
 
 .tf-sentence__remove { flex: none; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
-.tf-sentence__line:hover .tf-sentence__remove, .tf-sentence__line:focus-within .tf-sentence__remove { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .tf-sentence__line:hover .tf-sentence__remove, .tf-sentence__line:focus-within .tf-sentence__remove { opacity: 1; } }
 @media (hover: none) { .tf-sentence__remove { opacity: 1; } }
 .tf-sentence__pop { padding: var(--space-12); width: calc(var(--size-menu) + var(--space-20)); }
 

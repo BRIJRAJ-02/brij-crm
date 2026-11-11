@@ -9,7 +9,7 @@ import { Kbd } from '../Kbd/Kbd.tsx';
 import { AttributeField, AttributeIcon, type Attribute, type AttributeValue } from '../AttributeField/AttributeField.tsx';
 import './RecordPanel.css';
 
-/** Slides between two views of one surface (record to record, list to detail): the old one leaves 8px one way through a 3px blur while the new one arrives from the other (transitions.dev 08 page side-by-side). */
+/** Slides between two views of one surface (record to record, list to detail): the old one leaves 8px one way through while the new one arrives from the other (transitions.dev 08 page side-by-side). */
 export function PageSlide({ pageKey, direction = 'forward', children }: { readonly pageKey: string; readonly direction?: 'forward' | 'back'; readonly children: ReactNode }) {
   const last = useRef<{ key: string; node: ReactNode }>({ key: pageKey, node: children });
   const [leaving, setLeaving] = useState<{ key: string; node: ReactNode; dir: 'forward' | 'back' }>();
@@ -79,7 +79,7 @@ export interface RecordPanelProps {
   readonly children: ReactNode;
 }
 
-/** The peek drawer: a record opened beside the list without leaving it. It rises in with a short blur (transitions.dev 07 panel reveal), switches records with a side slide, and Esc closes it. */
+/** The peek drawer: a record opened beside the list without leaving it. It rises in with a short fade (transitions.dev 07 panel reveal), switches records with a side slide, and Esc closes it. */
 export function RecordPanel({ isOpen, onClose, objectName, recordKey, label, position, onExpand, children }: RecordPanelProps) {
   const ref = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(null);

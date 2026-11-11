@@ -22,12 +22,11 @@
 /* Star: a 28px round toggle; transitions.dev 09 icon swap between outline and filled. */
 .tf-rh__star { display: inline-grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); background: var(--surface); box-shadow: var(--shadow-xs); color: var(--text-secondary); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out); }
 .tf-rh__star[data-hovered] { background: var(--surface-hover); border-color: var(--border-strong); }
-.tf-rh__star[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-rh__star[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-rh__swap { display: inline-grid; }
-.tf-rh__swap > svg { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
+.tf-rh__swap > svg { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
 .tf-rh__swap-b { color: var(--dot-yellow); fill: currentColor; }
-.tf-rh__swap[data-state='a'] .tf-rh__swap-b, .tf-rh__swap[data-state='b'] .tf-rh__swap-a { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+.tf-rh__swap[data-state='a'] .tf-rh__swap-b, .tf-rh__swap[data-state='b'] .tf-rh__swap-a { opacity: 0; transform: scale(0.25); }
 
 @media (prefers-reduced-motion: reduce) {
   .tf-rh__name-btn, .tf-rh__star, .tf-rh__swap > svg { transition: none; }

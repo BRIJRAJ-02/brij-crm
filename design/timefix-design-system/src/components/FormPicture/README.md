@@ -6,6 +6,6 @@ FormPicture shows forms before anyone answers them: as cards on the forms list, 
 
 **States**: Draft (dashed circle), Live (green check), Closed (crossed circle); hovered card (edge and shadow), pressed; desktop and phone frames.
 
-**Interaction**: the picture is the real guest controls at half size, inert and hidden from assistive tech, so it always matches HostedForm. The card's name is its one link, stretched over the card; Enter opens it and a press eases the card to .99. A new response rolls the count's digits (NumberRoll). The device switch is a SegmentedControl whose pill slides (16); the frame eases to the new device's size (01 card resize) and the form fades in from a 2px blur (34). The form inside is live: it can be answered, checked and sent, laid out at the device's width and scaled to the column.
+**Interaction**: the picture is the real guest controls at half size, inert and hidden from assistive tech, so it always matches HostedForm. The card's name is its one link, stretched over the card; Enter opens it and a press eases the card to .99. A new response rolls the count's digits (NumberRoll). The device switch is a SegmentedControl whose pill slides (16); the frame eases to the new device's size (01 card resize) and the form fades in from (34). The form inside is live: it can be answered, checked and sent, laid out at the device's width and scaled to the column.
 
 **Replaces**: FormPicture, HostedFormPreview, FormLayoutThumbnail and the forms list's LinkCard picture.

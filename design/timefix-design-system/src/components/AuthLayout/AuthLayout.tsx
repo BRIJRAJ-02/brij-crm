@@ -59,7 +59,7 @@ export function AuthFooterLink({ href, onPress, children }: { readonly href?: st
   return <button type="button" className="tf-auth__link" onClick={onPress}>{children}</button>;
 }
 
-/** The page heading and its one line, revealed as staggered lines (transitions.dev 18: 12px rise, 3px blur, 500ms, 40ms apart). A new `title` replays it. */
+/** The page heading and its one line, revealed as staggered lines (transitions.dev 18: 12px rise, 500ms, 40ms apart). A new `title` replays it. */
 export function AuthHeading({ title, description, eyebrow, id }: { readonly title: string; readonly description?: ReactNode; readonly eyebrow?: ReactNode; readonly id?: string }) {
   return (
     <div className="tf-auth-head" key={title}>
@@ -80,7 +80,7 @@ export interface AuthPagesProps {
 }
 
 /**
- * Pages of one task that slide side by side (transitions.dev 08: 8px, 3px blur, 250ms) while the box eases to the new
+ * Pages of one task that slide side by side (transitions.dev 08: 8px, 250ms) while the box eases to the new
  * page's height (01 card resize). Every page stays mounted so the slide runs both ways; the hidden ones are inert.
  * On a change, focus moves to the new page's first field, else its heading.
  */

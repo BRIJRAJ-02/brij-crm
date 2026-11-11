@@ -6,6 +6,6 @@ The AI surface: Ask AI about a record, see it think, read the answer as it strea
 
 **States**: start (headline and suggestion chips), thinking, streaming (Stop replaces Ask), done (Copy, Save as note), stopped.
 
-**Interaction**: the start headline and sub-line rise 12px out of a 3px blur, 40ms apart, and the chips follow (texts reveal, 500ms). While it works, one shimmering status line swaps every 2 seconds, the old line rising out as the next rises in (thinking states). The answer resolves word by word through a 1px blur (streaming text, 350ms per word). Enter asks, Shift+Enter breaks a line. Copy swaps to a tick (icon swap).
+**Interaction**: the start headline and sub-line rise 12px out of, 40ms apart, and the chips follow (texts reveal, 500ms). While it works, one shimmering status line swaps every 2 seconds, the old line rising out as the next rises in (thinking states). The answer resolves word by word through (streaming text, 350ms per word). Enter asks, Shift+Enter breaks a line. Copy swaps to a tick (icon swap).
 
 **Replaces**: the AI attribute marks and the assistant panel bits.

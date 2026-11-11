@@ -161,7 +161,7 @@ export function OnSwitch({ page, onChange }: { readonly page: BookingPage; reado
   );
 }
 
-/** transitions.dev 08 page side-by-side: the page before waits 8px left, the one after 8px right, both blurred; the box eases
+/** transitions.dev 08 page side-by-side: the page before waits 8px left, the one after 8px right, both faded; the box eases
  *  to the showing page's height when the step changes (01 card resize) and follows it directly otherwise. */
 export function SlidePages({ step, pages }: { readonly step: number; readonly pages: ReadonlyArray<ReactNode> }) {
   const refs = useRef<Array<HTMLElement | null>>([]);

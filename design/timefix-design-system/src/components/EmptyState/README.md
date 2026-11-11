@@ -6,6 +6,6 @@ An empty state replaces a list, table or panel that has nothing in it yet, and s
 
 **States**: first run, no results (search-x icon, "No companies match “Umbrella”", Clear filters), small.
 
-**Interaction**: the icon sits in a 44px raised white well. When the state appears, its lines reveal with transitions.dev texts reveal: well, title, sentence and action each rise 12px out of a 3px blur over 500ms, 40ms apart, so the eye lands on the title first. Reduced motion shows them at once. The action is the only focusable element.
+**Interaction**: the icon sits in a 44px raised white well. When the state appears, its lines reveal with transitions.dev texts reveal: well, title, sentence and action each rise 12px out of over 500ms, 40ms apart, so the eye lands on the title first. Reduced motion shows them at once. The action is the only focusable element.
 
 **Replaces**: EmptyState, SpotIllustration, AvatarEmpty.

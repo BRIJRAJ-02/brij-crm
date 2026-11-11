@@ -8,8 +8,8 @@
 /* 08 page side-by-side between the list and the edit panel. */
 .tf-linked__side { display: grid; min-height: 0; overflow: clip; overflow-clip-margin: var(--space-6); }
 .tf-linked__pane {
-  grid-area: 1 / 1; display: flex; flex-direction: column; min-height: 0; opacity: 0; visibility: hidden; filter: blur(var(--blur-medium));
-  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast);
+  grid-area: 1 / 1; display: flex; flex-direction: column; min-height: 0; opacity: 0; visibility: hidden; 
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast);
 }
 .tf-linked__pane[data-pos='before'] { transform: translateX(calc(var(--distance-base) * -1)); }
 .tf-linked__pane[data-pos='after'] { transform: translateX(var(--distance-base)); }
@@ -20,7 +20,7 @@
 /* 21 accordion: the Custom colour opens under the looks. */
 .tf-linked__custom { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
 .tf-linked__custom[data-open] { grid-template-rows: 1fr; }
-.tf-linked__custom-clip { min-height: 0; overflow: hidden; opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__custom-clip { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 .tf-linked__custom[data-open] .tf-linked__custom-clip { opacity: 1; filter: none; padding-top: var(--space-12); }
 
 .tf-linked__profile {
@@ -61,10 +61,10 @@
 .tf-linked__slot { height: 0; border-radius: var(--radius-lg); outline: none; transition: height var(--duration-fast) var(--ease-smooth-out); }
 .tf-linked__slot[data-drop-target] { height: calc(var(--size-row) + var(--space-12)); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
 .tf-linked__undo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin: 0; padding: 0 var(--space-4) 0 var(--space-12); min-height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); animation: tf-linked-fade var(--duration-quick) var(--ease-in-out); }
-@keyframes tf-linked-fade { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-linked-fade { from { opacity: 0; } }
 /* 09 icon swap: the detected network's mark swaps in. */
 .tf-linked__detected { display: grid; place-items: center; animation: tf-linked-swap var(--duration-fast) var(--ease-in-out) both; }
-@keyframes tf-linked-swap { from { opacity: 0; transform: scale(0.25); filter: blur(var(--blur-small)); } }
+@keyframes tf-linked-swap { from { opacity: 0; transform: scale(0.25); } }
 
 /* The phone preview. */
 .tf-linked__preview { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); min-height: 0; }

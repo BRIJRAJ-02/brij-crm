@@ -1,11 +1,11 @@
 /* The Meetings list. Rows wash on hover and show their actions; a cancelled row folds in place to "Cancelled · Undo". */
 /* Fixed, readable columns: time 160 | title + place | invitee 240 | status 140 | actions; capped so a wide page does not spread a row. */
 .tf-meetings { --tf-meetings-cols: 136px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
-/* 14 skeleton reveal: skeleton and rows share one cell and cross-fade with a 2px blur over 400ms. */
-.tf-meetings__skeleton, .tf-meetings__content { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-slow) var(--ease-in-out), filter var(--duration-slow) var(--ease-in-out); }
-.tf-meetings__content { opacity: 0; filter: blur(var(--blur-small)); }
+/* 14 skeleton reveal: skeleton and rows share one cell and cross-fade over 400ms. */
+.tf-meetings__skeleton, .tf-meetings__content { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-slow) var(--ease-in-out); }
+.tf-meetings__content { opacity: 0; }
 .tf-meetings.is-revealed .tf-meetings__content { opacity: 1; filter: none; }
-.tf-meetings.is-revealed .tf-meetings__skeleton { opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
+.tf-meetings.is-revealed .tf-meetings__skeleton { opacity: 0; pointer-events: none; }
 .tf-meetings__skeleton { display: flex; flex-direction: column; }
 .tf-meetings__skel-head { display: flex; align-items: center; height: var(--size-control-lg); padding: 0 var(--space-8); }
 .tf-meetings__skel-row { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; height: calc(var(--size-row) + var(--space-16)); padding: 0 var(--space-8); }
@@ -26,9 +26,9 @@
 .tf-meetings__row + .tf-meetings__row::before { content: ''; position: absolute; top: 0; left: var(--space-8); right: var(--space-8); height: var(--border-width-hairline); background: var(--border-subtle); }
 
 .tf-meetings__row { position: relative; display: grid; min-height: calc(var(--size-row) + var(--space-16)); border-radius: var(--radius-lg); background: transparent; transition: height var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out); }
-.tf-meetings__row:hover, .tf-meetings__row:focus-within { background: var(--surface-hover); }
-.tf-meetings__row:hover::before, .tf-meetings__row:hover + .tf-meetings__row::before { opacity: 0; }
-.tf-meetings__main, .tf-meetings__strip { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover, .tf-meetings__row:focus-within { background: var(--surface-hover); } }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover::before, .tf-meetings__row:hover + .tf-meetings__row::before { opacity: 0; } }
+.tf-meetings__main, .tf-meetings__strip { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 .tf-meetings__main { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; padding: var(--space-8); }
 .tf-meetings--full { max-width: none; }
 .tf-meetings__time { display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
@@ -44,7 +44,7 @@
 .tf-meetings__status { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: var(--space-4); }
 /* Hover or focus reveals the row's actions; their space is always kept so nothing shifts. */
 .tf-meetings__actions { display: inline-flex; gap: var(--space-2); opacity: 0; transform: translateX(var(--distance-micro)); transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
-.tf-meetings__row:hover .tf-meetings__actions, .tf-meetings__row:focus-within .tf-meetings__actions, .tf-meetings__actions:has([aria-expanded='true']) { opacity: 1; transform: none; }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover .tf-meetings__actions, .tf-meetings__row:focus-within .tf-meetings__actions, .tf-meetings__actions:has([aria-expanded='true']) { opacity: 1; transform: none; } }
 .tf-meetings__decide { display: inline-flex; gap: var(--space-4); }
 @media (hover: none) { .tf-meetings__actions { opacity: 1; transform: none; } }
 .tf-meetings__row.is-past .tf-meetings__time, .tf-meetings__row.is-past .tf-meetings__title { color: var(--text-secondary); }
@@ -59,9 +59,9 @@
 @keyframes tf-meetings-wash { 0%, 40% { background-color: var(--accent-soft); } 100% { background-color: transparent; } }
 
 /* Cancelled in place: the row folds to 44 and the strip resolves where the eye already is. */
-.tf-meetings__strip { display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-8) 0 var(--space-12); opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
+.tf-meetings__strip { display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-8) 0 var(--space-12); opacity: 0; pointer-events: none; }
 .tf-meetings__row.is-strip { min-height: var(--size-row); height: var(--size-row); }
-.tf-meetings__row.is-strip .tf-meetings__main { opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
+.tf-meetings__row.is-strip .tf-meetings__main { opacity: 0; pointer-events: none; }
 .tf-meetings__row.is-strip .tf-meetings__strip { opacity: 1; filter: none; pointer-events: auto; }
 .tf-meetings__strip-icon { display: inline-flex; color: var(--tag-red-text); }
 .tf-meetings__strip-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
@@ -82,7 +82,7 @@
 .tf-meetings__reveal { animation: tf-meetings-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
 .tf-meetings__reveal + .tf-meetings__reveal { animation-delay: var(--duration-stagger); }
 .tf-meetings__reveal + .tf-meetings__reveal + .tf-meetings__reveal { animation-delay: calc(var(--duration-stagger) * 2); }
-@keyframes tf-meetings-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-meetings-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 
 /* Narrow: a tighter time column. */
 @container (max-width: 40rem) {
@@ -118,7 +118,6 @@
 .tf-meetcard__strip-action svg { transition: transform var(--duration-quick) var(--ease-out); }
 .tf-meetcard__strip-action[data-hovered] { background: var(--surface); }
 .tf-meetcard__strip-action[data-hovered] svg { transform: translateX(var(--distance-micro)); }
-.tf-meetcard__strip-action[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-meetcard__strip-action[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {

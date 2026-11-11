@@ -285,7 +285,7 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
     <div className="tf-linked-host">
     <div className="tf-linked">
       <div className="tf-linked__side">
-        {/* 08 page side-by-side: the list waits 8px left, the panel comes from 8px right, both through a 3px blur. */}
+        {/* 08 page side-by-side: the list waits 8px left, the panel comes from 8px right, both through. */}
         <div className="tf-linked__pane" data-pos={editing ? 'before' : 'current'} inert={editing !== undefined}>{list}</div>
         <div className="tf-linked__pane" data-pos={editing ? 'current' : 'after'} inert={editing === undefined}>
           {(shown === 'profile' || block) && (

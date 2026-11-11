@@ -8,7 +8,7 @@
 .tf-venue__stars { display: inline-flex; color: var(--text); }
 .tf-venue__muted { color: var(--text-secondary); font-weight: 400; }
 .tf-venue__link { color: var(--link); font-weight: 500; text-decoration: none; border-radius: var(--radius-xs); }
-.tf-venue__link:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .tf-venue__link:hover { text-decoration: underline; text-underline-offset: 3px; } }
 .tf-venue__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* Photos: one large on the left, two stacked on the right. */
@@ -34,7 +34,6 @@
 .tf-venue__items { display: flex; flex-direction: column; gap: var(--space-12); margin: 0; padding: 0; list-style: none; animation: tf-venue-in var(--duration-fast) var(--ease-smooth-out) both; }
 .tf-venue__item { display: flex; align-items: center; gap: var(--space-16); width: 100%; padding: var(--space-16) var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; outline: none; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
 .tf-venue__item[data-hovered] { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-.tf-venue__item[data-pressed] { transform: scale(var(--scale-tiny)); }
 .tf-venue__item[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-venue__item-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
 .tf-venue__item-name { font: 500 16px/24px var(--font-sans); }

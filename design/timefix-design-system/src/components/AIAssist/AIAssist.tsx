@@ -18,7 +18,7 @@ export function AITag({ children = 'AI enriched' }: { readonly children?: ReactN
   return <Tag size="sm" outline icon={<AIMark size={12} label="" />}>{children}</Tag>;
 }
 
-/** Model output that resolves word by word through opacity and a 1px blur as it arrives (transitions.dev 30 streaming text). Pass the text so far. */
+/** Model output that resolves word by word through opacity as it arrives (transitions.dev 30 streaming text). Pass the text so far. */
 export function StreamText({ text }: { readonly text: string }) {
   const words = text.split(/(\s+)/);
   return <span className="tf-stream">{words.map((w, i) => (/^\s+$/.test(w) ? w : <span key={i} className="tf-stream__w">{w}</span>))}</span>;

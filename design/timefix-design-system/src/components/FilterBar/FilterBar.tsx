@@ -101,7 +101,7 @@ export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSort
   latest.current = filters;
   const fieldOf = (id: string) => fields.find((f) => f.id === id);
 
-  // transitions.dev 13: chips fly down, blur and fade over a soft streak, then leave the list.
+  // transitions.dev 13: chips fly down and fade over a soft streak, then leave the list.
   const dissolve = (ids: ReadonlyArray<string>) => {
     setClearing((s) => new Set([...s, ...ids]));
     window.setTimeout(() => {

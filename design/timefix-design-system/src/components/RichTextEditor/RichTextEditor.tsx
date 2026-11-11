@@ -157,7 +157,7 @@ export interface RichTextEditorProps {
   readonly label: string;
   /** HTML or Tiptap JSON to start from. To show another document, remount with a new `key`. */
   readonly defaultContent?: string | JSONContent;
-  /** The document as Tiptap JSON, 300ms after typing pauses and on blur. Never HTML. */
+  /** The document as Tiptap JSON, 300ms after typing pauses and when the editor loses focus. Never HTML. */
   readonly onChange?: (doc: JSONContent) => void;
   readonly placeholder?: string;
   /** Members for `@`. Without them `@` stays plain text. */

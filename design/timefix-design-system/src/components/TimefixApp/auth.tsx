@@ -1,6 +1,7 @@
 // The doors into the app, as full screens: sign in (an emailed code, or Google), two factor, the first run, accepting an invitation,
 // asking to join by company email, a deleted workspace, and email preferences. Each ends back in the app or says what happens next.
 import { useEffect, useRef, useState } from 'react';
+import { Link } from '../Link/Link.tsx';
 import { ArrowLeft, Building2, MailCheck, RotateCcw } from 'lucide-react';
 import { AuthLayout, AuthHeading, AuthFooterLink } from '../AuthLayout/AuthLayout.tsx';
 import { SignInForm } from '../SignInForm/SignInForm.tsx';
@@ -9,6 +10,7 @@ import { Onboarding, nameFromEmail, type OnboardingValues } from '../Onboarding/
 import { useToast } from '../Toast/Toast.tsx';
 import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
 import { Button } from '../Button/Button.tsx';
+import { FullScreenDialog } from '../Dialog/Dialog.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { TextField } from '../Field/Field.tsx';
 
@@ -44,9 +46,7 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     // Focus lands in the door's own content first, not on its Back button.
     const first = el.querySelector<HTMLElement>(':scope > :not(.tf-door__back) :is([autofocus], input, button:not([disabled]))') ?? el.querySelector<HTMLElement>('[autofocus], input, button:not([disabled])'); (first ?? el).focus();
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); onDone(); } };
-    el.addEventListener('keydown', key);
-    return () => { el.removeEventListener('keydown', key); before?.focus(); };
+    return () => { before?.focus(); };
   }, [door]); // eslint-disable-line react-hooks/exhaustive-deps
   const back = <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={onDone}>Back to the app</Button>;
   // After the code: someone new sets up their own workspace; a workspace that asks for two factor gets it set up first; otherwise straight in.
@@ -55,9 +55,10 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
     if (ctx.twoFactor) onDoor('twofactor'); else if (ctx.require2fa) onDoor('setup2fa'); else onDone();
   };
   // First run: one flow in the split screen, from what you book to You're live, under the name of whoever just signed in.
-  if (door === 'welcome') return <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up your workspace" className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={signer ?? ctx.email} owner={signer ? nameFromEmail(signer) : ctx.name} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { if (v.kind === 'team') onFinish?.(v); onFormat?.(v.kind); onDone(); }} onSignOut={() => onDoor('signin')} /></div>;
+  if (door === 'welcome') return <FullScreenDialog aria-label="Set up your workspace" onOpenChange={(o) => { if (!o) onDone(); }}><div ref={ref} tabIndex={-1} className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={signer ?? ctx.email} owner={signer ? nameFromEmail(signer) : ctx.name} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { if (v.kind === 'team') onFinish?.(v); onFormat?.(v.kind); onDone(); }} onSignOut={() => onDoor('signin')} /></div></FullScreenDialog>;
   return (
-    <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={DOORS.find((d) => d.id === door)?.label ?? 'Timefix'} className="tf-door">
+    <FullScreenDialog aria-label={DOORS.find((d) => d.id === door)?.label ?? 'Timefix'} onOpenChange={(o) => { if (!o) onDone(); }}>
+    <div ref={ref} tabIndex={-1} className="tf-door">
       <div className="tf-door__back">{back}</div>
       {(door === 'signin' || door === 'expired') && (
         <AuthLayout aria-label="Sign in" footer={<span className="tf-rec__muted">Prototype: {ctx.email} (or any other email to start a new workspace), then the code 123456 · <AuthFooterLink onPress={() => onDoor('join')}>Joining your team?</AuthFooterLink> · <AuthFooterLink onPress={() => onDoor('welcome')}>New to Timefix?</AuthFooterLink></span>}>
@@ -89,7 +90,7 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
             <Avatar name={ctx.workspace} size={56} shape="square" />
             <AuthHeading title={`Join ${ctx.workspace}`} description="Sam Kim invited you as a Member. You’ll see the team’s records, pages and bookings." />
             <Button variant="primary" size="lg" onPress={() => { onJoin?.(); onDone(); }}>Join workspace</Button>
-            <span className="tf-rec__muted">Signed in as rahul@{ctx.slug}.com · <button type="button" className="tf-rec__link" onClick={() => onDoor('signin')}>Not you?</button></span>
+            <span className="tf-rec__muted">Signed in as rahul@{ctx.slug}.com · <Link onPress={() => onDoor('signin')}>Not you?</Link></span>
           </div>
         </AuthLayout>
       )}
@@ -97,6 +98,7 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
       {door === 'deleted' && <Deleted workspace={ctx.workspace} onRestore={() => { onRestore?.(); onDone(); }} onSignOut={() => onDoor('signin')} />}
       {door === 'email' && <EmailPrefs email={ctx.email} />}
     </div>
+    </FullScreenDialog>
   );
 }
 
@@ -113,7 +115,7 @@ function TwoFactor({ onDone, email }: { readonly onDone: () => void; readonly em
           : <CodeInput label="Six-digit code" autoFocus isInvalid={bad} errorMessage={bad ? 'That code didn’t match. Try the newest one.' : undefined} onChange={() => setBad(false)} onComplete={(v) => { if (v === '123456') onDone(); else setBad(true); }} description="Prototype: 123456" />}
         <Checkbox defaultSelected>Remember this device for 30 days</Checkbox>
         {backup && <Button variant="primary" size="lg" isDisabled={!BACKUP.test(code.trim())} onPress={() => { if (code.trim().replace('-', '') === '4F7Q29KD') onDone(); else setBad(true); }}>Continue</Button>}
-        <button type="button" className="tf-rec__link" onClick={() => { setBackup(!backup); setBad(false); setCode(''); }}>{backup ? 'Use the app instead' : 'Use a backup code'}</button>
+        <Link onPress={() => { setBackup(!backup); setBad(false); setCode(''); }}>{backup ? 'Use the app instead' : 'Use a backup code'}</Link>
       </div>
     </AuthLayout>
   );
@@ -179,7 +181,7 @@ function SetUpTwoFactor({ workspace, email, onDone, onSignOut }: { readonly work
         <span className="tf-rec__muted tf-num">Scan the code in Google Authenticator or 1Password, or type the key: JBSW Y3DP EHPK 3PXP</span>
         <TextField label="Six-digit code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(v) => setCode(v.replace(/[^\d]/g, '').slice(0, 6))} autoFocus description="Prototype: any six digits" />
         <Button variant="primary" size="lg" isDisabled={code.length !== 6} onPress={onDone}>Turn on and continue</Button>
-        <button type="button" className="tf-rec__link" onClick={onSignOut}>Sign out instead</button>
+        <Link onPress={onSignOut}>Sign out instead</Link>
       </div>
     </AuthLayout>
   );

@@ -44,7 +44,6 @@
   transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-file__btn[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-file__btn[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-file__btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,6 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
 import { copyText } from '../../lib/copy.ts';
+import { Link } from '../Link/Link.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Popover } from '../Popover/Popover.tsx';
@@ -116,7 +117,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
         <Callout key={firstClash.id} tone="warning" onDismiss={() => setDismissed((d) => new Set(d).add(firstClash.id))}>
           <span className="tf-bkf__banner">
             <span>{firstClash.title} on {formatDay(firstClash.start)} clashes with {firstClash.host === HOST ? 'your' : `${first(firstClash.host)}'s`} calendar{clashes.length > 1 ? `, and ${plural(clashes.length - 1, 'other meeting')} too` : ''}.</span>
-            <AriaButton className="tf-bkf__textbtn" onPress={() => props.onSeeConflict(firstClash)}>See conflict</AriaButton>
+            <Link onPress={() => props.onSeeConflict(firstClash)} weight="strong">See conflict</Link>
           </span>
         </Callout>
   );

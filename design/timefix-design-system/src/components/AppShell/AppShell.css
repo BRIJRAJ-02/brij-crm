@@ -52,19 +52,19 @@
 .tf-pagebody { flex: 1; min-height: 0; overflow: auto; padding: var(--space-24); }
 .tf-pagebody--flush { padding: 0; }
 
-/* Aside: the grid track opens, the panel slides in 30px with a 2px blur (transitions.dev 07, panel reveal: 400ms in, 350ms out). */
+/* Aside: the grid track opens, the panel slides in 30px (transitions.dev 07, panel reveal: 400ms in, 350ms out). */
 .tf-aside { display: grid; grid-template-columns: minmax(0, 1fr) 0; flex: 1; min-height: 0; transition: grid-template-columns var(--duration-medium) var(--ease-smooth-out); }
 .tf-aside[data-open] { grid-template-columns: minmax(0, 1fr) var(--size-panel); transition-duration: var(--duration-slow); }
 .tf-aside__content { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .tf-aside__panel { min-width: 0; min-height: 0; overflow: hidden; }
 .tf-aside__inner {
   width: var(--size-panel); height: 100%; overflow-y: auto; box-shadow: inset var(--border-width-hairline) 0 0 var(--border-subtle);
-  transform: translateX(var(--distance-large)); opacity: 0; filter: blur(var(--blur-small));
-  transition: transform var(--duration-medium) var(--ease-smooth-out), opacity var(--duration-medium) var(--ease-smooth-out), filter var(--duration-medium) var(--ease-smooth-out);
+  transform: translateX(var(--distance-large)); opacity: 0; 
+  transition: transform var(--duration-medium) var(--ease-smooth-out), opacity var(--duration-medium) var(--ease-smooth-out);
 }
 .tf-aside__panel[data-open] .tf-aside__inner {
-  transform: translateX(0); opacity: 1; filter: blur(0);
-  transition: transform var(--duration-slow) var(--ease-smooth-out), opacity var(--duration-slow) var(--ease-smooth-out), filter var(--duration-slow) var(--ease-smooth-out);
+  transform: translateX(0); opacity: 1; 
+  transition: transform var(--duration-slow) var(--ease-smooth-out), opacity var(--duration-slow) var(--ease-smooth-out);
 }
 @media (prefers-reduced-motion: reduce) { .tf-aside, .tf-aside__inner, .tf-aside__panel[data-open] .tf-aside__inner { transition: none; } }
 

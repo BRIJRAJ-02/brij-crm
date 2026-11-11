@@ -2,8 +2,8 @@
 .tf-tasks__list { margin: 0; padding: 0; list-style: none; }
 .tf-task { display: flex; align-items: center; gap: var(--space-12); min-height: calc(var(--size-row) + var(--space-8)); padding: 0 var(--space-8); border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
 .tf-tasks__list > li + li .tf-task { box-shadow: 0 calc(var(--border-width-hairline) * -1) 0 var(--border-subtle); }
-.tf-task:hover { background: var(--surface-subtle); }
-.tf-task:hover, .tf-tasks__list > li:hover + li .tf-task { box-shadow: none; }
+@media (hover: hover) and (pointer: fine) { .tf-task:hover { background: var(--surface-subtle); } }
+@media (hover: hover) and (pointer: fine) { .tf-task:hover, .tf-tasks__list > li:hover + li .tf-task { box-shadow: none; } }
 .tf-task__check { flex: 1; min-width: 0; }
 .tf-task__meta { display: inline-flex; align-items: center; gap: var(--space-16); flex: none; max-width: 55%; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
 /* Meta reads as quiet text, like Bookings' rows: the record with a small face, the day with an icon, red only when overdue. */
@@ -15,7 +15,7 @@
 .tf-task__due[data-overdue] svg { color: currentColor; }
 /* The open arrow shows on hover or keyboard focus; on touch it stays. */
 .tf-task__go { display: inline-grid; margin-left: calc(var(--space-8) * -1); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
-.tf-task:hover .tf-task__go, .tf-task:focus-within .tf-task__go { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .tf-task:hover .tf-task__go, .tf-task:focus-within .tf-task__go { opacity: 1; } }
 @media (hover: none) { .tf-task__go { opacity: 1; } }
 .tf-task.is-done .tf-task__meta { opacity: var(--opacity-disabled); }
 .tf-task__who { display: inline-grid; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; cursor: default; outline: none; }
@@ -24,7 +24,7 @@
 
 /* Add row: quiet until focused, then the filled input look. */
 .tf-tasks__add { display: flex; align-items: center; gap: var(--space-12); height: var(--size-row); padding: 0 var(--space-8); border-radius: var(--radius-md); color: var(--text-tertiary); box-shadow: inset 0 0 0 1px transparent; transition: background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out); }
-.tf-tasks__add:hover { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .tf-tasks__add:hover { background: var(--surface-hover); } }
 .tf-tasks__add:focus-within { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border); color: var(--text-secondary); }
 .tf-tasks__add-input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
 .tf-tasks__add-input::placeholder { color: var(--text-tertiary); }
@@ -38,8 +38,8 @@
 .tf-tasks__chev { color: var(--text-tertiary); transition: transform var(--duration-fast) var(--ease-smooth-out); }
 .tf-tasks__done[data-expanded] .tf-tasks__chev { transform: rotate(90deg); }
 .tf-tasks__done-panel { height: var(--disclosure-panel-height); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); }
-.tf-tasks__done-inner { opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
-.tf-tasks__done[data-expanded] .tf-tasks__done-inner { opacity: 1; filter: blur(0); }
+.tf-tasks__done-inner { opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-tasks__done[data-expanded] .tf-tasks__done-inner { opacity: 1; }
 
 .tf-tasks-demo { max-width: var(--size-measure); }
 

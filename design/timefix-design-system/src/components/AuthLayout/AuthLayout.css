@@ -26,7 +26,7 @@
   padding: 0; border: 0; background: none; color: var(--text-tertiary); font: 500 13px/20px var(--font-sans); text-decoration: none; cursor: pointer; border-radius: var(--radius-xs); outline: none;
   transition: color var(--duration-quick) var(--ease-out);
 }
-.tf-auth__link:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) { .tf-auth__link:hover { color: var(--text); } }
 .tf-auth__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* The preview half: soft canvas, a hairline between, the sketch centred in the half and as wide as it allows. */
@@ -49,19 +49,19 @@
 .tf-auth-head__desc strong { font-weight: 500; color: var(--text); }
 .tf-auth-head__line { animation: tf-auth-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
 .tf-auth-head__line--2 { animation-delay: var(--duration-stagger); }
-@keyframes tf-auth-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-auth-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 
 /* AuthPages: transitions.dev 08 page side-by-side, with 01 card resize on the box. */
 .tf-auth-pages { position: relative; }
 .tf-auth-pages[data-switching] { transition: height var(--duration-fast) var(--ease-smooth-out); }
 .tf-auth-pages__page {
   position: absolute; inset: 0 0 auto 0; opacity: 0; pointer-events: none;
-  transform: translateX(var(--tf-page-from, 0)); filter: blur(var(--blur-medium));
-  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out);
+  transform: translateX(var(--tf-page-from, 0)); 
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out);
 }
 .tf-auth-pages__page[data-state='before'] { --tf-page-from: calc(var(--distance-base) * -1); }
 .tf-auth-pages__page[data-state='after'] { --tf-page-from: var(--distance-base); }
-.tf-auth-pages__page[data-state='current'] { opacity: 1; pointer-events: auto; transform: translateX(0); filter: blur(0); }
+.tf-auth-pages__page[data-state='current'] { opacity: 1; pointer-events: auto; transform: translateX(0); }
 /* A page's heading reveals as it arrives, not while it waits off to the side. */
 .tf-auth-pages__page:not([data-state='current']) .tf-auth-head__line { animation: none; }
 

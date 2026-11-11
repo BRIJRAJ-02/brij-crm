@@ -29,7 +29,7 @@
 @media (hover: none) { .tf-inbox__actions { position: static; opacity: 1; pointer-events: auto; grid-column: 3 / -1; justify-self: end; } }
 .tf-inbox__dot-icon { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--accent); }
 .tf-inbox__undo { display: flex; align-items: center; gap: var(--space-6); height: var(--size-control); padding: 0 var(--space-12); margin: var(--space-2) 0; border-radius: var(--radius-md); background: var(--surface-subtle); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); animation: tf-inbox-undo var(--duration-fast) var(--ease-smooth-out); }
-@keyframes tf-inbox-undo { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-inbox-undo { from { opacity: 0; } }
 .tf-inbox__undo-btn { padding: 0 var(--space-4); border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); font: 500 13px/20px var(--font-sans); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; outline: none; }
 .tf-inbox__undo-btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
 
@@ -39,8 +39,8 @@
 .tf-bell__badge[data-open='true'] { animation: tf-badge-slide var(--duration-fast) var(--ease-smooth-out); }
 @keyframes tf-badge-slide { from { transform: translate(calc(var(--distance-base) * -1), var(--distance-medium)); } }
 .tf-bell__dot { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 var(--space-4); border-radius: var(--radius-full); background: var(--danger); color: var(--on-danger); box-shadow: 0 0 0 2px var(--surface); font: 500 11px/16px var(--font-sans); font-variant-numeric: tabular-nums;
-  transform: scale(1); opacity: 1; filter: blur(0); transition: transform var(--duration-very-slow) var(--ease-bounce), opacity var(--duration-slow) var(--ease-bounce), filter var(--duration-very-slow) var(--ease-bounce); }
-.tf-bell__badge[data-open='false'] .tf-bell__dot { transform: scale(0); opacity: 0; filter: blur(var(--blur-small)); transition: transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out), filter var(--duration-quick) var(--ease-smooth-out); }
+  transform: scale(1); opacity: 1; transition: transform var(--duration-very-slow) var(--ease-bounce), opacity var(--duration-slow) var(--ease-bounce); }
+.tf-bell__badge[data-open='false'] .tf-bell__dot { transform: scale(0); opacity: 0; transition: transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out); }
 .tf-bell-pop { width: 400px; max-width: calc(100vw - var(--space-32)); max-height: 480px; overflow: auto; padding: var(--space-8); border-radius: var(--radius-xl); background: var(--surface-raised); box-shadow: var(--shadow-md), 0 0 0 1px var(--border-subtle); outline: none; z-index: var(--z-popover); transform-origin: top right; }
 .tf-bell-pop[data-entering] { animation: tf-bell-pop-in var(--duration-fast) var(--ease-smooth-out); }
 .tf-bell-pop[data-exiting] { animation: tf-bell-pop-out var(--duration-quick) var(--ease-smooth-out) forwards; }

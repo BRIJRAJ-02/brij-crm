@@ -8,6 +8,6 @@ AuthLayout is the shell of every page before the app: sign in, verify, join, inv
 
 **States**: split, centred card, busy (skeleton lines, `aria-busy`), narrow (below about 760px the preview leaves and the task takes the window).
 
-**Interaction**: only the task takes focus; the preview is `inert` and hidden from assistive tech. `AuthHeading` reveals its title and line as staggered text (transitions.dev 18: 12px rise, 3px blur, 500ms, 40ms apart), and the preview's cards settle in one after another. `AuthPages` slides a task's pages side by side (08: 8px, 3px blur, 250ms) while the box eases to the new height (01 card resize), moves focus to the new page's first field or heading, and replays the heading's reveal on arrival.
+**Interaction**: only the task takes focus; the preview is `inert` and hidden from assistive tech. `AuthHeading` reveals its title and line as staggered text (transitions.dev 18: 12px rise, 500ms, 40ms apart), and the preview's cards settle in one after another. `AuthPages` slides a task's pages side by side (08: 8px, 250ms) while the box eases to the new height (01 card resize), moves focus to the new page's first field or heading, and replays the heading's reveal on arrival.
 
 **Replaces**: AuthLayout, PreviewLayout's sign in use.

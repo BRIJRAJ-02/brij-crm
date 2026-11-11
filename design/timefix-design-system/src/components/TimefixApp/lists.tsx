@@ -1,6 +1,7 @@
 // Lists: records of one object gathered for a purpose (a quarter's deals, people met at a conference), each entry with the list's own
 // stage, priority and next step. Table or board; add entries by search; remove with Undo; New list asks name, of what, pipeline or blank.
 import { useState } from 'react';
+import { Link } from '../Link/Link.tsx';
 import type { Selection } from 'react-aria-components';
 import { LayoutGrid, LayoutList, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import { DataGrid, type GridColumn } from '../DataGrid/DataGrid.tsx';
@@ -121,7 +122,7 @@ function AddEntries({ state, list, onClose, onAdd }: { readonly state: AppState;
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`Add to ${list.name}`} description={list.oncePerRecord ? 'Each record can be on this list once.' : undefined}
       actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={pick.length === 0} onPress={() => onAdd(pick)}>{pick.length > 1 ? `Add ${pick.length}` : 'Add'}</Button></>}>
       {items.length === 0 ? <p className="tf-rec__muted">Every one of your {OBJ_WORD[list.object]} is already on this list.</p> : <Select label="Find" searchable placeholder={`Search ${OBJ_WORD[list.object]}`} value={null} onChange={(v) => { if (v && !pick.includes(v)) setPick([...pick, v]); }} items={items.filter((i) => !pick.includes(i.id))} />}
-      {pick.length > 0 && <ul className="tf-list__picked">{pick.map((id) => <li key={id}>{items.find((i) => i.id === id)?.label}<button type="button" className="tf-rec__link" onClick={() => setPick(pick.filter((x) => x !== id))}>Remove</button></li>)}</ul>}
+      {pick.length > 0 && <ul className="tf-list__picked">{pick.map((id) => <li key={id}>{items.find((i) => i.id === id)?.label}<Link onPress={() => setPick(pick.filter((x) => x !== id))}>Remove</Link></li>)}</ul>}
     </Dialog>
   );
 }

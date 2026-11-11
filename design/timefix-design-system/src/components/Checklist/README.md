@@ -6,6 +6,6 @@ The checklist walks a new workspace through setup: a few steps, how far along it
 
 **States**: in progress ("2 of 6" and a thin blue bar), open step (icon in a grey round well, title, grey line, soft action), done step (round blue check that draws in, struck grey title, no action, listed after the open ones), all done ("You're all set" with Hide), folded.
 
-**Interaction**: the head is a disclosure button (Enter or Space folds the list); each action is in the tab order. Folding uses transitions.dev accordion on React Aria's measured height (250ms) while the content fades from a 2px blur and the chevron flips. A step that turns done glides to its new place over 350ms instead of jumping; the bar eases to the new share over 400ms.
+**Interaction**: the head is a disclosure button (Enter or Space folds the list); each action is in the tab order. Folding uses transitions.dev accordion on React Aria's measured height (250ms) while the content fades from and the chevron flips. A step that turns done glides to its new place over 350ms instead of jumping; the bar eases to the new share over 400ms.
 
 **Replaces**: SetupChecklist, ReadyPanel.

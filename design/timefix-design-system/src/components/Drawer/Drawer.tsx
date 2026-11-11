@@ -39,7 +39,7 @@ export interface DrawerProps extends DrawerSurfaceProps {
   readonly onOpenChange: (isOpen: boolean) => void;
 }
 
-/** A side sheet from the right over a scrim, for editing one thing without leaving the page. Panel reveal motion (400ms in, 350ms out, 2px blur). With unsaved changes, Esc, × and a click outside keep the drawer open and nudge Save and Discard. */
+/** A side sheet from the right over a scrim, for editing one thing without leaving the page. Panel reveal motion (400ms in, 350ms out. With unsaved changes, Esc, × and a click outside keep the drawer open and nudge Save and Discard. */
 export function Drawer({ isOpen, onOpenChange, width = 'md', ...surface }: DrawerProps) {
   const [nudge, setNudge] = useState(0);
   const dirty = surface.saveState === 'dirty' || surface.saveState === 'saving';

@@ -10,7 +10,7 @@
 .tf-avatar-group .tf-avatar + .tf-avatar { margin-left: calc(var(--tf-av) * -0.22); }
 @media (hover: hover) {
   .tf-avatar-group .tf-avatar:hover { translate: 0 -4px; scale: 1.05; z-index: 1; transition-timing-function: var(--ease-smooth-out); }
-  .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: 0 -1.8px; transition-timing-function: var(--ease-smooth-out); }
+  @media (hover: hover) and (pointer: fine) { .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: 0 -1.8px; transition-timing-function: var(--ease-smooth-out); } }
 }
 .tf-avatar--more { background: var(--surface-subtle); color: var(--text-secondary); font-weight: 500; }
 .tf-person { display: inline-flex; align-items: center; gap: var(--space-12); min-width: 0; }
@@ -18,4 +18,4 @@
 .tf-person[data-text-hidden] .tf-person__text { opacity: 0; pointer-events: none; }
 .tf-person__name { font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-person__sub { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { .tf-person__text { transition: none; } .tf-avatar-group .tf-avatar { transition: none; } .tf-avatar-group .tf-avatar:hover, .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: none; scale: none; } }
+@media (prefers-reduced-motion: reduce) { .tf-person__text { transition: none; } .tf-avatar-group .tf-avatar { transition: none; } @media (hover: hover) and (pointer: fine) { .tf-avatar-group .tf-avatar:hover, .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: none; scale: none; } } }

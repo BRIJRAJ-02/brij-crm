@@ -7,7 +7,6 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-btn svg { flex: none; }
-.tf-btn[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-btn[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 .tf-btn[data-pending] { cursor: progress; }
@@ -15,7 +14,6 @@
 .tf-btn--sm { --tf-btn-h: var(--size-control-sm); padding: 0 var(--space-12); font-size: 13px; gap: var(--space-4); }
 .tf-btn--lg { --tf-btn-h: var(--size-control-lg); padding: 0 var(--space-20); font-size: 15px; }
 .tf-btn--icon { width: var(--tf-btn-h); padding: 0; }
-.tf-btn--icon[data-pressed] { transform: scale(var(--scale-large)); }
 
 .tf-btn--primary { background: var(--primary); color: var(--on-primary); }
 .tf-btn--primary[data-hovered] { background: var(--primary-hover); }

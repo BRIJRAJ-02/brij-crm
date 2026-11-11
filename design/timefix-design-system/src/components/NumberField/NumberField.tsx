@@ -45,7 +45,7 @@ export function NumberField({ label, aside, description, errorMessage, placehold
   const prevText = useRef<string | undefined>(undefined);
   const [pop, setPop] = useState<{ readonly text: string; readonly same: number; readonly n: number } | undefined>();
 
-  // transitions.dev 02 number pop-in: once the value commits, the digits that changed rise 8px out of a 2px blur (500ms,
+  // transitions.dev 02 number pop-in: once the value commits, the digits that changed rise 8px out of (500ms,
   // bounce); the leading digits the old and new share stay still, and the last two follow 70ms apart.
   useLayoutEffect(() => {
     const text = inputRef.current?.value ?? '';

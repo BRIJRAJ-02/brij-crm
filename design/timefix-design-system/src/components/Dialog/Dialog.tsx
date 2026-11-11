@@ -60,6 +60,28 @@ export function DialogContent({ title, description, children, actions, showClose
   );
 }
 
+/** Props for FullScreenDialog. */
+export interface FullScreenDialogProps {
+  readonly isOpen?: boolean;
+  /** Esc asks to close (false): leave the task and go back. */
+  readonly onOpenChange?: (isOpen: boolean) => void;
+  readonly children: ReactNode;
+  /** Names the task for assistive tech ("Sign in", "Set up your workspace"). */
+  readonly 'aria-label': string;
+  readonly className?: string;
+}
+
+/** A task that takes the whole window (sign in, first run): a real modal (focus stays inside, the app behind is hidden from assistive tech, Esc leaves) with no scrim or card. Fades in over 250ms, out over 150ms. */
+export function FullScreenDialog({ isOpen = true, onOpenChange, children, 'aria-label': ariaLabel, className }: FullScreenDialogProps) {
+  return (
+    <ModalOverlay isOpen={isOpen} onOpenChange={onOpenChange} isDismissable={false} className="tf-fullscreen">
+      <Modal className="tf-fullscreen__modal">
+        <AriaDialog className={cx('tf-fullscreen__dialog', className)} aria-label={ariaLabel}>{children}</AriaDialog>
+      </Modal>
+    </ModalOverlay>
+  );
+}
+
 /** A dialog drawn in place, for documentation and previews. */
 export function DialogPreview({ size = 'sm', ...rest }: Pick<DialogProps, 'title' | 'description' | 'children' | 'actions' | 'size'>) {
   return <div className={cx('tf-dialog', `tf-dialog--${size}`, 'tf-dialog--static')}><div className="tf-dialog__dialog"><DialogContent {...rest} isStatic /></div></div>;
@@ -186,7 +208,7 @@ export interface StepDialogProps {
   readonly canContinue?: (stepIndex: number) => boolean;
 }
 
-/** A short wizard in one dialog: steps slide side by side (8px, 3px blur, 250ms) while the card's height eases to the new step's. Back on later steps, Cancel on the first. */
+/** A short wizard in one dialog: steps slide side by side (8px, 250ms) while the card's height eases to the new step's. Back on later steps, Cancel on the first. */
 export function StepDialog({ isOpen, onOpenChange, steps, onFinish, canContinue = () => true }: StepDialogProps) {
   const [index, setIndex] = useState(0);
   const close = (o: boolean) => { onOpenChange(o); if (!o) window.setTimeout(() => setIndex(0), 200); };

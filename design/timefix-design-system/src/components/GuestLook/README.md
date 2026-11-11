@@ -6,6 +6,6 @@ GuestLook is where an owner picks what their guest pages wear: one of four looks
 
 **States**: Calm, Ink, Warm and Night pick a whole look; changing the accent, face or appearance by hand makes it Custom, and Custom remembers the last look made by hand. Each tile carries a swatch drawn in its own look. The preview's Book button and picked day use the accent with white or ink text, whichever reads.
 
-**Interaction**: the looks are a radio group (arrows move, the chosen tile shows its check badge). Font and Appearance are segmented controls whose pill slides (tabs sliding). The preview's colours ease over 250ms and its caption's words cross-blur in place while their width eases (transitions.dev text swap soft).
+**Interaction**: the looks are a radio group (arrows move, the chosen tile shows its check badge). Font and Appearance are segmented controls whose pill slides (tabs sliding). The preview's colours ease over 250ms and its caption's words crossfade in place while their width eases (transitions.dev text swap soft).
 
 **Replaces**: GuestLook, MenuLookThumbnail and the look presets on the Design page.

@@ -13,12 +13,12 @@
   will-change: transform;
 }
 .tf-field--lg .tf-field__box { padding: 0 var(--space-16); border-radius: var(--radius-lg); }
-.tf-field__box:hover { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .tf-field__box:hover { background: var(--surface-hover); } }
 .tf-field__box:focus-within { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
 .tf-field[data-invalid] .tf-field__box, .tf-field__box[data-invalid] { border-color: var(--danger); transition-duration: var(--duration-medium); }
 .tf-field[data-invalid] .tf-field__box:focus-within, .tf-field__box[data-invalid]:focus-within { box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft); }
 .tf-field[data-disabled] .tf-field__box, .tf-field__box[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
-.tf-field[data-disabled] .tf-field__box:hover { background: var(--surface-subtle); }
+@media (hover: hover) and (pointer: fine) { .tf-field[data-disabled] .tf-field__box:hover { background: var(--surface-subtle); } }
 
 .tf-field__input {
   flex: 1; align-self: stretch; min-width: 0; padding: 0; border: 0; outline: none; background: transparent;

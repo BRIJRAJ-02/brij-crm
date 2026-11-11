@@ -1,5 +1,6 @@
 // Records of an object the owner made (Projects, Vendors): a table of its attributes, edited in place, with New, search, Export and Delete with Undo.
 import { useRef, useState } from 'react';
+import { Link } from '../Link/Link.tsx';
 import type { Selection } from 'react-aria-components';
 import { Boxes, Download, Plus, Settings2, Trash2 } from 'lucide-react';
 import { DataGrid, type GridColumn } from '../DataGrid/DataGrid.tsx';
@@ -65,7 +66,7 @@ export function CustomRecordsScreen({ state, dispatch, schema, onAttributes }: C
           <DataGrid label={schema.many} columns={columns} rows={rows} selectedKeys={selected} onSelectionChange={setSelected} summary={`${rows.length === records.length ? rows.length : `${rows.length} of ${records.length}`} ${rows.length === 1 ? one : many}`}
             onCellChange={canEdit ? (rid, col, v) => { const r = records.find((x) => x.id === rid); if (!r) return; if (col === 'name' && !v.trim()) { toast({ message: 'A name can’t be empty.', tone: 'danger' }); return; } set(col === 'name' ? { ...r, name: v.trim() } : { ...r, extra: { ...r.extra, [col]: v } }); toast({ message: 'Saved', tone: 'success', action: { label: 'Undo', onAction: () => { const now = (latest.current[schema.id] ?? []).find((x) => x.id === rid); if (now) set(col === 'name' ? { ...now, name: r.name } : { ...now, extra: { ...now.extra, [col]: r.extra[col] ?? '' } }); } } }); } : undefined}
             onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${one}`}
-            emptyState={<span>No {many} match. <button type="button" className="tf-rec__link" onClick={() => setQuery('')}>Clear search</button></span>} />
+            emptyState={<span>No {many} match. <Link onPress={() => setQuery('')}>Clear search</Link></span>} />
         </div>
       )}
       <BulkActionBar count={canEdit ? ids.length : 0} onClear={() => setSelected(new Set())}>

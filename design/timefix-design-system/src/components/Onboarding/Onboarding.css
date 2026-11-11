@@ -18,7 +18,7 @@
 .tf-onb__seg { position: relative; flex: 1; height: var(--space-12); padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-full); outline: none; }
 .tf-onb__seg::before { content: ''; position: absolute; inset: calc(50% - var(--space-2)) 0; border-radius: var(--radius-full); background: var(--border); transition: background-color var(--duration-fast) var(--ease-smooth-out); }
 .tf-onb__seg[data-state='done']::before, .tf-onb__seg[data-state='current']::before { background: var(--accent); }
-.tf-onb__seg[data-state='done']:hover::before { opacity: var(--opacity-disabled); }
+@media (hover: hover) and (pointer: fine) { .tf-onb__seg[data-state='done']:hover::before { opacity: var(--opacity-disabled); } }
 .tf-onb__seg:disabled { cursor: default; }
 .tf-onb__seg:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
@@ -29,7 +29,7 @@
   background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; outline: none;
   transition: border-color var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out);
 }
-.tf-onb__kind:hover { border-color: var(--border-strong); }
+@media (hover: hover) and (pointer: fine) { .tf-onb__kind:hover { border-color: var(--border-strong); } }
 .tf-onb__kind[aria-checked='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); background: var(--accent-soft); }
 .tf-onb__kind:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-onb__kind-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
@@ -110,5 +110,5 @@
 .tf-onb__live > .tf-btn:first-of-type { margin-inline-start: calc(var(--size-control) + var(--space-12)); }
 .tf-onb__live-text strong { color: var(--text); font: 500 15px/22px var(--font-sans); }
 .tf-onb--live { animation: tf-onb-live var(--duration-slow) var(--ease-smooth-out) both; }
-@keyframes tf-onb-live { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-onb-live { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
 @media (prefers-reduced-motion: reduce) { .tf-onb--live { animation: none; } }

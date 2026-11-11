@@ -6,6 +6,6 @@ Defines a relationship between two objects: the two object cards with the link b
 
 **States**: create (linked object Select, swap sides, three cardinality cards), edit (objects and cardinality fixed, names editable), self relationship (a reverse name that must differ), narrow (stacked).
 
-**Interaction**: the cardinality cards are a radio group (arrows choose); the diagram between the objects swaps in from 0.25 through a 2px blur (icon swap 09); the sentence underneath crossfades when it changes (TextSwap). Names follow the objects and cardinality (singular for one, plural for many) until someone types one.
+**Interaction**: the cardinality cards are a radio group (arrows choose); the diagram between the objects swaps in from 0.25 through (icon swap 09); the sentence underneath crossfades when it changes (TextSwap). Names follow the objects and cardinality (singular for one, plural for many) until someone types one.
 
 **Replaces**: RelationshipSettings.

@@ -7,9 +7,9 @@
 .tf-team__list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
 .tf-team__row { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-very-slow) var(--ease-out); }
 .tf-team__row + .tf-team__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-team__row:hover { background: var(--surface-hover); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); }
-/* A changed row gets a brief accent wash; a removed one collapses in place. */
-.tf-team__row--washed, .tf-team__row--washed:hover { background: var(--accent-soft); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); }
+@media (hover: hover) and (pointer: fine) { .tf-team__row:hover { background: var(--surface-hover); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); } }
+@media (hover: hover) and (pointer: fine) { /* A changed row gets a brief accent wash; a removed one collapses in place. */
+.tf-team__row--washed, .tf-team__row--washed:hover { background: var(--accent-soft); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); } }
 .tf-team__row--leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 .tf-team__clip { min-height: 0; overflow: hidden; }
 .tf-team__line {

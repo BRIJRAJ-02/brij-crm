@@ -1,6 +1,7 @@
 // A restaurant's Menu: its menus (Lunch, Dinner, Drinks) as sections of dishes, edited as a draft beside a live preview and published
 // when ready; Sold out and Hide apply at once. QR codes gives each table a code that opens timefix.com/<handle>/menu with the table set.
 import { copyText } from '../../lib/copy.ts';
+import { Link } from '../Link/Link.tsx';
 import { useRef, useState } from 'react';
 import { Copy, Download, Eye, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, UtensilsCrossed, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -108,7 +109,7 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
         <div className="tf-bkf-menued">
           <div className="tf-bkf-menued__main">
             {!menu.isLive && <Callout tone="warning" action={{ label: 'Show it', onPress: () => dispatch({ type: 'menu/show', id: menu.id, isLive: true }) }}>Guests can’t see {menu.name}.</Callout>}
-            <p className="tf-bkf__muted">{menu.serving ? `Served ${hm(menu.serving.start)} to ${hm(menu.serving.end)}` : 'Served all day'}{menu.tax ? ` · prices include ${menu.tax}% tax` : ''}{menu.service ? ` · ${menu.service}% service` : ''} · <button type="button" className="tf-bkf__textbtn" onClick={() => setSettings(true)}>Change</button></p>
+            <p className="tf-bkf__muted">{menu.serving ? `Served ${hm(menu.serving.start)} to ${hm(menu.serving.end)}` : 'Served all day'}{menu.tax ? ` · prices include ${menu.tax}% tax` : ''}{menu.service ? ` · ${menu.service}% service` : ''} · <Link onPress={() => setSettings(true)} weight="strong">Change</Link></p>
             {menu.sections.length === 0 && <EmptyState size="sm" icon={<UtensilsCrossed size={20} strokeWidth={1.75} />} title="Start with a section" description="Small plates, Mains, Desserts: then add dishes to each." action={<Button size="sm" variant="primary" onPress={() => setSection('new')}>Add section</Button>} />}
             {menu.sections.map((sec, si) => (
               <section key={sec.id} className="tf-bkf-card tf-bkf-menued__sec" aria-label={sec.name}>
@@ -323,7 +324,7 @@ function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns, on
                   onSelectionChange={(k) => patch({ allergens: [...d.allergens.filter((a) => !a.may), ...[...k].map((x) => ({ name: String(x), may: true }))] })} />
                 <div className="tf-bkf__group">
                   <ChoiceChips label="Add-ons" selectionMode="multiple" size="sm" selectedKeys={[...d.addOnIds]} items={book.addOns.map((a) => ({ id: a.id, label: a.name }))} onSelectionChange={(k) => patch({ addOnIds: [...k].map(String).slice(0, 6) })} />
-                  <button type="button" className="tf-bkf__textbtn" onClick={onAddOns}>Edit add-ons</button>
+                  <Link onPress={onAddOns} weight="strong">Edit add-ons</Link>
                 </div>
                 <NumberField label="Calories" aside="Optional" value={d.calories ?? 0} minValue={0} onChange={(n) => patch({ calories: Number.isFinite(n) && n > 0 ? n : undefined })} unit="kcal" />
               </div>

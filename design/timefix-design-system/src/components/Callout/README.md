@@ -6,6 +6,6 @@ A callout is a message that stays on the page until its cause is fixed or the us
 
 **States**: five tones, each with its own icon (bulb, info, check, triangle, alert) on a soft tinted ground; with or without title; with action; dismissing.
 
-**Interaction**: danger and warning are `role="alert"` and are announced; the others are `status`. The action and × are in the tab order. The action's arrow nudges 4px on hover. Dismiss collapses the callout with transitions.dev accordion motion (the row's height eases to zero while the content fades and blurs, 250ms), so the content below slides up instead of jumping, then `onDismiss` runs.
+**Interaction**: danger and warning are `role="alert"` and are announced; the others are `status`. The action and × are in the tab order. The action's arrow nudges 4px on hover. Dismiss collapses the callout with transitions.dev accordion motion (the row's height eases to zero while the content fades and fades, 250ms), so the content below slides up instead of jumping, then `onDismiss` runs.
 
 **Replaces**: Callout, CalloutBar.

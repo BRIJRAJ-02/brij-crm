@@ -10,12 +10,11 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-pager__page[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-pager__page[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-pager__page[aria-current='page'] { background: var(--surface-raised); border-color: var(--border); box-shadow: var(--shadow-xs); color: var(--text); }
 .tf-pager__page[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-pager__gap { min-width: var(--space-20); text-align: center; color: var(--text-tertiary); }
 
-/* transitions.dev 02: changed characters rise in from 8px below with a 2px blur over 500ms; the last two stagger. */
+/* transitions.dev 02: changed characters rise in from 8px below over 500ms; the last two stagger. */
 .tf-pop { display: inline-flex; font-variant-numeric: tabular-nums; }
 .tf-pop__group { display: inline-flex; align-items: baseline; }
 .tf-pop__digit { display: inline-block; white-space: pre; }
@@ -23,5 +22,5 @@
 .tf-pop__group.is-animating .tf-pop__digit[data-stagger='1'] { animation-delay: var(--duration-micro); }
 .tf-pop__group.is-animating .tf-pop__digit[data-stagger='2'] { animation-delay: calc(var(--duration-micro) * 2); }
 .tf-pop__group.is-animating .tf-pop__digit[data-same] { animation: none; }
-@keyframes tf-pop-in { 0% { transform: translateY(var(--distance-base)); opacity: 0; filter: blur(var(--blur-small)); } 100% { transform: translateY(0); opacity: 1; filter: blur(0); } }
+@keyframes tf-pop-in { 0% { transform: translateY(var(--distance-base)); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tf-pop__group .tf-pop__digit { animation: none; } .tf-pager__page { transition: none; } .tf-pager__page[data-pressed] { transform: none; } }

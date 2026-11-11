@@ -129,7 +129,7 @@ export interface GuestDrawerProps {
   readonly isReadOnly?: boolean;
 }
 
-/** One guest or client: how often they come, what the staff should know, and every visit. Saves as you go (notes on blur). */
+/** One guest or client: how often they come, what the staff should know, and every visit. Saves as you go (notes save when you leave the field). */
 export function GuestDrawer({ state, dispatch, guestKey: key, onClose, onBooking, isReadOnly = false }: GuestDrawerProps) {
   const { toast } = useToast();
   const restaurant = state.business?.kind === 'restaurant';

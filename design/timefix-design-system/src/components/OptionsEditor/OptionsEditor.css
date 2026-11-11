@@ -36,7 +36,6 @@
 .tf-optionseditor__swatch[data-hovered] { background: var(--surface-hover); }
 /* The trigger stays pressed while its colours are open. */
 .tf-optionseditor__swatch[data-pressed], .tf-optionseditor__swatch[aria-expanded='true'] { background: var(--surface-selected); }
-.tf-optionseditor__swatch[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-optionseditor__grip[data-focus-visible], .tf-optionseditor__swatch[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
 .tf-optionseditor__dot { width: var(--space-12); height: var(--space-12); border-radius: var(--radius-full); background: var(--tf-opt-hue); transition: background-color var(--duration-fast) var(--ease-in-out); }
 .tf-optionseditor__shape { display: inline-grid; color: var(--tf-opt-text); transition: color var(--duration-fast) var(--ease-in-out); }

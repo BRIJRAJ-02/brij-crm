@@ -1,6 +1,7 @@
 // Records: People, Companies, Deals. One toolbar (view, Table/Board, search, filters and sorts, Import/Export, New), a table you edit in place
 // or a board you drag, bulk actions with Undo, and a record panel beside the list. A changed view is a draft: Save it or Discard it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link } from '../Link/Link.tsx';
 import type { Selection, SortDescriptor } from 'react-aria-components';
 import { Building2, ChevronDown, CircleDollarSign, Copy, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, PenLine, Pencil, Plus, Star, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { DataGrid, type ColumnAction, type GridColumn, type GridRecord } from '../DataGrid/DataGrid.tsx';
@@ -304,7 +305,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
             onColumnAction={columnAction} columnActions={onAttributes && canEdit ? undefined : ['ascending', 'descending', 'filter', 'hide']}
             onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${def.one}`}
-            emptyState={q || view.filters.length ? <span>No {def.many} match. <button type="button" className="tf-rec__link" onClick={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</button></span> : <span>No {def.many} yet.{canEdit ? <>{' '}<button type="button" className="tf-rec__link" onClick={() => setCreating(true)}>Add one</button>{onImport ? <> or <button type="button" className="tf-rec__link" onClick={() => onImport()}>import a CSV</button></> : null}.</> : null}</span>} />
+            emptyState={q || view.filters.length ? <span>No {def.many} match. <Link onPress={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</Link></span> : <span>No {def.many} yet.{canEdit ? <>{' '}<Link onPress={() => setCreating(true)}>Add one</Link>{onImport ? <> or <Link onPress={() => onImport()}>import a CSV</Link></> : null}.</> : null}</span>} />
         </div>
       )}
       {peek !== undefined && !peekGone && <RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={def.one[0]?.toUpperCase() + def.one.slice(1)} recordKey={peek ?? ''}

@@ -33,7 +33,7 @@
   transition: transform var(--duration-medium) var(--ease-smooth-out); will-change: transform;
 }
 .tf-presence__item + .tf-presence__item { margin-left: calc(var(--tf-av) * -0.22); }
-.tf-presence__item:hover, .tf-presence__item:focus-visible { z-index: 1; }
+@media (hover: hover) and (pointer: fine) { .tf-presence__item:hover, .tf-presence__item:focus-visible { z-index: 1; } }
 .tf-presence__item:focus-visible { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring); }
 .tf-presence__more { place-items: center; width: var(--tf-av); height: var(--tf-av); background: var(--surface-subtle); color: var(--text-secondary); font: 500 12px/1 var(--font-sans); font-variant-numeric: tabular-nums; }
 

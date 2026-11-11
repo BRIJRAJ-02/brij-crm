@@ -44,7 +44,7 @@
 .tf-rte__mention-btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
 .tf-rte__person { display: flex; flex-direction: column; gap: var(--space-8); min-width: var(--size-menu); padding: var(--space-6); }
 .tf-rte__person-mail { font: 400 13px/20px var(--font-sans); color: var(--link); text-decoration: none; }
-.tf-rte__person-mail:hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .tf-rte__person-mail:hover { text-decoration: underline; } }
 
 /* The @ and / lists: rows drawn like a Menu's (36px, radius-md, wash on the active row), focus staying in the text. */
 .tf-rte__anchor { position: fixed; width: 0; height: 0; pointer-events: none; }
@@ -66,12 +66,11 @@
 .tf-rte__tool { display: inline-grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
   transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
 .tf-rte__tool[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-rte__tool[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-rte__tool[data-selected] { background: var(--surface-selected); color: var(--text); }
 .tf-rte__tool[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
 .tf-rte__sep { width: 1px; height: var(--space-16); margin: 0 var(--space-2); background: var(--border); }
 .tf-rte__link { display: flex; align-items: center; gap: var(--space-6); width: calc(var(--size-menu) + var(--space-32)); height: var(--size-control-sm); padding: 0 var(--space-4) 0 var(--space-8); animation: tf-rte-swap var(--duration-quick) var(--ease-in-out) both; }
-@keyframes tf-rte-swap { from { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-rte-swap { from { opacity: 0; } }
 .tf-rte__link-icon { flex: none; color: var(--text-tertiary); }
 .tf-rte__link-input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
 .tf-rte__link-input::placeholder { color: var(--text-tertiary); }

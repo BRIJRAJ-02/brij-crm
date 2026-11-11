@@ -1,6 +1,7 @@
 // Home: the day first. A greeting with what today holds, the setup checklist until it's hidden, today's meetings and your tasks
 // side by side, then four numbers. Everything links to where the work is.
 import { CalendarCheck, CalendarDays, CircleDollarSign, IdCard, Link2, Trophy, Upload, UserPlus, AlarmClock, Video, MapPin } from 'lucide-react';
+import { Link } from '../Link/Link.tsx';
 import { Card, CardLink, StatCard } from '../Card/Card.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Checklist, type ChecklistStep } from '../Checklist/Checklist.tsx';
@@ -113,7 +114,7 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
               dispatch({ type: 'task/set', task: { ...t, done } });
               toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } });
             }} onAdd={(title) => dispatch({ type: 'task/set', task: { id: `t-${Date.now().toString(36)}`, title, done: false, assignee: state.me, created: new Date() } })} />
-            {mine.filter((t) => !t.done).length > shown.length && <button type="button" className="tf-rec__link" onClick={() => onGo('tasks')}>{mine.filter((t) => !t.done).length - shown.length} more in Tasks</button>}
+            {mine.filter((t) => !t.done).length > shown.length && <Link onPress={() => onGo('tasks')}>{mine.filter((t) => !t.done).length - shown.length} more in Tasks</Link>}
           </>)}
         </Card>
       </div>}
@@ -143,7 +144,7 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
         </Card>}
         {!hidden.has('reports') && <Card title="Saved reports" action={<CardLink onPress={() => onReports?.()}>Insights</CardLink>}>
           {state.reports.length === 0 ? <div className="tf-home__none"><p>No reports yet.</p><Button size="sm" variant="secondary" onPress={() => onReports?.()}>Make one</Button></div>
-            : <ul className="tf-home__team">{state.reports.slice(0, 4).map((r) => <li key={r.id}><button type="button" className="tf-rec__link" onClick={() => onReports?.(r.id)}>{r.name}</button></li>)}</ul>}
+            : <ul className="tf-home__team">{state.reports.slice(0, 4).map((r) => <li key={r.id}><Link onPress={() => onReports?.(r.id)}>{r.name}</Link></li>)}</ul>}
         </Card>}
       </div>}
     </div>

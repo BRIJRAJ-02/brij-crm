@@ -24,6 +24,5 @@
   transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
 }
 .tf-crumbs__more[data-hovered] { background: var(--surface-hover); color: var(--text); }
-.tf-crumbs__more[data-pressed] { transform: scale(var(--scale-large)); }
 .tf-crumbs__more[aria-expanded='true'] { background: var(--surface-selected); color: var(--text); }
 @media (prefers-reduced-motion: reduce) { .tf-crumbs__link, .tf-crumbs__more { transition: none; } .tf-crumbs__more[data-pressed] { transform: none; } }
