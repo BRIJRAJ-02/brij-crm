@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { WeekHours } from '../HoursEditor/HoursEditor.tsx';
+import { contrastBetween, contrastOnWhiteText } from '../ColorPicker/ColorPicker.tsx';
 import { Button as AriaButton } from 'react-aria-components';
 import { BellRing, Check, Minus, Plus, Receipt, ShoppingBag, Trash2, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -40,8 +42,13 @@ export interface MenuDish {
 }
 /** A set of add-ons a dish offers: pick `min` to `max` (max 1 is "choose one"; min 1 or more is required). */
 export interface MenuAddOn { readonly id: string; readonly name: string; readonly min: number; readonly max: number; readonly options: ReadonlyArray<{ readonly name: string; readonly price: number }> }
-/** A section of a menu ("Small plates"), drawn as rows or a photo grid. */
-export interface MenuSection { readonly id: string; readonly name: string; readonly description?: string; readonly layout: 'list' | 'grid'; readonly dishIds: ReadonlyArray<string> }
+/** A sub section inside a section ("Small plates › From the grill"). */
+export interface MenuSub { readonly id: string; readonly name: string; readonly dishIds: ReadonlyArray<string> }
+/** A section of a menu ("Small plates"), drawn as rows or a photo grid, with optional sub sections and its own serving times. */
+export interface MenuSection { readonly id: string; readonly name: string; readonly description?: string; readonly layout: 'list' | 'grid'; readonly dishIds: ReadonlyArray<string>;
+  readonly subs?: ReadonlyArray<MenuSub>;
+  /** Served on these days and hours, inside the menu's own (a brunch section on weekends). Unset follows the menu. */
+  readonly days?: WeekHours }
 /** A menu ("Dinner", "Drinks"): its sections, when it's served, and how prices are added up. */
 export interface Menu {
   readonly id: string;
@@ -56,7 +63,57 @@ export interface Menu {
   readonly note?: string;
   /** Hidden menus aren't shown to guests. */
   readonly isLive: boolean;
+  /** Served on these days and hours; beats `serving`. Unset is every day at `serving`, or all day. */
+  readonly days?: WeekHours;
+  /** The places it is served at (ids of the business's places); unset is every place. */
+  readonly placeIds?: ReadonlyArray<string>;
 }
+
+/** How a business's guest menu looks: a preset, its three colours, a face, corners and a cover. */
+export interface MenuLook {
+  readonly preset: 'classic' | 'bistro' | 'garden' | 'night' | 'custom';
+  /** "#RRGGBB": the page, the words, the buttons and chosen chips. */
+  readonly ground: string; readonly text: string; readonly accent: string;
+  readonly font: 'sans' | 'mono';
+  readonly corners: 'sharp' | 'soft' | 'round';
+  readonly cover?: string;
+}
+/** The presets a menu can start from. */
+export const MENU_LOOKS: ReadonlyArray<{ readonly id: Exclude<MenuLook['preset'], 'custom'>; readonly title: string; readonly description: string; readonly look: Omit<MenuLook, 'preset' | 'cover'> }> = [
+  { id: 'classic', title: 'Classic', description: 'White, black, quiet', look: { ground: '#FFFFFF', text: '#111111', accent: '#111111', font: 'sans', corners: 'soft' } },
+  { id: 'bistro', title: 'Bistro', description: 'Cream and terracotta', look: { ground: '#FBF6EE', text: '#2B2118', accent: '#B4441F', font: 'sans', corners: 'round' } },
+  { id: 'garden', title: 'Garden', description: 'Sage and deep green', look: { ground: '#F2F5EE', text: '#1C2A1F', accent: '#2F6B3F', font: 'sans', corners: 'soft' } },
+  { id: 'night', title: 'Night', description: 'Dark, warm gold', look: { ground: '#16130F', text: '#F4EEE4', accent: '#E3B25B', font: 'mono', corners: 'sharp' } },
+];
+/** The contrast checks a look has to pass: words on the ground 4.5:1, buttons on the ground 3:1, words on buttons 4.5:1. */
+export function menuLookChecks(l: Pick<MenuLook, 'ground' | 'text' | 'accent'>): ReadonlyArray<{ readonly id: string; readonly label: string; readonly ratio: number; readonly need: number }> {
+  const onAccent = contrastOnWhiteText(l.accent) >= 4.5 ? '#FFFFFF' : '#111111';
+  return [
+    { id: 'text', label: 'Words on the background', ratio: contrastBetween(l.text, l.ground), need: 4.5 },
+    { id: 'accent', label: 'Buttons on the background', ratio: contrastBetween(l.accent, l.ground), need: 3 },
+    { id: 'on', label: 'Words on buttons', ratio: contrastBetween(onAccent, l.accent), need: 4.5 },
+  ];
+}
+/** The look as a theme and token overrides, spread on the page's root; everything inside follows through the tokens. */
+export function menuLookProps(l: MenuLook): { readonly 'data-theme': 'light' | 'dark'; readonly style: CSSProperties } {
+  const dark = contrastBetween('#000000', l.ground) < contrastBetween('#FFFFFF', l.ground);
+  const on = contrastOnWhiteText(l.accent) >= 4.5 ? '#FFFFFF' : '#111111';
+  const r = l.corners === 'sharp' ? 'var(--radius-xs)' : l.corners === 'round' ? 'var(--radius-xl)' : undefined;
+  return {
+    'data-theme': dark ? 'dark' : 'light',
+    style: {
+      '--surface': l.ground, '--surface-raised': l.ground, '--text': l.text, '--text-secondary': `color-mix(in srgb, ${l.text} 72%, ${l.ground})`, '--text-tertiary': `color-mix(in srgb, ${l.text} 55%, ${l.ground})`,
+      '--surface-subtle': `color-mix(in srgb, ${l.text} 6%, ${l.ground})`, '--surface-hover': `color-mix(in srgb, ${l.text} 9%, ${l.ground})`, '--border': `color-mix(in srgb, ${l.text} 16%, ${l.ground})`, '--border-subtle': `color-mix(in srgb, ${l.text} 10%, ${l.ground})`,
+      '--primary': l.accent, '--on-primary': on, '--primary-hover': `color-mix(in srgb, ${l.accent} 88%, black)`, '--accent': l.accent, '--on-accent': on,
+      '--font-sans': l.font === 'mono' ? 'var(--font-mono)' : undefined, '--radius-lg': r, '--radius-md': r, background: 'var(--surface)',
+    } as CSSProperties,
+  };
+}
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+/** Whether a week of hours is open on this day (0 is Sunday) at this minute. */
+export const openIn = (w: WeekHours, day: number, minute: number) => { const d = w[DAY_KEYS[day] ?? 'mon']; return Boolean(d?.on && d.ranges.some((r) => r.start <= minute && minute < r.end)); };
+/** The next opening on that day after this minute, if any. */
+const nextOpen = (w: WeekHours, day: number, minute: number) => { const d = w[DAY_KEYS[day] ?? 'mon']; return d?.on ? d.ranges.map((r) => r.start).filter((x) => x > minute).sort((a, b) => a - b)[0] : undefined; };
 
 /** What a guest picked: a dish, its size, its add-ons and how many. */
 export interface MenuPick { readonly key: string; readonly dishId: string; readonly size?: string; readonly options: ReadonlyArray<string>; readonly qty: number; readonly unit: number }
@@ -68,8 +125,8 @@ export function dishPrice(d: MenuDish, money: (n: number) => string = inr): stri
   if (d.sizes && d.sizes.length > 0) { const lo = Math.min(...d.sizes.map((s) => s.price)); return d.sizes.length > 1 ? `from ${money(lo)}` : money(lo); }
   return d.price !== undefined ? money(d.price) : d.priceNote ?? '';
 }
-/** Whether a menu is being served at this minute of the day. */
-export const servingNow = (m: Menu, minute: number) => !m.serving || (m.serving.start <= m.serving.end ? m.serving.start <= minute && minute < m.serving.end : minute >= m.serving.start || minute < m.serving.end);
+/** Whether a menu is being served at this minute of the day (and, with `days`, on this day; 0 is Sunday). */
+export const servingNow = (m: Menu, minute: number, day = new Date().getDay()) => (m.days ? openIn(m.days, day, minute) : !m.serving || (m.serving.start <= m.serving.end ? m.serving.start <= minute && minute < m.serving.end : minute >= m.serving.start || minute < m.serving.end));
 
 /** Props for MenuPage. */
 export interface MenuPageProps {
@@ -84,6 +141,10 @@ export interface MenuPageProps {
   readonly table?: string;
   /** Minutes into the day at the place, for "Served from 7 PM". */
   readonly now?: number;
+  /** The day at the place (0 is Sunday), for menus and sections served on some days. */
+  readonly day?: number;
+  /** How the page looks (MenuLook); left out, the app's own tokens. */
+  readonly look?: MenuLook;
   readonly money?: (n: number) => string;
   /** "Book a table" at the foot, when the place takes bookings. */
   readonly onBookTable?: () => void;
@@ -99,9 +160,11 @@ export interface MenuPageProps {
 
 /** A restaurant's public menu at timefix.com/<handle>/menu: a menu switcher, search and dietary filters, sections as pills, dishes with
  *  photos, a sheet for sizes and add-ons, and a selection to show the server. Nothing is ordered or sent from the page. */
-export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, money = inr, onBookTable, isPreview = false, foot, onRequest, requested = [] }: MenuPageProps) {
-  const live = menus.filter((m) => m.isLive && m.sections.some((s) => s.dishIds.length > 0));
-  const firstServing = live.find((m) => servingNow(m, now)) ?? live[0];
+export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, day = new Date().getDay(), look, money = inr, onBookTable, isPreview = false, foot, onRequest, requested = [] }: MenuPageProps) {
+  const themed = look ? menuLookProps(look) : undefined;
+  const coverSrc = cover ?? look?.cover;
+  const live = menus.filter((m) => m.isLive && m.sections.some((s) => s.dishIds.length > 0 || (s.subs ?? []).some((x) => x.dishIds.length > 0)));
+  const firstServing = live.find((m) => servingNow(m, now, day)) ?? live[0];
   const [menuId, setMenuId] = useState(firstServing?.id);
   const menu = live.find((m) => m.id === menuId) ?? firstServing;
   const [query, setQuery] = useState('');
@@ -114,14 +177,15 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
   const byId = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
   const q = query.trim().toLowerCase();
   const fits = (d: MenuDish) => (!q || d.name.toLowerCase().includes(q) || (d.description ?? '').toLowerCase().includes(q)) && [...diets].every((x) => d.diet.includes(x) || (x === 'vegetarian' && d.diet.includes('vegan')));
-  const sections = (menu?.sections ?? []).map((s) => ({ ...s, shown: s.dishIds.map((id) => byId.get(id)).filter((d): d is MenuDish => d !== undefined && fits(d)) })).filter((s) => s.shown.length > 0);
+  const pick = (ids: ReadonlyArray<string>) => ids.map((id) => byId.get(id)).filter((d): d is MenuDish => d !== undefined && fits(d));
+  const sections = (menu?.sections ?? []).map((s) => ({ ...s, shown: pick(s.dishIds), subsShown: (s.subs ?? []).map((x) => ({ ...x, shown: pick(x.dishIds) })).filter((x) => x.shown.length > 0) })).filter((s) => s.shown.length > 0 || s.subsShown.length > 0);
   const count = picks.reduce((n, p) => n + p.qty, 0);
   const subtotal = picks.reduce((n, p) => n + p.qty * p.unit, 0);
-  const used = new Set(sections.flatMap((s) => s.shown.flatMap((d) => d.allergens.map((a) => a.name))));
+  const used = new Set(sections.flatMap((s) => [...s.shown, ...s.subsShown.flatMap((x) => x.shown)].flatMap((d) => d.allergens.map((a) => a.name))));
 
   if (!menu) {
     return (
-      <div className="tf-menupage">
+      <div className="tf-menupage" {...themed}>
         <header className="tf-menupage__brand"><span className="tf-menupage__eyebrow">{venue}</span><h1 className="tf-menupage__title">The menu isn’t up right now</h1></header>
         <p className="tf-menupage__muted">Ask your server, or come back soon.</p>
         {onBookTable && <Button variant="secondary" onPress={onBookTable}>Book a table</Button>}
@@ -129,13 +193,34 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
       </div>
     );
   }
-  const serving = servingNow(menu, now);
+  const serving = servingNow(menu, now, day);
+  const from = menu.days ? nextOpen(menu.days, day, now) : menu.serving?.start;
   const add = (p: MenuPick) => setPicks((all) => { const same = all.find((x) => x.key === p.key); return same ? all.map((x) => (x.key === p.key ? { ...x, qty: Math.min(99, x.qty + p.qty) } : x)) : [...all, p]; });
   const step = (key: string, by: number) => setPicks((all) => all.map((x) => (x.key === key ? { ...x, qty: x.qty + by } : x)).filter((x) => x.qty > 0));
   const tax = menu.tax ?? 0; const service = menu.service ?? 0;
+  const dishList = (list: ReadonlyArray<MenuDish>, layout: 'list' | 'grid') => list.length === 0 ? null : (
+          <ul className={cx('tf-menupage__dishes', layout === 'grid' && 'is-grid')}>
+            {list.map((d) => (
+              <li key={d.id}>
+                <AriaButton className={cx('tf-menupage__dish', d.soldOut && 'is-out')} onPress={() => setOpen(d)} aria-label={`${d.name}, ${dishPrice(d, money)}${d.soldOut ? ', sold out' : ''}`}>
+                  {layout === 'grid' && d.photo && <img className="tf-menupage__photo" src={d.photo} alt="" />}
+                  <span className="tf-menupage__dish-text">
+                    <span className="tf-menupage__dish-name">{d.name}{d.popular && !d.soldOut && <span className="tf-menupage__badge">Popular</span>}{d.soldOut && <span className="tf-menupage__badge is-out">Sold out</span>}</span>
+                    {d.description && <span className="tf-menupage__desc">{d.description}</span>}
+                    <span className="tf-menupage__dish-foot">
+                      <span className="tf-menupage__price tf-num">{dishPrice(d, money)}</span>
+                      {d.diet.map((x) => <span key={x} className="tf-menupage__diet" title={DIETS[x].label} aria-label={DIETS[x].label}>{DIETS[x].short}</span>)}
+                    </span>
+                  </span>
+                  {layout === 'list' && d.photo && <img className="tf-menupage__thumb" src={d.photo} alt="" />}
+                </AriaButton>
+              </li>
+            ))}
+          </ul>
+  );
 
   return (
-    <div className={cx('tf-menupage', count > 0 && !isPreview && 'has-bag')}>
+    <div className={cx('tf-menupage', count > 0 && !isPreview && 'has-bag')} {...themed}>
       <header className="tf-menupage__top">
         <span className="tf-menupage__eyebrow">{venue}{table && <span className="tf-menupage__table">Table {table}</span>}</span>
         {live.length > 1 && (
@@ -152,10 +237,10 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
           })}
         </div>
       )}
-      {cover && <img className="tf-menupage__cover" src={cover} alt="" />}
+      {coverSrc && <img className="tf-menupage__cover" src={coverSrc} alt="" />}
       <div className="tf-menupage__brand">
         <h1 className="tf-menupage__title">{menu.name}</h1>
-        <p className="tf-menupage__muted">{!serving && menu.serving ? `Served from ${clock(menu.serving.start)} · ` : menu.serving ? `Until ${clock(menu.serving.end)} · ` : ''}{line}</p>
+        <p className="tf-menupage__muted">{!serving ? (from !== undefined ? `Served from ${clock(from)} · ` : 'Not served today · ') : menu.serving && !menu.days ? `Until ${clock(menu.serving.end)} · ` : ''}{line}</p>
       </div>
       <div className="tf-menupage__tools">
         <SearchField label="Search the menu" placeholder="Search dishes" size="sm" value={query} onChange={setQuery} />
@@ -179,24 +264,14 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
         <section key={s.id} className="tf-menupage__section" aria-labelledby={`tf-menupage-${s.id}`} ref={(el) => { sectionRefs.current[s.id] = el; }}>
           <h2 id={`tf-menupage-${s.id}`} className="tf-menupage__h2">{s.name}</h2>
           {s.description && <p className="tf-menupage__muted">{s.description}</p>}
-          <ul className={cx('tf-menupage__dishes', s.layout === 'grid' && 'is-grid')}>
-            {s.shown.map((d) => (
-              <li key={d.id}>
-                <AriaButton className={cx('tf-menupage__dish', d.soldOut && 'is-out')} onPress={() => setOpen(d)} aria-label={`${d.name}, ${dishPrice(d, money)}${d.soldOut ? ', sold out' : ''}`}>
-                  {s.layout === 'grid' && d.photo && <img className="tf-menupage__photo" src={d.photo} alt="" />}
-                  <span className="tf-menupage__dish-text">
-                    <span className="tf-menupage__dish-name">{d.name}{d.popular && !d.soldOut && <span className="tf-menupage__badge">Popular</span>}{d.soldOut && <span className="tf-menupage__badge is-out">Sold out</span>}</span>
-                    {d.description && <span className="tf-menupage__desc">{d.description}</span>}
-                    <span className="tf-menupage__dish-foot">
-                      <span className="tf-menupage__price tf-num">{dishPrice(d, money)}</span>
-                      {d.diet.map((x) => <span key={x} className="tf-menupage__diet" title={DIETS[x].label} aria-label={DIETS[x].label}>{DIETS[x].short}</span>)}
-                    </span>
-                  </span>
-                  {s.layout === 'list' && d.photo && <img className="tf-menupage__thumb" src={d.photo} alt="" />}
-                </AriaButton>
-              </li>
-            ))}
-          </ul>
+          {s.days && !openIn(s.days, day, now) && <p className="tf-menupage__muted">{nextOpen(s.days, day, now) !== undefined ? `Served from ${clock(nextOpen(s.days, day, now) ?? 0)}` : 'Not served today'}</p>}
+          {dishList(s.shown, s.layout)}
+          {s.subsShown.map((x) => (
+            <div key={x.id} className="tf-menupage__sub">
+              <h3 className="tf-menupage__h3">{x.name}</h3>
+              {dishList(x.shown, s.layout)}
+            </div>
+          ))}
         </section>
       ))}
       <footer className="tf-menupage__foot">

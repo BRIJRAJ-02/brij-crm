@@ -38,10 +38,10 @@ export function DragHandleDemo() {
       </div>
       <div className="tf-stack" style={{ gap: 'var(--space-12)', width: 'var(--size-menu)' }}>
         <p className="tf-demo-label" style={{ margin: 0 }}>Handle states</p>
-        <div className="tf-row"><DragHandle slot={null} reveal="always" label="Move Your name" /><span className="tf-muted" style={{ fontSize: 13 }}>Rest · hover it</span></div>
-        <div className="tf-row"><DragHandle slot={null} reveal="always" isLifted label="Move Work email" /><span className="tf-muted" style={{ fontSize: 13 }}>Lifted</span></div>
+        <div className="tf-row"><DragHandle reveal="always" label="Move Your name" /><span className="tf-muted" style={{ fontSize: 13 }}>Rest · hover it</span></div>
+        <div className="tf-row"><DragHandle reveal="always" isLifted label="Move Work email" /><span className="tf-muted" style={{ fontSize: 13 }}>Lifted</span></div>
         <p className="tf-faint" style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
-          Tab to a row, then to its grip. <Kbd>Enter</Kbd> lifts it, <Kbd>↑</Kbd> <Kbd>↓</Kbd> pick the slot, <Kbd>Enter</Kbd> drops, <Kbd>Esc</Kbd> cancels.
+          Tab to a row, then to its grip. <Kbd>Space</Kbd> lifts it, <Kbd>↑</Kbd> <Kbd>↓</Kbd> pick the slot, <Kbd>Space</Kbd> drops, <Kbd>Esc</Kbd> cancels.
         </p>
       </div>
     </div>

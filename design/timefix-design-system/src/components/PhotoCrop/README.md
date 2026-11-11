@@ -2,7 +2,7 @@ PhotoCrop is the one cropper every picture passes through before upload: drop or
 
 **Use it for**: profile photos, logos, booking and business page covers, staff and dish photos. **Don't use it for** files that are not pictures (FileDrop alone) or for editing a photo's colours.
 
-**The consumer provides**: `isOpen` and `onOpenChange`, `src` for a photo already there (left out, the dialog asks for one), `shape` when the use fixes it (`round` or `wide`; left out, a Round and Wide control shows), `title`, and `onSave(src, crop)`, which may return a promise. The crop is `{ x, y, zoom, aspect, shape }`, offsets as shares of the frame, so `CroppedImage` shows the same framing at any size.
+**The consumer provides**: `isOpen` and `onOpenChange`, `src` for a photo already there (left out, the dialog asks for one), `shape` when the use fixes it (`round`, `wide`, or `square` for a dish or product; left out, a Round and Wide control shows), `title`, and `onSave(src, crop)`, which may return a promise. The crop is `{ x, y, zoom, aspect, shape }`, offsets as shares of the frame, so `CroppedImage` shows the same framing at any size; `cropToDataUrl(src, crop, width)` draws it once into a finished picture for places that keep one (a dish photo).
 
 **States**: empty (the drop zone), placing, moving (thirds fade in), saving (Save spins), saved (Save becomes Saved with a drawn check, then the dialog closes), and a failed save that leaves it open.
 

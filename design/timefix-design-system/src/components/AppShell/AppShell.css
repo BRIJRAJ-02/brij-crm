@@ -93,3 +93,6 @@
 
 /* A phone tab bar lifts toasts above it (Toast reads --tf-toast-lift), so they never cover the tabs. */
 @media (max-width: 40rem) { body:has(.tf-shell--tabbed) { --tf-toast-lift: calc(var(--space-48) + env(safe-area-inset-bottom, 0px)); } }
+/* With a floating bar up as well, toasts clear both. */
+@media (max-width: 40rem) { body:has(.tf-shell--tabbed):has(.tf-floatbar-anchor:not([inert])) { --tf-toast-lift: calc(var(--space-48) + var(--size-control-lg) + var(--space-16) + env(safe-area-inset-bottom, 0px)); } }
+

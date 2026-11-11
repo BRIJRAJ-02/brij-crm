@@ -29,7 +29,8 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { lengthOf, placeLabel } from '../BookingsFlow/state.ts';
+import { lengthOf, placeLabel, unmanage, type BookingPage, type BookingsAction } from '../BookingsFlow/state.ts';
+import { StopManaging } from '../BookingsFlow/editor.tsx';
 import { dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type ObjectId, type Report, type SharedLinkPage } from './data.ts';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { TileGrid } from '../Card/Card.tsx';
@@ -201,10 +202,12 @@ export function QrSheet({ url, name, onClose }: { readonly url: string; readonly
 }
 
 /** One thing you share. */
-interface ShareRow { /** Me, Team or Company, on link pages. */ readonly kind?: string; /** Copy to another workspace. */ readonly copyWs?: () => void; readonly id: string; readonly icon: ReactNode; readonly name: string; readonly url: string; readonly live: boolean; readonly off?: string; readonly numbers: string; readonly open: () => void; readonly edit: () => void; readonly editLabel: string; /** One more thing its ⋯ menu offers ("Submissions"). */ readonly extra?: { readonly label: string; readonly run: () => void } }
+interface ShareRow { /** Me, Team or Company, on link pages. */ readonly kind?: string; /** A managed page's template: not bookable itself, so no Copy or Open, only its editor and its ending. */ readonly managed?: { readonly count: number; readonly onStop: () => void }; /** Copy to another workspace. */ readonly copyWs?: () => void; readonly id: string; readonly icon: ReactNode; readonly name: string; readonly url: string; readonly live: boolean; readonly off?: string; readonly numbers: string; readonly open: () => void; readonly edit: () => void; readonly editLabel: string; /** One more thing its ⋯ menu offers ("Submissions"). */ readonly extra?: { readonly label: string; readonly run: () => void } }
 
 /** Links: everything you share, in one place. */
-export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, onBookingPage, onBookings, onForm, onOpenPage, workspace = 'northwind', onCopy }: {
+export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, onBookingPage, onBookings, onForm, onOpenPage, workspace = 'northwind', onCopy, onBookingsAction, onEditBookingPage }: {
+  /** Bookings' own changes (a managed template's ending). */ readonly onBookingsAction?: (a: BookingsAction) => void;
+  /** Opens a booking page's editor. */ readonly onEditBookingPage?: (pageId: string) => void;
   readonly state: AppState; readonly bookings: BookingsState | undefined; readonly appsMenu: boolean;
   readonly onLinkPage: () => void; readonly onBookingPage: (pageId: string | undefined, scenario: 'book' | 'profile' | 'menu') => void; readonly onBookings: (tab: string) => void;
   readonly onForm: (id: string, visit: boolean) => void;
@@ -215,6 +218,7 @@ export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, o
 }) {
   const { toast } = useToast();
   const [making, setMaking] = useState(false);
+  const [stopping, setStopping] = useState<BookingPage>();
   const shared = (state.linkPages ?? []).filter((x) => (x.workspace ?? 'northwind') === workspace);
   const [qr, setQr] = useState<ShareRow>();
   const [query, setQuery] = useState('');
@@ -230,11 +234,14 @@ export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, o
       : [{ id: 'link', kind: 'Me', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: (() => { const blocks = (state.linkPage ?? STARTER).blocks; const n = blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length; const clicks = blocks.reduce((t, b) => t + (b.kind === 'link' ? b.clicks ?? 0 : 0), 0); return `${n} links${clicks ? ` · ${clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks} clicks` : ''}`; })(), open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page', copyWs: onCopy ? () => onCopy('me') : undefined },
         ...sharedRows] },
     ...(business && sharedRows.length ? [{ title: 'Link pages', rows: sharedRows }] : []),
-    { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
+    { title: 'Managed pages', rows: (bookings?.pages ?? []).filter((p) => p.hostMode === 'managed').map((p) => ({ id: p.id, icon: <Users {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}-…`, live: true,
+      numbers: 'One page you set up, with a copy for each person on it', open: () => (onEditBookingPage ?? (() => onBookings('pages')))(p.id), edit: () => (onEditBookingPage ?? (() => onBookings('pages')))(p.id), editLabel: 'Edit managed page',
+      managed: { count: p.hosts.length, onStop: () => setStopping(p) } })) },
+    { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).filter((p) => p.hostMode !== 'managed').map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
       numbers: `${upcoming(p.id)} upcoming`, open: () => onBookingPage(p.id, 'book'), edit: () => onBookings('pages'), editLabel: 'Edit in Bookings' })) },
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),
     { title: 'Forms', rows: state.forms.filter((f) => !f.workspace || f.workspace === workspace).map((f) => ({ id: f.id, icon: <FileText {...i16} />, name: f.name, url: `timefix.com/f/${f.slug}`, live: f.status === 'live', off: f.status === 'draft' ? 'Not published' : 'Paused', numbers: `${f.responses.filter((r) => !r.spam).length} responses`, open: () => onForm(f.id, true), edit: () => onForm(f.id, false), editLabel: 'Edit form' })) },
-    { title: 'Managed pages', rows: (state.teamPages ?? []).map((t) => ({ id: t.id, icon: <Users {...i16} />, name: t.name, url: `timefix.com/${t.handle}`, live: t.status === 'live', off: 'Invited', numbers: t.status === 'live' ? `${t.blocks} blocks` : 'Waiting for them', open: onLinkPage, edit: onLinkPage, editLabel: 'Team pages' })) },
+    { title: 'Team pages', rows: (state.teamPages ?? []).map((t) => ({ id: t.id, icon: <Users {...i16} />, name: t.name, url: `timefix.com/${t.handle}`, live: t.status === 'live', off: 'Invited', numbers: t.status === 'live' ? `${t.blocks} blocks` : 'Waiting for them', open: onLinkPage, edit: onLinkPage, editLabel: 'Team pages' })) },
   ].filter((g) => g.rows.length > 0);
   const q = query.trim().toLowerCase();
   const total = rows.reduce((n, g) => n + g.rows.length, 0);
@@ -258,8 +265,18 @@ export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, o
                 <span className="tf-links__icon" aria-hidden>{r.icon}</span>
                 <span className="tf-links__what"><strong>{r.name}</strong><span className="tf-rec__muted tf-num">{r.url}</span></span>
                 <span className="tf-links__nums tf-rec__muted tf-num">{r.numbers}</span>
-                <span className="tf-links__tags">{r.kind && <Tag size="sm" hue="purple">{r.kind}</Tag>}<Tag size="sm" hue={r.live ? 'green' : 'gray'}>{r.live ? 'Live' : r.off ?? 'Off'}</Tag></span>
-                <span className="tf-links__acts">
+                <span className="tf-links__tags">{r.managed ? <><Tag size="sm" hue="purple">Managed page</Tag><Tag size="sm" hue="gray">{r.managed.count === 1 ? '1 person' : `${r.managed.count} people`}</Tag></> : <>{r.kind && <Tag size="sm" hue="purple">{r.kind}</Tag>}<Tag size="sm" hue={r.live ? 'green' : 'gray'}>{r.live ? 'Live' : r.off ?? 'Off'}</Tag></>}</span>
+                {r.managed ? <span className="tf-links__acts">
+                  <Button size="sm" variant="ghost" icon={<Pencil {...i14} />} onPress={r.edit}>Edit</Button>
+                  <MenuTrigger>
+                    <IconButton size="sm" label={`More for ${r.name}`}><MoreHorizontal {...i14} /></IconButton>
+                    <Menu aria-label={`Actions for ${r.name}`} placement="bottom end" onAction={(k) => { if (k === 'edit') r.edit(); else if (k === 'stop') r.managed?.onStop(); }}>
+                      <MenuItem id="edit" icon={<Pencil {...i16} />}>{r.editLabel}</MenuItem>
+                      <MenuSeparator />
+                      <MenuItem id="stop" isDanger>Stop managing these pages…</MenuItem>
+                    </Menu>
+                  </MenuTrigger>
+                </span> : <span className="tf-links__acts">
                   <Button size="sm" variant="ghost" icon={<Copy {...i14} />} isDisabled={!r.live} onPress={() => copy(r)}>Copy</Button>
                   <IconButton size="sm" label={`Open ${r.name}`} onPress={r.open}><ExternalLink {...i14} /></IconButton>
                   <MenuTrigger>
@@ -275,12 +292,16 @@ export function LinksScreen({ state, dispatch, bookings, appsMenu, onLinkPage, o
                       {r.copyWs && <MenuItem id="copyws" icon={<Copy {...i16} />}>Copy to another workspace…</MenuItem>}
                     </Menu>
                   </MenuTrigger>
-                </span>
+                </span>}
               </li>
             ))}
           </ul>
         </section>
       ))}
+      {stopping && <StopManaging title={stopping.name} count={stopping.hosts.length} onClose={() => setStopping(undefined)} onConfirm={() => {
+        const p = stopping; const made = unmanage(p); const index = (bookings?.pages ?? []).findIndex((x) => x.id === p.id); setStopping(undefined);
+        onBookingsAction?.({ type: 'page/delete', id: p.id }); made.forEach((page) => onBookingsAction?.({ type: 'page/upsert', page }));
+        toast({ message: `${p.name} is no longer managed. Everyone’s own page is untouched.`, action: { label: 'Undo', onAction: () => { made.forEach((x) => onBookingsAction?.({ type: 'page/delete', id: x.id })); onBookingsAction?.({ type: 'page/restore', page: p, index }); } } }); }} />}
       {qr && <QrSheet url={qr.url} name={qr.name} onClose={() => setQr(undefined)} />}
       {making && dispatch && <NewLinkPage state={state} bookings={bookings} workspace={workspace} onClose={() => setMaking(false)} onMine={() => { setMaking(false); onLinkPage(); }}
         onMade={(p) => { dispatch({ type: 'linkpage/set', page: p }); setMaking(false); toast({ message: `Made /${p.handle}. It starts Private; turn on Live to share it.`, tone: 'success' }); onOpenPage?.(p.id); }} />}

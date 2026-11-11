@@ -3,7 +3,7 @@
 import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban, BellRing, Receipt } from 'lucide-react';
+import { CalendarDays, CalendarPlus, CalendarSearch, ChevronLeft, ChevronRight, Clock, GanttChart, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban, BellRing, Receipt } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -21,6 +21,11 @@ import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
+import { DialogTrigger } from 'react-aria-components';
+import { Popover } from '../Popover/Popover.tsx';
+import { Calendar } from '../DatePicker/DatePicker.tsx';
+import { CalendarDate } from '@internationalized/date';
+import { bizOf, currentBiz } from './biz.ts';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey, shiftsOn, pacingAt, coversAt, type TableBlock } from './state.ts';
@@ -60,8 +65,11 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   const now = new Date();
   const page = state.pages.find((p) => p.kind === 'table');
   const [offset, setOffset] = useState(0);
-  const [view, setView] = useState<'list' | 'floor'>('list');
-  const [editing, setEditing] = useState<BookedMeeting | 'new'>();
+  const [view, setView] = useState<'list' | 'timeline' | 'floor'>('list');
+  const [editing, setEditing] = useState<BookedMeeting | 'new' | { readonly at: number; readonly table: string }>();
+  const places = currentBiz(bizOf(state)).places;
+  const [placeId, setPlaceId] = useState(places[0]?.id ?? '');
+  const [picking, setPicking] = useState(false);
   const [seating, setSeating] = useState<SeatAsk>();
   const [blocking, setBlocking] = useState<Table>();
   const [waiting, setWaiting] = useState(false);
@@ -78,7 +86,11 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   const holdLate = page.holdLate ?? 15;
   const day = dayFrom(now, offset);
   const isToday = offset === 0;
-  const todays = state.meetings.filter((m) => m.pageId === page.id && m.start.toDateString() === day.toDateString());
+  // One place at a time: its tables (unplaced ones stand at the first place) and the bookings on them.
+  const firstPlace = places[0]?.id ?? '';
+  const placeTables = (state.tables ?? []).filter((t) => !t.archived && (t.placeId ?? firstPlace) === placeId);
+  const atPlace = (m: BookedMeeting) => ((m.tables ?? []).length === 0 ? placeId === firstPlace : (m.tables ?? []).some((id) => placeTables.some((t) => t.id === id)));
+  const todays = state.meetings.filter((m) => m.pageId === page.id && m.start.toDateString() === day.toDateString() && atPlace(m));
   const live = todays.filter((m) => m.status !== 'cancelled');
   const covers = live.filter((m) => m.status !== 'no-show').reduce((n, m) => n + (m.party ?? 0), 0);
   const seatedNow = live.filter((m) => stageOf(m, now, holdLate) === 'seated');
@@ -261,13 +273,21 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
     <div className="tf-bkf__meetings">
       <TabToolbar
         start={<>
-          <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={(k) => setView(k === 'floor' ? 'floor' : 'list')}
-            items={[{ id: 'list', label: 'List', icon: <LayoutList {...i14} /> }, { id: 'floor', label: 'Floor', icon: <LayoutGrid {...i14} /> }]} />
+          {places.length > 0 && <Select label="Place" isLabelHidden className="tf-bkf__whose" value={placeId} onChange={(v) => { if (v) setPlaceId(v); }} items={places.map((pl) => ({ id: pl.id, label: pl.name }))} />}
+          <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={(k) => setView(k === 'floor' ? 'floor' : k === 'timeline' ? 'timeline' : 'list')}
+            items={[{ id: 'list', label: 'List', icon: <LayoutList {...i14} /> }, { id: 'timeline', label: 'Timeline', icon: <GanttChart {...i14} /> }, { id: 'floor', label: 'Floor', icon: <LayoutGrid {...i14} /> }]} />
           <span className="tf-bkf__weeknav">
             <IconButton size="sm" label="Previous day" onPress={() => setOffset(offset - 1)}><ChevronLeft {...i16} /></IconButton>
             <span className="tf-num tf-bkf-res__day" aria-live="polite">{isToday ? `Today, ${formatDay(day)}` : offset === 1 ? `Tomorrow, ${formatDay(day)}` : formatLongDay(day)}</span>
             <IconButton size="sm" label="Next day" onPress={() => setOffset(offset + 1)}><ChevronRight {...i16} /></IconButton>
             {!isToday && <Button size="sm" variant="ghost" onPress={() => setOffset(0)}>Today</Button>}
+            <DialogTrigger isOpen={picking} onOpenChange={setPicking}>
+              <IconButton size="sm" label="Pick a date"><CalendarSearch {...i16} /></IconButton>
+              <Popover label="Pick a date" placement="bottom start">
+                <Calendar aria-label="Pick a date" value={new CalendarDate(day.getFullYear(), day.getMonth() + 1, day.getDate())}
+                  onChange={(v) => { const d = new Date(v.year, v.month - 1, v.day); setOffset(Math.round((d.getTime() - dayFrom(now, 0).getTime()) / 86_400_000)); setPicking(false); }} />
+              </Popover>
+            </DialogTrigger>
           </span>
         </>}
         action={<span className="tf-bkf-res__actions">
@@ -293,14 +313,16 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
             })}
           </ul>
         )}
-        {view === 'list' ? listView : <FloorView onNew={() => setEditing('new')} state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
+        {view === 'list' ? listView : view === 'timeline' ? <DayTimeline tables={placeTables} meetings={todays.filter((m) => m.status !== 'cancelled')} services={services} isToday={isToday} now={now} place={places.find((pl) => pl.id === placeId)?.name ?? ''}
+          onOpen={(m) => setEditing(m)} onPick={(at, table) => setEditing({ at, table })} /> : <FloorView onNew={() => setEditing('new')} state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
           onSeat={seat} onFinish={finish} onOpen={setEditing} onWalkIn={(t) => setSeating({ kind: 'walkin', table: t })} onBlock={setBlocking}
           onUnblock={(b) => { dispatch({ type: 'tableblock/remove', id: b.id }); toast({ message: `${state.tables?.find((t) => t.id === b.tableId)?.name ?? 'Table'} is open again`, action: { label: 'Undo', onAction: () => dispatch({ type: 'tableblock/add', block: b }) } }); }} />}
         {blocking && <BlockTableDialog state={state} table={blocking} day={day} now={isToday ? now : undefined} onClose={() => setBlocking(undefined)}
           onBlock={(b) => { dispatch({ type: 'tableblock/add', block: b }); setBlocking(undefined); toast({ message: `${blocking.name} blocked ${formatClockRange(b.start, b.end)}`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'tableblock/remove', id: b.id }) } }); }} />}
         {waitRail}
       </div>
-      {editing && <ReservationDialog key={editing === 'new' ? 'new' : editing.id} state={state} page={page} day={day} meeting={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)}
+      {editing && <ReservationDialog key={editing === 'new' ? 'new' : 'id' in editing ? editing.id : `at-${editing.at}-${editing.table}`} state={state} page={page} day={day}
+        meeting={editing === 'new' || !('id' in editing) ? undefined : editing} startAt={editing !== 'new' && !('id' in editing) ? editing.at : undefined} tableId={editing !== 'new' && !('id' in editing) ? editing.table : undefined} onClose={() => setEditing(undefined)}
         onSave={(m, isNew) => {
           if (isNew) { dispatch({ type: 'meeting/add', meeting: m }); toast({ message: `${first(m.invitee.name)}, ${plural(m.party ?? 2, 'guest')} at ${formatClock(minutesOf(m.start))} · ${tableName(m.tables)}`, tone: 'success' }); }
           else { update(m, 'Reservation changed'); toast({ message: 'Reservation saved', tone: 'success' }); }
@@ -545,8 +567,10 @@ function WaitDialog({ onClose, onAdd }: { readonly onClose: () => void; readonly
 }
 
 /** New reservation, or open one: the guest, party, when, which table, and what the floor should know. */
-function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
+function ReservationDialog({ state, page, day, meeting, startAt, tableId, onClose, onSave }: {
   readonly state: BookingsState; readonly page: BookingPage; readonly day: Date; readonly meeting?: BookedMeeting; readonly onClose: () => void; readonly onSave: (m: BookedMeeting, isNew: boolean) => void;
+  /** A new booking picked on the timeline: its time and table. */
+  readonly startAt?: number; readonly tableId?: string;
 }) {
   const now = new Date();
   const [name, setName] = useState(meeting?.invitee.name ?? '');
@@ -554,8 +578,8 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
   const [email, setEmail] = useState(meeting?.invitee.email ?? '');
   const [party, setParty] = useState(meeting?.party ?? 2);
   const [dayId, setDayId] = useState(isoDay(meeting?.start ?? day));
-  const [time, setTime] = useState<number | undefined>(meeting ? minutesOf(meeting.start) : undefined);
-  const [pick, setPick] = useState<string | undefined>(meeting?.tables?.join('+'));
+  const [time, setTime] = useState<number | undefined>(meeting ? minutesOf(meeting.start) : startAt);
+  const [pick, setPick] = useState<string | undefined>(meeting?.tables?.join('+') ?? tableId);
   const [occasion, setOccasion] = useState(meeting?.occasion ?? '');
   const [source, setSource] = useState<NonNullable<BookedMeeting['source']>>(meeting?.source ?? 'phone');
   const [tags, setTags] = useState<ReadonlyArray<string>>(meeting?.tags ?? []);
@@ -631,5 +655,48 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
         {extras ? fields : <ShowMore showLabel="Occasion, tags and notes" hideLabel="Fewer details">{fields}</ShowMore>}
       </div>
     </Dialog>
+  );
+}
+
+/** The day as a timeline: a row a table, the service hours across, each booking a bar from arrival to its turn's end.
+ *  Press an open half hour to start a booking there, at that table. */
+function DayTimeline({ tables, meetings, services, isToday, now, place, onOpen, onPick }: {
+  readonly tables: ReadonlyArray<Table>; readonly meetings: ReadonlyArray<BookedMeeting>; readonly services: ReadonlyArray<{ readonly name: string; readonly start: number; readonly end: number }>;
+  readonly isToday: boolean; readonly now: Date; readonly place: string; readonly onOpen: (m: BookedMeeting) => void; readonly onPick: (at: number, table: string) => void;
+}) {
+  const from = services.length ? Math.min(...services.map((s) => s.start)) : 11 * 60;
+  const to = services.length ? Math.max(...services.map((s) => s.end)) : 23 * 60;
+  const step = 30; const slots = Array.from({ length: Math.max(1, Math.ceil((to - from) / step)) }, (_, i) => from + i * step);
+  const col = (m: number) => Math.max(1, Math.min(slots.length + 1, Math.round((m - from) / step) + 1));
+  const open = (m: number) => services.some((s) => m >= s.start && m < s.end);
+  const nowAt = isToday ? minutesOf(now) : undefined;
+  if (tables.length === 0) return <EmptyState icon={<CalendarDays size={20} strokeWidth={1.75} />} title={`No tables at ${place} yet`} description="Add them in Availability, then bookings show here by table." />;
+  return (
+    <section className="tf-bkf-tl" aria-label={`Timeline at ${place}`} style={{ '--tf-tl-slots': slots.length } as CSSProperties}>
+      <div className="tf-bkf-tl__row tf-bkf-tl__row--head" aria-hidden="true">
+        <span className="tf-bkf-tl__name">Table</span>
+        <span className="tf-bkf-tl__track">{slots.map((m, i) => <span key={m} className="tf-bkf-tl__hour tf-num" style={{ gridColumn: i + 1 }}>{m % 60 === 0 ? formatClock(m) : ''}</span>)}</span>
+      </div>
+      {tables.map((t) => {
+        const here = meetings.filter((m) => (m.tables ?? []).includes(t.id));
+        return (
+          <div key={t.id} className="tf-bkf-tl__row" role="group" aria-label={`${t.name}, seats ${t.seats}`}>
+            <span className="tf-bkf-tl__name"><strong>{t.name}</strong><span className="tf-bkf__muted tf-num">{t.seats}</span></span>
+            <span className="tf-bkf-tl__track">
+              {slots.map((m, i) => <button key={m} type="button" className="tf-bkf-tl__slot" data-closed={!open(m) || undefined} style={{ gridColumn: i + 1 }}
+                aria-label={`New booking at ${t.name}, ${formatClock(m)}`} onClick={() => onPick(m, t.id)} />)}
+              {here.map((m) => (
+                <button key={m.id} type="button" className="tf-bkf-tl__bar" data-stage={m.seating ?? m.status} style={{ gridColumn: `${col(minutesOf(m.start))} / ${Math.max(col(minutesOf(m.start)) + 1, col(minutesOf(m.end)))}` }}
+                  onClick={() => onOpen(m)} aria-label={`${m.invitee.name}, ${plural(m.party ?? 2, 'guest')}, ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}`}>
+                  <span className="tf-bkf-tl__who">{m.invitee.name}</span><span className="tf-num">{m.party ?? 2}</span>
+                </button>
+              ))}
+              {nowAt !== undefined && nowAt >= from && nowAt < to && <span className="tf-bkf-tl__now" aria-hidden="true" style={{ gridColumn: col(nowAt) }} />}
+            </span>
+          </div>
+        );
+      })}
+      <p className="tf-bkf__muted">Press an open time to book that table then.</p>
+    </section>
   );
 }

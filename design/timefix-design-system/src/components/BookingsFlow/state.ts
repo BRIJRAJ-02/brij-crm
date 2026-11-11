@@ -1,5 +1,6 @@
 // The Bookings flow's model: types, the one reducer, and the pure rules (open times, summaries, routing).
-import type { Menu, MenuAddOn, MenuDish } from '../MenuPage/MenuPage.tsx';
+import type { BizState } from './biz.ts';
+import type { Menu, MenuAddOn, MenuDish, MenuLook } from '../MenuPage/MenuPage.tsx';
 import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { HOURS_DAYS, summarizeHours } from '../HoursEditor/HoursEditor.tsx';
 import type { Meeting, MeetingPlace } from '../MeetingList/MeetingList.tsx';
@@ -73,7 +74,18 @@ export type HostMode = 'one' | 'collective' | 'roundrobin' | 'managed';
 /** How round robin shares meetings out. */
 export type ShareOut = 'equal' | 'even' | 'weighted' | 'priority';
 /** Parts of a managed page members can't change on their copy. */
-export type LockedPart = 'length' | 'where' | 'questions' | 'look';
+export type LockedPart = 'address' | 'details' | 'durations' | 'location' | 'questions' | 'on_booking' | 'limits' | 'hours';
+/** The eight parts a managed page's template can lock (spec 0037, AC-1333), in the order the editor lists them, with what each covers. */
+export const MANAGED_PARTS: ReadonlyArray<{ readonly id: LockedPart; readonly label: string; readonly line: string }> = [
+  { id: 'address', label: 'Web address', line: 'Each page keeps its own address, built from this one. Nobody can rename theirs.' },
+  { id: 'details', label: 'Title and description', line: 'The title and description everyone’s page shows.' },
+  { id: 'durations', label: 'Lengths', line: 'The meeting lengths everyone offers.' },
+  { id: 'location', label: 'Location', line: 'Where the meeting happens.' },
+  { id: 'questions', label: 'Questions', line: 'What a visitor is asked.' },
+  { id: 'on_booking', label: 'On booking', line: 'Whether a booking adds the visitor to the CRM, and where their answers go.' },
+  { id: 'limits', label: 'Limits', line: 'Buffers, notice, how far ahead, the daily limit and how often a slot starts.' },
+  { id: 'hours', label: 'Working hours', line: 'Everyone’s page books on their own working hours, and can’t be pointed at another schedule.' },
+];
 
 /** One booking page. Every page is born bookable: the host's hours, 30 minutes, Google Meet. */
 export interface BookingPage {
@@ -205,6 +217,12 @@ export interface BookingPage {
   readonly ownLink?: string;
   /** A workspace link (books whoever in the workspace is free) or a team link (one round robin group); kept off the Pages list. */
   readonly linkKind?: 'workspace' | 'team';
+  /** A service's room or chair: any of a kind, or a named one (spec 0066). */
+  readonly needs?: { readonly kind: 'room' | 'chair'; readonly name?: string };
+  /** A line guests read before they book: the cancellation terms. */
+  readonly cancelNote?: string;
+  /** Archived services leave the menu but keep their bookings; Restore brings them back. */
+  readonly archived?: boolean;
 }
 
 /** One published version of a page, kept so it can be restored. */
@@ -375,9 +393,14 @@ export interface BusinessProfile {
 /** A table: seats, area, bookable online, joins its neighbour for bigger parties. */
 export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean;
   /** Fewest guests it takes, so a couple doesn't fill the 8-top (1 when unset). */ readonly minParty?: number;
-  /** The code in the table's QR (timefix.com/<handle>/menu?t=<code>). A new code stops old prints working. */ readonly code?: string }
+  /** The code in the table's QR (timefix.com/<handle>/menu?t=<code>). A new code stops old prints working. */ readonly code?: string;
+  /** What it is: a table (default), a booth, a room or a chair. */ readonly kind?: 'table' | 'booth' | 'room' | 'chair';
+  /** Archived: off the floor and the QR sheet, kept for its history. */ readonly archived?: boolean;
+  /** Menu opens from its QR code in the last 30 days. */ readonly scans?: number;
+  /** The place it stands at (biz.ts); unset is the first place. */ readonly placeId?: string }
 /** A restaurant's menus as you edit them; `live` is what guests see until you publish. */
-export interface MenuBook { readonly menus: ReadonlyArray<Menu>; readonly dishes: ReadonlyArray<MenuDish>; readonly addOns: ReadonlyArray<MenuAddOn> }
+export interface MenuBook { readonly menus: ReadonlyArray<Menu>; readonly dishes: ReadonlyArray<MenuDish>; readonly addOns: ReadonlyArray<MenuAddOn>;
+  /** How the guest menu looks; saved live, never waits for Publish. */ readonly look?: MenuLook }
 
 /** Everything the flow holds. */
 export interface BookingsState {
@@ -409,6 +432,8 @@ export interface BookingsState {
   readonly drafts?: Readonly<Record<string, BookingPage>>;
   /** A business (salon, clinic, restaurant): its public page and, for a restaurant, its tables. A team taking meetings has none. */
   readonly business?: BusinessProfile;
+  /** Businesses, places, staff and shifts (biz.ts); made from `business` until first changed. */
+  readonly biz?: BizState;
   readonly categories?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly tables?: ReadonlyArray<Table>;
   /** A restaurant's menus: the draft you edit and the published one guests read. Sold out and Hide apply to both at once. */
@@ -548,10 +573,16 @@ export type BookingsAction =
   | { readonly type: 'insights/share'; readonly on: boolean }
   | { readonly type: 'guest/patch'; readonly key: string; readonly patch: Partial<GuestProfile> }
   | { readonly type: 'business/set'; readonly business: BusinessProfile }
+  | { readonly type: 'biz/set'; readonly biz: BizState; readonly business?: BusinessProfile }
+  /** Every page in its new order and with its changes at once (services' order, bulk moves). */
+  | { readonly type: 'pages/set'; readonly pages: ReadonlyArray<BookingPage> }
+  | { readonly type: 'categories/set'; readonly categories: ReadonlyArray<{ readonly id: string; readonly name: string }> }
   | { readonly type: 'tables/set'; readonly tables: ReadonlyArray<Table> }
   | { readonly type: 'waitlist/set'; readonly waitlist: ReadonlyArray<WaitParty> }
   | { readonly type: 'menu/draft'; readonly menu: MenuBook }
   | { readonly type: 'menu/publish' }
+  /** The guest look goes live at once, without Publish. */
+  | { readonly type: 'menu/look'; readonly look: MenuLook | undefined }
   | { readonly type: 'menu/discard' }
   | { readonly type: 'dish/soldout'; readonly id: string; readonly soldOut: boolean }
   | { readonly type: 'menu/show'; readonly id: string; readonly isLive: boolean }
@@ -628,12 +659,16 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'member/calendar': return { ...state, memberCalendars: { ...(state.memberCalendars ?? {}), [action.name]: action.calendar } };
     case 'insights/share': return { ...state, insightsShared: action.on };
     case 'business/set': return { ...state, business: action.business };
+    case 'pages/set': return { ...state, pages: action.pages };
+    case 'categories/set': return { ...state, categories: action.categories };
+    case 'biz/set': return { ...state, biz: action.biz, business: action.business ?? state.business };
     case 'tables/set': return { ...state, tables: action.tables };
     case 'waitlist/set': return { ...state, waitlist: action.waitlist };
     case 'guest/patch': return { ...state, guests: { ...state.guests, [action.key]: { ...state.guests?.[action.key], ...action.patch } } };
     case 'menu/draft': return { ...state, menu: action.menu };
     case 'menu/publish': return state.menu ? { ...state, menuLive: state.menu } : state;
     case 'menu/discard': return state.menuLive ? { ...state, menu: state.menuLive } : state;
+    case 'menu/look': return { ...state, menu: state.menu && { ...state.menu, look: action.look }, menuLive: state.menuLive && { ...state.menuLive, look: action.look } };
     case 'dish/soldout': {
       const flip = (b: MenuBook | undefined) => b && { ...b, dishes: b.dishes.map((d) => (d.id === action.id ? { ...d, soldOut: action.soldOut } : d)) };
       return { ...state, menu: flip(state.menu), menuLive: flip(state.menuLive) };
@@ -665,6 +700,11 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
 /* ------------------------------------------------------------------ Helpers */
 
 let seq = 0;
+/** A managed template's ending: every person keeps their page, now their own one-on-one page at `<slug>-<first name>`. */
+export function unmanage(p: BookingPage): ReadonlyArray<BookingPage> {
+  return p.hosts.map((h) => ({ ...p, id: nextId('page'), hostMode: 'one' as const, hosts: [h], owner: h, slug: `${p.slug}-${(h.split(' ')[0] ?? h).toLowerCase()}`, locked: undefined, drift: undefined, versions: undefined }));
+}
+
 /** A fresh id with a prefix. */
 export const nextId = (prefix: string) => { seq += 1; return `${prefix}-${Date.now().toString(36)}-${seq}`; };
 /** "Discovery call" → "discovery-call". */

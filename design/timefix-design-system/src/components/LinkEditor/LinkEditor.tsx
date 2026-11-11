@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
-import { AlignLeft, Archive, ArchiveRestore, AtSign, CalendarClock, CalendarDays, FileText, GripVertical, Heading, HelpCircle, Image, Images, Import, Link2, Mail, Megaphone, Minus, Palette, Play, Plus, Quote, Settings2, Trash2 } from 'lucide-react';
+import { Button as AriaButton } from 'react-aria-components';
+import { DragList } from '../../lib/drag.ts';
+import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
+import { AlignLeft, Archive, ArchiveRestore, AtSign, CalendarClock, CalendarDays, FileText, Heading, HelpCircle, Image, Images, Import, Link2, Mail, Megaphone, Minus, Palette, Play, Plus, Quote, Settings2, Trash2 } from 'lucide-react';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { FileDrop } from '../FileDrop/FileDrop.tsx';
 import { PhotoCrop } from '../PhotoCrop/PhotoCrop.tsx';
@@ -19,7 +21,7 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Select } from '../Select/Select.tsx';
 import { ClickCount } from '../LinkList/LinkList.tsx';
 import { LinkPage, LINK_ICONS, LINK_PAGE_LOOKS, isShown, linkIcon, mediaKind, type LinkBlock, type LinkIconName, type LinkPageBooking, type LinkPageLook, type LinkPageProfile, type LinkStyle } from '../LinkPage/LinkPage.tsx';
-import { detectNetwork, reorderIds, SocialLinksEditor, SocialMark, socialLabel, type SocialLink } from '../SocialLinks/SocialLinks.tsx';
+import { detectNetwork, SocialLinksEditor, SocialMark, socialLabel, type SocialLink } from '../SocialLinks/SocialLinks.tsx';
 import { cx } from '../../lib/cx.ts';
 import './LinkEditor.css';
 
@@ -193,11 +195,21 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
   const archived = draft.blocks.filter((b) => b.archived);
   const pageBlocks = draft.blocks.filter((b) => !b.archived);
 
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ 'text/plain': String(k) })),
-    onReorder: (e) => { if (e.target.dropPosition !== 'on') { const pos = e.target.dropPosition; const key = String(e.target.key); setBlocks((bs) => reorderIds(bs, [...e.keys].map(String), key, pos)); } },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-linked__slot" />,
-  });
+  // Blocks reorder by their grip; archived ones keep their place at the end.
+  const reorderBlocks = (ids: ReadonlyArray<string>) => setBlocks((bs) => [...ids.map((id) => bs.find((x) => x.id === id)).filter((x): x is LinkBlock => Boolean(x)), ...bs.filter((x) => x.archived)]);
+  const openBlock = (b: LinkBlock) => { if (b.kind !== 'divider') setEditing(b.id); };
+  const blockBody = (b: LinkBlock, grip: ReactNode) => (
+    <span className="tf-linked__rowin">
+      {grip}
+      <span className="tf-linked__tile" aria-hidden="true">{b.kind === 'link' ? linkIcon(b, 16) ?? KIND_ICON.link : KIND_ICON[b.kind]}</span>
+      <span className="tf-linked__text">
+        <span className="tf-linked__title">{titleOf(b)}</span>
+        <span className="tf-linked__sub">{[b.hidden ? 'Hidden' : !isShown(b) && (b.showFrom || b.showUntil) ? 'Not showing today' : '', describe(b, draft.socials.length), ...marks(b)].filter(Boolean).join(' · ')}</span>
+      </span>
+      {b.kind === 'link' && b.clicks !== undefined && <ClickCount clicks={b.clicks} />}
+      <Switch aria-label={`Show ${titleOf(b)} on the page`} isSelected={!b.hidden} onChange={(on) => patch(b.id, { hidden: !on })} />
+    </span>
+  );
 
   const hasSocial = draft.blocks.some((b) => b.kind === 'social');
   const list = (
@@ -240,23 +252,19 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
           </Menu>
         </MenuTrigger></span>
       </div>
-      <GridList aria-label="Blocks, in page order" items={pageBlocks} dragAndDropHooks={dragAndDropHooks} className="tf-linked__blocks"
-        onAction={(k) => { const b = draft.blocks.find((x) => x.id === k); if (b && b.kind !== 'divider') setEditing(String(k)); }}>
-        {(b) => (
-          <GridListItem id={b.id} textValue={titleOf(b)} className={cx('tf-linked__row', fresh === b.id && 'is-new', washed === b.id && 'is-changed', b.hidden && 'is-hidden')}>
-            <span className="tf-linked__rowin">
-              <AriaButton slot="drag" className="tf-linked__grip" aria-label={`Move ${titleOf(b)}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
-              <span className="tf-linked__tile" aria-hidden="true">{b.kind === 'link' ? linkIcon(b, 16) ?? KIND_ICON.link : KIND_ICON[b.kind]}</span>
-              <span className="tf-linked__text">
-                <span className="tf-linked__title">{titleOf(b)}</span>
-                <span className="tf-linked__sub">{[b.hidden ? 'Hidden' : !isShown(b) && (b.showFrom || b.showUntil) ? 'Not showing today' : '', describe(b, draft.socials.length), ...marks(b)].filter(Boolean).join(' · ')}</span>
-              </span>
-              {b.kind === 'link' && b.clicks !== undefined && <ClickCount clicks={b.clicks} />}
-              <Switch aria-label={`Show ${titleOf(b)} on the page`} isSelected={!b.hidden} onChange={(on) => patch(b.id, { hidden: !on })} />
-            </span>
-          </GridListItem>
-        )}
-      </GridList>
+      <DragList ids={pageBlocks.map((b) => b.id)} onReorder={reorderBlocks} textOf={(id) => { const b = draft.blocks.find((x) => x.id === id); return b ? titleOf(b) : 'block'; }}
+        overlay={(id) => { const b = draft.blocks.find((x) => x.id === id); return b ? <div className="tf-linked__row">{blockBody(b, <DragHandle label="" reveal="always" isLifted size="sm" />)}</div> : null; }}>
+        <ul aria-label="Blocks, in page order" className="tf-linked__blocks">
+          {pageBlocks.map((b) => (
+            <DragItem key={b.id} id={b.id} className={cx('tf-linked__row', fresh === b.id && 'is-new', washed === b.id && 'is-changed', b.hidden && 'is-hidden')}>
+              {(d) => <>
+                {b.kind !== 'divider' && <button type="button" className="tf-linked__open" aria-label={`Edit ${titleOf(b)}`} onClick={() => openBlock(b)} />}
+                {blockBody(b, <DragHandle label={`Move ${titleOf(b)}`} reveal="always" size="sm" isLifted={d.isDragging} drag={d.grip} />)}
+              </>}
+            </DragItem>
+          ))}
+        </ul>
+      </DragList>
       {deleted && (
         <p className="tf-linked__undo" role="status"><span>{titleOf(deleted.block)} deleted</span><Button size="sm" variant="ghost" onPress={undo}>Undo</Button></p>
       )}

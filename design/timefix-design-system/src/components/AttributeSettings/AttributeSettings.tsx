@@ -1,6 +1,8 @@
-import { Button as AriaButton, DropIndicator, GridList, GridListItem, Radio, RadioGroup, useDragAndDrop, type DropTarget, type Key } from 'react-aria-components';
+import { Button as AriaButton, Radio, RadioGroup, type DropTarget, type Key } from 'react-aria-components';
+import { DragList } from '../../lib/drag.ts';
+import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, GripVertical, Lock, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Lock, Plus } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { ATTRIBUTE_TYPES, AttributeIcon, AttributeField, type Attribute, type AttributeType, type AttributeValue } from '../AttributeField/AttributeField.tsx';
 import { ConfirmDialog, Dialog } from '../Dialog/Dialog.tsx';
@@ -80,16 +82,7 @@ export function reorder<T extends { readonly id: string }>(list: ReadonlyArray<T
   return [...rest.slice(0, i), ...moving, ...rest.slice(i)];
 }
 
-/** Marks an id for one settle (the dropped row eases from lifted to rest). */
-function useSettle(): readonly [string | undefined, (id: string) => void] {
-  const [id, setId] = useState<string>();
-  useEffect(() => { if (!id) return; const t = window.setTimeout(() => setId(undefined), 300); return () => window.clearTimeout(t); }, [id]);
-  return [id, setId];
-}
-
 /* ------------------------------------------------------------ the list */
-
-const ATTR_TYPE = 'application/x-tf-attribute';
 
 /** Props for AttributeList. */
 export interface AttributeListProps {
@@ -107,31 +100,23 @@ export interface AttributeListProps {
 
 /** An object's attributes in order: drag a row by its grip (or Enter on the grip, arrows, Enter) to move it; press a row to edit it. */
 export function AttributeList({ label, attributes, onReorder, onEdit, changedId, pluralOf: objectName }: AttributeListProps) {
-  const [settling, settle] = useSettle();
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ [ATTR_TYPE]: String(k), 'text/plain': attributes.find((a) => a.id === k)?.name ?? String(k) })),
-    onReorder: (e) => {
-      onReorder(reorder(attributes, e.keys, e.target).map((a) => a.id));
-      const first = [...e.keys][0];
-      if (first !== undefined) settle(String(first));
-    },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-attributesettings__slot" />,
-    renderDragPreview: (items) => {
-      const a = attributes.find((x) => x.id === items[0]?.[ATTR_TYPE]);
-      return <div className="tf-attributesettings__preview">{a ? <RowBody attribute={a} objectName={objectName} /> : null}</div>;
-    },
-  });
   return (
-    <GridList aria-label={label} items={attributes} dragAndDropHooks={dragAndDropHooks} onAction={(k) => onEdit(String(k))} className="tf-attributesettings__list">
-      {(a) => (
-        <GridListItem id={a.id} textValue={a.name} className={cx('tf-attributesettings__row', settling === a.id && 'is-settling')}>
-          {changedId === a.id && <span key={`${a.id}-${a.name}-${a.type}`} className="tf-attributesettings__wash" aria-hidden="true" />}
-          <AriaButton slot="drag" className="tf-attributesettings__grip" aria-label={`Move ${a.name}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
-          <RowBody attribute={a} objectName={objectName} />
-          <ChevronRight className="tf-attributesettings__chev" size={16} strokeWidth={1.75} aria-hidden="true" />
-        </GridListItem>
-      )}
-    </GridList>
+    <DragList ids={attributes.map((a) => a.id)} onReorder={(ids) => onReorder(ids)} textOf={(id) => attributes.find((a) => a.id === id)?.name ?? 'attribute'}
+      overlay={(id) => { const a = attributes.find((x) => x.id === id); return a ? <div className="tf-attributesettings__row"><DragHandle label="" reveal="always" size="sm" isLifted /><RowBody attribute={a} objectName={objectName} /></div> : null; }}>
+      <ul aria-label={label} className="tf-attributesettings__list">
+        {attributes.map((a) => (
+          <DragItem key={a.id} id={a.id} className="tf-attributesettings__row" aria-label={a.name}>
+            {(d) => <>
+              {changedId === a.id && <span key={`${a.id}-${a.name}-${a.type}`} className="tf-attributesettings__wash" aria-hidden="true" />}
+              <button type="button" className="tf-attributesettings__open" aria-label={`Edit ${a.name}`} onClick={() => onEdit(a.id)} />
+              <span className="tf-attributesettings__grip"><DragHandle label={`Move ${a.name}`} size="sm" isLifted={d.isDragging} drag={d.grip} /></span>
+              <RowBody attribute={a} objectName={objectName} />
+              <ChevronRight className="tf-attributesettings__chev" size={16} strokeWidth={1.75} aria-hidden="true" />
+            </>}
+          </DragItem>
+        ))}
+      </ul>
+    </DragList>
   );
 }
 

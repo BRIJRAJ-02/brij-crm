@@ -18,6 +18,8 @@
 .tf-menupage__pill { border-color: transparent; background: var(--surface-subtle); }
 .tf-menupage__section { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-8); scroll-margin-top: var(--space-64); }
 .tf-menupage__h2 { margin: 0; font: 600 20px/28px var(--font-sans); letter-spacing: -0.01em; }
+.tf-menupage__sub { display: flex; flex-direction: column; gap: var(--space-4); padding-top: var(--space-8); }
+.tf-menupage__h3 { margin: 0; color: var(--text-secondary); font: 600 15px/22px var(--font-sans); }
 .tf-menupage__dishes { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .tf-menupage__dishes.is-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-12); }
 .tf-menupage__dishes:not(.is-grid) > li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }

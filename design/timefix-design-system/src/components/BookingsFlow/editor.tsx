@@ -1,7 +1,7 @@
 // Step 5: the page editor. One scroll of sections with live summaries, the guest's view beside it, Save changes at the foot.
 import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { AlertTriangle, ArrowRight, BarChart3, CalendarCheck, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, Plus, RotateCcw, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, CalendarCheck, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, Plus, RotateCcw, Settings2, Users, X } from 'lucide-react';
 import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { TopBar } from '../AppShell/AppShell.tsx';
@@ -22,7 +22,9 @@ import { SocialLinksEditor } from '../SocialLinks/SocialLinks.tsx';
 import { Meter } from '../Progress/Progress.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
-import { Button } from '../Button/Button.tsx';
+import { Button, IconButton } from '../Button/Button.tsx';
+import { ConfirmDialog } from '../Dialog/Dialog.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
 import { NumberRoll } from '../Motion/Motion.tsx';
 import { formatDate, formatDay } from '../../lib/format.ts';
 import { DaysOffEditor, Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
@@ -34,7 +36,7 @@ import { uniqueSlug } from './seed.ts';
 import { TablePreview } from './guest-venue.tsx';
 import {
   HOST, HOST_ZONE, PLACES, PLACE_ALL, TEAM, ZONES, afterSummary, handleOf, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
-  type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
+  MANAGED_PARTS, type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
 } from './state.ts';
 
 const LENGTHS = [15, 30, 45, 60, 90];
@@ -66,6 +68,8 @@ export interface PageEditorProps {
   readonly onToggle: (on: boolean) => void;
   readonly onShare: (p: BookingPage, how: ShareHow) => void;
   readonly onMore: (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => void;
+  /** A managed page's ending: the template goes, every person keeps their page as their own. */
+  readonly onStopManaging?: (p: BookingPage) => void;
   readonly onGuest: () => void;
   readonly onMeetings: () => void;
   readonly onManageGroups: () => void;
@@ -83,11 +87,10 @@ const SHARE_HELP: Readonly<Record<ShareOut, string>> = {
   weighted: 'Some hosts take a bigger share.',
   priority: 'The first free host in your order takes it.',
 };
-const LOCKABLE: ReadonlyArray<{ readonly id: LockedPart; readonly label: string }> = [
-  { id: 'length', label: 'Length' }, { id: 'where', label: 'Where' }, { id: 'questions', label: 'Questions' }, { id: 'look', label: 'Look' },
-];
+const LOCKABLE = MANAGED_PARTS;
+const DEFAULT_LOCKS: ReadonlyArray<LockedPart> = ['durations', 'questions'];
 
-export function PageEditor({ page, draft, state, section, onDraft, onBack, onSave, onToggle, onShare, onMore, onGuest, onMeetings, onManageGroups, onKeepDraft, onOpenMeeting }: PageEditorProps) {
+export function PageEditor({ page, draft, state, section, onDraft, onBack, onSave, onToggle, onShare, onMore, onGuest, onMeetings, onManageGroups, onKeepDraft, onOpenMeeting, onStopManaging }: PageEditorProps) {
   const [customOpen, setCustomOpen] = useState(false);
   const [customMin, setCustomMin] = useState(40);
   const [bookingsRange, setBookingsRange] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
@@ -347,7 +350,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       </SettingRow>
                     )}
                     </div>
-                    {draft.hostMode === 'one' ? null : (
+                    {/* A managed page picks its people once, in "Who has this page" below. */}
+                    {draft.hostMode === 'one' || draft.hostMode === 'managed' ? null : (
                       <div className="tf-bkf__checks" role="group" aria-label="Hosts">
                         {TEAM.map((name) => {
                           const on = draft.hosts.includes(name);
@@ -416,30 +420,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       </div>
                     )}
                     {draft.hostMode === 'managed' && (
-                      <div className="tf-bkf-settings tf-bkf-settings--ruled">
-                        <SettingRow title="Locked for members" description="Members can't change these on their copy. Saving here updates every copy.">
-                          <ChoiceChips label="Locked for members" isLabelHidden selectionMode="multiple" selectedKeys={draft.locked ?? ['length', 'questions']}
-                            items={LOCKABLE} onSelectionChange={(k) => set({ locked: [...k] as LockedPart[] })} />
-                        </SettingRow>
-                        <div className="tf-bkf-setting__more">
-                          <ul className="tf-bkf__list-plain tf-bkf-copies">
-                            {draft.hosts.map((h) => {
-                              const changed = (draft.drift?.[h] ?? []).filter((x) => !(draft.locked ?? ['length', 'questions']).includes(x));
-                              const stale = (draft.drift?.[h] ?? []).filter((x) => (draft.locked ?? ['length', 'questions']).includes(x));
-                              return (
-                                <li key={h} className="tf-bkf-copies__row">
-                                  <Avatar name={h} size={24} />
-                                  <span className="tf-bkf-copies__text"><strong>{first(h)}’s copy</strong><span className="tf-bkf__muted tf-num">timefix.com/{first(h).toLowerCase()}/{draft.slug}</span></span>
-                                  {stale.length > 0 ? <Tag hue="orange">Behind on {stale.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
-                                    : changed.length > 0 ? <Tag hue="gray">Changed {changed.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
-                                    : <Tag hue="green">In sync</Tag>}
-                                  {stale.length > 0 && <Button variant="ghost" onPress={() => set({ drift: { ...(draft.drift ?? {}), [h]: changed } })}>Update copy</Button>}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      </div>
+                      <ManagedParts draft={draft} set={set} onStopManaging={onStopManaging ? () => onStopManaging(draft) : undefined} />
                     )}
                     <div className="tf-bkf-settings tf-bkf-settings--ruled">
                     <SettingRow title="Who can book" description={draft.whoCanBook === 'form' ? 'Guests see times after they send the form.' : 'Anyone with the link picks a time.'}>
@@ -590,5 +571,74 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         <p className="tf-bkf__muted">Restoring opens that version as a draft. Nothing changes for guests until you publish.</p>
       </Drawer>
     </>
+  );
+}
+
+/** A managed page's template: the eight parts the workspace sets (Switches), who has a page (add, take off asking first), and its ending. */
+function ManagedParts({ draft, set, onStopManaging }: { readonly draft: BookingPage; readonly set: (p: Partial<BookingPage>) => void; readonly onStopManaging?: () => void }) {
+  const [taking, setTaking] = useState<string>();
+  const [ending, setEnding] = useState(false);
+  const locked = draft.locked ?? DEFAULT_LOCKS;
+  const n = draft.hosts.length;
+  const label = (x: LockedPart) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase() ?? x;
+  return (
+    <div className="tf-bkf-settings tf-bkf-settings--ruled">
+      <div className="tf-bkf-managed">
+        <span className="tf-bkf__label">What your workspace sets</span>
+        <p className="tf-bkf__muted">Switched on, the workspace decides this and nobody can change it on their own page. Saving updates {n === 1 ? 'the one page' : `all ${n} pages`} made from this.</p>
+        <ul className="tf-bkf-managed__parts" aria-label="Lockable parts">
+          {LOCKABLE.map((x) => (
+            <li key={x.id}><span className="tf-bkf-managed__text"><strong>{x.label}</strong><span className="tf-bkf__muted">{x.line}</span></span>
+              <Switch aria-label={x.label} isSelected={locked.includes(x.id)} onChange={(on) => set({ locked: on ? LOCKABLE.map((l) => l.id).filter((id) => id === x.id || locked.includes(id)) : locked.filter((id) => id !== x.id) })} /></li>
+          ))}
+        </ul>
+      </div>
+      <div className="tf-bkf-managed">
+        <span className="tf-bkf__label">Who has this page <span className="tf-bkf__muted tf-num">{n === 1 ? '1 person' : `${n} people`}</span></span>
+        <p className="tf-bkf__muted">Each person gets their own page, on their own hours, at their own address.</p>
+        <ul className="tf-bkf__list-plain tf-bkf-copies">
+          {draft.hosts.length === 0 && <li className="tf-bkf__muted">Nobody has this page yet</li>}
+          {draft.hosts.map((h) => {
+            const changed = (draft.drift?.[h] ?? []).filter((x) => !locked.includes(x));
+            const stale = (draft.drift?.[h] ?? []).filter((x) => locked.includes(x));
+            return (
+              <li key={h} className="tf-bkf-copies__row">
+                <Avatar name={h} size={24} />
+                <span className="tf-bkf-copies__text"><strong>{first(h)}’s page</strong><span className="tf-bkf__muted tf-num">timefix.com/{draft.slug}-{first(h).toLowerCase()}</span></span>
+                {stale.length > 0 ? <Tag hue="orange">Behind on {stale.map(label).join(', ')}</Tag> : changed.length > 0 ? <Tag hue="gray">Changed {changed.map(label).join(', ')}</Tag> : <Tag hue="green">In sync</Tag>}
+                {stale.length > 0 && <Button variant="ghost" onPress={() => set({ drift: { ...(draft.drift ?? {}), [h]: changed } })}>Update page</Button>}
+                <IconButton size="sm" label={`Take ${h} off this page`} onPress={() => setTaking(h)}><X size={14} strokeWidth={1.75} /></IconButton>
+              </li>
+            );
+          })}
+        </ul>
+        {TEAM.some((x) => !draft.hosts.includes(x)) ? (
+          <MenuTrigger>
+            <Button size="sm" variant="ghost" icon={<Plus size={14} strokeWidth={1.75} />}>Add someone</Button>
+            <Menu aria-label="Add someone" onAction={(k) => set({ hosts: [...draft.hosts, String(k)] })}>
+              {TEAM.filter((x) => !draft.hosts.includes(x)).map((x) => <MenuItem key={x} id={x}>{x}</MenuItem>)}
+            </Menu>
+          </MenuTrigger>
+        ) : <p className="tf-bkf__muted">Everyone here already has this page</p>}
+      </div>
+      {onStopManaging && <div className="tf-bkf-managed">
+        <span className="tf-bkf__label">Stop managing these pages</span>
+        <p className="tf-bkf__muted">Nobody loses a page. Each one becomes its owner’s own, to change as they like.</p>
+        <Button size="sm" variant="secondary" onPress={() => setEnding(true)}>Stop managing these pages</Button>
+      </div>}
+      {taking && <ConfirmDialog isOpen onOpenChange={(o) => { if (!o) setTaking(undefined); }} title={`Take ${taking} off this managed page?`} tone="danger" cancelLabel="Cancel" confirmLabel={`Delete ${first(taking)}’s page`}
+        consequence={`${taking}’s ${draft.name} page and its link are deleted. Bookings already made stay in Bookings, and ${first(taking)} is emailed.`}
+        onConfirm={() => { set({ hosts: draft.hosts.filter((x) => x !== taking) }); setTaking(undefined); }} />}
+      {ending && onStopManaging && <StopManaging title={draft.name} count={n} onClose={() => setEnding(false)} onConfirm={() => { setEnding(false); onStopManaging(); }} />}
+    </div>
+  );
+}
+
+/** Deleting a template: every page stays. The opposite of taking someone off, and the words carry that. */
+export function StopManaging({ title, count, onClose, onConfirm }: { readonly title: string; readonly count: number; readonly onClose: () => void; readonly onConfirm: () => void }) {
+  return (
+    <ConfirmDialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`Stop managing the ${title} pages?`} tone="danger" cancelLabel="Cancel" confirmLabel="Stop managing, keep the pages"
+      consequence={count === 0 ? 'Nobody has a page from it, so no page is affected.' : count === 1 ? 'The one page made from it keeps working and becomes its owner’s own, to change as they like. You stop setting it from here.' : `All ${count} pages made from it keep working and become their owners’ own, to change as they like. You stop setting them from here.`}
+      onConfirm={onConfirm} />
   );
 }

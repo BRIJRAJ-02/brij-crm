@@ -9,3 +9,5 @@ The app shell is the frame of every signed-in page: the sidebar on the grey canv
 **Interaction**: ⌘K and the sidebar's search open the command palette. Tab order runs sidebar, top bar, toolbar, content, aside. The aside's track opens over 400ms (closes over 350ms) while the panel slides 30px in (transitions.dev 07, panel reveal); the toolbar search takes the accent focus edge. Pages are full width; the toolbar scrolls sideways on narrow screens.
 
 **Replaces**: AppShell, Toolbar, PreviewLayout, AsideLayout.
+
+On a phone, toasts rise above the tab bar, and above a floating bar too when one is up (`--tf-toast-lift`).

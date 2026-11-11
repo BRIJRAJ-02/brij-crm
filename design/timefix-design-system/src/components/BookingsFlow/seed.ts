@@ -79,7 +79,7 @@ export function northwind(now: Date = new Date()): BookingsState {
     shareOut: 'even', evenGap: 2, countDays: 30, caps: { 'Jo Mendes': 3 }, rrReschedule: 'same', weights: { 'Sam Kim': 1, 'Jo Mendes': 1, 'Ava Chen': 1 }, accent: 'green', stats: { views: 190, bookings: 27, showRate: 95 } });
   // A managed page: each member has their own copy; length and questions are locked.
   add({ id: 'p-intro', name: 'Intro call', durations: [20], hostMode: 'managed', hosts: ['Priya Raman', 'Sam Kim', 'Ava Chen'], shareOut: 'equal', weights: {}, accent: 'purple',
-    locked: ['length', 'questions'], drift: { 'Sam Kim': ['where'], 'Ava Chen': ['length'] }, editors: ['Sam Kim'], stats: { views: 74, bookings: 9, showRate: 94 } });
+    locked: ['durations', 'questions'], drift: { 'Sam Kim': ['location'], 'Ava Chen': ['durations'] }, editors: ['Sam Kim'], stats: { views: 74, bookings: 9, showRate: 94 } });
   add({ id: 'p-quick', name: 'Quick chat', durations: [15, 30], isOn: false, places: ['meet', 'phone'], accent: 'orange', stats: { views: 33, bookings: 4, showRate: 100 } });
   const site = add({ id: 'p-site', name: 'Site visit', durations: [60], places: ['in-person'], address: 'Northwind office, 12 Harbour Street', accent: 'sky', bufferBefore: 30, bufferAfter: 30, perDay: 1, visibility: 'link', inHeldTime: true, stats: { views: 58, bookings: 6, showRate: 100 } });
   const support = add({ id: 'p-support', name: 'Support call', owner: 'Jo Mendes', hosts: ['Jo Mendes'], whoCanBook: 'form', formName: 'Support request', places: ['phone'], accent: 'yellow',

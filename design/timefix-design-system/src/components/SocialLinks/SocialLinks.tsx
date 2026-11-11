@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Button as AriaButton, DropIndicator, GridList, GridListItem, Link, useDragAndDrop } from 'react-aria-components';
-import { Globe, GripVertical, Mail, Plus, X } from 'lucide-react';
+import { Link } from 'react-aria-components';
+import { DragList } from '../../lib/drag.ts';
+import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
+import { Globe, Mail, Plus, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -146,15 +148,6 @@ export function SocialLinksEditor({ links, onChange }: SocialLinksEditorProps) {
     setRemoved(undefined);
   };
 
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ 'text/plain': String(k) })),
-    onReorder: (e) => {
-      if (e.target.dropPosition === 'on') return;
-      onChange(reorderIds(links, [...e.keys].map(String), String(e.target.key), e.target.dropPosition));
-    },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-socialed__slot" />,
-  });
-
   const options = NETWORK_ORDER.map((n) => ({ id: n, label: SOCIAL_NETWORKS[n].name, icon: <SocialMark network={n} size={16} />,  }));
   return (
     <div className="tf-socialed">
@@ -168,22 +161,27 @@ export function SocialLinksEditor({ links, onChange }: SocialLinksEditorProps) {
       {links.length === 0 && !removed ? (
         <p className="tf-socialed__empty">No social links yet. Paste one above.</p>
       ) : (
-        <GridList aria-label="Social links" items={links} dragAndDropHooks={dragAndDropHooks} className="tf-socialed__list"
-          renderEmptyState={() => null}>
-          {(l) => (
-            <GridListItem id={l.id} textValue={SOCIAL_NETWORKS[l.network].name} className={cx('tf-socialed__row', fresh === l.id && 'is-new')}>
-              <span className="tf-socialed__rowin">
-                <AriaButton slot="drag" className="tf-socialed__grip" aria-label={`Move ${SOCIAL_NETWORKS[l.network].name}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
-                <span className="tf-socialed__mark"><SocialMark network={l.network} size={16} /></span>
-                <span className="tf-socialed__text">
-                  <span className="tf-socialed__name">{SOCIAL_NETWORKS[l.network].name}</span>
-                  <span className="tf-socialed__addr">{socialLabel(l.url)}</span>
-                </span>
-                <IconButton size="sm" label={`Remove ${SOCIAL_NETWORKS[l.network].name}`} onPress={() => remove(l.id)}><X size={14} strokeWidth={1.75} /></IconButton>
-              </span>
-            </GridListItem>
-          )}
-        </GridList>
+        <DragList ids={links.map((l) => l.id)} onReorder={(ids) => onChange(ids.map((id) => links.find((l) => l.id === id)).filter((l): l is SocialLink => Boolean(l)))}
+          textOf={(id) => { const l = links.find((x) => x.id === id); return l ? SOCIAL_NETWORKS[l.network].name : 'link'; }}
+          overlay={(id) => { const l = links.find((x) => x.id === id); return l ? <div className="tf-socialed__row"><span className="tf-socialed__rowin"><DragHandle label="" reveal="always" size="sm" isLifted /><span className="tf-socialed__mark"><SocialMark network={l.network} size={16} /></span><span className="tf-socialed__text"><span className="tf-socialed__name">{SOCIAL_NETWORKS[l.network].name}</span><span className="tf-socialed__addr">{socialLabel(l.url)}</span></span></span></div> : null; }}>
+          <ul aria-label="Social links" className="tf-socialed__list">
+            {links.map((l) => (
+              <DragItem key={l.id} id={l.id} className={cx('tf-socialed__row', fresh === l.id && 'is-new')}>
+                {(d) => (
+                  <span className="tf-socialed__rowin">
+                    <DragHandle label={`Move ${SOCIAL_NETWORKS[l.network].name}`} reveal="always" size="sm" isLifted={d.isDragging} drag={d.grip} />
+                    <span className="tf-socialed__mark"><SocialMark network={l.network} size={16} /></span>
+                    <span className="tf-socialed__text">
+                      <span className="tf-socialed__name">{SOCIAL_NETWORKS[l.network].name}</span>
+                      <span className="tf-socialed__addr">{socialLabel(l.url)}</span>
+                    </span>
+                    <IconButton size="sm" label={`Remove ${SOCIAL_NETWORKS[l.network].name}`} onPress={() => remove(l.id)}><X size={14} strokeWidth={1.75} /></IconButton>
+                  </span>
+                )}
+              </DragItem>
+            ))}
+          </ul>
+        </DragList>
       )}
       {removed && (
         <p className="tf-socialed__undo" role="status">

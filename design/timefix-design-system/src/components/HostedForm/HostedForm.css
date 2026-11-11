@@ -146,17 +146,13 @@
 .tf-hq__files { display: flex; flex-direction: column; gap: var(--space-12); }
 
 /* Ranking: rows like choice cards with a grip and their place; the dragged row lifts, the slot opens dashed. */
-.tf-hq__rank { display: flex; flex-direction: column; gap: var(--space-8); outline: none; }
-.tf-hq__rank-row { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control-lg); padding: 0 var(--space-12) 0 var(--space-4); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); font: 400 16px/24px var(--font-sans); outline: none; transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-smooth-out); }
-.tf-hq__rank-row[data-hovered] { background: var(--surface-hover); }
-.tf-hq__rank-row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-hq__rank-row[data-dragging] { opacity: var(--opacity-disabled); }
+.tf-hq__rank { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; outline: none; }
+.tf-hq__rank-row { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control-lg); padding: 0 var(--space-12) 0 var(--space-4); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); font: 400 16px/24px var(--font-sans); outline: none; transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) and (pointer: fine) { .tf-hq__rank-row:hover { background: var(--surface-hover); } }
 .tf-hq__grip { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); cursor: grab; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
-.tf-hq__grip[data-hovered] { background: var(--surface-selected); color: var(--text); }
-.tf-hq__grip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) { .tf-hq__grip:hover { background: var(--surface-selected); color: var(--text); } }
+.tf-hq__grip:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
 .tf-hq__rank-n { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font: 500 13px/20px var(--font-sans); }
-.tf-hq__drop { height: 0; margin: calc(var(--space-4) * -1) 0; outline: none; }
-.tf-hq__drop[data-drop-target] { height: var(--size-control-lg); margin: 0; border: var(--border-width-hairline) dashed var(--border-strong); border-radius: var(--radius-lg); transition: height var(--duration-fast) var(--ease-smooth-out); }
 
 /* Signature: a pad three times as wide as tall, inked in the text colour. */
 .tf-hq__sign { display: flex; flex-direction: column; gap: var(--space-12); }
@@ -194,8 +190,7 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-hform__pages, .tf-hform__page, .tf-hform__bar, .tf-hform__later-btn, .tf-hform__later-panel, .tf-hform__later-clip, .tf-hform__foot,
   .tf-hq__choice, .tf-hq__key, .tf-hq__tick path, .tf-hq__box, .tf-hq__chev, .tf-hq__option, .tf-hq__date-btn, .tf-hq__star, .tf-hq__star svg,
-  .tf-hq__rank-row, .tf-hq__grip, .tf-hq__drop[data-drop-target], .tf-hq__pad-hint, .tf-hq__time { transition: none; }
-  .tf-hform__error, .tf-hform__alert, .tf-hform__check, .tf-hform__reveal-line, .tf-hq__star[data-selected] svg, .tf-hq__rating-word,
+  .tf-hq__rank-row, .tf-hq__grip,   .tf-hform__error, .tf-hform__alert, .tf-hform__check, .tf-hform__reveal-line, .tf-hq__star[data-selected] svg, .tf-hq__rating-word,
   .tf-hq__typed-ink, .tf-hq__slots-day, .tf-hq__slot-list { animation: none; }
   .tf-hform__check path { animation: none; stroke-dashoffset: 0; }
 }

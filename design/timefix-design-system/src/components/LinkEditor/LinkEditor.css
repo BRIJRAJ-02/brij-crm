@@ -34,14 +34,17 @@
 .tf-linked__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-4); }
 .tf-linked__heading { margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
 
-.tf-linked__blocks { display: flex; flex-direction: column; gap: var(--space-6); outline: none; }
+.tf-linked__blocks { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; outline: none; }
 .tf-linked__row {
-  display: grid; grid-template-rows: 1fr; border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
+  position: relative; display: grid; grid-template-rows: 1fr; border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
   cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out);
 }
-.tf-linked__row[data-hovered] { background: var(--surface-hover); }
-.tf-linked__row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-linked__row[data-dragging] { opacity: 0.4; }
+@media (hover: hover) and (pointer: fine) { .tf-linked__row:hover { background: var(--surface-hover); } }
+.tf-linked__row:has(.tf-linked__open:focus-visible) { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* Pressing a block opens it; its grip and switch sit above that press. */
+.tf-linked__open { position: absolute; inset: 0; z-index: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; outline: none; }
+.tf-linked__rowin { position: relative; z-index: 1; pointer-events: none; }
+.tf-linked__rowin > .tf-drag-handle, .tf-linked__rowin > .tf-switch, .tf-linked__rowin > :last-child { pointer-events: auto; }
 .tf-linked__row.is-hidden .tf-linked__title, .tf-linked__row.is-hidden .tf-linked__tile { opacity: var(--opacity-disabled); }
 /* A new block drops in at the top; a changed one gets a brief accent wash. */
 .tf-linked__row.is-new { animation: tf-linked-open var(--duration-fast) var(--ease-smooth-out); }
@@ -51,15 +54,10 @@
 @keyframes tf-linked-rise { from { transform: translateY(var(--distance-medium)); } }
 @keyframes tf-linked-wash { from { background: var(--accent-soft); } }
 .tf-linked__rowin { display: flex; align-items: center; gap: var(--space-8); min-height: calc(var(--size-row) + var(--space-12)); min-width: 0; padding: 0 var(--space-12) 0 var(--space-4); overflow: hidden; }
-.tf-linked__grip { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: grab; outline: none; }
-.tf-linked__grip[data-hovered] { background: var(--surface-selected); color: var(--text); }
-.tf-linked__grip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
 .tf-linked__tile { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
 .tf-linked__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .tf-linked__title { font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-linked__sub { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tf-linked__slot { height: 0; border-radius: var(--radius-lg); outline: none; transition: height var(--duration-fast) var(--ease-smooth-out); }
-.tf-linked__slot[data-drop-target] { height: calc(var(--size-row) + var(--space-12)); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
 .tf-linked__undo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin: 0; padding: 0 var(--space-4) 0 var(--space-12); min-height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); animation: tf-linked-fade var(--duration-quick) var(--ease-in-out); }
 @keyframes tf-linked-fade { from { opacity: 0; } }
 /* 09 icon swap: the detected network's mark swaps in. */
@@ -81,7 +79,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tf-linked__pane, .tf-linked__custom, .tf-linked__custom-clip, .tf-linked__profile, .tf-linked__row, .tf-linked__slot { transition: none; }
+  .tf-linked__pane, .tf-linked__custom, .tf-linked__custom-clip, .tf-linked__profile, .tf-linked__row { transition: none; }
   .tf-linked__row.is-new, .tf-linked__row.is-new .tf-linked__rowin, .tf-linked__row.is-changed, .tf-linked__undo, .tf-linked__detected { animation: none; }
 }
 .tf-linked__faq { display: flex; flex-direction: column; gap: var(--space-8); padding-bottom: var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }

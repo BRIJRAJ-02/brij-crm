@@ -874,7 +874,14 @@ function builtInObjects(owners: ReadonlyArray<{ readonly id: string; readonly na
     { id: 'companies', one: 'Company', many: 'Companies', custom: false, attributes: [sys('name', 'Name', 'text', { isSystem: true, isRequired: true }), sys('domain', 'Domain', 'domain', { isUnique: true }),
       sys('industry', 'Industry', 'select', { options: ['Software', 'Fintech', 'Healthcare', 'Manufacturing', 'Logistics', 'Retail'].map((x) => ({ id: x, label: x, hue: 'blue' as const })) }), sys('size', 'Employees', 'text'), sys('city', 'City', 'location'), owner, created] },
     { id: 'deals', one: 'Deal', many: 'Deals', custom: false, attributes: [sys('name', 'Deal', 'text', { isSystem: true, isRequired: true }), sys('company', 'Company', 'record'),
-      sys('stage', 'Stage', 'status', { options: ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost'].map((x) => ({ id: x, label: x, hue: (x === 'Won' ? 'green' : x === 'Lost' ? 'red' : 'blue') as 'green' | 'red' | 'blue' })) }),
+      // Each stage sits in its status group (Lead not started, Won and Lost done) with the shape and colour the board shows.
+      sys('stage', 'Stage', 'status', { options: [
+        { id: 'Lead', label: 'Lead', hue: 'gray' as const, group: 'notStarted' as const, shape: 'draft' as const },
+        { id: 'Qualified', label: 'Qualified', hue: 'blue' as const, group: 'inProgress' as const, shape: 'progress' as const },
+        { id: 'Proposal', label: 'Proposal', hue: 'purple' as const, group: 'inProgress' as const, shape: 'review' as const },
+        { id: 'Won', label: 'Won', hue: 'green' as const, group: 'done' as const, shape: 'done' as const, outcome: 'won' as const },
+        { id: 'Lost', label: 'Lost', hue: 'red' as const, group: 'done' as const, shape: 'failed' as const, outcome: 'lost' as const },
+      ] }),
       sys('amount', 'Amount', 'currency', { currency: 'INR' }), sys('close', 'Close date', 'date'), owner, created] },
   ];
 }

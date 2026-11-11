@@ -134,7 +134,7 @@ await t('objects: formula, relationship, stage rules, archive warning', async ()
   await dialog().getByRole('textbox', { name: 'Name' }).fill('Seats value'); await shot('26-formula'); await esc();
   await p.getByRole('button', { name: 'More kinds' }).click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Rollup/ }).click(); await p.waitForTimeout(400); await shot('27-rollup'); await esc();
   await p.getByRole('button', { name: 'More kinds' }).click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Relationship/ }).click(); await p.waitForTimeout(400); await shot('28-relationship'); await esc();
-  await p.getByRole('row', { name: /Close date/ }).click(); await p.waitForTimeout(400); await dialog().getByRole('button', { name: 'Archive' }).click(); await p.waitForTimeout(400);
+  await p.getByRole('row', { name: /Close date/ }).or(p.getByRole('listitem', { name: /Close date/ })).first().click(); await p.waitForTimeout(400); await dialog().getByRole('button', { name: 'Archive' }).click(); await p.waitForTimeout(400);
   await need(p.getByText(/Used by:/), 'impact'); await shot('29-archive-impact'); await p.getByRole('button', { name: /^Archive Close date/ }).click(); await p.waitForTimeout(400);
   await need(p.getByText('Archived attributes'), 'archived list'); await shot('30-archived'); await p.getByRole('button', { name: 'Restore' }).click(); await p.waitForTimeout(300);
   await p.getByRole('tab', { name: 'Configuration' }).click(); await p.waitForTimeout(400); await need(p.getByText(/Won and lost stages end a pipeline/), 'stage rules'); await shot('31-stage-rules');

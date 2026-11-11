@@ -4,6 +4,8 @@ ColorPicker picks a colour: one of the nine data hues for options, objects and c
 
 **The consumer provides**: ColorSwatchPicker takes `label`, `value` / `onChange` (a Hue), `isLabelShown` (label plus the chosen name), `isDisabled`. AccentPicker takes `label`, `value` / `onChange` as "#RRGGBB", and `swatches` (defaults to seven curated accents that keep white text readable).
 
+AccentPicker's `use="plain"` drops the readability line, for a colour whose check lives elsewhere (a text colour checked against its ground). `contrastBetween(a, b)` gives WCAG's ratio between any two colours, for a check like the menu design's AA line.
+
 **States**: swatch rest, hover (grey ring), chosen (ring in its own colour and a check), focus-visible, disabled. Hex field: typing, focused (accent edge), a hex that doesn't parse returns to the last good colour when you leave the field. A readability line says white text's contrast; under 4.5:1 it turns amber and suggests a darker colour.
 
 **Interaction**: Tab reaches the chosen swatch; arrows move and choose. The check swaps in from 0.25 scale over 250ms (transitions.dev 09 icon swap); nothing moves on press. In a popover, the pick shows its check, then closes 120ms later.

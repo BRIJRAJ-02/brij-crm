@@ -88,19 +88,21 @@ Wave C notes: on the week, other calendars show as hatched events you can open (
 - [x] Form analytics: period, median time, started, views over time, sources; drop-off for every layout; answers for scale/yes-no/multi with unpicked choices
 - [x] Link page: blocks Next times, Video/music, Picture, Gallery, Banner, folding heading; per block schedule, size, link picture, ask first (sensitive/18+/21+); archive/restore; import from Linktree etc.; profile photo + cover with crop, title, photo shape; design templates, colour, cover/background photo; details (site, closing line, share image, indexing); link page insights; share tools; team pages; claim handle; Live/Private switch; links list row ⋯ + Managed pages group
 - [x] Insights: public shared page; named share links with scope, expiry, list, revoke; sessions table; sources; visits/finishes/finish rate/avg time/drop-off per step; link page in picker
-- [ ] Menus: Design screen (presets, colours with AA check, fonts, corners, cover crop); sub sections; Items tab (all items, Available switch); search; publish review with checks; setup checklist; serving times per day per menu/section; places served; preview at day/time; item photo upload/crop, Add another, ⌘↵
-- [ ] Table QR: print sheet (A4 tiles, tent cards); zone chips + selection; scans per table; table seats fewest–most + new zones; resource kinds, drag order, bulk, archive with Undo, cap 300
-- [ ] Reservations: day timeline (pick time -> new booking), month picker, switch place
-- [ ] Business: several businesses (switch, add, remove, copy, setup card); several places, place page, special days; business page gallery, amenities, listing, draft/publish; profile email/website/description/currency/time zone; apps turning off asks, dependencies, admins only
-- [ ] Services: categories, drag order, bulk, archived/restore, starter service; "what it needs" (room/chair), cancellation note
-- [ ] Staff list + profile (photo, title, colour, bio, places, services, member link, archive); Appointments setup checklist
-- [ ] Shifts: per place, copy to all weeks, copy to others, block time per person
-- [ ] Managed pages: group in Links, people count, remove person, delete template, the real eight lockable parts
+- [x] Menus: Design screen (presets, colours with AA check, fonts, corners, cover crop); sub sections; Items tab (all items, Available switch); search; publish review with checks; setup checklist; serving times per day per menu/section; places served; preview at day/time; item photo upload/crop, Add another, ⌘↵
+- [x] Table QR: print sheet (A4 tiles, tent cards); zone chips + selection; scans per table; table seats fewest–most + new zones; resource kinds, drag order, bulk, archive with Undo, cap 300
+- [x] Reservations: day timeline (pick time -> new booking), month picker, switch place
+- [x] Business: several businesses (switch, add, remove, copy, setup card); several places, place page, special days; business page gallery, amenities, listing, draft/publish; profile email/website/description/currency/time zone; apps turning off asks, dependencies, admins only
+- [x] Services: categories, drag order, bulk, archived/restore, starter service; "what it needs" (room/chair), cancellation note
+- [x] Staff list + profile (photo, title, colour, bio, places, services, member link, archive); Appointments setup checklist
+- [x] Shifts: per place, copy to all weeks, copy to others, block time per person
+- [x] Managed pages: group in Links, people count, remove person, delete template, the real eight lockable parts
 
 - [x] Owner asks 11 Nov (added to D1): link page profile + background editing as a full feature (photo crop/shape, cover/background, name, title, bio); team and company link pages ("New page" asks Me / a team / the company); copy a form, booking page or link page to another workspace, or copy just its look (new feature, not in the real app)
 - [x] Owner asks 11 Nov, later (added to D1): redesign the Add question picker (two panes with live preview, distinct ready-made icons, compact rows, unclipped search); one publish system everywhere (PublishBar on every editor incl. menus and business page, one status tag set, one ShareSheet dialog for every Share)
 
 Wave D1 notes: form language translates the form's own words only (answer-check messages stay English); Import reads pasted links (the prototype can't fetch Linktree, and says so); booking page switch now says Live / Off.
+
+Wave D2 notes: every drag list goes through src/lib/drag.ts (dnd-kit, zoom-safe); Business, Services and Staff and shifts are full Settings screens; the menu design offers Geist and Geist Mono only (no serif token); business and reservation pages don't take the menu look yet.
 
 ## Wave E: settings, auth, admin
 - [ ] Webhooks screen (endpoint, events, secret shown once, rotate, test, on/off, delivery log + resend, delete, limit 10)

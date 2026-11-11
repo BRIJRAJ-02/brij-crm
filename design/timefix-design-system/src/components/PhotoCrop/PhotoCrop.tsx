@@ -9,14 +9,14 @@ import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
 import './PhotoCrop.css';
 
-/** The mask: a round face, or a wide 3:1 cover. */
-export type PhotoShape = 'round' | 'wide';
+/** The mask: a round face, a wide 3:1 cover, or a square (a dish, a product). */
+export type PhotoShape = 'round' | 'wide' | 'square';
 
 /** The part kept: the offset as a share of the frame (so it fits any size the photo is shown at), the zoom over a cover fit, and the photo's own aspect. */
 export interface PhotoCropValue { readonly x: number; readonly y: number; readonly zoom: number; readonly aspect: number; readonly shape: PhotoShape }
 
 const MAX_ZOOM = 3;
-const FRAME_ASPECT: Readonly<Record<PhotoShape, number>> = { round: 1, wide: 3 };
+const FRAME_ASPECT: Readonly<Record<PhotoShape, number>> = { round: 1, wide: 3, square: 1 };
 
 /** The photo's size at zoom 1 when it just covers a frame. */
 function coverSize(aspect: number, w: number, h: number) {
@@ -40,6 +40,23 @@ export function CroppedImage({ src, crop, width, alt = '' }: { readonly src: str
       <img src={src} alt={alt} className="tf-cropped__img" style={style} draggable={false} />
     </span>
   );
+}
+
+/** Draws a photo through its crop into a picture `width` wide (JPEG data URL), for places that keep one finished picture (a dish). Falls back to the source when it can't draw. */
+export function cropToDataUrl(src: string, crop: PhotoCropValue, width = 480): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = width; const h = width / FRAME_ASPECT[crop.shape];
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d'); if (!ctx) { resolve(src); return; }
+      const base = coverSize(crop.aspect, w, h); const bw = base.width * crop.zoom; const bh = base.height * crop.zoom;
+      ctx.drawImage(img, w / 2 + crop.x * w - bw / 2, h / 2 + crop.y * h - bh / 2, bw, bh);
+      try { resolve(canvas.toDataURL('image/jpeg', 0.86)); } catch { resolve(src); }
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
 }
 
 /** Props for PhotoCrop. */

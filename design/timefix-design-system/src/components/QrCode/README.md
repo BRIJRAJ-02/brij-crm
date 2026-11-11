@@ -4,6 +4,8 @@ QrCode draws a scannable code for a link page, booking page, table menu or authe
 
 **The consumer provides**: `value`, `label` for screen readers, `size` (`sm` 120, `md` 240, `fill`), `withLogo` (the Timefix mark in the centre; error correction goes to H), `colour` (`#rrggbb`), `frameLabel`, `ground` (`drawn`, `paper`, `clear`), `ref` for `downloadQr(svg, name, 'png' | 'svg')`, and optional `children` beside it. Always show the link or key as text too.
 
+`qrPrintSheet(codes, 'tiles' | 'tents', title)` lays codes on A4 pages for printing: six tiles a page, or two tent cards a page folded along a dashed line.
+
 **States**: one drawn state. Rounded modules and finder eyes, a 4-module quiet zone. In a dark app the ground steps down to a soft grey so it doesn't glare; saved files are always on white.
 
 **Interaction**: not focusable. The code redraws as the value changes; the encoder is a local port (byte mode, versions 1 to 40, best mask), checked with Apple's QR detector, logo included.

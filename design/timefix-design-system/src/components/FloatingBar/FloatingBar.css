@@ -1,4 +1,6 @@
 .tf-floatbar-anchor { container-type: inline-size; position: absolute; left: 0; right: 0; bottom: var(--space-16); z-index: var(--z-sticky); display: flex; justify-content: center; padding: 0 var(--space-16); pointer-events: none; }
+/* While a bar is up, toasts rise above it (Toast reads --tf-toast-lift), so a toast never covers Save, Publish or a selection's actions. */
+body:has(.tf-floatbar-anchor:not([inert])) { --tf-toast-lift: calc(var(--size-control-lg) + var(--space-16)); }
 .tf-floatbar-anchor--end { justify-content: flex-end; }
 
 /* transitions.dev 22 toast: rises 16px from 0.97 over 350ms; leaves on the 250ms clock. */

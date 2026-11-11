@@ -6,6 +6,6 @@ SocialLinks is a person's social links as a row of official marks in the page's 
 
 **States**: the row draws nothing when empty. Marks are monochrome (Instagram, X, LinkedIn, YouTube, TikTok, Threads, GitHub, Facebook from their official files; website and email in Lucide). The editor shows an empty line, a taken network as an error, and "Removed · Undo" after a removal.
 
-**Interaction**: hovering a mark lifts it 4px and nudges its neighbours with a 0.45 falloff, then the row springs back (avatar group hover). Each mark opens in a new tab with `rel="me nofollow"`. In the editor, pasting a link detects the network and its mark swaps in (icon swap); one link per network; grips reorder by drag or keyboard; × removes, Undo brings it back.
+**Interaction**: hovering a mark lifts it 4px and nudges its neighbours with a 0.45 falloff, then the row springs back (avatar group hover). Each mark opens in a new tab with `rel="me nofollow"`. In the editor, pasting a link detects the network and its mark swaps in (icon swap); one link per network; grips reorder by drag or keyboard (lib/drag.ts: the row lifts under the pointer, the others slide aside, Space, arrows, Space); × removes, Undo brings it back.
 
 **Replaces**: SocialLinks, SocialLinksEditor and the social marks of ProviderMark.

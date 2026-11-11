@@ -12,4 +12,6 @@ HostedForm is the form a guest fills in, on its hosted page, inside an embed and
 
 **Interaction**: Enter goes on (Shift and Enter breaks a long answer's line); a letter key picks a choice card; a single choice, a dropdown pick or a rating goes on by itself 450ms later, never from the last question; Back returns. Steps slide side by side (transitions.dev 08, 8px, 250ms) in a card that eases to each step's height (01). A refused step shakes (12). Choice ticks draw (25); stars pop on the bounce curve; the dropdown and date open in the shared Popover (05). Finish later opens its Saved row as an accordion (21) and Copy link swaps to Copied. The thank you draws its check (10) and reveals its words, staggered 40ms (18), over the sent answers.
 
+**Ranking**: rows reorder by their grip on lib/drag.ts (the row lifts, the others slide aside; Space, arrows, Space by keyboard).
+
 **Replaces**: HostedForm, HostedFormSteps, Question, AddressQuestion, FileQuestion, RankingQuestion, SignatureQuestion, FinishLater, FormBooking, BookingView, SentAnswers, FormParts.

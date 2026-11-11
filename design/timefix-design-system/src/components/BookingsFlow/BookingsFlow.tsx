@@ -37,7 +37,7 @@ import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboar
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
   HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural, guestKey, isWith, alwaysFree,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
+  unmanage, type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
 
@@ -567,6 +567,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         onChange={(id) => { leaveEditor(); setTab(id); }} />}>
       {appContent !== undefined ? appContent : (editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
+          onStopManaging={(p) => { const made = unmanage(p); const index = state.pages.findIndex((x) => x.id === p.id); leaveEditor(); setTab('pages'); dispatch({ type: 'page/delete', id: p.id }); made.forEach((page) => dispatch({ type: 'page/upsert', page }));
+            toast({ message: `${p.name} is no longer managed. Everyone’s own page is untouched.`, action: { label: 'Undo', onAction: () => { made.forEach((x) => dispatch({ type: 'page/delete', id: x.id })); dispatch({ type: 'page/restore', page: p, index }); } } }); }}
           onBack={() => { leaveEditor(); setTab('pages'); }}
           onKeepDraft={(d) => {
             const same = pageChanges(editing, d).length === 0;

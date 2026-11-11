@@ -1,9 +1,8 @@
-import {
-  Button as AriaButton, DialogTrigger, DropIndicator, GridList, GridListItem, Input, TextField, isTextDropItem, useDragAndDrop,
-  type DropTarget,
-} from 'react-aria-components';
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { Archive, ArchiveRestore, GripVertical, Plus } from 'lucide-react';
+import { Button as AriaButton, DialogTrigger, Input, TextField } from 'react-aria-components';
+import { DragArea, DragGroup, useDragGroup, type DragGroups } from '../../lib/drag.ts';
+import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { Archive, ArchiveRestore, Plus } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import type { AttributeOption } from '../AttributeField/AttributeField.tsx';
 import { Popover } from '../Popover/Popover.tsx';
@@ -44,7 +43,7 @@ export function nextHue(options: ReadonlyArray<AttributeOption>): Hue {
   return HUE_CYCLE[(last ? HUE_CYCLE.indexOf(last) + 1 : 0) % HUE_CYCLE.length] ?? 'blue';
 }
 
-const OPTION_TYPE = 'application/x-tf-option';
+const ALL = 'all';
 const UNDO_MS = 5_000;
 const COLLAPSE_MS = 250;
 const PICK_CLOSE_MS = 120;
@@ -72,6 +71,8 @@ export function OptionsEditor({ kind, options, onChange, label = kind === 'statu
   const latest = useRef(options);
   latest.current = options;
 
+  // A stage saved without a group (older data) sits where its shape says: draft not started, done or failed done, the rest in progress.
+  const groupOf = (o: EditableOption): StatusGroup | undefined => (kind !== 'status' ? undefined : o.group ?? (o.shape === 'draft' ? 'notStarted' : o.shape === 'done' || o.shape === 'failed' || o.outcome ? 'done' : 'inProgress'));
   const live = options.filter((o) => !o.archived);
   const shelved = options.filter((o) => o.archived && undo[o.id] === undefined);
   const dupes = new Set(live.map((o) => o.label.trim().toLowerCase()).filter((l, i, all) => l !== '' && all.indexOf(l) !== i));
@@ -80,7 +81,7 @@ export function OptionsEditor({ kind, options, onChange, label = kind === 'statu
   const add = (group?: StatusGroup, after?: string) => {
     const id = `opt-${Date.now().toString(36)}`;
     const shape = STATUS_GROUPS.find((g) => g.id === group)?.shape;
-    const peers = latest.current.filter((o) => !o.archived && o.group === group);
+    const peers = latest.current.filter((o) => !o.archived && groupOf(o) === group);
     const made: EditableOption = { id, label: '', hue: nextHue(peers.length > 0 ? peers : latest.current), ...(group ? { group, shape } : {}) };
     const list = [...latest.current];
     const at = after ? list.findIndex((o) => o.id === after) + 1 : (() => { const lastPeer = peers[peers.length - 1]; return lastPeer ? list.indexOf(lastPeer) + 1 : list.length; })();
@@ -109,20 +110,33 @@ export function OptionsEditor({ kind, options, onChange, label = kind === 'statu
   };
 
   const groups: ReadonlyArray<{ readonly id?: StatusGroup; readonly label?: string; readonly shape?: StatusShape }> = kind === 'status' ? STATUS_GROUPS : [{}];
+  const shownIn = (g?: StatusGroup) => options.filter((o) => groupOf(o) === g && (!o.archived || undo[o.id] !== undefined)).map((o) => o.id);
+  const dragGroups: DragGroups = Object.fromEntries(groups.map((g) => [g.id ?? ALL, shownIn(g.id)]));
+  // A drop: each group's rows in their new order (a stage moved to another group takes its shape), the shelved ones after.
+  const moved = (next: DragGroups) => {
+    const placed = groups.flatMap((g) => (next[g.id ?? ALL] ?? []).map((id) => {
+      const o = options.find((x) => x.id === id);
+      return o && kind === 'status' && groupOf(o) !== g.id ? { ...o, group: g.id, shape: STATUS_GROUPS.find((x) => x.id === g.id)?.shape } : o;
+    })).filter((o): o is EditableOption => Boolean(o));
+    onChange([...placed, ...options.filter((o) => !placed.some((p) => p.id === o.id))]);
+  };
   return (
     <section className="tf-optionseditor" aria-label={label}>
       <div className="tf-optionseditor__head">
         <span className="tf-optionseditor__label">{label}</span>
         <Count>{live.length}</Count>
       </div>
-      {groups.map((g) => (
-        <OptionGroup
-          key={g.id ?? 'all'} group={g.id} title={g.label} shape={g.shape} kind={kind}
-          rows={options.filter((o) => o.group === g.id && (!o.archived || undo[o.id] !== undefined))}
-          all={options} fresh={fresh} dupes={dupes} undo={undo}
-          onPatch={patch} onAdd={add} onLeave={dropIfEmpty} onArchive={archive} onRestore={restore} onMove={onChange}
-        />
-      ))}
+      <DragArea groups={dragGroups} onChange={moved} textOf={(id) => options.find((o) => o.id === id)?.label || 'untitled option'} groupName={(g) => STATUS_GROUPS.find((x) => x.id === g)?.label ?? 'the list'}
+        overlay={(id) => { const o = options.find((x) => x.id === id); return o ? <div className="tf-optionseditor__row"><div className="tf-optionseditor__rowbody"><DragHandle label="" reveal="always" isLifted /><span className="tf-optionseditor__swatch"><Swatch option={o} kind={kind} /></span><span className="tf-optionseditor__lifted">{o.label || 'Untitled'}</span></div></div> : null; }}>
+        {(liveGroups) => groups.map((g) => (
+          <OptionGroup
+            key={g.id ?? 'all'} group={g.id} title={g.label} shape={g.shape} kind={kind}
+            rows={(liveGroups[g.id ?? ALL] ?? []).map((id) => options.find((o) => o.id === id)).filter((o): o is EditableOption => Boolean(o))}
+            fresh={fresh} dupes={dupes} undo={undo}
+            onPatch={patch} onAdd={add} onLeave={dropIfEmpty} onArchive={archive} onRestore={restore}
+          />
+        ))}
+      </DragArea>
       {dupes.size > 0 && <p className="tf-optionseditor__error" role="alert">Two {kind === 'status' ? 'stages' : 'options'} share a name. Rename one so people can tell them apart.</p>}
       {shelved.length > 0 && (
         <MenuTrigger>
@@ -142,7 +156,6 @@ interface GroupProps {
   readonly shape?: StatusShape;
   readonly kind: 'select' | 'status';
   readonly rows: ReadonlyArray<EditableOption>;
-  readonly all: ReadonlyArray<EditableOption>;
   readonly fresh?: string;
   readonly dupes: ReadonlySet<string>;
   readonly undo: Readonly<Record<string, 'open' | 'closing'>>;
@@ -151,47 +164,12 @@ interface GroupProps {
   readonly onLeave: (id: string) => void;
   readonly onArchive: (id: string) => void;
   readonly onRestore: (id: string) => void;
-  readonly onMove: (options: ReadonlyArray<EditableOption>) => void;
 }
 
-/** Puts ids at a drop target in the whole list, moving them into `group`. */
-function place(all: ReadonlyArray<EditableOption>, ids: ReadonlyArray<string>, target: DropTarget, group: StatusGroup | undefined): ReadonlyArray<EditableOption> {
-  const shapeOf = STATUS_GROUPS.find((g) => g.id === group)?.shape;
-  const moving = all.filter((o) => ids.includes(o.id)).map((o) => (o.group === group ? o : { ...o, group, shape: shapeOf }));
-  const rest = all.filter((o) => !ids.includes(o.id));
-  let at = rest.length;
-  if (target.type === 'item') {
-    const i = rest.findIndex((o) => o.id === target.key);
-    if (i >= 0) at = target.dropPosition === 'after' ? i + 1 : i;
-  } else {
-    const peers = rest.filter((o) => o.group === group);
-    const last = peers[peers.length - 1];
-    at = last ? rest.indexOf(last) + 1 : group === 'notStarted' ? 0 : rest.length;
-  }
-  return [...rest.slice(0, at), ...moving, ...rest.slice(at)];
-}
-
-function OptionGroup({ group, title, shape, kind, rows, all, fresh, dupes, undo, onPatch, onAdd, onLeave, onArchive, onRestore, onMove }: GroupProps) {
-  const [settling, setSettling] = useState<string>();
-  useEffect(() => { if (!settling) return; const t = window.setTimeout(() => setSettling(undefined), 300); return () => window.clearTimeout(t); }, [settling]);
-  const moved = (ids: ReadonlyArray<string>, target: DropTarget) => { onMove(place(all, ids, target, group)); setSettling(ids[0]); };
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ [OPTION_TYPE]: String(k), 'text/plain': all.find((o) => o.id === k)?.label ?? '' })),
-    acceptedDragTypes: [OPTION_TYPE],
-    getDropOperation: () => 'move',
-    onReorder: (e) => moved([...e.keys].map(String), e.target),
-    onInsert: async (e) => moved(await Promise.all(e.items.filter(isTextDropItem).map((it) => it.getText(OPTION_TYPE))), e.target),
-    onRootDrop: async (e) => moved(await Promise.all(e.items.filter(isTextDropItem).map((it) => it.getText(OPTION_TYPE))), { type: 'root' }),
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-optionseditor__slot" />,
-    renderDragPreview: (items) => {
-      const o = all.find((x) => x.id === items[0]?.[OPTION_TYPE]);
-      return <div className="tf-optionseditor__preview">{o ? <><Swatch option={o} kind={kind} /><span>{o.label || 'Untitled'}</span></> : null}</div>;
-    },
-  });
-  // Text typed into a label must never start a drag of its row.
-  const downInInput = useRef(false);
+function OptionGroup({ group, title, shape, kind, rows, fresh, dupes, undo, onPatch, onAdd, onLeave, onArchive, onRestore }: GroupProps) {
   const noun = kind === 'status' ? 'stage' : 'option';
   const liveCount = rows.filter((o) => !o.archived).length;
+  const drop = useDragGroup(group ?? ALL);
   return (
     <div className="tf-optionseditor__group">
       {title !== undefined && shape !== undefined && (
@@ -201,32 +179,26 @@ function OptionGroup({ group, title, shape, kind, rows, all, fresh, dupes, undo,
           <span className="tf-optionseditor__groupcount">{liveCount}</span>
         </div>
       )}
-      <div
-        className="tf-optionseditor__listwrap"
-        onPointerDownCapture={(e) => { downInInput.current = (e.target as HTMLElement).tagName === 'INPUT'; }}
-        onDragStartCapture={(e) => { if (downInInput.current) e.preventDefault(); }}
-      >
-      <GridList
-        aria-label={title ?? 'Options'} items={rows} dragAndDropHooks={dragAndDropHooks} keyboardNavigationBehavior="tab" className="tf-optionseditor__list"
-        renderEmptyState={() => <div className="tf-optionseditor__empty">Drop a {noun} here</div>}
-      >
-        {(o) => (
-          <GridListItem id={o.id} textValue={o.label || 'Untitled'} className={cx('tf-optionseditor__row', settling === o.id && 'is-settling', o.archived && 'is-archived')}>
-            {o.archived ? (
-              <Collapse open={undo[o.id] === 'open'}>
-                <div className="tf-optionseditor__undo">
-                  <span><strong>{o.label || 'Untitled'}</strong> archived. Records keep it.</span>
-                  <Button size="sm" variant="ghost" onPress={() => onRestore(o.id)}>Undo</Button>
-                </div>
-              </Collapse>
-            ) : (
-              <Row option={o} kind={kind} isFresh={fresh === o.id} isDupe={dupes.has(o.label.trim().toLowerCase())}
-                onPatch={onPatch} onEnter={() => onAdd(group, o.id)} onLeave={onLeave} onArchive={onArchive} />
-            )}
-          </GridListItem>
-        )}
-      </GridList>
-      </div>
+      <DragGroup id={group ?? ALL}>
+        <ul ref={drop.ref} aria-label={title ?? 'Options'} className="tf-optionseditor__list" data-drop-target={(drop.isOver && kind === 'status') || undefined}>
+          {rows.length === 0 && <li className="tf-optionseditor__empty">Drop a {noun} here</li>}
+          {rows.map((o) => (
+            <DragItem key={o.id} id={o.id} group={group ?? ALL} isDisabled={o.archived} className={cx('tf-optionseditor__row', o.archived && 'is-archived')}>
+              {(d) => o.archived ? (
+                <Collapse open={undo[o.id] === 'open'}>
+                  <div className="tf-optionseditor__undo">
+                    <span><strong>{o.label || 'Untitled'}</strong> archived. Records keep it.</span>
+                    <Button size="sm" variant="ghost" onPress={() => onRestore(o.id)}>Undo</Button>
+                  </div>
+                </Collapse>
+              ) : (
+                <Row option={o} kind={kind} isFresh={fresh === o.id} isDupe={dupes.has(o.label.trim().toLowerCase())} grip={<DragHandle label={`Move ${o.label || 'untitled option'}`} isLifted={d.isDragging} drag={d.grip} reveal="always" />}
+                  onPatch={onPatch} onEnter={() => onAdd(group, o.id)} onLeave={onLeave} onArchive={onArchive} />
+              )}
+            </DragItem>
+          ))}
+        </ul>
+      </DragGroup>
       <Button size="sm" variant="ghost" icon={<Plus size={14} strokeWidth={1.75} />} className="tf-optionseditor__add" onPress={() => onAdd(group)}>Add {noun}</Button>
     </div>
   );
@@ -249,9 +221,10 @@ interface RowProps {
   readonly onEnter: () => void;
   readonly onLeave: (id: string) => void;
   readonly onArchive: (id: string) => void;
+  readonly grip: ReactNode;
 }
 
-function Row({ option: o, kind, isFresh, isDupe, onPatch, onEnter, onLeave, onArchive }: RowProps) {
+function Row({ option: o, kind, isFresh, isDupe, grip, onPatch, onEnter, onLeave, onArchive }: RowProps) {
   const [picking, setPicking] = useState(false);
   const [entering, setEntering] = useState(isFresh);
   const before = useRef(o.label);
@@ -263,7 +236,7 @@ function Row({ option: o, kind, isFresh, isDupe, onPatch, onEnter, onLeave, onAr
   return (
     <div className={cx('tf-optionseditor__rowin', entering && 'is-new')}>
       <div className="tf-optionseditor__rowbody">
-        <AriaButton slot="drag" className="tf-optionseditor__grip" aria-label={`Move ${o.label || 'untitled option'}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
+        {grip}
         <DialogTrigger isOpen={picking} onOpenChange={setPicking}>
           <AriaButton className="tf-optionseditor__swatch" aria-label={`Colour of ${o.label || 'untitled option'}: ${HUE_NAMES[o.hue]}`}><Swatch option={o} kind={kind} /></AriaButton>
           <Popover label={`Colour of ${o.label || 'untitled option'}`} placement="bottom start">
@@ -273,7 +246,7 @@ function Row({ option: o, kind, isFresh, isDupe, onPatch, onEnter, onLeave, onAr
         <TextField aria-label={`${kind === 'status' ? 'Stage' : 'Option'} name`} value={o.label} onChange={(v) => onPatch(o.id, { label: v })} className="tf-optionseditor__name" isInvalid={isDupe}>
           <Input
             className="tf-optionseditor__input" placeholder={kind === 'status' ? 'Type a stage' : 'Type an option'} autoFocus={isFresh} onKeyDown={keys}
-            onFocus={() => { before.current = o.label; }} onBlur={() => onLeave(o.id)} draggable={false}
+            onFocus={() => { before.current = o.label; }} onBlur={() => onLeave(o.id)}
           />
         </TextField>
         <Tooltip label="Archive">

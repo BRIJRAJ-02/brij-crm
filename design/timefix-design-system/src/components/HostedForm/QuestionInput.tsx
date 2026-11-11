@@ -1,9 +1,11 @@
 import {
-  Button as AriaButton, Checkbox as AriaCheckbox, CheckboxGroup, DateInput, DatePicker as AriaDatePicker, DateSegment, DropIndicator,
-  GridList, GridListItem, Group, ListBox, ListBoxItem, Radio, RadioGroup, Select, SelectValue, useDragAndDrop, type Key,
+  Button as AriaButton, Checkbox as AriaCheckbox, CheckboxGroup, DateInput, DatePicker as AriaDatePicker, DateSegment,
+  Group, ListBox, ListBoxItem, Radio, RadioGroup, Select, SelectValue, type Key,
 } from 'react-aria-components';
 import { parseDate, parseTime, type CalendarDate, type Time } from '@internationalized/date';
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { DragList } from '../../lib/drag.ts';
+import { DragItem } from '../DragHandle/DragHandle.tsx';
 import { CalendarDays, Check, ChevronDown, Eraser, GripVertical, Star } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Button } from '../Button/Button.tsx';
@@ -292,28 +294,20 @@ function AddressInput({ value = EMPTY_ADDRESS, onChange, labelId }: { readonly v
   );
 }
 
-/** Rows in order, moved by their grip with a pointer, or with Enter then the arrows; the drop slot opens dashed. */
+/** Rows in order, moved by their grip with a pointer, or with Space then the arrows (lib/drag.ts): the row lifts, the others slide aside, a dashed gap shows where it lands. */
 function Ranking({ options, onChange, labelId }: { readonly options: ReadonlyArray<string>; readonly onChange: (v: ReadonlyArray<string>) => void; readonly labelId: string }) {
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ 'text/plain': String(k) })),
-    onReorder: (e) => {
-      const moving = options.filter((o) => e.keys.has(o));
-      const rest = options.filter((o) => !e.keys.has(o));
-      const at = rest.indexOf(String(e.target.key)) + (e.target.dropPosition === 'after' ? 1 : 0);
-      onChange([...rest.slice(0, at), ...moving, ...rest.slice(at)]);
-    },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-hq__drop" />,
-  });
+  const row = (o: string, grip: ReactNode) => <>{grip}<span className="tf-hq__rank-n tf-num" aria-hidden="true">{options.indexOf(o) + 1}</span><span className="tf-hq__choice-label">{o}</span></>;
   return (
-    <GridList aria-labelledby={labelId} items={options.map((o) => ({ id: o }))} dragAndDropHooks={dragAndDropHooks} className="tf-hq__rank">
-      {(it) => (
-        <GridListItem id={it.id} textValue={it.id} className="tf-hq__rank-row">
-          <AriaButton slot="drag" className="tf-hq__grip" aria-label={`Move ${it.id}`}><GripVertical {...i16} /></AriaButton>
-          <span className="tf-hq__rank-n tf-num" aria-hidden="true">{options.indexOf(it.id) + 1}</span>
-          <span className="tf-hq__choice-label">{it.id}</span>
-        </GridListItem>
-      )}
-    </GridList>
+    <DragList ids={options} onReorder={(ids) => onChange(ids)} textOf={(id) => id}
+      overlay={(id) => <div className="tf-hq__rank-row">{row(id, <span className="tf-hq__grip" aria-hidden="true"><GripVertical {...i16} /></span>)}</div>}>
+      <ul aria-labelledby={labelId} className="tf-hq__rank">
+        {options.map((o) => (
+          <DragItem key={o} id={o} className="tf-hq__rank-row">
+            {(d) => row(o, <button type="button" className="tf-hq__grip" aria-label={`Move ${o}`} {...d.grip}><GripVertical {...i16} /></button>)}
+          </DragItem>
+        ))}
+      </ul>
+    </DragList>
   );
 }
 

@@ -149,7 +149,7 @@ function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMe
     const at = state.tables?.find((t) => t.code === table || t.name.toLowerCase() === table?.toLowerCase());
     const now = new Date();
     return (
-      <MenuPage venue={state.workspace} line={state.business?.address} cover={state.business?.photos[0]} menus={live?.menus ?? []} dishes={live?.dishes ?? []} addOns={live?.addOns ?? []}
+      <MenuPage venue={state.workspace} line={state.business?.address} cover={live?.look?.cover ?? state.business?.photos[0]} look={live?.look} menus={live?.menus ?? []} dishes={live?.dishes ?? []} addOns={live?.addOns ?? []}
         table={at?.name.replace(/^T/, '')} now={now.getHours() * 60 + now.getMinutes()} onBookTable={state.pages.some((p) => p.kind === 'table' && p.isOn) ? () => setOnMenu(false) : undefined} foot={<PoweredBy />}
         onRequest={at && onTableRequest ? (k) => onTableRequest(at.id, k) : undefined} requested={(state.tableRequests ?? []).filter((r) => r.tableId === at?.id).map((r) => r.kind)} />
     );

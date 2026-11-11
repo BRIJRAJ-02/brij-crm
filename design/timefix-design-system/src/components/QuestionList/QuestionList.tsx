@@ -1,8 +1,10 @@
 import {
-  Button as AriaButton, DialogTrigger, DropIndicator, GridList, GridListItem, useDragAndDrop, type Selection,
+  Button as AriaButton, DialogTrigger,
 } from 'react-aria-components';
+import { DragList, useDragRow } from '../../lib/drag.ts';
+import { DragHandle } from '../DragHandle/DragHandle.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, Briefcase, Building2, CopyPlus, Ellipsis, Eye, GripVertical, Megaphone, MousePointerClick, Phone, Plus, Sparkles, Trash, TriangleAlert, Wallet, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Briefcase, Building2, CopyPlus, Ellipsis, Eye, Megaphone, MousePointerClick, Phone, Plus, Sparkles, Trash, TriangleAlert, Wallet, X, type LucideIcon } from 'lucide-react';
 import { QuestionInput } from '../HostedForm/QuestionInput.tsx';
 import { Kbd } from '../Kbd/Kbd.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -226,21 +228,13 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
   const broken = questions.filter((q) => logicProblems(q, questions, endings).length > 0).length;
   const filter = withLogic.length === 0 && broken === 0 ? 'all' : only;
   const shownQs = filter === 'logic' ? questions.filter((q) => hasLogicOf(q) || logicProblems(q, questions, endings).length > 0) : questions;
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ 'text/plain': questions.find((q) => q.id === k)?.title ?? String(k) })),
-    onReorder: (e) => {
-      const moving = questions.filter((q) => e.keys.has(q.id));
-      const rest = questions.filter((q) => !e.keys.has(q.id));
-      const at = rest.findIndex((q) => q.id === e.target.key) + (e.target.dropPosition === 'after' ? 1 : 0);
-      onReorder([...rest.slice(0, at), ...moving, ...rest.slice(at)]);
-    },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-qlist__drop" />,
-    renderDragPreview: (items) => <div className="tf-qlist__preview">{items[0]?.['text/plain'] ?? 'Question'}</div>,
-  });
-  const select = (keys: Selection) => {
-    if (keys === 'all') return;
-    const k = [...keys][0];
-    onSelect(k === undefined ? undefined : String(k));
+  // Dragging inside the Logic filter moves a question next to the shown one it lands beside.
+  const reorderShown = (ids: ReadonlyArray<string>, moved: string) => {
+    const q = questions.find((x) => x.id === moved); if (!q) return;
+    const rest = questions.filter((x) => x.id !== moved);
+    const i = ids.indexOf(moved); const after = ids[i + 1]; const before = ids[i - 1];
+    const at = after ? rest.findIndex((x) => x.id === after) : before ? rest.findIndex((x) => x.id === before) + 1 : 0;
+    onReorder([...rest.slice(0, at), q, ...rest.slice(at)]);
   };
   return (
     <section className="tf-qlist" aria-label="Questions">
@@ -254,60 +248,76 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
       {questions.length === 0 ? (
         <EmptyState size="sm" icon={<Plus size={20} strokeWidth={1.75} />} title="No questions yet" description="Add the first one. Visitors see them in this order." />
       ) : (
-        <GridList aria-label="Questions, drag to reorder" items={shownQs} dragAndDropHooks={dragAndDropHooks} selectionMode="single" selectionBehavior="replace"
-          selectedKeys={selectedId ? [selectedId] : []} onSelectionChange={select} className="tf-qlist__list">
-          {(q) => {
-            const n = questions.indexOf(q);
-            // Steps: the first question opens step 1 when any later one starts a step.
-            const stepNo = questions.slice(0, n + 1).filter((x, m) => m === 0 || x.step).length;
-            const showsStep = questions.some((x, m) => m > 0 && x.step) && (n === 0 || q.step !== undefined);
-            return (
-              <GridListItem id={q.id} textValue={q.title || 'Untitled question'} className="tf-qlist__row">
-                <DropIn animate={freshIds?.has(q.id) ?? false}>
-                  {showsStep && <span className="tf-qlist__step tf-num"><span>Step {stepNo}{q.step?.title ? ` · ${q.step.title}` : ''}</span>
-                    <MenuTrigger>
-                      <IconButton label={`More for step ${stepNo}`} size="sm"><Ellipsis {...i16} /></IconButton>
-                      <Menu placement="bottom end" onAction={(k) => { if (k === 'rename') setRenaming({ id: q.id, title: q.step?.title ?? '' }); else onReorder(questions.map((x) => (x.id === q.id ? { ...x, step: undefined } : x))); }}>
-                        <MenuItem id="rename">Rename step</MenuItem>
-                        {n > 0 && <MenuItem id="merge">Merge with the step above</MenuItem>}
-                      </Menu>
-                    </MenuTrigger></span>}
-                  <div className="tf-qlist__card">
-                    <AriaButton slot="drag" className="tf-qlist__grip" aria-label={`Move ${q.title || 'question'}`}><GripVertical {...i16} /></AriaButton>
-                    <QuestionTypeTile kind={q.kind} />
-                    <span className="tf-qlist__text">
-                      <span className="tf-qlist__q"><span className="tf-qlist__n tf-num">{n + 1}.</span> {q.title || <span className="tf-qlist__untitled">Untitled question</span>}</span>
-                      <span className="tf-qlist__sub">{questionSummary(q, questions, saveTargets)}</span>
-                      {(q.showIf || logicProblems(q, questions, endings).length > 0) && <span className="tf-qlist__chips">
-                        {q.showIf && <Tag size="sm" hue="purple" icon={<Eye size={12} strokeWidth={1.75} />}>Shown if {questions.find((x) => x.id === q.showIf?.questionId)?.title || 'an earlier answer'} is {q.showIf.is}</Tag>}
-                        {logicProblems(q, questions, endings).map((w) => <Tag key={w} size="sm" hue="orange" icon={<TriangleAlert size={12} strokeWidth={1.75} />}>{w}</Tag>)}
-                      </span>}
-                    </span>
-                    <span className="tf-qlist__end">
-                      {onRequiredChange ? <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>
-                        : q.required ? <span className="tf-qlist__req">Required</span> : null}
-                      <MenuTrigger>
-                        <IconButton label={`More for ${q.title || 'question'}`} size="sm"><Ellipsis {...i16} /></IconButton>
-                        <Menu placement="bottom end" onAction={(k) => { if (k === 'delete') onDelete(q.id); else if (k === 'step') onReorder(questions.map((x) => (x.id === q.id ? { ...x, step: x.step ? undefined : {} } : x))); else onDuplicate(q.id); }}>
-                          <MenuItem id="duplicate" icon={<CopyPlus {...i16} />}>Duplicate</MenuItem>
-                          {n > 0 && <MenuItem id="step">{q.step ? 'Merge with the step above' : 'Start a new step here'}</MenuItem>}
-                          <MenuSeparator />
-                          <MenuItem id="delete" icon={<Trash {...i16} />} isDanger>Delete</MenuItem>
-                        </Menu>
-                      </MenuTrigger>
-                    </span>
-                  </div>
-                </DropIn>
-              </GridListItem>
-            );
-          }}
-        </GridList>
+        <DragList ids={shownQs.map((q) => q.id)} onReorder={reorderShown} textOf={(id) => questions.find((q) => q.id === id)?.title || 'Untitled question'}
+          overlay={(id) => { const q = questions.find((x) => x.id === id); return q ? <div className="tf-qlist__card"><DragHandle label="" reveal="always" isLifted /><QuestionTypeTile kind={q.kind} /><span className="tf-qlist__text"><span className="tf-qlist__q">{q.title || 'Untitled question'}</span><span className="tf-qlist__sub">{questionSummary(q, questions, saveTargets)}</span></span></div> : null; }}>
+          <ul aria-label="Questions, drag to reorder" className="tf-qlist__list">
+            {shownQs.map((q) => {
+              const n = questions.indexOf(q);
+              // Steps: the first question opens step 1 when any later one starts a step.
+              const stepNo = questions.slice(0, n + 1).filter((x, m) => m === 0 || x.step).length;
+              const showsStep = questions.some((x, m) => m > 0 && x.step) && (n === 0 || q.step !== undefined);
+              return <QuestionRow key={q.id} q={q} n={n} stepNo={stepNo} showsStep={showsStep} questions={questions} endings={endings} saveTargets={saveTargets} isSelected={selectedId === q.id}
+                isFresh={freshIds?.has(q.id) ?? false} onSelect={() => onSelect(q.id)} onReorder={onReorder} onRename={() => setRenaming({ id: q.id, title: q.step?.title ?? '' })}
+                onRequiredChange={onRequiredChange} onDelete={onDelete} onDuplicate={onDuplicate} />;
+            })}
+          </ul>
+        </DragList>
       )}
       {renaming && <Dialog isOpen onOpenChange={(o) => { if (!o) setRenaming(undefined); }} title="Rename step" description="Visitors see it over the step’s questions."
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => { const r = renaming; onReorder(questions.map((x, m) => (x.id === r.id ? { ...x, step: m === 0 && !r.title.trim() ? undefined : { title: r.title.trim() || undefined } } : x))); setRenaming(undefined); }}>Rename</Button></>}>
         <TextField label="Step name" value={renaming.title} placeholder="About your company" autoFocus onChange={(t) => setRenaming({ ...renaming, title: t })} />
       </Dialog>}
     </section>
+  );
+}
+
+/** One question card in the list: press it to open it; its grip lifts it (lib/drag.ts). */
+function QuestionRow({ q, n, stepNo, showsStep, questions, endings, saveTargets, isSelected, isFresh, onSelect, onReorder, onRename, onRequiredChange, onDelete, onDuplicate }: {
+  readonly q: FormQuestion; readonly n: number; readonly stepNo: number; readonly showsStep: boolean; readonly questions: ReadonlyArray<FormQuestion>;
+  readonly endings: ReadonlyArray<JumpEnding>; readonly saveTargets?: ReadonlyArray<SaveTarget>; readonly isSelected: boolean; readonly isFresh: boolean;
+  readonly onSelect: () => void; readonly onReorder: (qs: ReadonlyArray<FormQuestion>) => void; readonly onRename: () => void;
+  readonly onRequiredChange?: (id: string, required: boolean) => void; readonly onDelete: (id: string) => void; readonly onDuplicate: (id: string) => void;
+}) {
+  const d = useDragRow(q.id);
+  return (
+    <li {...d.row} className="tf-qlist__row" data-selected={isSelected || undefined} aria-label={q.title || 'Untitled question'}>
+      <DropIn animate={isFresh}>
+        {showsStep && <span className="tf-qlist__step tf-num"><span>Step {stepNo}{q.step?.title ? ` · ${q.step.title}` : ''}</span>
+          <MenuTrigger>
+            <IconButton label={`More for step ${stepNo}`} size="sm"><Ellipsis {...i16} /></IconButton>
+            <Menu placement="bottom end" onAction={(k) => { if (k === 'rename') onRename(); else onReorder(questions.map((x) => (x.id === q.id ? { ...x, step: undefined } : x))); }}>
+              <MenuItem id="rename">Rename step</MenuItem>
+              {n > 0 && <MenuItem id="merge">Merge with the step above</MenuItem>}
+            </Menu>
+          </MenuTrigger></span>}
+        <div className="tf-qlist__card">
+          <button type="button" className="tf-qlist__open" aria-pressed={isSelected} aria-label={`Open ${q.title || 'untitled question'}`} onClick={onSelect} />
+          <span className="tf-qlist__grip"><DragHandle label={`Move ${q.title || 'question'}`} reveal="always" isLifted={d.isDragging} drag={d.grip} /></span>
+          <QuestionTypeTile kind={q.kind} />
+          <span className="tf-qlist__text">
+            <span className="tf-qlist__q"><span className="tf-qlist__n tf-num">{n + 1}.</span> {q.title || <span className="tf-qlist__untitled">Untitled question</span>}</span>
+            <span className="tf-qlist__sub">{questionSummary(q, questions, saveTargets)}</span>
+            {(q.showIf || logicProblems(q, questions, endings).length > 0) && <span className="tf-qlist__chips">
+              {q.showIf && <Tag size="sm" hue="purple" icon={<Eye size={12} strokeWidth={1.75} />}>Shown if {questions.find((x) => x.id === q.showIf?.questionId)?.title || 'an earlier answer'} is {q.showIf.is}</Tag>}
+              {logicProblems(q, questions, endings).map((w) => <Tag key={w} size="sm" hue="orange" icon={<TriangleAlert size={12} strokeWidth={1.75} />}>{w}</Tag>)}
+            </span>}
+          </span>
+          <span className="tf-qlist__end">
+            {onRequiredChange ? <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>
+              : q.required ? <span className="tf-qlist__req">Required</span> : null}
+            <MenuTrigger>
+              <IconButton label={`More for ${q.title || 'question'}`} size="sm"><Ellipsis {...i16} /></IconButton>
+              <Menu placement="bottom end" onAction={(k) => { if (k === 'delete') onDelete(q.id); else if (k === 'step') onReorder(questions.map((x) => (x.id === q.id ? { ...x, step: x.step ? undefined : {} } : x))); else onDuplicate(q.id); }}>
+                <MenuItem id="duplicate" icon={<CopyPlus {...i16} />}>Duplicate</MenuItem>
+                {n > 0 && <MenuItem id="step">{q.step ? 'Merge with the step above' : 'Start a new step here'}</MenuItem>}
+                <MenuSeparator />
+                <MenuItem id="delete" icon={<Trash {...i16} />} isDanger>Delete</MenuItem>
+              </Menu>
+            </MenuTrigger>
+          </span>
+        </div>
+      </DropIn>
+    </li>
   );
 }
 

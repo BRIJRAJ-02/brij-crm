@@ -4,6 +4,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppWindow, ArrowRightLeft, Bell, Building2, CalendarClock, CalendarDays, Clock, Code2, Database, Eye, FileDown, History, KeyRound, LayoutGrid, ListChecks, Palette, Repeat, Scissors, Shield, SlidersHorizontal, Split, Store, Trash2, User, UserCog, Users, UtensilsCrossed, Workflow } from 'lucide-react';
 import { SettingsLayout, SettingsNav, SettingsSection, type SettingsNavGroup } from '../SettingsLayout/SettingsLayout.tsx';
+import { BusinessScreen } from './business.tsx';
+import { ServicesScreen, StaffScreen } from './services.tsx';
 import { TeamList } from '../TeamList/TeamList.tsx';
 import { InviteRows } from '../InviteRows/InviteRows.tsx';
 import { RolePowers } from '../RolePowers/RolePowers.tsx';
@@ -13,7 +15,7 @@ import { Select } from '../Select/Select.tsx';
 import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
 import { FileDrop } from '../FileDrop/FileDrop.tsx';
 import { Button } from '../Button/Button.tsx';
-import { Dialog } from '../Dialog/Dialog.tsx';
+import { ConfirmDialog, Dialog } from '../Dialog/Dialog.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { QrCode } from '../QrCode/QrCode.tsx';
@@ -51,7 +53,7 @@ export const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<
     { id: 'apps', label: 'Apps and connections', icon: <AppWindow {...i16} />, words: 'menu table seating appointments connected partner' }, { id: 'history', label: 'History', icon: <History {...i16} />, words: 'audit changes sign-ins' }, { id: 'jobs', label: 'Imports and exports', icon: <FileDown {...i16} />, words: 'csv download background jobs' }] },
   { title: 'Scheduling', items: [{ id: 'availability', label: kind === 'team' ? 'Availability' : 'Opening hours', icon: <Clock {...i16} />, words: 'hours schedules time off limits' }, ...(kind === 'team' ? [{ id: 'roundrobin' as const, label: 'Round robin', icon: <Repeat {...i16} />, words: 'groups rotation fair' }, { id: 'routing' as const, label: 'Routing', icon: <Split {...i16} />, words: 'rules form questions' }] : []),
     { id: 'schedaccess', label: 'Scheduling access', icon: <Eye {...i16} />, words: 'who can see manage hours calendar' }] },
-  ...(kind === 'team' ? [] : [{ title: 'Business', items: [{ id: 'business' as const, label: 'Business page', icon: <Store {...i16} />, words: 'public page photos address' }, { id: 'services' as const, label: kind === 'restaurant' ? 'Table bookings' : 'Services', icon: <Scissors {...i16} />, words: 'prices categories' },
+  ...(kind === 'team' ? [] : [{ title: 'Business', items: [{ id: 'business' as const, label: 'Business', icon: <Store {...i16} />, words: 'business page places hours special days photos address switch' }, { id: 'services' as const, label: kind === 'restaurant' ? 'Table bookings' : 'Services', icon: <Scissors {...i16} />, words: 'prices categories' },
     { id: 'staff' as const, label: 'Staff and shifts', icon: <UserCog {...i16} />, words: 'roster shifts' }, ...(kind === 'restaurant' ? [{ id: 'tables' as const, label: 'Places and tables', icon: <LayoutGrid {...i16} />, words: 'areas seats floor' }, { id: 'menu' as const, label: 'Menu', icon: <UtensilsCrossed {...i16} />, words: 'dishes qr codes' }] : [])] }]),
   { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, ...(LISTS_ON ? [{ id: 'lists' as const, label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }] : []), { id: 'automations', label: 'Automations', icon: <Workflow {...i16} />, words: 'workflow rules trigger when if then runs' }, { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
   { title: 'Developer', items: [{ id: 'developer', label: 'API keys', icon: <Code2 {...i16} />, words: 'api keys tokens' }] },
@@ -106,6 +108,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
 type Dispatch = (a: AppAction) => void;
 type Ask =
   | { readonly kind: 'account' | 'workspace' }
+  | { readonly kind: 'app-off'; readonly id: 'menu' | 'seating' | 'appointments' }
   | { readonly kind: 'devices' } | { readonly kind: 'device'; readonly id: string } | { readonly kind: '2fa-off' } | { readonly kind: 'signout' }
   | { readonly kind: 'team'; readonly id?: string } | { readonly kind: 'remove'; readonly id: string } | { readonly kind: 'key' } | { readonly kind: 'revoke'; readonly id: string }
   | { readonly kind: 'guest'; readonly id: string } | { readonly kind: 'transfer' } | { readonly kind: 'leave' } | { readonly kind: 'partner'; readonly id?: string } | { readonly kind: 'unpartner'; readonly id: string }
@@ -116,9 +119,9 @@ const TAKEN = ['acme', 'timefix', 'admin', 'help', 'northwind-team'];
 const ZONES = [{ id: 'ist', label: 'India (IST)' }, { id: 'gmt', label: 'London (GMT)' }, { id: 'cet', label: 'Berlin (CET)' }, { id: 'gst', label: 'Dubai (GST)' }, { id: 'sgt', label: 'Singapore (SGT)' }, { id: 'est', label: 'New York (ET)' }, { id: 'pst', label: 'Los Angeles (PT)' }];
 const ROLE_NAME = (id: string): Member['role'] => (id === 'owner' ? 'Owner' : id === 'admin' ? 'Admin' : id === 'guest' ? 'Guest' : 'Member');
 const APPS = [
-  { id: 'menu', title: 'Menu and QR codes', hint: 'A menu at your link, a code on every table', kinds: ['restaurant'] },
-  { id: 'seating', title: 'Table seating', hint: 'Reservations, tables and a waitlist', kinds: ['restaurant'] },
-  { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'] },
+  { id: 'menu', title: 'Menu and QR codes', hint: 'A menu at your link, a code on every table', kinds: ['restaurant'], uses: ['The Menu page leaves Bookings', 'Table QR codes open “The menu isn’t up right now”', 'Your business page drops its menu'] },
+  { id: 'seating', title: 'Table seating', hint: 'Reservations, tables and a waitlist', kinds: ['restaurant'], uses: ['Guests leaves Bookings', 'Your page stops taking table bookings', 'The waitlist and the floor view are hidden'] },
+  { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'], uses: ['Clients and Roster leave Bookings', 'Your page stops taking appointments', 'Services, staff and shifts stay in Settings, unused'] },
 ] as const;
 
 function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, openObject, onOpenList, onGoPage, calendars = [], onOpenRecord, onOpenTrashed, sub, bookings, onBookingsAction, onImport, onLinkPage }: { readonly onOpenTrashed?: SettingsScreenProps['onOpenTrashed']; readonly sub?: string; readonly bookings?: BookingsState; readonly onBookingsAction?: (a: BookingsAction) => void; readonly onImport?: () => void; readonly onLinkPage?: () => void; readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly openObject?: string; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
@@ -353,11 +356,12 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
     </>; break; }
     case 'apps': body = <>
       <SettingsSection title="Business apps" description="Each adds its pages to Bookings. Turning one off hides its pages; nothing is deleted.">
-        {APPS.map((a) => { const fits = (a.kinds as ReadonlyArray<string>).includes(kind); const core = fits && a.id !== 'menu'; return (
-          <div key={a.id} className="tf-set__switch"><span><strong>{a.title}</strong><span className="tf-rec__muted">{!fits ? `For ${a.kinds[0] === 'salon' ? 'salons and clinics' : 'restaurants and cafés'}. Switch workspace to try it.` : core ? `${a.hint}. Your workspace runs on it, so it stays on.` : a.hint}</span></span>
-            {!fits ? <Tag size="sm" hue="gray">Not for this workspace</Tag> : core ? <Tag size="sm" hue="green">On</Tag>
-              : <Switch aria-label={a.title} isSelected={p.apps[a.id]} onChange={(on) => { const before = p.apps; dispatch({ type: 'prefs/set', prefs: { apps: { ...p.apps, [a.id]: on } }, note: `${state.me} turned ${a.title} ${on ? 'on' : 'off'}` });
-                toast({ message: on ? `${a.title} is on. Menu is back in Bookings.` : `${a.title} is off. Menu is hidden from Bookings; nothing is deleted.`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { apps: before } }) } }); }} />}</div>); })}
+        {APPS.map((a) => { const fits = (a.kinds as ReadonlyArray<string>).includes(kind); const on = p.apps[a.id]; return (
+          <div key={a.id} className="tf-set__switch"><span><strong>{a.title}</strong><span className="tf-rec__muted">{!fits ? `For ${a.kinds[0] === 'salon' ? 'salons and clinics' : 'restaurants and cafés'}. Switch workspace to try it.` : on ? a.hint : `Off. ${a.uses[0]}; nothing is deleted.`}</span></span>
+            {!fits ? <Tag size="sm" hue="gray">Not for this workspace</Tag>
+              : <Switch aria-label={a.title} isSelected={on} onChange={(next) => { if (!next) { setAsk({ kind: 'app-off', id: a.id }); return; } const before = p.apps; dispatch({ type: 'prefs/set', prefs: { apps: { ...p.apps, [a.id]: true } }, note: `${state.me} turned ${a.title} on` });
+                toast({ message: `${a.title} is on. Its pages are back in Bookings.`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { apps: before } }) } }); }} />}</div>); })}
+        <p className="tf-rec__muted">Only owners and admins turn apps on or off.</p>
         <div className="tf-set__switch"><span><strong>Events</strong><span className="tf-rec__muted">Ticketed classes and workshops</span></span><Tag size="sm" hue="gray">Coming soon</Tag></div>
       </SettingsSection>
       <SettingsSection title="Connected apps" description="Apps that reach your workspace from outside." action={<Button variant="secondary" onPress={() => setAsk({ kind: 'partner' })}>Connect a hub</Button>}>
@@ -403,19 +407,13 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           <Select label={`Who changes ${m.name}'s hours`} isLabelHidden className="tf-you__select" value={bookings.access?.[m.name] ?? 'self'} onChange={(v) => { if (v) { act({ type: 'access/set', name: m.name, access: v === 'admins' ? 'admins' : 'self' }); toast({ message: 'Saved', tone: 'success' }); } }} items={[{ id: 'self', label: 'They and admins' }, { id: 'admins', label: 'Admins only' }]} /></li>)}</ul>
       </SettingsSection>}
     </>; break; }
-    case 'business': { const b = bookings?.business; body = summary('Business page', 'Your public page: photos, about, address and what guests can book.', b ? [
-        ['Address', `timefix.com/${b.handle}`], ['Shown as', `${bookings?.workspace ?? ws.name} · ${b.kindLabel}`], ['Where', b.address], ['Status', b.published ? 'Published' : 'Not published'],
-      ] : [], 'pages', 'Open business page'); break; }
+    case 'business': body = <BusinessScreen bookings={bookings} act={act} />; break;
     case 'services': { const list = (bookings?.pages ?? []).filter((x) => x.kind !== 'table'); const tables = (bookings?.pages ?? []).filter((x) => x.kind === 'table');
       body = kind === 'restaurant' ? summary('Table bookings', 'How guests book a table: party sizes, turn times, pacing and the late hold.', bookings ? [
         ['Booking pages', tables.map((x) => x.name).join(', ') || 'None'], ['Pacing', tables[0]?.pacing ? `${tables[0].pacing} guests per start time` : 'No cap'], ['Late hold', `${tables[0]?.holdLate ?? 15} minutes`],
       ] : [], 'pages', 'Open booking pages')
-        : summary('Services', 'What guests book, with prices and categories.', bookings ? [
-        ['Services', String(list.length)], ['Categories', (bookings.categories ?? []).map((c) => c.name).join(', ') || 'None'], ['Priced', String(list.filter((x) => (x.price ?? 0) > 0).length)],
-      ] : [], 'pages', 'Open services'); break; }
-    case 'staff': { const hosts = [...new Set((bookings?.pages ?? []).flatMap((x) => x.hosts))]; body = summary('Staff and shifts', 'Who works when, and who guests can pick.', bookings ? [
-        ['Staff', hosts.join(', ') || 'Nobody yet'], ['Away soon', String(bookings.timeOff.filter((t) => t.to >= new Date().toISOString().slice(0, 10)).length)],
-      ] : [], 'roster', 'Open Roster'); break; }
+        : <ServicesScreen bookings={bookings} act={act} onGo={(to) => onGoPage?.(to)} />; void list; break; }
+    case 'staff': body = <StaffScreen key={sub ?? 'staff'} bookings={bookings} act={act} startOn={sub === 'shifts' ? 'shifts' : 'staff'} onGo={(to) => onGoPage?.(to)} />; break;
     case 'tables': { const t = bookings?.tables ?? []; body = summary('Places and tables', 'Your areas and tables, and which can be booked online.', bookings ? [
         ['Areas', [...new Set(t.map((x) => x.area))].join(', ') || 'None'], ['Tables', `${t.length} · ${t.reduce((n, x) => n + x.seats, 0)} seats`], ['Online', `${t.filter((x) => x.online).length} of ${t.length}`],
       ] : [], 'availability', 'Open tables'); break; }
@@ -455,6 +453,11 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       {ask?.kind === 'leave' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Leave ${ws.name}?`}
         description={otherOwners === 0 && me?.role === 'Owner' ? `You’re the only owner. Make someone else owner first, or delete the workspace.` : 'You lose access straight away. Your records stay with the workspace; someone can invite you back.'}
         actions={<><Button variant="ghost" slot="close">Stay</Button>{otherOwners === 0 && me?.role === 'Owner' && <Button variant="secondary" onPress={() => setAsk({ kind: 'transfer' })}>Make someone else owner</Button>}<Button variant="danger" isDisabled={otherOwners === 0 && me?.role === 'Owner'} onPress={() => { close(); dispatch({ type: 'history/add', text: `${state.me} left ${ws.name}` }); onDoor?.('signin'); }}>Leave workspace</Button></>} />}
+      {ask?.kind === 'app-off' && (() => { const a = APPS.find((x) => x.id === ask.id); if (!a) return null; return (
+        <ConfirmDialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Turn off ${a.title}?`} tone="danger" confirmLabel="Turn off"
+          consequence={<><span>Nothing is deleted, and turning it back on brings everything back. While it’s off:</span><ul className="tf-set__uses">{a.uses.map((u) => <li key={u}>{u}</li>)}</ul></>}
+          onConfirm={() => { const before = p.apps; dispatch({ type: 'prefs/set', prefs: { apps: { ...p.apps, [a.id]: false } }, note: `${state.me} turned ${a.title} off` }); close();
+            toast({ message: `${a.title} is off`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { apps: before } }) } }); }} />); })()}
       {ask?.kind === 'partner' && (() => { const was = ask.id ? (p.partners ?? []).find((x) => x.id === ask.id) : undefined; return <PartnerDialog initial={was} onClose={close} onConnect={(name, scopes) => { close();
         if (was) { const before = p.partners; dispatch({ type: 'prefs/set', prefs: { partners: (p.partners ?? []).map((x) => (x.id === was.id ? { ...x, scopes } : x)) }, note: `${state.me} changed what ${was.name} can reach` }); toast({ message: `${was.name} updated`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { partners: before } }) } }); }
         else set({ partners: [...(p.partners ?? []), { id: newId('pt'), name, scopes, at: new Date() }] }, `${state.me} connected ${name}`, `${name} is connected`); }} />; })()}

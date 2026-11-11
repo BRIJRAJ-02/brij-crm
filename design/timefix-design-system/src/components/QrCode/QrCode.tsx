@@ -155,6 +155,36 @@ export function qrSheet(codes: ReadonlyArray<{ readonly svg: SVGSVGElement; read
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#fff"/><text x="${gap}" y="44" font-family="Geist, Arial, sans-serif" font-size="24" font-weight="600" fill="#111">${esc(title)}</text>${parts}</svg>`;
 }
 
+/** A print sheet on A4 pages (595 × 842): `tiles` puts six codes a page (2 × 3) with their label and line; `tents` puts two tent cards a page,
+ *  each folded along a dashed line with the code upright on both faces. Pages stack in one SVG, ready to print. */
+export function qrPrintSheet(codes: ReadonlyArray<{ readonly svg: SVGSVGElement; readonly label: string; readonly line?: string }>, layout: 'tiles' | 'tents', title: string): string {
+  const W = 595; const H = 842; const gapY = 24; const per = layout === 'tiles' ? 6 : 2;
+  const pages = Math.max(1, Math.ceil(codes.length / per));
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const text = (x: number, y: number, size: number, weight: number, fill: string, t: string, rot = '') => `<text x="${x}" y="${y}" text-anchor="middle" font-family="Geist, Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}"${rot}>${esc(t)}</text>`;
+  const code = (svg: SVGSVGElement, x: number, y: number, side: number, rot = '') => `<g${rot}>${standalone(svg).replace(/^<svg/, `<svg x="${x}" y="${y}" width="${side}" height="${side}"`)}</g>`;
+  const out: string[] = [];
+  for (let p = 0; p < pages; p += 1) {
+    const top = p * (H + gapY);
+    out.push(`<rect x="0" y="${top}" width="${W}" height="${H}" fill="#fff" stroke="#ddd"/>`, text(W / 2, top + 36, 12, 500, '#555', `${title} · page ${p + 1} of ${pages}`));
+    codes.slice(p * per, p * per + per).forEach((c, i) => {
+      if (layout === 'tiles') {
+        const cw = (W - 3 * 32) / 2; const ch = (H - 64 - 4 * 24) / 3; const x = 32 + (i % 2) * (cw + 32); const y = top + 64 + 24 + Math.floor(i / 2) * (ch + 24);
+        const side = Math.min(cw, ch) - 70;
+        out.push(`<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="12" fill="none" stroke="#ccc" stroke-dasharray="4 4"/>`, code(c.svg, x + (cw - side) / 2, y + 14, side), text(x + cw / 2, y + side + 40, 18, 600, '#111', c.label), c.line ? text(x + cw / 2, y + side + 58, 11, 400, '#555', c.line) : '');
+      } else {
+        const ch = (H - 64 - 3 * 24) / 2; const x = 40; const cw = W - 80; const y = top + 64 + 24 + i * (ch + 24); const half = ch / 2; const side = half - 70;
+        const cx = x + cw / 2; const upper = y + half / 2;
+        out.push(`<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="12" fill="none" stroke="#ccc"/>`, `<line x1="${x}" y1="${y + half}" x2="${x + cw}" y2="${y + half}" stroke="#999" stroke-dasharray="6 6"/>`,
+          code(c.svg, cx - side / 2, upper - side / 2 - 10, side, ` transform="rotate(180 ${cx} ${upper})"`), text(cx, upper + side / 2 + 8, 16, 600, '#111', c.label, ` transform="rotate(180 ${cx} ${upper + side / 2 + 2})"`),
+          code(c.svg, cx - side / 2, y + half + 16, side), text(cx, y + half + side + 36, 16, 600, '#111', c.label), c.line ? text(cx, y + half + side + 54, 11, 400, '#555', c.line) : '');
+      }
+    });
+  }
+  const h = pages * H + (pages - 1) * gapY;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${h}" width="${W}" height="${h}">${out.join('')}</svg>`;
+}
+
 /** Saves a drawn QrCode as `name.svg`, or `name.png` at `px` pixels wide (default 1024), always on white. */
 export async function downloadQr(svg: SVGSVGElement, name: string, format: 'svg' | 'png', px = 1024): Promise<SaveOutcome> {
   const text = standalone(svg);

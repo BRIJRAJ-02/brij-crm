@@ -1,7 +1,5 @@
 import { Button as AriaButton } from 'react-aria-components';
-import { closestCorners, DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, PointerSensor, pointerWithin, useDroppable, useSensor, useSensors, type Announcements, type ClientRect, type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter, type Modifier } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS as DndCss } from '@dnd-kit/utilities';
+import { closestCorners, DndContext, DragOverlay, KeyboardSensor, measuring, PointerSensor, pointerWithin, SHIFT, SortableContext, translateOf, useDroppable, useReducedMotion, useSensor, useSensors, useSortable, useUnzoom, verticalListSortingStrategy, zoomOf, type Announcements, type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter } from '../../lib/drag.ts';
 import { useEffect, useRef, useState, type KeyboardEventHandler, type PointerEventHandler } from 'react';
 import { ArrowRight, Calendar, ChevronsLeft, GripVertical, Plus } from 'lucide-react';
 import { IconButton } from '../Button/Button.tsx';
@@ -67,8 +65,6 @@ export interface BoardProps {
   readonly noun?: string;
 }
 
-/** Card shifts and the drop glide: --duration-fast on --ease-smooth-out. */
-const SHIFT = { duration: 250, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };
 const SETTLE_MS = 250; // --duration-fast
 const LANE = 'lane:';
 
@@ -76,33 +72,6 @@ const LANE = 'lane:';
 type DragState = { readonly from: string; readonly over?: string; readonly card: string };
 type Lanes = Readonly<Record<string, ReadonlyArray<string>>>;
 const lanesOf = (columns: ReadonlyArray<BoardColumn>): Lanes => Object.fromEntries(columns.map((c) => [c.id, c.cards.map((card) => card.id)]));
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  useEffect(() => { const m = window.matchMedia('(prefers-reduced-motion: reduce)'); const f = () => setReduced(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
-  return reduced;
-}
-
-/** The CSS zoom an element draws at (the product of its ancestors' zoom); 1 on a page that isn't zoomed. */
-function zoomOf(el: Element | null): number {
-  let z = 1;
-  for (let n = el; n; n = n.parentElement) z *= parseFloat(getComputedStyle(n).zoom) || 1;
-  return z;
-}
-/** dnd-kit measures on screen but moves things in the page's own units, so under a CSS zoom every length is divided by it.
- *  Cards and lanes are measured where they sit without their live slide (as dnd-kit does by default); the lifted copy as drawn. */
-const rectIn = (el: HTMLElement, withSlide: boolean): ClientRect => {
-  const r = el.getBoundingClientRect(); const z = zoomOf(el);
-  let dx = 0; let dy = 0;
-  if (!withSlide) { const m = getComputedStyle(el).transform; if (m && m !== 'none') { const v = m.slice(m.indexOf('(') + 1, -1).split(',').map(Number); dx = v.length === 6 ? v[4] ?? 0 : v[12] ?? 0; dy = v.length === 6 ? v[5] ?? 0 : v[13] ?? 0; } }
-  const top = r.top / z - dy; const left = r.left / z - dx; const width = r.width / z; const height = r.height / z;
-  return { top, left, width, height, bottom: top + height, right: left + width };
-};
-const measuring = {
-  draggable: { measure: (el: HTMLElement) => rectIn(el, false) },
-  droppable: { measure: (el: HTMLElement) => rectIn(el, false), strategy: MeasuringStrategy.WhileDragging },
-  dragOverlay: { measure: (el: HTMLElement) => rectIn(el, true) },
-};
 
 /** The pointer's lane first (so a drop anywhere down a lane counts), then the nearest card corners inside it. */
 const collideAt = (z: number): CollisionDetection => (args) => {
@@ -162,9 +131,8 @@ export function Board({ label, columns, onMove, onAdd, onToggleCollapse, onOpen,
   const byId = new Map(columns.flatMap((c) => c.cards.map((card) => [card.id, card] as const)));
 
   const boardRef = useRef<HTMLDivElement>(null);
-  const zoom = useRef(1);
   // The pointer moves in screen pixels; keyboard steps are already in the page's units.
-  const unzoom: Modifier = ({ transform, activatorEvent }) => (activatorEvent instanceof KeyboardEvent ? transform : { ...transform, x: transform.x / zoom.current, y: transform.y / zoom.current });
+  const { modifier: unzoom, zoom } = useUnzoom();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: boardKeys }),
@@ -314,7 +282,7 @@ function SortableCard({ card, lane, onOpen, reduced, isSettling, isNew }: {
   readonly card: BoardCard; readonly lane: string; readonly onOpen?: (id: string) => void; readonly reduced: boolean; readonly isSettling: boolean; readonly isNew: boolean;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { lane }, transition: reduced ? null : SHIFT });
-  const style = { transform: DndCss.Translate.toString(transform), transition: transition ?? undefined };
+  const style = { transform: translateOf(transform), transition: transition ?? undefined };
   return (
     // eslint-disable-next-line react/forbid-dom-props -- dnd-kit's live offset
     <li ref={setNodeRef} style={style} className={cx('tf-board__card', isSettling && 'is-settling', isNew && 'is-new')} data-dragging={isDragging || undefined}

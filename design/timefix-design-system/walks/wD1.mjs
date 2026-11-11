@@ -44,14 +44,14 @@ await t('2 builder: steps, shown if chip, logic filter, warnings, endings, route
   await shot('11-steps-builder');
   await openForm('Talk to sales');
   // Show only if on Company: when team size is 51–200.
-  await main().getByRole('row', { name: 'What are you hoping to fix?' }).click(); await p.waitForTimeout(400);
+  await main().getByRole('row', { name: 'What are you hoping to fix?' }).or(main().getByRole('listitem', { name: 'What are you hoping to fix?' })).first().click(); await p.waitForTimeout(400);
   await main().getByRole('button', { name: 'Logic and points' }).click(); await p.waitForTimeout(300);
   await main().getByRole('button', { name: /Question/ }).filter({ hasText: 'Always show' }).click(); await p.waitForTimeout(300);
   await p.getByRole('option', { name: 'How big is your team?' }).click(); await p.waitForTimeout(300);
   await main().getByRole('button', { name: 'All questions' }).click(); await p.waitForTimeout(400);
   await need(main().getByText(/Shown if How big is your team\? is Just me/), 'shown if chip');
   // A jump to an ending, and an Otherwise line.
-  await main().getByRole('row', { name: 'How big is your team?' }).click(); await p.waitForTimeout(400);
+  await main().getByRole('row', { name: 'How big is your team?' }).or(main().getByRole('listitem', { name: 'How big is your team?' })).first().click(); await p.waitForTimeout(400);
   await need(main().getByRole('button', { name: 'Pick one' }).or(main().getByRole('radio', { name: 'Pick one' })), 'choice type switch');
   await need(main().getByRole('switch', { name: 'Add Other' }), 'other switch');
   await main().getByRole('switch', { name: 'Add Other' }).evaluate((e) => e.click()); await p.waitForTimeout(200);
@@ -71,7 +71,7 @@ await t('2 builder: steps, shown if chip, logic filter, warnings, endings, route
   await need(main().getByText('Save the score to'), 'score');
   await main().locator('.tf-fp__after').scrollIntoViewIfNeeded(); await shot('14-after-send');
   // Delete a choice a jump reads: the card warns, and the Logic filter counts it.
-  await main().getByRole('row', { name: 'How big is your team?' }).click(); await p.waitForTimeout(400);
+  await main().getByRole('row', { name: 'How big is your team?' }).or(main().getByRole('listitem', { name: 'How big is your team?' })).first().click(); await p.waitForTimeout(400);
   await main().getByRole('button', { name: 'Remove Just me' }).click(); await p.waitForTimeout(300);
   await main().getByRole('button', { name: 'All questions' }).click(); await p.waitForTimeout(400);
   await need(main().getByText(/no longer a choice/).first(), 'broken logic warning');
