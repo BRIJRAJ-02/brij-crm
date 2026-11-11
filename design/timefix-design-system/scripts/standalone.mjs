@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 const [name, title, outFile] = process.argv.slice(2);
 const tmp = `../standalone-out-${name}`;
 
-// React Aria places popovers from on-screen rects, but the popover layer draws at 80%, so every placed length would
+// React Aria places popovers from on-screen rects, but the popover layer draws at 88%, so every placed length would
 // shrink again and land short of its trigger. Patch its maths at build time: measure the popover on screen too, divide
 // the result by the popover's effective zoom, and size --trigger-width from the trigger's own layout width.
 const zoomHelper = `
@@ -61,11 +61,11 @@ ${fontLinks}
 ${tokens}
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${themed('dark')} color-scheme: dark; } }
 [data-theme="dark"] { color-scheme: dark; }
-/* The dashboard draws at 80% (owner, 11 Nov: smaller type and padding across); public pages step back to 100%.
+/* The dashboard draws at 88% (owner, 11 Nov: 80% for smaller type and padding, then type 10% larger); public pages step back to 100%.
    The app and each overlay layer (popovers, menus, dialogs, toasts: React Aria portals them into body) are zoomed on
    their own, never the root, so React Aria measures the page in one coordinate space; the zoom-fix build plugin
    converts its placed lengths into each popover's own zoomed space. */
-html:not([data-guest]) #root, html:not([data-guest]) body > :not(#root) { zoom: 0.8; }
+html:not([data-guest]) #root, html:not([data-guest]) body > :not(#root) { zoom: 0.88; }
 html, body { height: 100%; overflow: hidden; }
 body { margin: 0; background: var(--canvas); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }
