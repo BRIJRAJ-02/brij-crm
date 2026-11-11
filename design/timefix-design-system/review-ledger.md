@@ -371,3 +371,9 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Chart: BarChart `look="dots"` (marketing dot columns), used on Insights per day and Bookings Insights. Walk w5dots.
 - Fix: guest manage page showed the default cut-off line and the host's own too-late message together; the host's message now stands alone.
 - regress "manage move" fails before ~10:00 local because the seeded 10:00 booking is inside the 4 hour cut-off; correct behaviour, time-dependent walk.
+
+## Wave 6 (11 Nov)
+- Restaurant shifts: `shifts` per table page (Lunch/Dinner/Service: own pacing, last seating), `shiftsOn`/`pacingAt` in state, editor rows behind a switch, PaceStrip under each shift on Reservations. Walk w6shift.
+- Always joins: `alwaysWith` on round robin pages, `coHosts` on meetings, `isWith` used for clashes, limits, team day, roster; drawer says "with". Walk w6rr.
+- Record Meetings section (person by email or name, deal contact, company people), opening the booking. Walk w6rec.
+- w5guests dark flaked once under load, passed on rerun. regress "manage move" still time-dependent (before ~10:00).

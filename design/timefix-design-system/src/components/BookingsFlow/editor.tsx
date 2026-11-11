@@ -14,7 +14,7 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { ShowMore } from '../Disclosure/Disclosure.tsx';
 import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
 import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
-import { HoursEditor } from '../HoursEditor/HoursEditor.tsx';
+import { HoursEditor, HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { QuestionBuilder } from '../QuestionList/QuestionList.tsx';
 import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { SocialLinksEditor } from '../SocialLinks/SocialLinks.tsx';
@@ -28,8 +28,8 @@ import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, Scaled
 import { uniqueSlug } from './seed.ts';
 import { TablePreview } from './guest-venue.tsx';
 import {
-  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
-  type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut,
+  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName,
+  type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
 } from './state.ts';
 
 const LENGTHS = [15, 30, 45, 60, 90];
@@ -197,6 +197,24 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                           <Select label="Late tables held for" description="Then the table can go to someone else." value={String(draft.holdLate ?? 15)} onChange={(v) => set({ holdLate: Number(v ?? 15) })}
                             items={[10, 15, 20, 30].map((n) => ({ id: String(n), label: `${n} min` }))} />
                         </div>
+                        {/* Each shift's own pacing and last seating (Resy and OpenTable shifts), off until asked for. */}
+                        {(() => {
+                          const names = [...new Set(HOURS_DAYS.flatMap((d) => { const h = (state.savedHours.find((x) => x.id === state.defaultHoursId) ?? state.savedHours[0])?.hours[d]; return h?.on ? h.ranges.map((r) => shiftName(h.ranges.length, r.start)) : []; }))]
+                            .sort((a, b) => ['Lunch', 'Service', 'Dinner'].indexOf(a) - ['Lunch', 'Service', 'Dinner'].indexOf(b));
+                          if (names.length === 0) return null;
+                          const rule = (n: string) => draft.shifts?.[n] ?? {};
+                          const put = (n: string, x: Partial<ShiftRule>) => set({ shifts: { ...draft.shifts, [n]: { ...rule(n), ...x } } });
+                          return <>
+                            <Switch isSelected={draft.shifts !== undefined} onChange={(on) => set({ shifts: on ? Object.fromEntries(names.map((n) => [n, {}])) : undefined })}>{names.length > 1 ? `Own rules for ${names.join(' and ').toLowerCase()}` : 'Last seating and pacing for the service'}</Switch>
+                            {draft.shifts && <ul className="tf-bkf__turns tf-bkf__turns--shifts"><li className="tf-bkf__turns-head" aria-hidden="true"><span>Shift</span><span>Most starting at once</span><span>Last seating</span></li>{names.map((n) => (
+                              <li key={n}><span>{n}</span>
+                                <Select label={`${n}: most guests starting at once`} isLabelHidden className="tf-bkf__inline-select" value={String(rule(n).pacing ?? 'page')} onChange={(v) => put(n, { pacing: v && v !== 'page' ? Number(v) : undefined })}
+                                  items={[{ id: 'page', label: draft.pacing ? `${draft.pacing} at once` : 'No limit' }, ...[6, 8, 10, 12, 16, 20, 24, 30].filter((x) => x !== draft.pacing).map((x) => ({ id: String(x), label: `${x} at once` }))]} />
+                                <Select label={`${n}: last seating`} isLabelHidden className="tf-bkf__inline-select" value={String(rule(n).lastSeating ?? 'fit')} onChange={(v) => put(n, { lastSeating: v && v !== 'fit' ? Number(v) : undefined })}
+                                  items={[{ id: 'fit', label: 'While a table fits' }, ...[30, 45, 60, 90, 120].map((x) => ({ id: String(x), label: `${x} min before close` }))]} />
+                              </li>))}</ul>}
+                          </>;
+                        })()}
                         {/* How long each party keeps its table, by size (OpenTable's turn times). */}
                         <Switch isSelected={draft.turns !== undefined} onChange={(on) => set({ turns: on ? [{ upTo: 2, minutes: 75 }, { upTo: 4, minutes: 90 }, { upTo: 6, minutes: 120 }, { upTo: 99, minutes: 150 }] : undefined, bigTurn: undefined })}>Turn time by party size</Switch>
                         {draft.turns && <ul className="tf-bkf__turns">{draft.turns.map((t, n) => (
@@ -284,8 +302,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                           const off = state.timeOff.some((t) => t.member === name && parseDay(t.to) >= dayFrom(now, 0));
                           return (
                             <Checkbox key={name} isSelected={on} isDisabled={on && draft.hosts.length === 1}
-                              onChange={(v) => set({ hosts: v ? TEAM.filter((n) => n === name || draft.hosts.includes(n)) : draft.hosts.filter((n) => n !== name) })}>
-                              <span className="tf-bkf__host"><Avatar name={name} size={20} />{name}{name === HOST && <span className="tf-bkf__muted"> · you</span>}{paused && <span className="tf-bkf__muted"> · paused</span>}{off && <span className="tf-bkf__muted"> · time off soon</span>}{(state.memberCalendars?.[name] === 'reconnect') && <span className="tf-bkf__muted"> · calendar needs reconnecting</span>}</span>
+                              onChange={(v) => set({ hosts: v ? TEAM.filter((n) => n === name || draft.hosts.includes(n)) : draft.hosts.filter((n) => n !== name), alwaysWith: v && draft.alwaysWith?.includes(name) ? draft.alwaysWith.filter((n) => n !== name).length ? draft.alwaysWith.filter((n) => n !== name) : undefined : draft.alwaysWith })}>
+                              <span className="tf-bkf__host"><Avatar name={name} size={20} />{name}{name === HOST && <span className="tf-bkf__muted"> · you</span>}{paused && <span className="tf-bkf__muted"> · paused</span>}{off && <span className="tf-bkf__muted"> · time off soon</span>}{(state.memberCalendars?.[name] === 'reconnect') && <span className="tf-bkf__muted"> · calendar needs reconnecting</span>}{draft.hostMode === 'roundrobin' && draft.alwaysWith?.includes(name) && <span className="tf-bkf__muted"> · joins every meeting</span>}</span>
                             </Checkbox>
                           );
                         })}
@@ -322,7 +340,14 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                             ))}
                           </span>
                         </SettingRow>
-                        <ShowMore showLabel="More options" hideLabel="Fewer options">
+                        <ShowMore showLabel="More options" hideLabel="Fewer options" defaultExpanded={Boolean(draft.alwaysWith?.length)}>
+                          {/* A fixed teammate on every meeting while the hosts rotate (Chili Piper's and Calendly's "always include"). */}
+                          {TEAM.some((n) => !draft.hosts.includes(n)) && <div className="tf-bkf__group tf-bkf-always">
+                            <ChoiceChips label="Always joins" size="sm" selectionMode="multiple" selectedKeys={[...(draft.alwaysWith ?? [])]}
+                              onSelectionChange={(k) => set({ alwaysWith: k.size ? TEAM.filter((n) => k.has(n)) : undefined })}
+                              items={TEAM.filter((n) => !draft.hosts.includes(n)).map((n) => ({ id: n, label: n === HOST ? `${first(n)} (you)` : first(n) }))} />
+                          {draft.alwaysWith?.length ? <p className="tf-bkf__muted">{draft.alwaysWith.map(first).join(' and ')} {draft.alwaysWith.length === 1 ? 'joins' : 'join'} every meeting, so times show only when {draft.alwaysWith.length === 1 ? 'they are' : 'they’re all'} free too.</p> : null}
+                          </div>}
                           <div className="tf-bkf-settings">
                         <SettingRow title="When a meeting moves" description={(draft.rrReschedule ?? 'same') === 'same' ? 'The same host keeps it if they’re free at the new time.' : 'The rotation picks again, as for a new booking.'}>
                           <Select label="When a meeting moves" isLabelHidden className="tf-bkf__inline-select" value={draft.rrReschedule ?? 'same'} onChange={(k) => set({ rrReschedule: k === 'rotate' ? 'rotate' : 'same' })}

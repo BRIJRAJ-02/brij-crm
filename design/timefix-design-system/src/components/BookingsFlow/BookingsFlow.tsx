@@ -36,7 +36,7 @@ import { lumen, olive } from './seed-business.ts';
 import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
-  HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural, guestKey,
+  HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural, guestKey, isWith, alwaysFree,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
@@ -260,13 +260,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     const name = r.name.trim() || 'Guest';
     // A returning guest on a shared page goes to whoever they met last time, when that person is free then.
     const lastHost = p.hostMode !== 'one' && r.email ? now.meetings.filter((m) => m.invitee.email.toLowerCase() === r.email.toLowerCase() && p.hosts.includes(m.host) && m.status !== 'cancelled').sort((a, b) => b.start.getTime() - a.start.getTime())[0]?.host : undefined;
-    const host = p.kind === 'table' ? (p.hosts[0] ?? HOST) : lastHost && memberFree(now, p, lastHost, day, r.minutes, r.minutes + r.length) ? lastHost : hostFor(now, p, day, r.minutes, r.minutes + r.length);
+    const host = p.kind === 'table' ? (p.hosts[0] ?? HOST) : lastHost && memberFree(now, p, lastHost, day, r.minutes, r.minutes + r.length) && alwaysFree(now, p, day, r.minutes, r.minutes + r.length) ? lastHost : hostFor(now, p, day, r.minutes, r.minutes + r.length);
     // Nobody free then (someone else took it a moment ago): the guest's page shows "Someone just booked that time".
     if (!host || (p.kind === 'table' && !tables)) return false;
     pending.current.push({
       type: 'meeting/add',
       meeting: {
-        id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.kind === 'table' ? `Table for ${r.party ?? 2}` : p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: tables ? tableText : placeLabel(p, r.place),
+        id, pageId: p.id, host, coHosts: p.hostMode === 'roundrobin' && p.alwaysWith?.length ? p.alwaysWith : undefined, start, end: new Date(start.getTime() + r.length * 60_000), title: p.kind === 'table' ? `Table for ${r.party ?? 2}` : p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: tables ? tableText : placeLabel(p, r.place),
         party: p.kind === 'table' ? r.party ?? 2 : undefined, tables, phone: r.phone, occasion: r.occasion, area: r.area, source: p.kind === 'table' ? 'online' : undefined,
         status: p.confirmFirst ? 'pending' : 'confirmed', notes: p.kind === 'table' ? r.notes : '', answers: r.notes && p.kind !== 'table' ? [{ question: 'Anything to share before the call?', answer: r.notes }] : [], guestZone: r.timeZone,
         record: p.addToPeople ? { id: nextId('r'), name, kind: 'person', sub: r.email } : undefined, activity: [{ id: nextId('a'), text: `Booked by ${name}`, at: new Date() }],
@@ -334,7 +334,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     const others = { ...state, meetings: state.meetings.filter((x) => x.id !== m.id) };
     const p = m.pageId ? pageById(m.pageId) : undefined;
     const s = minutesOf(start); const e = minutesOf(end);
-    const clash = (h: string) => others.meetings.some((x) => x.host === h && x.status !== 'cancelled' && x.start < end && x.end > start) || isOff(state, h, start, s, e) !== undefined;
+    const clash = (h: string) => others.meetings.some((x) => isWith(x, h) && x.status !== 'cancelled' && x.start < end && x.end > start) || isOff(state, h, start, s, e) !== undefined;
     const free = (h: string) => (p ? memberFree(others, p, h, start, s, e) : true) && !clash(h);
     if (p?.hostMode === 'roundrobin' && (rotate || !free(m.host))) return hostFor(others, p, start, s, e) ?? (free(m.host) ? m.host : undefined);
     return free(m.host) ? m.host : undefined;
@@ -350,7 +350,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     toast({ message: `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}. ${first(m.invitee.name)} ${how}.`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { start: m.start, end: m.end, host: m.host }, note: 'Move undone' }) } });
   };
   const freeTeammate = (m: BookedMeeting, pool: ReadonlyArray<string> = TEAM, given: ReadonlyArray<BookedMeeting> = []) => pool.find((n) => n !== m.host && !isOff(state, n, m.start, minutesOf(m.start), minutesOf(m.end))
-    && ![...state.meetings, ...given].some((x) => x.id !== m.id && x.host === n && x.status !== 'cancelled' && x.start < m.end && m.start < x.end));
+    && ![...state.meetings, ...given].some((x) => x.id !== m.id && isWith(x, n) && x.status !== 'cancelled' && x.start < m.end && m.start < x.end));
   /** Hands several meetings on; each one counts the ones already handed on in this batch, so no one is double-booked. */
   const reassignMany = (list: ReadonlyArray<BookedMeeting>, pool?: ReadonlyArray<string>) => {
     const given: BookedMeeting[] = [];

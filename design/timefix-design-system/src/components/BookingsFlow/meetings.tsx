@@ -30,6 +30,7 @@ import { Button as AriaButton, type Key } from 'react-aria-components';
 import {
   HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, atLimit, busyOn, conflicted, dayFrom, first, hoursOn, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
   type BookedMeeting, type BookingsState, type PlaceKind, type TimeBlock,
+  isWith,
 } from './state.ts';
 
 /** People in the CRM the host can book with or link a meeting to. */
@@ -95,7 +96,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
   const { toast } = useToast();
   const now = new Date();
   const [range, setRange] = useState<Range>('upcoming');
-  const mine = (m: BookedMeeting) => whose === 'everyone' || m.host === (whose === 'mine' ? HOST : whose);
+  const mine = (m: BookedMeeting) => whose === 'everyone' || isWith(m, whose === 'mine' ? HOST : whose);
   const scoped = state.meetings.filter(mine);
   const upcomingAll = scoped.filter((m) => m.status !== 'cancelled' && m.end > now);
   const requests = upcomingAll.filter((m) => m.status === 'pending');
@@ -332,7 +333,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
       <div className="tf-bkf-team" style={{ '--tf-bkf-cols': staff.length, '--tf-bkf-hours': to - from } as React.CSSProperties}>
         <div className="tf-bkf-team__head">
           <span />
-          {staff.map((name) => { const n = onDay.filter((m) => m.host === name).length; return <span key={name} className="tf-bkf-team__who"><Avatar name={name} size={28} /><span className="tf-bkf-team__whotext"><strong>{name}</strong><span className="tf-bkf__muted tf-num">{isOff(state, name, day) ? 'Away' : `${plural(n, 'booking')}`}</span></span></span>; })}
+          {staff.map((name) => { const n = onDay.filter((m) => isWith(m, name)).length; return <span key={name} className="tf-bkf-team__who"><Avatar name={name} size={28} /><span className="tf-bkf-team__whotext"><strong>{name}</strong><span className="tf-bkf__muted tf-num">{isOff(state, name, day) ? 'Away' : `${plural(n, 'booking')}`}</span></span></span>; })}
         </div>
         <div className="tf-bkf-team__scroll">
         <div className="tf-bkf-team__body">
@@ -346,7 +347,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
             const ranges = h.on ? [...h.ranges].sort((a, b) => a.start - b.start) : [];
             const breaks = ranges.slice(1).map((r, n) => ({ start: ranges[n]?.end ?? r.start, end: r.start })).filter((b) => b.end > b.start);
             const closed = off ? [] : ranges.length === 0 ? [{ start: from * 60, end: to * 60 }] : [{ start: from * 60, end: Math.max(from * 60, ranges[0]?.start ?? from * 60) }, { start: Math.min(to * 60, ranges[ranges.length - 1]?.end ?? to * 60), end: to * 60 }].filter((c) => c.end > c.start);
-            const meetings = state.meetings.filter((m) => m.host === name && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString());
+            const meetings = state.meetings.filter((m) => isWith(m, name) && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString());
             const busy = busyOn(state, name, day);
             const sel = drag?.member === name ? { start: Math.min(drag.a, drag.b), end: Math.max(drag.a, drag.b) + 15 } : undefined;
             return (

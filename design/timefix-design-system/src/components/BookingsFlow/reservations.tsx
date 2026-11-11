@@ -1,7 +1,7 @@
 // A restaurant's home: the host stand. One day at a time, split by service (Lunch, Dinner) with covers, each table booking moving
 // Booked → Seated → Left (or Late → No-show), plus Walk in, a waitlist and a floor view of every table. Same meetings underneath.
 import { Callout } from '../Callout/Callout.tsx';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -23,7 +23,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey } from './state.ts';
+  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey, shiftsOn, pacingAt, coversAt } from './state.ts';
 
 /** Where a table booking is tonight. */
 type Stage = 'request' | 'booked' | 'late' | 'seated' | 'left' | 'no-show' | 'cancelled';
@@ -86,7 +86,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   // Earlier today: who was seated off the waitlist and who left, with the average wait, kept for the host's numbers.
   const waitDone = allWait.filter((w) => w.outcome);
   const waitAvg = (() => { const s = waitDone.filter((w) => w.outcome === 'seated' && w.endedAt); return s.length ? Math.round(s.reduce((n, w) => n + mins(w.added, w.endedAt ?? w.added), 0) / s.length) : undefined; })();
-  const services = servicesOn(state, day);
+  const services = shiftsOn(state, day);
   const tableName = (ids: ReadonlyArray<string> | undefined) => (ids ?? []).map((id) => state.tables?.find((t) => t.id === id)?.name ?? '').filter(Boolean).join(' + ') || 'No table';
 
   const update = (m: BookedMeeting, text: string) => dispatch({ type: 'meeting/update', meeting: { ...m, activity: [...m.activity, { id: nextId('a'), text, at: new Date() }] } });
@@ -188,10 +188,11 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
           <section key={s.name} className="tf-bkf-res-group" aria-label={s.name}>
             <h3 className="tf-bkf-res-group__h"><span>{s.name}<span className="tf-bkf__muted tf-num"> · {formatClockRange(s.start, s.end)}</span></span><span className="tf-bkf__muted tf-num">{plural(c, 'cover')} · {plural(rows.length, 'table')}{(() => {
               // Pacing: the busiest start time against the page's cap, so the host sees a rush coming.
-              const cap = page.pacing ?? 0; if (!cap) return null;
+              const cap = pacingAt(page, state, day, s.start); if (!cap) return null;
               const at0 = [...rows.filter((m) => m.status !== 'no-show').reduce((mp, m) => mp.set(minutesOf(m.start), (mp.get(minutesOf(m.start)) ?? 0) + (m.party ?? 0)), new Map<number, number>())].sort((x, y) => y[1] - x[1])[0];
               return at0 ? ` · busiest ${formatClock(at0[0])}, ${at0[1]} of ${cap}` : null;
             })()}</span></h3>
+            {rows.length > 0 && <PaceStrip state={state} page={page} day={day} shift={s} now={isToday ? now : undefined} />}
             {rows.length === 0 ? <p className="tf-bkf__muted tf-bkf-res-group__empty">No reservations yet.</p> : <ul className="tf-bkf-res-rows">{rows.map(row)}</ul>}
           </section>
         );
@@ -304,11 +305,29 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   );
 }
 
-/** The day's services from opening hours: one range is "Service", two are Lunch and Dinner. */
-function servicesOn(state: BookingsState, day: Date): ReadonlyArray<{ readonly name: string; readonly start: number; readonly end: number }> {
-  const d = venueDay(state, day);
-  if (!d?.on) return [];
-  return d.ranges.map((r) => ({ name: d.ranges.length === 1 ? 'Service' : r.start < 16 * 60 ? 'Lunch' : 'Dinner', start: r.start, end: r.end }));
+/** A shift's load at a glance: guests starting in each 15 minutes against the shift's pacing cap; a slot at the cap turns orange,
+ *  and slots already gone today are dimmed. Hover or focus a slot for its numbers. */
+function PaceStrip({ state, page, day, shift, now }: { readonly state: BookingsState; readonly page: BookingPage; readonly day: Date; readonly shift: { readonly name: string; readonly start: number; readonly end: number }; readonly now?: Date }) {
+  const cap = pacingAt(page, state, day, shift.start);
+  const last = page.shifts?.[shift.name]?.lastSeating;
+  const slots = Array.from({ length: Math.max(0, Math.floor((shift.end - shift.start) / 15)) }, (_, n) => shift.start + n * 15);
+  const vals = slots.map((m) => coversAt(state, page.id, day, m));
+  const top = Math.max(cap, ...vals, 1);
+  const busiest = slots[vals.indexOf(Math.max(...vals))];
+  const gone = now ? minutesOf(now) : -1;
+  return (
+    <div className="tf-bkf-pace" role="group" aria-label={`${shift.name}: guests starting every 15 minutes${cap ? `, up to ${cap} each` : ''}`}>
+      <div className="tf-bkf-pace__bars" style={{ '--cap': cap ? cap / top : 0 } as CSSProperties}>
+        {slots.map((m, n) => {
+          const v = vals[n] ?? 0;
+          return <span key={m} tabIndex={v > 0 ? 0 : -1} className={cx('tf-bkf-pace__slot', v === 0 && 'is-empty', cap > 0 && v >= cap && 'is-full', m + 15 <= gone && 'is-gone', last !== undefined && m > shift.end - last && 'is-closed')}
+            style={{ '--h': v / top } as CSSProperties} aria-label={`${formatClock(m)}: ${plural(v, 'guest')}${cap ? ` of ${cap}` : ''}`} title={`${formatClock(m)} · ${plural(v, 'guest')}${cap ? ` of ${cap}` : ''}`} />;
+        })}
+        {cap > 0 && <span className="tf-bkf-pace__cap" aria-hidden="true" />}
+      </div>
+      <div className="tf-bkf-pace__axis tf-num" aria-hidden="true"><span>{formatClock(shift.start)}</span>{busiest !== undefined && Math.max(...vals) > 0 && <span>Busiest {formatClock(busiest)}</span>}<span>{last !== undefined ? `Last seating ${formatClock(shift.end - last)}` : formatClock(shift.end)}</span></div>
+    </div>
+  );
 }
 
 function stageTag(m: BookedMeeting, stage: Stage, now: Date, holdLate: number): ReactNode {
@@ -496,7 +515,7 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
   const d = days.find((x) => isoDay(x) === dayId) ?? (meeting?.start ?? day);
   const turn = turnFor(page, party);
   // The host can book any time in service hours, staff-only tables included.
-  const slots = servicesOn(state, d).flatMap((s) => Array.from({ length: Math.max(0, Math.floor((s.end - s.start) / 15)) }, (_, n) => s.start + n * 15));
+  const slots = shiftsOn(state, d).flatMap((s) => Array.from({ length: Math.max(0, Math.floor((s.end - s.start) / 15)) }, (_, n) => s.start + n * 15));
   const choices = time === undefined ? [] : freeChoices(state, party, d, time, turn, meeting?.id);
   const chosen = choices.find((c) => c.id === pick) ?? choices[0];
   const auto = time !== undefined ? fitTables(state, party, d, time, turn, false, undefined, meeting?.id) : undefined;

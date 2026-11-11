@@ -98,6 +98,8 @@ export interface BookingPage {
   readonly perDay: number;
   readonly perWeek: number;
   readonly hostMode: HostMode;
+  /** Round robin: teammates who join every meeting (a manager on every demo) while the hosts take turns; they aren't in the turns. */
+  readonly alwaysWith?: ReadonlyArray<string>;
   readonly hosts: ReadonlyArray<string>;
   readonly shareOut: ShareOut;
   /** Weights (weighted) or order (priority) per host. */
@@ -165,6 +167,9 @@ export interface BookingPage {
   readonly party?: { readonly min: number; readonly max: number };
   /** A table page: most guests whose tables start at one time, so the kitchen isn't hit at once; 0 or unset is no cap. */
   readonly pacing?: number;
+  /** A table page: rules for one shift (Lunch, Dinner, or Service when there's one) that differ from the page's: its own pacing,
+   *  and a last seating (minutes before the shift closes) so the kitchen can close on time. */
+  readonly shifts?: Readonly<Record<string, ShiftRule>>;
   /** A table page: how long a late table is held before it's given away (minutes). */
   readonly holdLate?: number;
   /** A table page: guests can ask for an area (Terrace, Main room). */
@@ -192,6 +197,8 @@ export interface BookedMeeting extends Meeting {
   readonly guestZone: string;
   readonly record?: RecordRef;
   readonly activity: ReadonlyArray<ActivityLine>;
+  /** Teammates who join as well (a round robin page's "Always joins"); their time is taken too. */
+  readonly coHosts?: ReadonlyArray<string>;
   /** A table booking: how many guests and which tables. */
   readonly party?: number;
   readonly tables?: ReadonlyArray<string>;
@@ -335,6 +342,22 @@ export interface BookingsState {
   readonly insightsShared?: boolean;
   /** What the staff keep about a guest or client, by guestKey: tags, notes, birthday, diet, colour formulas, patch test. */
   readonly guests?: Readonly<Record<string, GuestProfile>>;
+}
+
+/** One shift's own rules on a table page. */
+export interface ShiftRule { readonly pacing?: number; readonly lastSeating?: number }
+/** A venue's shifts on a day, from its hours: one range is "Service", two or more are Lunch and Dinner. */
+export function shiftsOn(state: BookingsState, date: Date): ReadonlyArray<{ readonly name: string; readonly start: number; readonly end: number }> {
+  const d = venueDay(state, date);
+  if (!d?.on) return [];
+  return d.ranges.map((r) => ({ name: shiftName(d.ranges.length, r.start), start: r.start, end: r.end }));
+}
+/** "Service" for a venue open once a day, else Lunch (starts before 4 PM) or Dinner. */
+export const shiftName = (count: number, start: number) => (count === 1 ? 'Service' : start < 16 * 60 ? 'Lunch' : 'Dinner');
+/** The pacing cap at a time: the shift's own, else the page's; 0 is no cap. */
+export function pacingAt(page: BookingPage, state: BookingsState, date: Date, minutes: number): number {
+  const s = shiftsOn(state, date).find((x) => minutes >= x.start && minutes < x.end);
+  return (s ? page.shifts?.[s.name]?.pacing : undefined) ?? page.pacing ?? 0;
 }
 
 /** One colour formula, kept per visit so the next colourist mixes the same. */
@@ -588,6 +611,10 @@ export function busyOn(state: BookingsState, member: string, date: Date): Readon
   ];
 }
 
+/** Whether someone is in a meeting: its host, or a teammate who always joins. */
+export const isWith = (m: Pick<BookedMeeting, 'host' | 'coHosts'>, name: string) => m.host === name || (m.coHosts ?? []).includes(name);
+/** Whether everyone who always joins a page's meetings is free then. */
+export const alwaysFree = (state: BookingsState, page: BookingPage, date: Date, start: number, end: number) => (page.hostMode === 'roundrobin' ? page.alwaysWith ?? [] : []).every((h) => memberFree(state, page, h, date, start, end));
 /** Hosts who could take a page's meetings at all (not paused). */
 export const activeHosts = (state: BookingsState, p: BookingPage) => p.hosts.filter((h) => !(p.hostMode === 'roundrobin' && isPaused(state, p, h)));
 /** Whether nobody on a page can take a booking in the next week (everyone paused or off). */
@@ -604,7 +631,7 @@ export function noHostsFree(state: BookingsState, p: BookingPage, now: Date): bo
 export function atLimit(state: BookingsState, member: string, date: Date): 'day' | 'week' | undefined {
   const l = state.limits?.[member];
   if (!l) return undefined;
-  const theirs = state.meetings.filter((m) => m.host === member && m.status !== 'cancelled');
+  const theirs = state.meetings.filter((m) => isWith(m, member) && m.status !== 'cancelled');
   if (l.perDay > 0 && theirs.filter((m) => m.start.toDateString() === date.toDateString()).length >= l.perDay) return 'day';
   const monday = mondayOf(date).getTime();
   if (l.perWeek > 0 && theirs.filter((m) => mondayOf(m.start).getTime() === monday).length >= l.perWeek) return 'week';
@@ -619,7 +646,7 @@ export function memberFree(state: BookingsState, page: BookingPage | undefined, 
   if (atLimit(state, member, date)) return false;
   const before = page?.bufferBefore ?? 0;
   const after = page?.bufferAfter ?? 0;
-  const clash = state.meetings.some((m) => m.host === member && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString()
+  const clash = state.meetings.some((m) => isWith(m, member) && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString()
     && overlap(start - before, end + after, minutesOf(m.start), minutesOf(m.end)));
   return !clash && !busyOn(state, member, date).some((b) => overlap(start, end, b.start, b.end));
 }
@@ -630,6 +657,7 @@ export function hostFor(state: BookingsState, page: BookingPage, date: Date, sta
   const free = activeHosts(state, page).filter((h) => memberFree(state, page, h, date, start, end) && !(page.hostMode === 'roundrobin' && capped(h)));
   if (page.hostMode === 'collective') return free.length === activeHosts(state, page).length ? page.hosts[0] : undefined;
   if (page.hostMode !== 'roundrobin') return free[0];
+  if (!alwaysFree(state, page, date, start, end)) return undefined;
   const spread = monthSpread(state, page, date);
   if (page.shareOut === 'even') {
     // Even: whoever is ahead by the gap waits, so turns stay level.
@@ -702,14 +730,20 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   const step = page.slotStep && page.slotStep > 0 ? page.slotStep : length < 30 ? 15 : 30;
   const out: number[] = [];
   day.ranges.forEach((r) => {
-    for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && (page.kind === 'table' ? tableOpen(page, state, date, m, length, party, area) : hostFor(state, page, date, m, m + length))) out.push(m);
+    // A shift's last seating stops online bookings that many minutes before it closes (the kitchen's last orders).
+    const last = page.kind === 'table' ? page.shifts?.[shiftName(day.ranges.length, r.start)]?.lastSeating : undefined;
+    for (let m = r.start; m + length <= r.end; m += step) {
+      if (last !== undefined && m > r.end - last) continue;
+      if (m > earliest && (page.kind === 'table' ? tableOpen(page, state, date, m, length, party, area) : hostFor(state, page, date, m, m + length))) out.push(m);
+    }
   });
   return [...new Set(out)].sort((a, b) => a - b);
 }
 
 /** A table time is open when a table fits the party and the pacing cap has room for them. */
 function tableOpen(page: BookingPage, state: BookingsState, date: Date, m: number, length: number, party: number, area?: string): boolean {
-  if (page.pacing && page.pacing > 0 && coversAt(state, page.id, date, m) + party > page.pacing) return false;
+  const cap = pacingAt(page, state, date, m);
+  if (cap > 0 && coversAt(state, page.id, date, m) + party > cap) return false;
   return fitTables(state, party, date, m, length, true, area) !== undefined;
 }
 
@@ -732,7 +766,7 @@ export function whoSummary(p: BookingPage, state: BookingsState, now: Date): str
   if (noHostsFree(state, p, now)) return 'No hosts available this week';
   const n = p.hosts.length;
   const form = p.whoCanBook === 'form' ? ` · only through ${p.formName}` : '';
-  if (p.hostMode === 'roundrobin') return `Round robin · ${n} hosts${form}`;
+  if (p.hostMode === 'roundrobin') return `Round robin · ${n} hosts${p.alwaysWith?.length ? `, with ${p.alwaysWith.map(first).join(' and ')} on every one` : ''}${form}`;
   if (p.hostMode === 'collective') return `Everyone free · ${n} hosts${form}`;
   if (p.hostMode === 'managed') return `A copy for each of ${n}${form}`;
   return `${p.hosts[0] === HOST ? 'You' : p.hosts[0] ?? 'You'}${form}`;
@@ -804,7 +838,7 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
     noticeHours: 'Notice', daysAhead: 'How far ahead', perDay: 'Most a day', perWeek: 'Most a week', hostMode: 'Who hosts', hosts: 'Hosts', shareOut: 'Round robin', questions: 'Questions',
     confirmFirst: 'Confirming', reminders: 'Reminders', emails: 'Emails', look: 'Look', socials: 'Social links', slotStep: 'Start times', visibility: 'Who can find it',
     cancelCutoff: 'Cancel cut-off', moveCutoff: 'Move cut-off', fileTo: 'Filed to', after: 'After they book', whoCanBook: 'Who can book',
-    price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time', turns: 'Turn times',
+    price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', shifts: 'Shifts', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time', turns: 'Turn times',
   };
   const keys = Object.keys(names) as Array<keyof BookingPage>;
   return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];
@@ -820,7 +854,7 @@ export function busyReason(state: BookingsState, page: BookingPage | undefined, 
   const limit = atLimit(others, name, day);
   if (limit) return limit === 'day' ? 'at their daily limit' : 'at their weekly limit';
   const before = page?.bufferBefore ?? 0; const after = page?.bufferAfter ?? 0;
-  if (others.meetings.some((m) => m.host === name && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString() && overlap(start - before, end + after, minutesOf(m.start), minutesOf(m.end)))) return 'has another meeting';
+  if (others.meetings.some((m) => isWith(m, name) && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString() && overlap(start - before, end + after, minutesOf(m.start), minutesOf(m.end)))) return 'has another meeting';
   if (busyOn(state, name, day).some((b) => overlap(start, end, b.start, b.end))) return 'busy in their calendar';
   return undefined;
 }
@@ -828,7 +862,7 @@ export function personFree(state: BookingsState, name: string, day: Date, start:
   const at0 = (m: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(m / 60), m % 60);
   const s = at0(start); const e = at0(end);
   if (isOff(state, name, day, start, end)) return false;
-  if (state.meetings.some((x) => x.id !== skipId && x.host === name && x.status !== 'cancelled' && x.start < e && s < x.end)) return false;
+  if (state.meetings.some((x) => x.id !== skipId && isWith(x, name) && x.status !== 'cancelled' && x.start < e && s < x.end)) return false;
   return !busyOn(state, name, day).some((b) => b.start < end && start < b.end);
 }
 

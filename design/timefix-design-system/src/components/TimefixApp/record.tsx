@@ -1,7 +1,7 @@
 // A record's full page: a header, then the work on it in tabs (Overview, Activity, Notes, Tasks, Comments), with its details down the side.
 // Log a call or meeting in two clicks; every change has Undo.
 import { useRef, useState } from 'react';
-import { ArrowLeft, Link2, ListPlus, Mail, Phone, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Link2, ListPlus, Mail, Phone, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
 import { MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
 import { Select } from '../Select/Select.tsx';
 import { TaskDialog } from './you.tsx';
@@ -23,6 +23,8 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import type { Attribute } from '../AttributeField/AttributeField.tsx';
+import type { BookedMeeting } from '../BookingsFlow/state.ts';
+import { formatDay } from '../../lib/format.ts';
 import { STAGES, dayFrom, inr, isEmptyNote, newId, recordName, ymdOf, type AppAction, type AppState, type ObjectId, type Stage } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
@@ -40,10 +42,14 @@ export interface RecordPageProps {
   readonly backLabel?: string;
   /** The tab it opens on ("comments" when a mention brought you here). */
   readonly initialTab?: string;
+  /** Every booking in the workspace; the ones with this person (by email, else name) or this company's people show as Meetings. */
+  readonly meetings?: ReadonlyArray<BookedMeeting>;
+  /** Opens one in Bookings. */
+  readonly onMeeting?: (id: string) => void;
 }
 
 /** One record, full page. */
-export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLabel, initialTab }: RecordPageProps) {
+export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLabel, initialTab, meetings: allMeetings = [], onMeeting }: RecordPageProps) {
   const { toast } = useToast();
   const [tab, setTab] = useState(initialTab ?? 'overview');
   const [logging, setLogging] = useState(false);
@@ -127,6 +133,24 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       </RecordSection>
       {company && object !== 'companies' && <RecordSection title="Company" count={1}><button type="button" className="tf-rec__rel" onClick={() => onOpen('companies', company.id)}><Avatar name={company.name} size={20} shape="square" />{company.name}</button></RecordSection>}
       {object === 'companies' && <RecordSection title="People" count={state.people.filter((p) => p.companyId === id).length}>{state.people.filter((p) => p.companyId === id).map((p) => <button key={p.id} type="button" className="tf-rec__rel" onClick={() => onOpen('people', p.id)}><Avatar name={p.name} size={20} />{p.name}</button>)}</RecordSection>}
+      {(() => {
+        // Meetings with them: this person's (or the deal contact's, or the company's people's) bookings, upcoming first, then the last three.
+        const who = object === 'people' ? (person ? [person] : []) : object === 'deals' ? state.people.filter((p) => p.id === deal?.contactId) : state.people.filter((p) => p.companyId === id);
+        const mails = new Set(who.map((p) => p.email.toLowerCase())); const names = new Set(who.map((p) => p.name.toLowerCase()));
+        const domain = object === 'companies' ? (company?.domain ?? '').toLowerCase() : '';
+        const theirs = allMeetings.filter((m) => m.status !== 'cancelled' && (mails.has(m.invitee.email.toLowerCase()) || names.has(m.invitee.name.toLowerCase()) || (domain !== '' && m.invitee.email.toLowerCase().endsWith(`@${domain}`))));
+        if (theirs.length === 0) return null;
+        const now = new Date();
+        const next = theirs.filter((m) => m.end > now).sort((a, b) => a.start.getTime() - b.start.getTime());
+        const past = theirs.filter((m) => m.end <= now).sort((a, b) => b.start.getTime() - a.start.getTime()).slice(0, 3);
+        const line = (m: BookedMeeting) => (
+          <button key={m.id} type="button" className="tf-rec__rel tf-rec__rel--meeting" onClick={() => onMeeting?.(m.id)} disabled={!onMeeting}>
+            <CalendarDays size={14} strokeWidth={1.75} aria-hidden /><span className="tf-rec__relname">{m.title}{object !== 'people' ? <span className="tf-rec__muted"> · {m.invitee.name}</span> : null}</span>
+            <span className="tf-rec__muted tf-num">{m.status === 'no-show' ? 'No-show' : m.status === 'pending' ? 'Asked' : formatDay(m.start)}</span>
+          </button>
+        );
+        return <RecordSection title="Meetings" count={theirs.length}>{next.map(line)}{past.length > 0 && next.length > 0 && <span className="tf-rec__subhead">Earlier</span>}{past.map(line)}</RecordSection>;
+      })()}
       {object !== 'deals' && <RecordSection title="Deals" count={state.deals.filter((d) => (object === 'people' ? d.contactId === id : d.companyId === id)).length}>
         {state.deals.filter((d) => (object === 'people' ? d.contactId === id : d.companyId === id)).map((d) => <button key={d.id} type="button" className="tf-rec__rel" onClick={() => onOpen('deals', d.id)}>{d.name}<span className="tf-rec__muted tf-num">{inr(d.amount)}</span></button>)}
       </RecordSection>}

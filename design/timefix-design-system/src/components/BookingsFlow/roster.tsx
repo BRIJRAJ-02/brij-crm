@@ -26,6 +26,7 @@ import { weekdays } from './seed.ts';
 import {
   HOST, TEAM, dayFrom, first, hoursOn, isOff, isoDay, memberHours, mondayOf, nextId, overrideKey, plural,
   type BookedMeeting, type BookingsAction, type BookingsState,
+  isWith,
 } from './state.ts';
 
 /** Props for RosterTab. */
@@ -153,7 +154,7 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
               {days.map((d) => {
                 const on = hoursOn(state, name, d);
                 return <ShiftCell key={isoDay(d)} name={name} day={d} hours={on.hours} usual={hours[keyOf(d)]} isOverride={on.isOverride} off={isOff(state, name, d)?.note}
-                  count={state.meetings.filter((m) => m.host === name && m.status !== 'cancelled' && m.start.toDateString() === d.toDateString()).length}
+                  count={state.meetings.filter((m) => isWith(m, name) && m.status !== 'cancelled' && m.start.toDateString() === d.toDateString()).length}
                   onDate={(next) => dispatch({ type: 'overrides/merge', patch: { [overrideKey(name, d)]: next } })}
                   onEvery={(next) => { setHours(name, { ...hours, [keyOf(d)]: next }); dispatch({ type: 'overrides/merge', patch: { [overrideKey(name, d)]: null } }); }} />;
               })}

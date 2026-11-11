@@ -250,6 +250,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
           : sub === 'dupes' ? <DuplicatesScreen state={state} dispatch={dispatch} object={page === 'records:companies' ? 'companies' : 'people'} onDone={() => setSub(undefined)} />
           : <>
             {record && <RecordPage key={`${record.object}-${record.id}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={back} onOpen={openRecord}
+              meetings={bookings?.meetings} onMeeting={(mid) => { setOpenTab((o) => ({ tab: 'meetings', n: (o?.n ?? 0) + 1, meetingId: mid })); setPage('bookings'); setRecord(undefined); setTrail([]); setSub(undefined); }}
               backLabel={trail.length ? undefined : head?.label} initialTab={record.tab} />}
             <div className="tf-app__keep" hidden={record !== undefined}>{main}</div>
           </>}

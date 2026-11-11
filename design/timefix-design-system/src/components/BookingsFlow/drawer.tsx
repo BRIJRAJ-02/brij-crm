@@ -103,7 +103,7 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         </dd>
         <dt><PlaceIcon place={m.place} /></dt>
         <dd className="tf-bkf__place">
-          <span>{m.placeLabel}{m.host !== HOST ? ` · hosted by ${m.host}` : ''}</span>
+          <span>{m.placeLabel}{m.host !== HOST ? ` · hosted by ${m.host}` : ''}{m.coHosts?.length ? `${m.host !== HOST ? ',' : ' ·'} with ${m.coHosts.map((c) => (c === HOST ? 'you' : c)).join(' and ')}` : ''}</span>
           {m.place === 'video' && open && <Button size="sm" variant="secondary" icon={<Video {...i14} />} onPress={() => onJoin(m)}>Join</Button>}
         </dd>
       </dl>
