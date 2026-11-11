@@ -20,6 +20,7 @@ import { FormsScreen } from './forms.tsx';
 import { InsightsScreen, LinkPageScreen, LinksScreen, STARTER, handleFor } from './grow.tsx';
 import { NewObjectDialog, SettingsScreen, groupsFor } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
+import { useAssemble } from '../../lib/assemble.ts';
 import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
 import { CustomRecordsScreen } from './custom.tsx';
@@ -85,6 +86,10 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [newList, setNewList] = useState(false);
   const [newObject, setNewObject] = useState(false);
   const [door, setDoor] = useState<Door>();
+  /** Entering the dashboard (first load, after sign in or setup) assembles it once. */
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [assembling, setAssembling] = useState(1);
+  useAssemble(shellRef, assembling);
   const [signingOut, setSigningOut] = useState(false);
   const [settingsStart, setSettingsStart] = useState<{ readonly page?: string; readonly n: number }>({ n: 0 });
   /** While Settings is open its groups take the sidebar; this is the page showing and where Back to app returns. */
@@ -283,7 +288,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   return (
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
-      <div className="tf-app__keep" inert={door !== undefined || undefined}>
+      <div ref={shellRef} className="tf-app__keep" inert={door !== undefined || undefined}>
       <BookingsFlow showDemoMenu onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
@@ -307,14 +312,14 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       {door && <DoorScreen door={door} onDoor={setDoor}
         ctx={{ workspace: state.prefs.workspace.name, slug: state.prefs.workspace.slug, name: state.me, email: me?.email ?? '', twoFactor: state.prefs.twoFactor, memberEmails: state.members.map((m) => m.email.toLowerCase()), require2fa: state.prefs.rules.require2fa }}
         onTwoFactorOn={() => dispatch({ type: 'prefs/set', prefs: { twoFactor: true }, note: `${state.me} turned on two factor` })}
-        onDone={() => { const signed = door === 'signin' || door === 'twofactor'; setDoor(undefined); if (signed) goStart(); }}
+        onDone={() => { const signed = door === 'signin' || door === 'twofactor'; setDoor(undefined); if (signed) { goStart(); setAssembling((n) => n + 1); } }}
         onFormat={(k) => { setSwitchWs((w) => ({ id: k === 'salon' ? 'lumen' : k === 'restaurant' ? 'olive' : 'northwind', n: (w?.n ?? 0) + 1 }));
           if (k !== 'team') { openBookings('meetings'); toast({ message: k === 'salon' ? 'Here’s a salon set up with services, staff and a booking page. Change anything.' : 'Here’s a restaurant set up with tables, services and a menu. Change anything.', tone: 'success' }); } }}
         onRestore={() => { dispatch({ type: 'history/add', text: `${state.me} restored ${state.prefs.workspace.name}` }); toast({ message: `${state.prefs.workspace.name} is back. Everyone has access again.`, tone: 'success' }); }}
         onJoin={() => { const iv = state.prefs.invites[0]; if (!iv) return; rawDispatch({ type: 'member/set', member: { id: newId('u'), name: iv.email.split('@')[0]?.replace(/^./, (c) => c.toUpperCase()) ?? iv.email, email: iv.email, role: iv.role === 'guest' ? 'Guest' : 'Member', title: '' }, note: `${iv.email} accepted the invitation` }); rawDispatch({ type: 'prefs/update', fn: (q) => ({ invites: q.invites.filter((x) => x.id !== iv.id) }) }); toast({ message: `${iv.email} joined ${state.prefs.workspace.name}`, tone: 'success' }); }}
         onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
-          toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); }} />}
+          toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); setAssembling((n) => n + 1); }} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={commands} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
         placeholder="Search people, companies, deals, notes, or type a command…" />
       <ShortcutHelp isOpen={help} onOpenChange={setHelp} />

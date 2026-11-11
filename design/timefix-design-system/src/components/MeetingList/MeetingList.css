@@ -1,6 +1,6 @@
 /* The Meetings list. Rows wash on hover and show their actions; a cancelled row folds in place to "Cancelled · Undo". */
 /* Fixed, readable columns: time 160 | title + place | invitee 240 | status 140 | actions; capped so a wide page does not spread a row. */
-.tf-meetings { --tf-meetings-cols: 136px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; max-width: 1040px; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
+.tf-meetings { --tf-meetings-cols: 136px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
 /* 14 skeleton reveal: skeleton and rows share one cell and cross-fade with a 2px blur over 400ms. */
 .tf-meetings__skeleton, .tf-meetings__content { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-slow) var(--ease-in-out), filter var(--duration-slow) var(--ease-in-out); }
 .tf-meetings__content { opacity: 0; filter: blur(var(--blur-small)); }
