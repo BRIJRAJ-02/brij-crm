@@ -1,6 +1,6 @@
 import { Button as AriaButton } from 'react-aria-components';
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
-import { AlertTriangle, ArrowRight, CalendarClock, CalendarX2, Link2, MapPin, MoreHorizontal, Phone, StickyNote, UserX, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarClock, CalendarDays, CalendarX2, Link2, MapPin, MoreHorizontal, Phone, StickyNote, UserX, Video, X } from 'lucide-react';
 import { AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
@@ -30,6 +30,10 @@ export interface Meeting {
   readonly status: MeetingStatus;
   /** Whose meeting it is, when the list shows a team's: added to the place line. */
   readonly host?: string;
+  /** An event from a connected calendar, not a booking: a grey Calendar tag, no actions; it opens to read. */
+  readonly kind?: 'booking' | 'calendar';
+  /** A short grey note on the row's status (a request's "Declines in 19 hr"). */
+  readonly note?: string;
 }
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
@@ -219,17 +223,17 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
                     </li>
                   )}
                   <li className={cx('tf-meetings__row', strip && 'is-strip', past && 'is-past', m.status === 'cancelled' && !strip && 'is-cancelled', m.id === highlightId && 'is-new', onOpen && !strip && 'is-openable')}
-                    tabIndex={onOpen && !strip ? 0 : undefined} aria-label={onOpen && !strip ? `${m.title} with ${m.invitee.name}, ${span(m.start, m.end, hour12)}` : undefined}
+                    tabIndex={onOpen && !strip ? 0 : undefined} aria-label={onOpen && !strip ? (m.kind === 'calendar' ? `${m.title}, ${m.placeLabel}, ${span(m.start, m.end, hour12)}` : `${m.title} with ${m.invitee.name}, ${span(m.start, m.end, hour12)}`) : undefined}
                     aria-haspopup={onOpen && !strip ? 'dialog' : undefined} onClick={press(m, strip)} onKeyDown={key(m, strip)}>
                     <div className="tf-meetings__main" inert={strip}>
                       {/* When, then what: the start in ink with its length under it (a request leads with its day); the meeting's name, then who and where. */}
                       <span className="tf-meetings__time tf-num">{g.title ? <><span className="tf-meetings__time-start">{formatDay(m.start)}</span><span className="tf-meetings__time-end">{clock(m.start, hour12)} · {length(m.start, m.end)}</span></> : <><span className="tf-meetings__time-start">{clock(m.start, hour12)}</span><span className="tf-meetings__time-end">{length(m.start, m.end)}</span></>}</span>
                       <span className="tf-meetings__what">
                         <span className="tf-meetings__title">{m.title}</span>
-                        <span className="tf-meetings__place"><span className="tf-meetings__with">{m.invitee.name}</span><span aria-hidden="true">·</span><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</span>
+                        <span className="tf-meetings__place">{m.kind === 'calendar' ? <><CalendarDays {...i14} aria-hidden />{m.placeLabel}</> : <><span className="tf-meetings__with">{m.invitee.name}</span><span aria-hidden="true">·</span><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</>}</span>
                       </span>
-                      <span className="tf-meetings__status">{m.status !== 'confirmed' && m.status !== 'pending' && <MeetingStatusTag status={m.status} />}{conflictIds?.has(m.id) && <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} aria-hidden />}>Clash</Tag>}</span>
-                      <RowActions m={m} onReschedule={onReschedule} onCancel={cancel} onCopyLink={onCopyLink} onNoShow={onNoShow} onNote={onNote} onConfirm={onConfirm} onDecline={onDecline} />
+                      <span className="tf-meetings__status">{m.note && <span className="tf-meetings__note tf-num">{m.note}</span>}{m.kind === 'calendar' && <Tag size="sm" hue="gray">Calendar</Tag>}{m.kind !== 'calendar' && m.status !== 'confirmed' && m.status !== 'pending' && <MeetingStatusTag status={m.status} />}{conflictIds?.has(m.id) && <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} aria-hidden />}>Clash</Tag>}</span>
+                      {m.kind === 'calendar' ? <span /> : <RowActions m={m} onReschedule={onReschedule} onCancel={cancel} onCopyLink={onCopyLink} onNoShow={onNoShow} onNote={onNote} onConfirm={onConfirm} onDecline={onDecline} />}
                     </div>
                     <div className="tf-meetings__strip" inert={!strip} role={strip ? 'status' : undefined}>
                       {strip && (

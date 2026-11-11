@@ -4,7 +4,7 @@ import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { HOURS_DAYS, summarizeHours } from '../HoursEditor/HoursEditor.tsx';
 import type { Meeting, MeetingPlace } from '../MeetingList/MeetingList.tsx';
 import type { Notification } from '../NotificationList/NotificationList.tsx';
-import type { CalendarAccount } from '../CalendarConnections/CalendarConnections.tsx';
+import type { CalendarAccount, CalendarItem } from '../CalendarConnections/CalendarConnections.tsx';
 import type { Hue } from '../Tag/Tag.tsx';
 import type { FormQuestion } from '../HostedForm/answers.ts';
 import type { GuestLookValue } from '../GuestLook/GuestLook.tsx';
@@ -46,16 +46,21 @@ export const ZONE_OFFSET: Readonly<Record<string, number>> = { 'Asia/Kolkata': 3
 export const first = (name: string) => name.split(' ')[0] ?? name;
 
 /** Where a booking page's meetings happen. */
-export type PlaceKind = 'meet' | 'phone' | 'in-person' | 'zoom';
+export type PlaceKind = 'meet' | 'phone' | 'in-person' | 'zoom' | 'custom';
 /** Each place's words and how a meeting draws it. */
 export const PLACES: Readonly<Record<PlaceKind, { readonly label: string; readonly guest: 'video' | 'phone' | 'place'; readonly meeting: MeetingPlace }>> = {
   meet: { label: 'Google Meet', guest: 'video', meeting: 'video' },
   zoom: { label: 'Zoom', guest: 'video', meeting: 'video' },
   phone: { label: 'Phone', guest: 'phone', meeting: 'phone' },
   'in-person': { label: 'Northwind office', guest: 'place', meeting: 'in-person' },
+  custom: { label: 'Somewhere else', guest: 'place', meeting: 'in-person' },
 };
 /** The order places are offered in. */
 export const PLACE_ORDER: ReadonlyArray<PlaceKind> = ['meet', 'zoom', 'phone', 'in-person'];
+/** Every place a page can offer, with Somewhere else (the host's own words) last; the create sheet's tiles keep the first four. */
+export const PLACE_ALL: ReadonlyArray<PlaceKind> = [...PLACE_ORDER, 'custom'];
+/** How a video page gets its link: made by the connected calendar, pasted by the host, or sent by the host later. */
+export type VideoLink = 'calendar' | 'own' | 'send';
 
 /* ------------------------------------------------------------------ Pages */
 
@@ -180,6 +185,26 @@ export interface BookingPage {
   readonly bigTurn?: { readonly from: number; readonly minutes: number };
   /** A table page: how long a table is held by party size, smallest band first (the last band covers everyone larger). */
   readonly turns?: ReadonlyArray<{ readonly upTo: number; readonly minutes: number }>;
+  /** Book only through these links: its own address shows "This page books by invitation"; one-time links still work. */
+  readonly inviteOnly?: boolean;
+  /** The zone its hours follow; unset is the host's. */
+  readonly zone?: string;
+  /** Dates (YYYY-MM-DD) this page offers no times, on top of the hours it uses. */
+  readonly daysOff?: ReadonlyArray<string>;
+  /** Which connected calendars it checks for conflicts (account ids); unset is every one that checks. */
+  readonly conflictIn?: ReadonlyArray<string>;
+  /** A redirect after booking adds the booking's details to the address (name, email, start, time zone, page). */
+  readonly redirectDetails?: boolean;
+  /** On your link page, and where in its list (1 is first). */
+  readonly onLinkPage?: boolean;
+  readonly linkOrder?: number;
+  /** Somewhere else: where, in the host's words. */
+  readonly customPlace?: string;
+  /** Video: where the link comes from, and the host's own link when pasted. */
+  readonly videoLink?: VideoLink;
+  readonly ownLink?: string;
+  /** A workspace link (books whoever in the workspace is free) or a team link (one round robin group); kept off the Pages list. */
+  readonly linkKind?: 'workspace' | 'team';
 }
 
 /** One published version of a page, kept so it can be restored. */
@@ -222,13 +247,47 @@ export interface BookedMeeting extends Meeting {
   readonly cancelledBy?: 'host' | 'guest'; readonly cancelReason?: string;
   /** Where a table booking came from: online, phone, walk-in or the waitlist. */
   readonly source?: 'online' | 'phone' | 'walk-in' | 'waitlist';
+  /** A meeting link pasted by hand (the page's calendar made none, or the host changed it); the guest is emailed it. */
+  readonly ownLink?: string;
+  /** Round robin: why it went to this host (a key of ASSIGNED_WHY), and the numbers behind it. */
+  readonly assigned?: { readonly why: AssignedWhy; readonly count?: number; readonly days?: number; readonly weight?: number; readonly group?: string };
+  /** Booked by chat on the booking page: the conversation, oldest first. */
+  readonly chat?: ReadonlyArray<{ readonly from: 'visitor' | 'assistant'; readonly text: string }>;
+  /** The calendar event couldn't be made (the account needs reconnecting): it isn't on anyone's calendar yet. */
+  readonly eventFailed?: boolean;
+  /** Which calendar it went on, and the note sent with the invitation (New meeting). */
+  readonly calendarId?: string;
+  readonly message?: string;
+  /** Its host left the workspace and nobody else was free then: it needs a host. */
+  readonly hostLeft?: boolean;
+}
+
+/** Why round robin gave a booking to its host, in the real app's words. */
+export type AssignedWhy = 'fair' | 'priority' | 'even' | 'owner' | 'last_host' | 'standin' | 'only_free' | 'routed' | 'manual' | 'reassigned';
+/** Each reason as one line after the host's name. */
+export function assignedLine(a: NonNullable<BookedMeeting['assigned']>): string {
+  switch (a.why) {
+    case 'fair': return a.count !== undefined ? `had the fewest meetings in the last ${a.days ?? 30} days: ${a.count}, at weight ${a.weight ?? 1}` : 'had the fewest meetings lately';
+    case 'priority': return 'was the first free by priority';
+    case 'even': return 'was next in turn for an even share';
+    case 'owner': return 'owns this person’s record';
+    case 'last_host': return 'hosted this person last time';
+    case 'standin': return 'stood in for the usual host';
+    case 'only_free': return 'was the only one free then';
+    case 'routed': return 'was chosen by the routing form';
+    case 'manual': return 'was picked by hand';
+    case 'reassigned': return 'took it over when it was reassigned';
+  }
 }
 /** A party waiting for a table: walked in tonight, or asked online to be told if one frees up. */
 export interface WaitParty { readonly id: string; readonly name: string; readonly phone: string; readonly party: number; readonly added: Date; readonly day: string;
   /** Minutes quoted at the door; online it's the time they hoped for. */ readonly quote?: number; readonly wanted?: number; readonly online?: boolean; readonly notified?: boolean;
   /** Kept after they're seated or leave, for wait times: when it ended and how. */ readonly endedAt?: Date; readonly outcome?: 'seated' | 'left' }
 /** Time a member blocked or held by hand. */
-export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string }
+export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string;
+  /** Repeats on this weekday every week, from `day` on. */ readonly weekly?: boolean;
+  /** Reserved for one link-only page (its id); unset is any link-only page. */ readonly forPage?: string;
+  /** Days a weekly block was removed for just that once. */ readonly skips?: ReadonlyArray<string> }
 /** Time off: a day or a range, all day or some hours, with a note. */
 /** Why someone is away. */
 export type TimeOffReason = 'vacation' | 'sick' | 'travel' | 'holiday' | 'other';
@@ -241,16 +300,30 @@ export interface TimeOff { readonly id: string; readonly member: string; readonl
 /** Most meetings one person takes, across every page; 0 is no limit. */
 export interface MeetingLimits { readonly perDay: number; readonly perWeek: number }
 /** A named set of weekly hours. */
-export interface SavedHours { readonly id: string; readonly name: string; readonly hours: WeekHours }
+export interface SavedHours { readonly id: string; readonly name: string; readonly hours: WeekHours;
+  /** The zone these hours follow; unset is the owner's. */ readonly zone?: string;
+  /** Dates (YYYY-MM-DD) with no hours on this schedule (a holiday the office closes). */ readonly daysOff?: ReadonlyArray<string> }
 /** Time another calendar holds on one day. */
-export interface BusyBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly source: string }
+export interface BusyBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly source: string;
+  /** Which of the account's calendars holds it (a SubCalendar id). */ readonly calendar?: string }
 /** A connected calendar's extra facts the card shows. */
 export interface CalendarHealth { readonly skipped: Readonly<Record<string, number>>; readonly bookingCalendar: string }
 
 /* ------------------------------------------------------------------ Teams */
 
 /** A round robin group: its members and who is paused. */
-export interface RoundRobinGroup { readonly id: string; readonly name: string; readonly members: ReadonlyArray<{ readonly name: string; readonly paused: boolean }> }
+export interface RoundRobinGroup { readonly id: string; readonly name: string; readonly members: ReadonlyArray<{ readonly name: string; readonly paused: boolean; /** Share of meetings (1 is even). */ readonly weight?: number; /** Most a week from this group; 0 or unset is none. */ readonly weeklyCap?: number }>;
+  /** A returning guest goes to: whoever's turn it is, the person's record owner, or whoever hosted them last (when free). */
+  readonly returning?: 'turn' | 'owner' | 'last';
+  /** Counts changed by hand, with why: added to the member's count for fair share. */
+  readonly adjustments?: ReadonlyArray<CountAdjustment>;
+  /** Teammates besides admins who may change this group. */
+  readonly editors?: ReadonlyArray<string>;
+}
+/** A count changed by hand in a group's distribution, kept with the note. */
+export interface CountAdjustment { readonly id: string; readonly member: string; readonly by: number; readonly note: string; readonly at: Date; readonly who: string }
+/** Someone's access to another person's scheduling: see it, or manage it (hours, time off, meetings). */
+export interface SchedulingGrant { readonly id: string; readonly owner: string; readonly to: string; readonly level: 'see' | 'manage' }
 /** One routing rule: when the answers match, book this page with this team. */
 /** What a matched rule does: book a page, show a message, or send to a link. */
 export type RouteOutcome = 'page' | 'message' | 'redirect';
@@ -260,7 +333,8 @@ export interface RoutingRule { readonly id: string; readonly conditions: Readonl
   readonly outcome?: RouteOutcome; readonly message?: string; readonly url?: string; readonly tag?: RouteTag }
 /** One answer the routing form got, and where it went. */
 export interface RouteDecision { readonly id: string; readonly at: Date; readonly name: string; readonly company: string; readonly answers: RoutingAnswers;
-  /** The rule that matched; undefined is Otherwise. */ readonly ruleId?: string; readonly booked: boolean; readonly noShow?: boolean; readonly won?: boolean }
+  /** The rule that matched; undefined is Otherwise. */ readonly ruleId?: string; readonly booked: boolean; readonly noShow?: boolean; readonly won?: boolean;
+  /** Who took it, and why them (a key of AssignedWhy). */ readonly host?: string; readonly why?: AssignedWhy }
 /** The routing form: its rules, the fallback, member skills and what "won" means. */
 export interface Routing {
   readonly formName: string;
@@ -273,6 +347,8 @@ export interface Routing {
   readonly log?: ReadonlyArray<RouteDecision>;
   readonly skills: Readonly<Record<string, ReadonlyArray<string>>>;
   readonly wonMeans: string;
+  /** The workspace's skills, in groups (Languages, Products); a rule asks for one or more. */
+  readonly skillGroups?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly skills: ReadonlyArray<string> }>;
 }
 
 /** A business's public page: timefix.com/<handle>, with its services or table booking. */
@@ -350,7 +426,17 @@ export interface BookingsState {
   readonly insightsShared?: boolean;
   /** What the staff keep about a guest or client, by guestKey: tags, notes, birthday, diet, colour formulas, patch test. */
   readonly guests?: Readonly<Record<string, GuestProfile>>;
+  /** Who can see or manage whose scheduling (Settings › Scheduling access). */
+  readonly grants?: ReadonlyArray<SchedulingGrant>;
+  /** Each connected account's own calendars: which check conflicts, show on the week, log to the CRM, and their colour. */
+  readonly subCalendars?: Readonly<Record<string, ReadonlyArray<SubCalendar>>>;
+  /** When calendars last synced. */
+  readonly lastSync?: Date;
+  /** The booking calendar stopped taking events and new bookings went to another: what it was and what it is now. */
+  readonly fellBack?: { readonly was: string; readonly now: string };
 }
+/** One calendar inside a connected account. */
+export type SubCalendar = CalendarItem;
 
 /** How a meeting went, in a sales team's words. */
 export const OUTCOMES = ['Qualified', 'Follow up', 'Not a fit'] as const;
@@ -494,6 +580,10 @@ export type BookingsAction =
   | { readonly type: 'request/done'; readonly id: string }
   | { readonly type: 'tableblock/remove'; readonly id: string }
   | { readonly type: 'block/remove'; readonly id: string }
+  | { readonly type: 'grants/set'; readonly grants: ReadonlyArray<SchedulingGrant> }
+  | { readonly type: 'subcal/set'; readonly account: string; readonly calendars: ReadonlyArray<SubCalendar> }
+  | { readonly type: 'calendar/sync'; readonly at: Date }
+  | { readonly type: 'calendar/fellback'; readonly fellBack: BookingsState['fellBack'] }
   | { readonly type: 'groups/set'; readonly groups: ReadonlyArray<RoundRobinGroup> }
   | { readonly type: 'routing/patch'; readonly ids: ReadonlyArray<string>; readonly pageId: string; readonly fallback: boolean }
   | { readonly type: 'routing/set'; readonly routing: Routing }
@@ -561,6 +651,10 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'tableblock/add': return { ...state, tableBlocks: [...(state.tableBlocks ?? []), action.block] };
     case 'tableblock/remove': return { ...state, tableBlocks: (state.tableBlocks ?? []).filter((b) => b.id !== action.id) };
     case 'block/remove': return { ...state, blocks: state.blocks.filter((b) => b.id !== action.id) };
+    case 'grants/set': return { ...state, grants: action.grants };
+    case 'subcal/set': return { ...state, subCalendars: { ...(state.subCalendars ?? {}), [action.account]: action.calendars } };
+    case 'calendar/sync': return { ...state, lastSync: action.at };
+    case 'calendar/fellback': return { ...state, fellBack: action.fellBack };
     case 'groups/set': return { ...state, groups: action.groups };
     case 'routing/set': return { ...state, routing: action.routing };
     case 'routing/patch': return { ...state, routing: { ...state.routing, rules: state.routing.rules.map((r) => (action.ids.includes(r.id) ? { ...r, pageId: action.pageId } : r)), fallbackPageId: action.fallback ? action.pageId : state.routing.fallbackPageId } };
@@ -601,7 +695,7 @@ export const placeOf = (p: BookingPage): PlaceKind => p.places[0] ?? 'meet';
 /** "30 min" or "30 or 60 min". */
 export const lengthsText = (p: BookingPage) => (p.durations.length > 1 ? `${p.durations.slice(0, -1).join(', ')} or ${p.durations[p.durations.length - 1]} min` : `${lengthOf(p)} min`);
 /** A place as the guest reads it: the address for in person. */
-export const placeLabel = (p: BookingPage, k: PlaceKind) => (k === 'in-person' && p.address.trim() ? p.address.trim() : PLACES[k].label);
+export const placeLabel = (p: BookingPage, k: PlaceKind) => (k === 'in-person' && p.address.trim() ? p.address.trim() : k === 'custom' && p.customPlace?.trim() ? p.customPlace.trim() : PLACES[k].label);
 /** "Google Meet" or "Google Meet or Phone". */
 export const placesText = (p: BookingPage) => p.places.map((k) => placeLabel(p, k)).join(' or ');
 const dayKey = (d: Date) => HOURS_DAYS[(d.getDay() + 6) % 7] ?? 'mon';
@@ -642,14 +736,25 @@ export function isPaused(state: BookingsState, page: BookingPage, member: string
 }
 
 /** What other calendars hold for a member on a day: the connected calendar's busy time, and blocks or holds made by hand. */
-export function busyOn(state: BookingsState, member: string, date: Date): ReadonlyArray<{ readonly id: string; readonly start: number; readonly end: number; readonly source: string; readonly kind: 'calendar' | 'block' | 'hold' }> {
+export function busyOn(state: BookingsState, member: string, date: Date, page?: BookingPage): ReadonlyArray<{ readonly id: string; readonly start: number; readonly end: number; readonly source: string; readonly kind: 'calendar' | 'block' | 'hold'; readonly forPage?: string }> {
   const d = isoDay(date);
-  const checks = state.calendars.some((c) => c.checkConflicts && c.status === 'connected');
+  // A page that checks only some calendars ignores busy time from the others (matched by the provider named in the event's source).
+  const checked = state.calendars.filter((c) => c.checkConflicts && c.status === 'connected' && (!page?.conflictIn || page.conflictIn.includes(c.id)));
   return [
-    ...(checks ? state.busy.filter((b) => b.member === member && b.day === d).map((b) => ({ ...b, kind: 'calendar' as const })) : []),
-    ...state.blocks.filter((b) => b.member === member && b.day === d).map((b) => ({ id: b.id, start: b.start, end: b.end, source: b.label, kind: b.kind })),
+    ...(checked.length ? state.busy.filter((b) => b.member === member && b.day === d && checked.some((c) => b.source.includes(c.provider) && (state.subCalendars?.[c.id]?.find((x) => x.id === b.calendar)?.conflicts ?? true))).map((b) => ({ ...b, kind: 'calendar' as const })) : []),
+    ...state.blocks.filter((b) => b.member === member && blockOnDay(b, date)).map((b) => ({ id: b.id, start: b.start, end: b.end, source: b.label, kind: b.kind, forPage: b.forPage })),
   ];
 }
+/** Whether a block falls on a date: its own day, or every same weekday after it when it repeats. */
+export const blockOnDay = (b: TimeBlock, date: Date) => !(b.skips ?? []).includes(isoDay(date)) && (b.day === isoDay(date) || (b.weekly === true && b.day <= isoDay(date) && parseDay(b.day).getDay() === date.getDay()));
+/** Whether a page may book inside held time: a link-only page set to, and the hold is for any link-only page or this one. */
+const bookableHold = (page: BookingPage | undefined, b: { readonly kind: string; readonly forPage?: string }) => b.kind === 'hold' && page?.visibility === 'link' && page.inHeldTime === true && (!b.forPage || b.forPage === page.id);
+/** A schedule's or a page's own day off on a date. */
+export const dayOffFor = (page: BookingPage, state: BookingsState, date: Date) => {
+  const d = isoDay(date);
+  const set = page.hoursFrom === 'custom' ? undefined : state.savedHours.find((h) => h.id === (page.hoursFrom === 'working' ? state.defaultHoursId : page.hoursFrom));
+  return (page.daysOff ?? []).includes(d) || (set?.daysOff ?? []).includes(d);
+};
 
 /** Whether someone is in a meeting: its host, or a teammate who always joins. */
 export const isWith = (m: Pick<BookedMeeting, 'host' | 'coHosts'>, name: string) => m.host === name || (m.coHosts ?? []).includes(name);
@@ -688,7 +793,7 @@ export function memberFree(state: BookingsState, page: BookingPage | undefined, 
   const after = page?.bufferAfter ?? 0;
   const clash = state.meetings.some((m) => isWith(m, member) && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString()
     && overlap(start - before, end + after, minutesOf(m.start), minutesOf(m.end)));
-  return !clash && !busyOn(state, member, date).some((b) => overlap(start, end, b.start, b.end));
+  return !clash && !busyOn(state, member, date, page).some((b) => !bookableHold(page, b) && overlap(start, end, b.start, b.end));
 }
 /** Who would take a slot: for round robin, the free host with the fewest meetings this month (or by weight or priority). */
 export function hostFor(state: BookingsState, page: BookingPage, date: Date, start: number, end: number): string | undefined {
@@ -761,7 +866,7 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   if (ahead < 0 || ahead > page.daysAhead) return [];
   // A date-only change to the host's hours wins over the page's usual week.
   const day = state.overrides?.[overrideKey(page.hosts[0] ?? '', date)] ?? hoursFor(page, state)[dayKey(date)];
-  if (!day.on) return [];
+  if (!day.on || dayOffFor(page, state, date)) return [];
   const mine = state.meetings.filter((m) => m.pageId === page.id && m.status !== 'cancelled');
   if (page.perDay > 0 && mine.filter((m) => m.start.toDateString() === date.toDateString()).length >= page.perDay) return [];
   const monday = mondayOf(date).getTime();
@@ -849,7 +954,8 @@ export const ROUTING_FIELDS: ReadonlyArray<Attribute> = [
 export const isRecordField = (id: string): boolean => id.includes('.');
 /** The answers a test (or a guest) gives the routing form. */
 export type RoutingAnswers = Readonly<Record<string, string | number | undefined>>;
-function holds(c: Condition, answers: RoutingAnswers): boolean {
+/** Whether one condition holds for these answers. */
+export function holds(c: Condition, answers: RoutingAnswers): boolean {
   const v = answers[c.attributeId];
   switch (c.operator) {
     case 'gt': return typeof v === 'number' && typeof c.value === 'number' && v > c.value;
@@ -881,6 +987,7 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
     confirmFirst: 'Confirming', reminders: 'Reminders', emails: 'Emails', look: 'Look', socials: 'Social links', slotStep: 'Start times', visibility: 'Who can find it',
     cancelCutoff: 'Cancel cut-off', moveCutoff: 'Move cut-off', fileTo: 'Filed to', after: 'After they book', whoCanBook: 'Who can book',
     price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', shifts: 'Shifts', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time', turns: 'Turn times',
+    inviteOnly: 'Who can book', zone: 'Time zone', daysOff: 'Days off', conflictIn: 'Conflicts', redirectDetails: 'After they book', onLinkPage: 'Link page', linkOrder: 'Link page', customPlace: 'Places', videoLink: 'Video link', ownLink: 'Video link',
   };
   const keys = Object.keys(names) as Array<keyof BookingPage>;
   return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];

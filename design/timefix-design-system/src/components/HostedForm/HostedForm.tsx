@@ -240,19 +240,25 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const send = async (only?: ReadonlySet<string>) => {
     if (sending) return;
     setSending(true); setFailed(false);
-    const out = only && logic.length ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
+    const out = only && (logic.length || questions.some((q) => q.showIf || q.jumps?.length)) ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
     try { await onSubmit({ ...hiddenAnswers, ...out }); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
   };
   const last = questions.length - 1;
+  /** Whether a question with Show only if is on: its source answer matches (a multi-choice answer that includes it counts). */
+  const shown = (q: FormQuestion, all: FormAnswers) => { if (!q.showIf) return true; const a = all[q.showIf.questionId]; return Array.isArray(a) ? a.map(String).includes(q.showIf.is) : a !== undefined && String(a) === q.showIf.is; };
   /** Where the visitor came from, so Back retraces a jump instead of landing on a skipped question. */
   const trail = useRef<number[]>([]);
   /** The step after this one: a matching rule's target, the end, or simply the next question. */
   const after = (at: number, all: FormAnswers): number | 'end' => {
     const q = questions[at]; const a = q ? all[q.id] : undefined;
     const said = Array.isArray(a) ? a.map(String) : a === undefined ? [] : [String(a)];
-    const rule = q ? logic.find((r) => r.when === q.id && said.includes(r.is)) : undefined;
-    if (rule) { if (rule.goto === 'end') return 'end'; const to = questions.findIndex((x) => x.id === rule.goto); if (to > at) return to; }
-    return at === last ? 'end' : at + 1;
+    // The form's rules, then the question's own jumps by answer.
+    const rule = q ? logic.find((r) => r.when === q.id && said.includes(r.is)) ?? q.jumps?.filter((j) => said.includes(j.is)).map((j) => ({ when: q.id, is: j.is, goto: j.to }))[0] : undefined;
+    let to: number | 'end' = at === last ? 'end' : at + 1;
+    if (rule) { if (rule.goto === 'end') return 'end'; const t = questions.findIndex((x) => x.id === rule.goto); if (t > at) to = t; }
+    // A question shown only for another answer is skipped when that answer wasn't given.
+    while (to !== 'end' && questions[to] && !shown(questions[to], all)) to = to === last ? 'end' : to + 1;
+    return to;
   };
   const go = (at: number, all: FormAnswers = answers) => { const to = after(at, all); if (to === 'end') void send(visited(at)); else { trail.current.push(at); setStep(to); } };
   /** The questions on the path they took: answers left behind on a branch they backed out of aren't sent. */
@@ -284,7 +290,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const submitPage = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const found: Record<string, string> = {};
-    for (const q of questions) { const p = checkAnswer(q, answers[q.id]); if (p) found[q.id] = p; }
+    for (const q of questions) { if (!shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id]); if (p) found[q.id] = p; }
     const first = questions.find((q) => found[q.id]);
     if (first) {
       refuse(found);
@@ -293,7 +299,8 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       return;
     }
-    void send();
+    // Hidden answers aren't kept.
+    void send(new Set(questions.filter((q) => shown(q, answers)).map((q) => q.id)));
   };
 
   const slot = (q: FormQuestion, n: number, large: boolean) => (
@@ -343,7 +350,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
           <h2 className="tf-hform__name">{title}</h2>
           {description && <p className="tf-hform__lede">{description}</p>}
         </header>
-        {questions.map((q, n) => slot(q, n, false))}
+        {questions.map((q, n) => (shown(q, answers) ? slot(q, n, false) : null))}
         {alert}
         <Button type="submit" variant="primary" size="lg" isPending={sending} className="tf-hform__submit">{submitLabel}</Button>
         {later}

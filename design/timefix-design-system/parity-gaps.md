@@ -63,19 +63,21 @@ Wave A left: choice tiles to TileGrid, Brand preview to GuestLook, phone-only re
 Wave B also fixed: every popup (menus, selects, popovers, tooltips) opened about 20% short of its trigger under the 80% zoom. The app and each overlay layer are now zoomed on their own, and a build-time patch to React Aria's placement divides by the popover's zoom (rt/popalign.mjs checks it).
 
 ## Wave C: scheduling
-- [ ] Meetings: Day view; go to a date (month calendar); filter by booking page; filter by calendar (side panel show/hide); calendar events in the list; sort + Show more; team day filters (people, only with bookings, order); issues menu (outside hours, clashes, host left)
-- [ ] Block time weekly (repeat); remove a block / release reserved time; reserve time for a chosen link-only page; open a calendar event ("About this event")
-- [ ] New meeting: their time zone, which calendar, message to guest, email for someone not in People
-- [ ] Meeting drawer: copy guest link, add/change meeting link (emails guest), why it went to this host, chat transcript, "calendar event couldn't be made" warning, link to any object
-- [ ] Booking pages: invitation-only ("Book only through these links"); search pages; per-page time zone; days off on page hours; "Checks for conflicts in"; redirect with booking details; profile section/position on link page; location "Somewhere else" + own video link; custom duration 5–480; per-question "Save answer to"; page's own Bookings/Insights tabs; workspace link editable; team link per team; share times "Copy text"; confirm-first auto-decline after a day
-- [ ] Questions: show-only-if, steps, jumps, points; ready-made presets; "How did you hear" for Insights
-- [ ] Availability: duplicate schedule; per-schedule time zone; days off on a schedule; edit time off, time off for a colleague
-- [ ] Round robin groups: create/rename/delete; weekly cap per member; returning guests setting; distribution panel (fair share, 12 weeks, admin adjust with note, undo); share with editors
-- [ ] Routing: overview of routed forms/pages; decision filters and "What happened" steps; skill groups, rename/delete with usage
-- [ ] Calendars: disconnect, Sync now; per calendar conflicts/show on week/log to CRM/colour; what teammates see; "Add people from meetings" (admins); fallback notice
-- [ ] Scheduling access: give a colleague See/Manage, see whose you reach, remove (asks first)
-- [ ] Guest: invitation-only state wired to the page setting
-- [ ] Embedded partner link-page frames
+- [x] Meetings: Day view; go to a date (month calendar); filter by booking page; filter by calendar (side panel show/hide); calendar events in the list; sort + Show more; team day filters (people, only with bookings, order); issues menu (outside hours, clashes, host left)
+- [x] Block time weekly (repeat); remove a block / release reserved time; reserve time for a chosen link-only page; open a calendar event ("About this event")
+- [x] New meeting: their time zone, which calendar, message to guest, email for someone not in People
+- [x] Meeting drawer: copy guest link, add/change meeting link (emails guest), why it went to this host, chat transcript, "calendar event couldn't be made" warning, link to any object
+- [x] Booking pages: invitation-only ("Book only through these links"); search pages; per-page time zone; days off on page hours; "Checks for conflicts in"; redirect with booking details; profile section/position on link page; location "Somewhere else" + own video link; custom duration 5–480; per-question "Save answer to"; page's own Bookings/Insights tabs; workspace link editable; team link per team; share times "Copy text"; confirm-first auto-decline after a day
+- [x] Questions: show-only-if, steps, jumps, points; ready-made presets; "How did you hear" for Insights
+- [x] Availability: duplicate schedule; per-schedule time zone; days off on a schedule; edit time off, time off for a colleague
+- [x] Round robin groups: create/rename/delete; weekly cap per member; returning guests setting; distribution panel (fair share, 12 weeks, admin adjust with note, undo); share with editors
+- [x] Routing: overview of routed forms/pages; decision filters and "What happened" steps; skill groups, rename/delete with usage
+- [x] Calendars: disconnect, Sync now; per calendar conflicts/show on week/log to CRM/colour; what teammates see; "Add people from meetings" (admins); fallback notice
+- [x] Scheduling access: give a colleague See/Manage, see whose you reach, remove (asks first)
+- [x] Guest: invitation-only state wired to the page setting
+- [x] Embedded partner link-page frames
+
+Wave C notes: on the week, other calendars show as hatched events you can open (Filter › Show replaces the old switch); teammates' calendars stay busy-only; disconnecting a calendar asks first (no Undo, since reconnecting needs the provider sign-in); workspace and team links are made the first time they are opened.
 
 ## Wave D: forms, link page, insights, hospitality
 - [ ] Forms list: card ⋯ (Pause asks, Resume, Duplicate, Delete naming submissions), Copy link, Open; "New" submissions badge; templates Demo request, Booking intake, Customer onboarding; arrow keys

@@ -23,6 +23,7 @@ import { AttributeSettings } from '../AttributeSettings/AttributeSettings.tsx';
 import { CalendarConnections, type CalendarProvider } from '../CalendarConnections/CalendarConnections.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
+import { Callout } from '../Callout/Callout.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsAction, BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { ListSettings } from './lists.tsx';
@@ -32,6 +33,7 @@ import { cx } from '../../lib/cx.ts';
 import { newId, type AppAction, type AppState, type Member, type ObjectId, type ObjectSchema, type Prefs, LISTS_ON } from './data.ts';
 import { JobsPage, ObjectAttributes, ObjectsList, StageRules, TrashPage } from './datasettings.tsx';
 import { AutomationsPage } from './automations.tsx';
+import { AccessGrants, RoundRobinPage, RoutingOverview } from './scheduling.tsx';
 import type { Door } from './auth.tsx';
 import { RenameDialog } from './records.tsx';
 import { HOME_SECTIONS } from './home.tsx';
@@ -211,28 +213,33 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       </SettingsSection>
       <SettingsSection title="Sign out" description="Of this device only." action={<Button variant="secondary" onPress={() => setAsk({ kind: 'signout' })}>Sign out</Button>}><span /></SettingsSection>
     </>; break;
-    case 'calendars': { const targets = cals.filter((c) => c.status === 'connected').map((c) => ({ id: c.provider === 'Google' ? 'work' : c.id, label: c.provider === 'Google' ? 'Work' : 'Calendar', description: `${c.provider} · ${c.email}` }));
+    case 'calendars': { const targets = cals.filter((c) => c.status === 'connected').flatMap((c) => (bookings?.subCalendars?.[c.id]?.filter((x) => x.conflicts) ?? [{ id: c.provider === 'Google' ? 'work' : c.id, name: c.provider === 'Google' ? 'Work' : 'Calendar' }]).map((x) => ({ id: x.id, label: x.name, description: `${c.provider} · ${c.email}` })));
+      const isAdmin = me?.role === 'Owner' || me?.role === 'Admin';
+      const syncedAt = bookings?.lastSync ?? p.lastSync;
       body = <>
-      <SettingsSection title="Connected calendars" description="Busy times there are never offered to guests. Bookings land in the one you pick below.">
+      {bookings?.fellBack && <Callout tone="warning" onDismiss={() => act({ type: 'calendar/fellback', fellBack: undefined })}>New bookings now go to {bookings.fellBack.now}. {bookings.fellBack.was} stopped taking them.</Callout>}
+      <SettingsSection title="Connected calendars" description="Busy times there are never offered to guests. Open an account to pick which of its calendars count, show on your week and log meetings.">
         {!bookings ? <p className="tf-rec__muted">Open Bookings once to load your calendars.</p> : <CalendarConnections accounts={cals}
+          calendarsOf={(id) => bookings.subCalendars?.[id]}
+          onCalendarChange={(acc, id, patch) => act({ type: 'subcal/set', account: acc, calendars: (bookings.subCalendars?.[acc] ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) })}
+          onDisconnect={(id) => setAsk({ kind: 'cal-off', id })}
+          onSync={() => new Promise<void>((r) => { window.setTimeout(() => { const at = new Date(); act({ type: 'calendar/sync', at }); dispatch({ type: 'prefs/set', prefs: { lastSync: at } }); toast({ message: 'Calendars synced', tone: 'success' }); r(); }, 800); })}
+          syncedText={syncedAt ? `Synced ${when(syncedAt)}` : undefined}
           onCheckConflicts={(id, on) => act({ type: 'calendar/set', calendars: cals.map((c) => (c.id === id ? { ...c, checkConflicts: on } : c)) })}
           onReconnect={(id) => new Promise<void>((r) => { window.setTimeout(() => { act({ type: 'calendar/set', calendars: cals.map((c) => (c.id === id ? { ...c, status: 'connected' } : c)) }); r(); }, 800); })}
-          onConnect={(provider: CalendarProvider) => new Promise<void>((r) => { window.setTimeout(() => { act({ type: 'calendar/set', calendars: [...cals, { id: newId('cal'), provider, email: me?.email ?? 'you@example.com', calendars: 2, status: 'connected', checkConflicts: true }] }); toast({ message: `${provider} connected`, tone: 'success' }); r(); }, 900); })} />}
+          onConnect={(provider: CalendarProvider) => new Promise<void>((r) => { window.setTimeout(() => { const id = newId('cal'); act({ type: 'calendar/set', calendars: [...cals, { id, provider, email: me?.email ?? 'you@example.com', calendars: 2, status: 'connected', checkConflicts: true }] }); act({ type: 'subcal/set', account: id, calendars: [{ id: `${id}-main`, name: 'Calendar', conflicts: true, week: true, log: true, colour: 'blue' }, { id: `${id}-family`, name: 'Family', conflicts: true, week: false, log: false, colour: 'green' }] }); toast({ message: `${provider} connected`, tone: 'success' }); r(); }, 900); })} />}
       </SettingsSection>
-      {cals.map((c) => { const o = p.calendarOpts?.[c.id] ?? { week: true, log: true, colour: 'blue' }; const put = (patch: Partial<typeof o>) => set({ calendarOpts: { ...(p.calendarOpts ?? {}), [c.id]: { ...o, ...patch } } }); return (
-        <SettingsSection key={c.id} title={c.email} description={`${c.provider} · ${c.calendars} ${c.calendars === 1 ? 'calendar' : 'calendars'}`} action={<Button variant="ghost" onPress={() => setAsk({ kind: 'cal-off', id: c.id })}>Disconnect</Button>}>
-          {sw('Show on my week', o.week, (on) => put({ week: on }), 'Its events sit beside your meetings in Bookings')}
-          {sw('Log meetings to the CRM', o.log, (on) => put({ log: on }), 'Meetings with people you know land on their record')}
-          <Select label="Colour" className="tf-you__select" value={o.colour} onChange={(v) => v && put({ colour: v })} items={[{ id: 'blue', label: 'Blue', hue: 'blue' }, { id: 'green', label: 'Green', hue: 'green' }, { id: 'purple', label: 'Purple', hue: 'purple' }, { id: 'orange', label: 'Orange', hue: 'orange' }]} />
-        </SettingsSection>); })}
-      <SettingsSection title="Bookings and sharing" action={cals.length > 0 ? <Button variant="secondary" onPress={() => { set({ lastSync: new Date() }, undefined, 'Calendars synced'); }}>Sync now</Button> : undefined}
-        description={p.lastSync ? `Last synced ${when(p.lastSync)}.` : 'Calendars sync every few minutes.'}>
+      <SettingsSection title="Bookings and sharing" action={cals.length > 0 ? <Button variant="secondary" onPress={() => { const at = new Date(); act({ type: 'calendar/sync', at }); set({ lastSync: at }, undefined, 'Calendars synced'); }}>Sync now</Button> : undefined}
+        description={syncedAt ? `Last synced ${when(syncedAt)}.` : 'Calendars sync every few minutes.'}>
         <div className="tf-rec__form tf-set__narrow">
           {targets.length > 0 && bookings && <Select label="Add new bookings to" items={targets} value={targets.some((t) => t.id === bookings.health.bookingCalendar) ? bookings.health.bookingCalendar : targets[0]?.id ?? null}
-            onChange={(v) => { if (v) { act({ type: 'calendar/set', calendars: cals, health: { ...bookings.health, bookingCalendar: v } }); toast({ message: 'Saved', tone: 'success' }); } }} description="Each booking page can pick another." />}
-          <Select label="Teammates see" value={p.teammatesSee ?? 'busy'} onChange={(v) => v && set({ teammatesSee: v === 'full' ? 'full' : 'busy' })} items={[{ id: 'busy', label: 'Busy or free only' }, { id: 'full', label: 'Full details' }]} />
+            onChange={(v) => { if (v) { act({ type: 'calendar/set', calendars: cals, health: { ...bookings.health, bookingCalendar: v } }); act({ type: 'calendar/fellback', fellBack: undefined }); toast({ message: 'Saved', tone: 'success' }); } }} description="Each booking page can pick another." />}
+          <Select label="Teammates see" value={p.teammatesSee ?? 'busy'} onChange={(v) => v && set({ teammatesSee: v === 'full' ? 'full' : 'busy' })} items={[{ id: 'busy', label: 'Busy or free only', description: 'Your events show as Busy, with no title' }, { id: 'full', label: 'Full details', description: 'Titles, guests and places' }]} />
         </div>
-        {sw('Add people from meetings', p.addFromMeetings ?? true, (on) => set({ addFromMeetings: on }, `${state.me} turned ${on ? 'on' : 'off'} adding people from meetings`), 'Guests you meet who aren’t in People yet are added, for everyone')}
+      </SettingsSection>
+      <SettingsSection title="Workspace" description={isAdmin ? 'For everyone in the workspace.' : 'Only owners and admins change this.'}>
+        <div className="tf-set__switch"><span><strong>Add people from meetings</strong><span className="tf-rec__muted">Guests you meet who aren’t in People yet are added, for everyone</span></span>
+          <Switch aria-label="Add people from meetings" isSelected={p.addFromMeetings ?? true} isDisabled={!isAdmin} onChange={(on) => set({ addFromMeetings: on }, `${state.me} turned ${on ? 'on' : 'off'} adding people from meetings`)} /></div>
       </SettingsSection>
     </>; break; }
     case 'general': body = <>
@@ -378,14 +385,10 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         ['Time off ahead', String(bookings.timeOff.filter((t) => t.to >= today).length)],
         ...(kind === 'team' ? [['People with meeting limits', String(Object.values(bookings.limits ?? {}).filter((l) => l.perDay > 0 || l.perWeek > 0).length)] as const] : []),
       ] : [], 'availability', kind === 'team' ? 'Open Availability' : 'Open hours'); break; }
-    case 'roundrobin': body = summary('Round robin', 'Groups share pages in turn: whoever is free and has had the fewest meetings takes the next.', bookings ? [
-        ['Groups', bookings.groups.length === 0 ? 'None yet' : bookings.groups.map((g) => `${g.name} (${g.members.filter((m) => !m.paused).length} active)`).join(', ')],
-        ['Pages shared in turn', bookings.pages.filter((x) => x.hostMode === 'roundrobin').map((x) => x.name).join(', ') || 'None'],
-      ] : [], 'roster', 'Open Roster'); break;
-    case 'routing': body = summary('Routing', 'A form’s answers decide which page, message or link someone gets.', bookings ? [
-        ['Form', bookings.routing.formName], ['Rules', String(bookings.routing.rules.length)],
-        ['Nobody matches', bookings.routing.fallbackOutcome === 'message' ? 'Show a message' : bookings.routing.fallbackOutcome === 'redirect' ? 'Send to a link' : `Book ${bookings.pages.find((x) => x.id === bookings.routing.fallbackPageId)?.name ?? 'a page'}`],
-      ] : [], 'routing', 'Open Routing'); break;
+    case 'roundrobin': body = !bookings ? summary('Round robin', 'Groups share pages in turn.', [], 'roster', 'Open Roster')
+      : <RoundRobinPage bookings={bookings} act={act} me={state.me} isAdmin={me?.role === 'Owner' || me?.role === 'Admin'} people={state.members} />; break;
+    case 'routing': body = !bookings ? summary('Routing', 'A form’s answers decide which page, message or link someone gets.', [], 'routing', 'Open Routing')
+      : <RoutingOverview bookings={bookings} act={act} me={state.me} isAdmin={me?.role === 'Owner' || me?.role === 'Admin'} people={state.members} onOpen={() => onBookings('routing')} />; break;
     case 'schedaccess': { const mine = bookings?.access?.[state.me] ?? 'self'; const isAdmin = me?.role === 'Owner' || me?.role === 'Admin';
       body = <>
       <SettingsSection title="Your scheduling" description="Your calendar, hours, time off and meetings.">
@@ -394,6 +397,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           <Select label="Who changes my hours and time off" value={mine} isDisabled={!bookings} onChange={(v) => { if (v && bookings) { act({ type: 'access/set', name: state.me, access: v === 'admins' ? 'admins' : 'self' }); toast({ message: 'Saved', tone: 'success' }); } }} items={[{ id: 'self', label: 'Me and admins' }, { id: 'admins', label: 'Admins only' }]} />
         </div>
       </SettingsSection>
+      {bookings && <AccessGrants bookings={bookings} act={act} me={state.me} isAdmin={isAdmin} people={state.members} />}
       {isAdmin && bookings && <SettingsSection title="Everyone’s hours" description="Who may change each person’s hours and time off.">
         <ul className="tf-set__list">{state.members.filter((m) => m.name !== state.me && m.role !== 'Guest').map((m) => <li key={m.id}><span><strong>{m.name}</strong> <span className="tf-rec__muted">{m.role}</span></span>
           <Select label={`Who changes ${m.name}'s hours`} isLabelHidden className="tf-you__select" value={bookings.access?.[m.name] ?? 'self'} onChange={(v) => { if (v) { act({ type: 'access/set', name: m.name, access: v === 'admins' ? 'admins' : 'self' }); toast({ message: 'Saved', tone: 'success' }); } }} items={[{ id: 'self', label: 'They and admins' }, { id: 'admins', label: 'Admins only' }]} /></li>)}</ul>
@@ -473,7 +477,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         </Dialog>); })()}
       {ask?.kind === 'cal-off' && (() => { const c = cals.find((x) => x.id === ask.id); if (!c) return null; return (
         <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Disconnect ${c.email}?`} description="Busy times there stop counting, so guests could book over them. Meetings already booked stay."
-          actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { close(); act({ type: 'calendar/set', calendars: cals.filter((x) => x.id !== c.id) }); toast({ message: `${c.provider} disconnected`, action: { label: 'Undo', onAction: () => act({ type: 'calendar/set', calendars: cals }) } }); }}>Disconnect</Button></>} />); })()}
+          actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { close(); act({ type: 'calendar/set', calendars: cals.filter((x) => x.id !== c.id) }); toast({ message: `${c.provider} disconnected` }); }}>Disconnect</Button></>} />); })()}
       {ask?.kind === 'unpartner' && (() => { const x = (p.partners ?? []).find((y) => y.id === ask.id); if (!x) return null; return (
         <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Disconnect ${x.name}?`} description="It stops reaching your workspace straight away. Pages it shows go blank until you connect again."
           actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { close(); set({ partners: (p.partners ?? []).filter((y) => y.id !== x.id) }, `${state.me} disconnected ${x.name}`, `${x.name} disconnected`); }}>Disconnect</Button></>} />); })()}

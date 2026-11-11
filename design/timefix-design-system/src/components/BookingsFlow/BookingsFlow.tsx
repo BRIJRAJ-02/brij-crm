@@ -2,7 +2,7 @@ import { copyText } from '../../lib/copy.ts';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users, Contact } from 'lucide-react';
+import { AlertTriangle, AppWindow, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users, Contact } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
@@ -84,6 +84,9 @@ export interface BookingsFlowProps {
   /** Look but don't change: the app is previewing another role. */
   readonly isReadOnly?: boolean;
   readonly openGuest?: { readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number };
+  /** The app's own Demo items (the link page inside a partner's app), and what picking one does. */
+  readonly demoItems?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly description?: string }>;
+  readonly onDemo?: (id: string) => void;
 }
 
 const readWhose = (workspace: string): Whose => { try { return window.localStorage.getItem(`tf-bkf-whose:${workspace}`) ?? 'mine'; } catch { return 'mine'; } };
@@ -104,7 +107,7 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', guests: 'Clients', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, onSearch, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, onSearch, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false, demoItems = [], onDemo }: BookingsFlowProps) {
   const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const readOnlyRef = useRef(isReadOnly); readOnlyRef.current = isReadOnly;
@@ -114,10 +117,16 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const lastCmd = useRef(0);
   useEffect(() => { (commands ?? []).forEach((c) => { if (c.seq > lastCmd.current) { lastCmd.current = c.seq; dispatch(c.action); } }); }, [commands, dispatch]);
   const [tab, setTab] = useState('meetings');
+  // Requests nobody answered within a day decline on their own (the page's editor says so); checked now and every minute.
+  useEffect(() => {
+    const sweep = () => { const cut = Date.now() - 86_400_000; state.meetings.forEach((m) => { if (m.status === 'pending' && (m.activity[0]?.at.getTime() ?? Date.now()) < cut) rawDispatch({ type: 'meeting/patch', id: m.id, patch: { status: 'cancelled', cancelledBy: 'host', cancelReason: 'No answer within a day' }, note: 'Declined on its own: no answer within a day' }); }); };
+    sweep(); const t = window.setInterval(sweep, 60_000); return () => window.clearInterval(t);
+  }, [state.meetings]);
   /** The guest or client whose profile is open (by guestKey). */
   const [profileKey, setProfileKey] = useState<string>();
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (openTab) { setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Opening a page from outside leaves the page editor (its changes are kept as a draft), so the page asked for shows.
+  useEffect(() => { if (openTab) { leaveEditor(); setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!openGuest) return; const p = state.pages.find((x) => x.id === openGuest.pageId) ?? state.pages.find((x) => x.isOn && x.kind !== 'table') ?? state.pages[0]; if (p) setGuest({ scenario: openGuest.scenario ?? 'book', pageId: p.id, prefill: openGuest.prefill }); }, [openGuest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hiddenSections.includes(tab)) setTab('meetings'); }, [hiddenSections.join(','), tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
@@ -242,6 +251,17 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       else toast({ message: `${p.name} added to your link page`, tone: 'success', action: { label: 'Undo', onAction: undo } });
     } else setShare({ kind: how === 'once' ? 'once' : how, id: p.id });
   };
+  /** The workspace link (whoever in the workspace is free) or a group's team link: opened, or made the first time and opened. */
+  const openTeamLink = (which: { readonly kind: 'workspace' } | { readonly kind: 'team'; readonly groupId: string }) => {
+    const existing = which.kind === 'workspace' ? state.pages.find((p) => p.linkKind === 'workspace') : state.pages.find((p) => p.linkKind === 'team' && p.groupId === which.groupId);
+    if (existing) { setEditor({ id: existing.id, draft: draftOf(existing) }); return; }
+    const group = which.kind === 'team' ? state.groups.find((g) => g.id === which.groupId) : undefined;
+    const name = group?.name ?? state.workspace;
+    const page = newPage(state.pages, { name, slug: uniqueSlug(slugify(name), state.pages), linkKind: which.kind, hostMode: 'roundrobin', hosts: group ? group.members.map((m) => m.name) : [...TEAM], groupId: group?.id, shareOut: 'equal', weights: {}, owner: HOST, description: group ? `Book whoever in ${group.name} is free.` : 'Book whoever on the team is free.' });
+    dispatch({ type: 'page/upsert', page });
+    setEditor({ id: page.id, draft: page });
+    toast({ message: which.kind === 'workspace' ? 'Workspace link made. Set its hours, hosts and limits.' : `${name}’s team link made`, tone: 'success' });
+  };
   const toggle = (id: string, isOn: boolean) => {
     const p = pageById(id);
     if (!p) return;
@@ -310,7 +330,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   /** Join: the meeting's own link, copied so it opens in any browser; the toast shows it too in case copying is blocked. */
   const join = (m: BookedMeeting) => {
-    const url = m.place === 'phone' ? `tel:${m.phone ?? ''}` : `https://meet.google.com/${m.id.replace(/[^a-z0-9]/gi, '').slice(-3)}-tfx-${m.id.replace(/[^a-z0-9]/gi, '').slice(0, 4)}`;
+    const url = m.ownLink ? m.ownLink : m.place === 'phone' ? `tel:${m.phone ?? ''}` : `https://meet.google.com/${m.id.replace(/[^a-z0-9]/gi, '').slice(-3)}-tfx-${m.id.replace(/[^a-z0-9]/gi, '').slice(0, 4)}`;
     void navigator.clipboard.writeText(url).then(() => toast({ message: `${m.placeLabel} link copied. Paste it in your browser to join.`, tone: 'success' }), () => toast({ message: `Join at ${url}` }));
   };
   /* Meetings */
@@ -374,6 +394,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const demo = (k: Key) => {
     const key = String(k);
     if (key.startsWith('ws:')) { switchTo(key.slice(3) as WorkspaceId); return; }
+    if (key.startsWith('app:')) { onDemo?.(key.slice(4)); return; }
     const pick = (pred: (p: BookingPage) => boolean) => state.pages.find(pred) ?? state.pages[0];
     // Only these two replace the workspace, and each asks first.
     if (key === 'fresh' || key === 'northwind') { setResetTo(key); return; }
@@ -412,7 +433,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     if (!scenario) return;
     if (state.pages.length === 0) { toast({ message: 'Make a booking page first.' }); return; }
     const page = scenario === 'pending' || scenario === 'offered' ? pick((p) => p.confirmFirst || p.offers.length > 0)
-      : scenario === 'hidden' ? pick((p) => !p.isOn) : pick((p) => p.isOn && p.whoCanBook === 'anyone' && p.durations.length === 1 && p.hostMode === 'one');
+      : scenario === 'hidden' ? pick((p) => !p.isOn) : scenario === 'invited' ? state.pages.find((p) => p.inviteOnly) : pick((p) => p.isOn && p.whoCanBook === 'anyone' && p.durations.length === 1 && p.hostMode === 'one');
+    if (scenario === 'invited' && !page) { toast({ message: 'Turn on Book only through these links on a page first (its one-time links).' }); return; }
     if (page) setGuest({ scenario, pageId: page.id });
   };
 
@@ -476,6 +498,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
           {GUEST_SCENARIOS.map((s) => <MenuItem key={s.id} id={s.id} icon={<Play {...i16} />}>{s.label}</MenuItem>)}
           {state.menuLive ? <MenuItem id="menu" icon={<Play {...i16} />} description="Opens the menu with Table 3 set">Scan a table’s QR code</MenuItem> : null}
         </MenuSection>
+        {demoItems.length > 0 && <MenuSection title="In other apps">
+          {demoItems.map((d) => <MenuItem key={d.id} id={`app:${d.id}`} icon={<AppWindow {...i16} />} description={d.description}>{d.label}</MenuItem>)}
+        </MenuSection>}
         <MenuSection title="Edge cases">
           <MenuItem id="team" icon={<PauseCircle {...i16} />} description="Everyone on a round robin is paused">A team page no one can take</MenuItem>
           <MenuItem id="arrival" icon={<CalendarDays {...i16} />} description="As if someone books while you watch">A guest books now</MenuItem>
@@ -547,7 +572,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
             setEditor({ id: d.id, draft: page }); toast({ message: 'Published. Guests see it now.', tone: 'success' }); resolve();
           }, 700); })}
           onToggle={(on) => toggle(editing.id, on)} onShare={onShare} onMore={onMore} onGuest={() => setGuest({ scenario: 'book', pageId: editing.id })}
-          onMeetings={() => { leaveEditor(); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} />
+          onMeetings={() => { leaveEditor(); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} onOpenMeeting={setMeetingId} />
       ) : (
         <>
           <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: (() => { const x = SECTIONS.find((y) => y.id === tab); return x ? labelOf(x) : 'Bookings'; })(), icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
@@ -571,8 +596,14 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                   onConfirm={confirm} onDecline={setDeclineId}
                   onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn) ?? state.pages[0]; if (p) onShare(p, 'copy'); }}
                   onNewMeeting={(initial) => setNewMeeting({ initial })} onQuickMeeting={bookNew}
-                  onBlock={(block) => { dispatch({ type: 'block/add', block }); toast({ message: `${formatDay(parseDay(block.day))}, ${formatClockRange(block.start, block.end)} is blocked`, action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
-                  onHold={setHoldAt}
+                  onBlock={(block) => { dispatch({ type: 'block/add', block }); toast({ message: block.weekly ? `Every ${parseDay(block.day).toLocaleDateString('en-GB', { weekday: 'long' })}, ${formatClockRange(block.start, block.end)} is blocked` : `${formatDay(parseDay(block.day))}, ${formatClockRange(block.start, block.end)} is blocked`, action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
+                  onHold={(p, forPage) => { const page = pageById(forPage); const block = { id: nextId('hold'), member: p.member, day: isoDay(p.day), start: p.start, end: p.end, kind: 'hold' as const, label: page ? `Reserved for ${page.name}` : 'Held', forPage }; dispatch({ type: 'block/add', block }); toast({ message: 'Reserved. Only your link only pages can book it.', action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
+                  onRemoveBlock={(b, every, date) => {
+                    // One day of a weekly block is skipped; the block itself, or every week of it, goes.
+                    if (b.weekly && !every) { dispatch({ type: 'block/remove', id: b.id }); dispatch({ type: 'block/add', block: { ...b, skips: [...(b.skips ?? []), date] } }); }
+                    else dispatch({ type: 'block/remove', id: b.id });
+                    toast({ message: 'That time is open again.', tone: 'success' });
+                  }}
                   onTimeOff={(p) => {
                     const day = isoDay(p.day);
                     const entry = { id: nextId('off'), member: p.member, from: day, to: day, allDay: false, start: p.start, end: p.end, note: '' };
@@ -591,7 +622,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                 <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p) }); }}
                   onFix={(id, section) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p), section: section ?? 'who' }); }}
                   onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={(k) => { setCreateKind(k === 'service' ? 'service' : undefined); setCreating(true); }} dispatch={dispatch} onSeePage={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'profile', pageId: p.id }); }}
-                  onSeeMenu={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'menu', pageId: p.id }); }} onEditMenu={() => setTab('menu')} />
+                  onSeeMenu={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'menu', pageId: p.id }); }} onEditMenu={() => setTab('menu')} onTeamLink={openTeamLink} />
               </div>)}
               {tab === 'menu' && state.menu && (<div className="tf-bkf__panel">
                 <MenuTab state={state} dispatch={dispatch} onTables={() => setTab('availability')}

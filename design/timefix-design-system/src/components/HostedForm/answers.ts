@@ -71,6 +71,18 @@ export interface FormQuestion {
   readonly defaultValue?: string;
   /** Consent: terms (required to go on) or marketing (optional). */
   readonly consentKind?: 'terms' | 'marketing';
+  /** Shown only when an earlier question's answer is this; its answer isn't kept when it's skipped. */
+  readonly showIf?: { readonly questionId: string; readonly is: string };
+  /** Starts a new step (a page of the form) at this question, with the step's title. */
+  readonly step?: { readonly title?: string };
+  /** After this question, by answer: go to another question's id, or 'end'. */
+  readonly jumps?: ReadonlyArray<{ readonly is: string; readonly to: string }>;
+  /** Points each choice gives; the answers' total is the score. */
+  readonly points?: Readonly<Record<string, number>>;
+  /** Counts as "How did you hear about us" in Insights. */
+  readonly insights?: boolean;
+  /** The record field the answer fills ("person.title"); unset keeps it with the submission only. */
+  readonly saveTo?: string;
 }
 
 /** A postal address, each part as typed. */

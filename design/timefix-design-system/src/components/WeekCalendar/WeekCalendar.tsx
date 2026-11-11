@@ -11,7 +11,8 @@ import './WeekCalendar.css';
 export { formatClock, formatClockRange, minutesOf } from './clock.ts';
 
 /** Timefix meetings are blue, internal time grey, in-person orange. */
-export type WeekEventKind = 'meeting' | 'internal' | 'in-person';
+/** `calendar` is an event from a connected calendar: hatched like busy time, opened to read, never moved. */
+export type WeekEventKind = 'meeting' | 'internal' | 'in-person' | 'calendar';
 /** One event on the grid. `day` is the column index; times are minutes from midnight. */
 export interface WeekEvent {
   readonly id: string;
@@ -24,6 +25,8 @@ export interface WeekEvent {
   readonly location?: string;
   /** A small mark before the title: where the event came from (the Timefix mark on a booking). */
   readonly mark?: ReactNode;
+  /** Can't be dragged or resized (a calendar's own event, a block): it still opens. */
+  readonly isLocked?: boolean;
 }
 /** Time another calendar holds: drawn hatched, never as an event. */
 export interface WeekBusy { readonly id: string; readonly day: number; readonly start: number; readonly end: number; readonly source: string }
@@ -51,6 +54,8 @@ export interface WeekCalendarProps {
   readonly onEventChange?: (event: WeekEvent, next: WeekSelection) => void;
   /** How tall the scrolling hours area is (a CSS length), e.g. to fill a page; 8.5 hours when not given. */
   readonly scrollHeight?: string;
+  /** What an event's popover shows under its title and time, in place of Join and Reschedule (a block's Remove, a calendar event's About). Return undefined for the default. */
+  readonly eventDetails?: (event: WeekEvent, close: () => void) => ReactNode | undefined;
 }
 
 const STEP = 15;
@@ -91,7 +96,7 @@ interface Moving {
 interface Pressing { readonly id: string; readonly mode: 'move' | 'resize'; readonly x: number; readonly y: number; readonly origin: WeekSelection; readonly started: boolean }
 
 /** The team week: hour gutter, day headers, now-line, tinted events with a popover, hatched busy time, drag to select, and events that move and resize. */
-export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, selectionMenu, onJoin, onReschedule, onEventChange, scrollHeight }: WeekCalendarProps) {
+export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, selectionMenu, onJoin, onReschedule, onEventChange, scrollHeight, eventDetails }: WeekCalendarProps) {
   const selRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const hours = endHour - startHour;
@@ -150,7 +155,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
     return { day: over === -1 ? p.origin.day : over, start, end: start + len };
   };
   const eventDown = (ev: WeekEvent, mode: 'move' | 'resize') => (e: PointerEvent<HTMLElement>) => {
-    if (!editable || e.button !== 0) return;
+    if (!editable || e.button !== 0 || ev.isLocked) return;
     if (mode === 'resize') e.stopPropagation();
     press.current = { id: ev.id, mode, x: e.clientX, y: e.clientY, origin: { day: ev.day, start: ev.start, end: ev.end }, started: false };
   };
@@ -177,7 +182,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
   };
   /** Keyboard moving: Enter picks up, arrows move 15 minutes or a day, Shift with arrows changes the length, Enter drops, Esc cancels. */
   const eventKeys = (ev: WeekEvent) => (e: KeyboardEvent<HTMLElement>) => {
-    if (!editable) return;
+    if (!editable || ev.isLocked) return;
     const m = moving?.id === ev.id && moving.via === 'keyboard' ? moving : undefined;
     if (!m) {
       if (e.key !== 'Enter' || moving) return;
@@ -282,34 +287,36 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
                   const lane = lanes.get(ev.id) ?? { lane: 0, lanes: 1 };
                   const conflict = conflictAt(ev.id, ev);
                   const isGhost = moving?.id === ev.id;
+                  const own = eventDetails?.(ev, () => setOpenId(undefined));
                   return (
                     <div key={ev.id}
-                      className={cx('tf-week__item', isGhost && 'is-ghost', settling === ev.id && 'is-settling', editable && 'is-editable')}
+                      className={cx('tf-week__item', isGhost && 'is-ghost', settling === ev.id && 'is-settling', editable && !ev.isLocked && 'is-editable')}
                       style={{ '--tf-top': pos(ev.start), '--tf-len': (ev.end - ev.start) / 60, '--tf-lane': lane.lane, '--tf-lanes': lane.lanes } as React.CSSProperties}
                       onPointerDown={eventDown(ev, 'move')} onPointerMove={eventMove} onPointerUp={eventUp} onPointerCancel={() => finish(false)}
                       onKeyDownCapture={eventKeys(ev)}>
                       <DialogTrigger isOpen={openId === ev.id && !moving} onOpenChange={(o) => { if (o && justDragged.current) return; setOpenId(o ? ev.id : undefined); }}>
                         <AriaButton className={cx('tf-week__event', `tf-week__event--${ev.kind}`, ev.end - ev.start < 60 && 'tf-week__event--short')}
-                          aria-label={`${ev.title}, ${range(ev.start, ev.end)}${conflict ? ', conflict' : ''}`} aria-describedby={editable ? hintId : undefined}>
+                          aria-label={`${ev.title}, ${range(ev.start, ev.end)}${conflict ? ', conflict' : ''}`} aria-describedby={editable && !ev.isLocked ? hintId : undefined}>
                           <EventFace ev={ev} start={ev.start} end={ev.end} conflict={conflict} hour12={hour12} />
                         </AriaButton>
                         <Popover label={ev.title} placement="end top" offset={8} className="tf-week__pop">
                           <div className="tf-week__dialog">
                             <Heading slot="title" className="tf-week__pop-title">{ev.title}</Heading>
                             <p className="tf-week__pop-when tf-num">{d.label} · {range(ev.start, ev.end)}</p>
-                            {ev.location && <p className="tf-week__pop-row">{ev.kind === 'in-person' ? <MapPin size={14} strokeWidth={1.75} aria-hidden /> : <Video size={14} strokeWidth={1.75} aria-hidden />}{ev.location}</p>}
-                            {conflict && <p className="tf-week__pop-row tf-week__pop-row--warn"><AlertTriangle size={14} strokeWidth={1.75} aria-hidden />Overlaps other busy time</p>}
-                            {ev.guests && ev.guests.length > 0 && (
+                            {own}
+                            {own === undefined && ev.location && <p className="tf-week__pop-row">{ev.kind === 'in-person' ? <MapPin size={14} strokeWidth={1.75} aria-hidden /> : <Video size={14} strokeWidth={1.75} aria-hidden />}{ev.location}</p>}
+                            {own === undefined && conflict && <p className="tf-week__pop-row tf-week__pop-row--warn"><AlertTriangle size={14} strokeWidth={1.75} aria-hidden />Overlaps other busy time</p>}
+                            {own === undefined && ev.guests && ev.guests.length > 0 && (
                               <div className="tf-week__pop-row"><Users size={14} strokeWidth={1.75} aria-hidden /><AvatarGroup names={ev.guests} size={20} max={4} /><span className="tf-num">{ev.guests.length} {ev.guests.length === 1 ? 'guest' : 'guests'}</span></div>
                             )}
-                            <div className="tf-week__pop-actions">
+                            {own === undefined && <div className="tf-week__pop-actions">
                               {ev.kind === 'meeting' && <Button size="sm" variant="primary" icon={<Video size={14} strokeWidth={1.75} />} onPress={() => { setOpenId(undefined); onJoin?.(ev); }}>Join</Button>}
                               <Button size="sm" onPress={() => { setOpenId(undefined); window.setTimeout(() => onReschedule?.(ev), 150); }}>Reschedule</Button>
-                            </div>
+                            </div>}
                           </div>
                         </Popover>
                       </DialogTrigger>
-                      {editable && <span className="tf-week__resize" aria-hidden="true" onPointerDown={eventDown(ev, 'resize')} />}
+                      {editable && !ev.isLocked && <span className="tf-week__resize" aria-hidden="true" onPointerDown={eventDown(ev, 'resize')} />}
                     </div>
                   );
                 })}

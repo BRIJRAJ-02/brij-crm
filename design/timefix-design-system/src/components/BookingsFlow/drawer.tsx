@@ -2,7 +2,10 @@
 import { copyText } from '../../lib/copy.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'react-aria-components';
-import { Bell, Check, Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
+import { Bell, Check, Clock, Link2, MessageSquareText, MoreHorizontal, Repeat, Share2, UserRound, UserX, Users, Video, X } from 'lucide-react';
+import { Callout } from '../Callout/Callout.tsx';
+import { TextField } from '../Field/Field.tsx';
+import { Link as TextLink } from '../Link/Link.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -22,7 +25,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
 import { ProfileButton } from './guests.tsx';
-import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, OUTCOMES, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+import { HOST, HOST_ZONE, TEAM, ZONES, assignedLine, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, OUTCOMES, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
 export interface MeetingDrawerProps {
@@ -52,6 +55,11 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
   if (meeting && meeting !== last) setLast(meeting);
   const m = meeting ?? last;
   const [notes, setNotes] = useState(m?.notes ?? '');
+  const [linking, setLinking] = useState(false);
+  const [linkDraft, setLinkDraft] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => { setChatOpen(false); }, [meeting?.id]);
   useEffect(() => { setNotes(meeting?.notes ?? ''); }, [meeting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!m) return null;
   const zoneTime = (tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(m.start);
@@ -68,10 +76,12 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <Menu aria-label="Meeting actions" placement="bottom end" onAction={(k: Key) => {
             if (k === 'reassign') onReassign(m);
             else if (k === 'noshow') onNoShow(m);
+            else if (k === 'guest') { const url = `https://timefix.com/b/manage/${m.id.replace(/[^a-z0-9]/gi, '').slice(-10)}`; void copyText(url).then((ok) => toast(ok ? { message: 'Guest link copied. It opens their booking, so share it only with them.', tone: 'success' } : { message: `Couldn’t copy the link. It’s ${url}`, tone: 'danger' })); }
             else if (k === 'copy') { void copyText(`https://timefix.com/m/${m.id.slice(-6)}`).then((ok) => toast(ok ? { message: 'Meeting link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://timefix.com/m/${m.id.slice(-6)}`}`, tone: 'danger' })); }
           }}>
             <MenuItem id="reassign" icon={<Users {...i16} />} isDisabled={!open}>Reassign</MenuItem>
             <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy meeting link</MenuItem>
+            <MenuItem id="guest" icon={<Share2 {...i16} />} description="Where they move or cancel" isDisabled={!open}>Copy guest link</MenuItem>
             <MenuItem id="noshow" icon={<UserX {...i16} />} isDisabled={!past || m.status === 'no-show'}>Mark as no-show</MenuItem>
           </Menu>
         </MenuTrigger>
@@ -95,6 +105,14 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         <Button variant="secondary" onPress={() => onReschedule(m)}>Reschedule</Button>
         <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel meeting</Button>
       </span> : undefined}>
+      {m.eventFailed && (
+        <Callout tone="warning" action={{ label: retrying ? 'Trying…' : 'Try again', onPress: () => { if (retrying) return; setRetrying(true); window.setTimeout(() => { setRetrying(false); onUpdate({ ...m, eventFailed: undefined, activity: [...m.activity, { id: `a-${Date.now()}`, text: 'Added to the calendar', at: new Date() }] }); toast({ message: 'It’s on your calendar now', tone: 'success' }); }, 900); } }}>
+          This booking isn’t on your calendar: the event couldn’t be made.
+        </Callout>
+      )}
+      {m.hostLeft && m.status !== 'cancelled' && (
+        <Callout tone="warning" action={{ label: 'Reassign', onPress: () => onReassign(m) }}>Its host left the workspace and nobody else was free then. Reassign it, or cancel it.</Callout>
+      )}
       <dl className="tf-bkf__facts">
         <dt><Clock {...i16} aria-label="When" /></dt>
         <dd>
@@ -118,8 +136,24 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         <dt><PlaceIcon place={m.place} /></dt>
         <dd className="tf-bkf__place">
           <span>{m.placeLabel}{m.host !== HOST ? ` · hosted by ${m.host}` : ''}{m.coHosts?.length ? `${m.host !== HOST ? ',' : ' ·'} with ${m.coHosts.map((c) => (c === HOST ? 'you' : c)).join(' and ')}` : ''}</span>
-          {m.place === 'video' && open && <Button size="sm" variant="secondary" icon={<Video {...i14} />} onPress={() => onJoin(m)}>Join</Button>}
+          {m.place === 'video' && open && (m.ownLink || !needsLink(m, page)) && <Button size="sm" variant="secondary" icon={<Video {...i14} />} onPress={() => onJoin(m)}>Join</Button>}
+          {m.place === 'video' && open && (
+            <span className="tf-bkf__sub tf-bkf-linkline">
+              {m.ownLink ? <span className="tf-num tf-bkf-linkline__url">{m.ownLink.replace(/^https:\/\//, '')}</span> : needsLink(m, page) ? <span>No link yet.</span> : null}
+              <TextLink onPress={() => { setLinkDraft(m.ownLink ?? ''); setLinking(true); }} weight="strong">{m.ownLink || needsLink(m, page) ? (m.ownLink ? 'Change link' : 'Add meeting link') : 'Change link'}</TextLink>
+            </span>
+          )}
         </dd>
+        {m.assigned && (<>
+          <dt><Repeat {...i16} aria-label="Assigned" /></dt>
+          <dd><span>Assigned in {m.assigned.group ?? 'its round robin group'}</span><span className="tf-bkf__sub">{m.host === HOST ? 'You' : first(m.host)} {assignedLine(m.assigned)}</span></dd>
+        </>)}
+        {m.chat && m.chat.length > 0 && (<>
+          <dt><MessageSquareText {...i16} aria-label="Booked" /></dt>
+          <dd><span className="tf-bkf__row">Booked by chat<span aria-hidden="true">·</span><TextLink onPress={() => setChatOpen((o) => !o)} weight="strong">{chatOpen ? 'Hide chat' : 'Show chat'}</TextLink></span>
+            {chatOpen && <ol className="tf-bkf-chatlog" aria-label="Chat">{m.chat.map((c, n) => <li key={n} className={c.from === 'visitor' ? 'is-visitor' : 'is-assistant'}><span className="tf-bkf-chatlog__who">{c.from === 'visitor' ? first(m.invitee.name) : 'Assistant'}</span><span>{c.text}</span></li>)}</ol>}
+          </dd>
+        </>)}
       </dl>
       <section className="tf-bkf__block" aria-label="Answers">
         <h3 className="tf-bkf__block-title">Answers</h3>
@@ -141,12 +175,12 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         <h3 className="tf-bkf__block-title">Linked record</h3>
         {m.record ? (
           <span className="tf-bkf__record">
-            <PersonLine name={m.record.name} sub={m.record.sub} shape={m.record.kind === 'company' ? 'square' : 'round'} />
-            <Tag size="sm" hue={m.record.kind === 'company' ? 'purple' : 'blue'}>{m.record.kind === 'company' ? 'Company' : 'Person'}</Tag>
+            <PersonLine name={m.record.name} sub={m.record.sub} shape={m.record.kind === 'person' ? 'round' : 'square'} />
+            <Tag size="sm" hue={m.record.kind === 'company' ? 'purple' : m.record.kind === 'record' ? 'gray' : 'blue'}>{m.record.kind === 'company' ? 'Company' : m.record.kind === 'record' ? m.record.object ?? 'Record' : 'Person'}</Tag>
             <IconButton size="sm" label={`Unlink ${m.record.name}`} onPress={() => onUpdate({ ...m, record: undefined })}><X {...i14} /></IconButton>
           </span>
         ) : (
-          <ReferencePicker label="Link to record" placeholder="Search people, companies and deals…" recent={PEOPLE.slice(0, 3)} search={searchPeople}
+          <ReferencePicker label="Link to a record" placeholder="Search any record…" description="People, companies, deals and your own objects." recent={[...PEOPLE.slice(0, 2), ...PEOPLE.filter((p) => p.kind === 'record').slice(0, 1)]} search={searchPeople}
             onSelect={(record) => onUpdate({ ...m, record, activity: [...m.activity, { id: `a-${Date.now()}`, text: `Linked to ${record.name}`, at: new Date() }] })} />
         )}
       </section>
@@ -166,9 +200,21 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <TextArea label="A note to them" aside="Optional" rows={2} value={note} onChange={setNote} placeholder="Sorry, something came up. Grab another time?" />
         </div>
       </Dialog>}
+    {linking && <Dialog isOpen onOpenChange={(o) => { if (!o) setLinking(false); }} size="md" title={m.ownLink ? 'Change meeting link' : 'Add meeting link'} description={`${m.invitee.name} is emailed it.`}
+        actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!/^https:\/\/\S+\.\S+/.test(linkDraft.trim())} onPress={() => {
+          const url = linkDraft.trim(); setLinking(false);
+          onUpdate({ ...m, ownLink: url, activity: [...m.activity, { id: `a-${Date.now()}`, text: `${HOST} ${m.ownLink ? 'changed' : 'added'} the meeting link; ${first(m.invitee.name)} was emailed it`, at: new Date() }] });
+          toast({ message: `Link saved. ${first(m.invitee.name)} is emailed it.`, tone: 'success' });
+        }}>Save and email</Button></>}>
+        <TextField label="Meeting link" value={linkDraft} onChange={setLinkDraft} placeholder="https://meet.google.com/abc-defg-hij" autoFocus type="url"
+          isInvalid={linkDraft.trim() !== '' && !/^https:\/\/\S+\.\S+/.test(linkDraft.trim())} errorMessage="Paste the meeting’s link, starting https://" />
+      </Dialog>}
       </Drawer>
   );
 }
+
+/** A video meeting with no link of its own: its page sends links by hand, or the calendar event that makes one failed. */
+const needsLink = (m: BookedMeeting, page: BookingPage | undefined) => m.eventFailed === true || page?.videoLink === 'send' || (page?.videoLink === 'own' && !page.ownLink);
 
 /** Reschedule: the next two weeks of open times on the meeting's page; the guest is told. */
 export function RescheduleDialog({ meeting, state, onClose, onMove }: { readonly meeting: BookedMeeting | undefined; readonly state: BookingsState; readonly onClose: () => void; readonly onMove: (m: BookedMeeting, start: Date) => void }) {

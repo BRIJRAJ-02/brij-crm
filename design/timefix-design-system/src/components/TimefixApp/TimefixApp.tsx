@@ -30,6 +30,7 @@ import { useAssemble } from '../../lib/assemble.ts';
 import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
 import { LostReasonDialog } from './deals.tsx';
+import { PartnerFrame } from './embed.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -90,6 +91,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const toBookings = (action: BookingsAction) => setBookingsCmds((q) => [...q, { seq: (q[q.length - 1]?.seq ?? 0) + 1, action }]);
   const [openTab, setOpenTab] = useState<{ readonly tab: string; readonly n: number; readonly meetingId?: string }>();
   const [search, setSearch] = useState(false);
+  /** The demo of the link page inside a partner's app. */
+  const [partner, setPartner] = useState(false);
   const searchButton = <Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
   const [help, setHelp] = useState(false);
   const [newList, setNewList] = useState(false);
@@ -334,7 +337,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
       <div ref={shellRef} className="tf-app__keep" inert={door !== undefined || undefined}>
-      <BookingsFlow showDemoMenu onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
+      <BookingsFlow showDemoMenu demoItems={[{ id: 'partner', label: 'Your link page in a partner’s app', description: 'The embedded frame: its start screen, then the page' }]} onDemo={(id) => { if (id === 'partner') setPartner(true); }} onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
           if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
@@ -365,6 +368,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); setAssembling((n) => n + 1); }} />}
+      {partner && <PartnerFrame state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onClose={() => setPartner(false)} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={[...here, ...commands]} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
         placeholder="Search records, views, notes, or type a command…" />
       <ShortcutHelp isOpen={help} onOpenChange={setHelp} />

@@ -2,6 +2,8 @@
 import type { WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import type { FormQuestion } from '../HostedForm/answers.ts';
 import type { Notification } from '../NotificationList/NotificationList.tsx';
+import { formatClock, minutesOf } from '../WeekCalendar/clock.ts';
+import { formatDay } from '../../lib/format.ts';
 import {
   HOST, HOST_ZONE, PLACES, at, dayFrom, isoDay, nextId, slugify,
   type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind,
@@ -121,13 +123,32 @@ export function northwind(now: Date = new Date()): BookingsState {
   meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
   // How the earlier calls went, so a person's record shows outcomes beside their meetings.
   meetings.forEach((m, n) => { if (m.end < now && m.status !== 'cancelled' && m.status !== 'no-show' && m.invitee.email === 'noor@globex.io') meetings[n] = { ...m, outcome: 'Qualified' }; });
+  // Round robin bookings say why they went to their host; requests were asked a few hours ago (they decline after a day unanswered).
+  meetings.forEach((m, n) => {
+    if (m.pageId === onboarding.id) meetings[n] = { ...m, assigned: n % 3 === 0 ? { why: 'last_host', group: 'Onboarding team' } : { why: 'fair', count: 2 + (n % 3), days: 30, weight: 1, group: 'Onboarding team' } };
+    if (m.status === 'pending') meetings[n] = { ...m, activity: [{ id: nextId('a'), text: `Booked by ${m.invitee.name}`, at: new Date(now.getTime() - (4 + n % 5) * 3_600_000) }] };
+  });
+  // One booked by chat, one whose calendar event couldn't be made, and one whose host has left the workspace.
+  // The second upcoming call, so the first stays the plain Next up card.
+  const chatIdx = meetings.findIndex((m, n) => m.pageId === discovery.id && m.start > now && m.status === 'confirmed' && meetings.slice(0, n).some((x) => x.pageId === discovery.id && x.start > now && x.status === 'confirmed'));
+  const chatOne = meetings[chatIdx];
+  if (chatOne) meetings[chatIdx] = { ...chatOne, chat: [
+    { from: 'visitor', text: 'Hi, can I get 30 minutes with Priya this week?' }, { from: 'assistant', text: `Sure. ${formatDay(chatOne.start)} at ${formatClock(minutesOf(chatOne.start))} is open. Does that work?` },
+    { from: 'visitor', text: 'Yes, that works.' }, { from: 'assistant', text: 'What email should the invite go to?' }, { from: 'visitor', text: chatOne.invitee.email }, { from: 'assistant', text: 'You’re booked. The invite is on its way.' },
+  ], activity: [{ id: nextId('a'), text: `Booked by ${chatOne.invitee.name} by chat`, at: new Date(chatOne.start.getTime() - 2 * 86_400_000) }] };
+  const failIdx = meetings.findIndex((m, n) => n > chatIdx && m.pageId === discovery.id && m.start > now && m.status === 'confirmed');
+  const failOne = meetings[failIdx];
+  if (failOne) meetings[failIdx] = { ...failOne, eventFailed: true };
+  { const start = at(wd(3), 15 * 60); meetings.push({ id: nextId('m'), pageId: onboarding.id, host: 'Dev Patel', start, end: new Date(start.getTime() + 60 * 60_000), title: onboarding.name, invitee: { name: 'Ines Duarte', email: 'ines@cyberdyne.io' }, place: 'video', placeLabel: 'Google Meet',
+    status: 'confirmed', notes: '', answers: [], guestZone: HOST_ZONE, hostLeft: true, activity: [{ id: nextId('a'), text: 'Booked by Ines Duarte', at: new Date(now.getTime() - 6 * 86_400_000) }, { id: nextId('a'), text: 'Dev Patel left the workspace; nobody else was free then', at: new Date(now.getTime() - 86_400_000) }] }); }
+  meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
 
   // Google holds lunch every weekday and one dentist visit that lands on a booked call.
   const busy = Array.from({ length: 12 }, (_, n) => wd(n)).flatMap((d) => [
-    { id: nextId('busy'), member: HOST, day: isoDay(d), start: 13 * 60, end: 14 * 60, source: 'Lunch · Google Calendar' },
+    { id: nextId('busy'), member: HOST, day: isoDay(d), start: 13 * 60, end: 14 * 60, source: 'Lunch · Google Calendar', calendar: 'work' },
     { id: nextId('busy'), member: 'Sam Kim', day: isoDay(d), start: 12 * 60, end: 13 * 60, source: 'Gym · Google Calendar' },
   ]);
-  busy.push({ id: 'busy-dentist', member: HOST, day: isoDay(wd(5)), start: 9 * 60 + 30, end: 10 * 60 + 30, source: 'Dentist · Google Calendar' });
+  busy.push({ id: 'busy-dentist', member: HOST, day: isoDay(wd(5)), start: 9 * 60 + 30, end: 10 * 60 + 30, source: 'Dentist · Google Calendar', calendar: 'personal' });
 
   const thu = next(4);
   const fri = dayFrom(thu, 1);
@@ -153,14 +174,22 @@ export function northwind(now: Date = new Date()): BookingsState {
     drafts: { [demo.id]: { ...demo, durations: [30, 45] } },
     // Ava covers the afternoon while Jo is away: a change for that date only.
     overrides: { [`Ava Chen|${isoDay(thu)}`]: { on: true, ranges: r('ov-a', 12, 20) } },
+    subCalendars: {
+      google: [{ id: 'work', name: 'Work', conflicts: true, week: true, log: true, colour: 'blue' }, { id: 'personal', name: 'Personal', conflicts: true, week: true, log: false, colour: 'green' }, { id: 'holidays', name: 'Holidays in India', conflicts: false, week: false, log: false, colour: 'gray' }],
+      outlook: [{ id: 'outlook-cal', name: 'Calendar', conflicts: true, week: true, log: true, colour: 'purple' }],
+    },
+    grants: [{ id: 'gr-1', owner: 'Jo Mendes', to: 'Priya Raman', level: 'manage' }, { id: 'gr-2', owner: 'Ava Chen', to: 'Priya Raman', level: 'see' }, { id: 'gr-3', owner: 'Priya Raman', to: 'Sam Kim', level: 'see' }],
     calendars: [
       { id: 'google', provider: 'Google', email: 'priya@northwind.com', calendars: 3, status: 'connected', checkConflicts: true },
       { id: 'outlook', provider: 'Outlook', email: 'priya.raman@outlook.com', calendars: 1, status: 'reconnect', checkConflicts: true },
     ],
     health: { skipped: { google: 1 }, bookingCalendar: 'work' },
+    // The Outlook calendar took bookings until its account expired; new ones went to Work instead.
+    fellBack: { was: 'Calendar · Outlook', now: 'Work · Google' },
     busy,
     blocks: [],
-    groups: [{ id: 'g-onboard', name: 'Onboarding team', members: [{ name: 'Sam Kim', paused: false }, { name: 'Jo Mendes', paused: false }, { name: 'Ava Chen', paused: false }] }],
+    groups: [{ id: 'g-onboard', name: 'Onboarding team', returning: 'last', editors: ['Sam Kim'], members: [{ name: 'Sam Kim', paused: false, weight: 1 }, { name: 'Jo Mendes', paused: false, weight: 1, weeklyCap: 6 }, { name: 'Ava Chen', paused: false, weight: 2 }],
+      adjustments: [{ id: 'adj-1', member: 'Ava Chen', by: 2, note: 'Took two walk-in calls by phone', at: new Date(now.getTime() - 9 * 86_400_000), who: 'Sam Kim' }] }],
     routing: {
       formName: 'Contact sales',
       rules: [
@@ -170,17 +199,18 @@ export function northwind(now: Date = new Date()): BookingsState {
       ],
       fallbackPageId: discovery.id,
       log: [
-        { id: 'd1', at: new Date(now.getTime() - 25 * 60_000), name: 'Maya Chen', company: 'Acme', answers: { size: 120, region: 'eu', need: 'buy', source: 'web', known: 'no' }, ruleId: 'rule-1', booked: true },
-        { id: 'd2', at: new Date(now.getTime() - 3 * 3_600_000), name: 'Leo Brandt', company: 'Globex', answers: { size: 12, region: 'eu', need: 'help', source: 'email', known: 'yes' }, ruleId: 'rule-2', booked: true },
+        { id: 'd1', at: new Date(now.getTime() - 25 * 60_000), name: 'Maya Chen', company: 'Acme', answers: { size: 120, region: 'eu', need: 'buy', source: 'web', known: 'no' }, ruleId: 'rule-1', booked: true, host: 'Sam Kim', why: 'fair' },
+        { id: 'd2', at: new Date(now.getTime() - 3 * 3_600_000), name: 'Leo Brandt', company: 'Globex', answers: { size: 12, region: 'eu', need: 'help', source: 'email', known: 'yes' }, ruleId: 'rule-2', booked: true, host: 'Jo Mendes', why: 'only_free' },
         { id: 'd3', at: new Date(now.getTime() - 26 * 3_600_000), name: 'Aiko Tanaka', company: 'Initech', answers: { size: 40, region: 'apac', need: 'partner', source: 'linkedin', known: 'no' }, ruleId: 'rule-3', booked: false },
-        { id: 'd4', at: new Date(now.getTime() - 30 * 3_600_000), name: 'Sara Ortiz', company: 'Umbrella', answers: { size: 300, region: 'na', need: 'buy', source: 'ads', known: 'no' }, ruleId: 'rule-1', booked: true, won: true },
-        { id: 'd5', at: new Date(now.getTime() - 50 * 3_600_000), name: 'Tom Price', company: 'Hooli', answers: { size: 8, region: 'na', need: 'buy', source: 'web', known: 'no' }, booked: true, noShow: true },
-        { id: 'd6', at: new Date(now.getTime() - 74 * 3_600_000), name: 'Nina Rossi', company: 'Stark', answers: { size: 75, region: 'eu', need: 'buy', source: 'email', known: 'yes' }, ruleId: 'rule-1', booked: true, won: true },
-        { id: 'd7', at: new Date(now.getTime() - 98 * 3_600_000), name: 'Omar Haddad', company: 'Waynelog', answers: { size: 20, region: 'eu', need: 'help', source: 'web', known: 'yes' }, ruleId: 'rule-2', booked: true },
+        { id: 'd4', at: new Date(now.getTime() - 30 * 3_600_000), name: 'Sara Ortiz', company: 'Umbrella', answers: { size: 300, region: 'na', need: 'buy', source: 'ads', known: 'no' }, ruleId: 'rule-1', booked: true, won: true, host: 'Priya Raman', why: 'owner' },
+        { id: 'd5', at: new Date(now.getTime() - 50 * 3_600_000), name: 'Tom Price', company: 'Hooli', answers: { size: 8, region: 'na', need: 'buy', source: 'web', known: 'no' }, booked: true, noShow: true, host: 'Priya Raman', why: 'fair' },
+        { id: 'd6', at: new Date(now.getTime() - 74 * 3_600_000), name: 'Nina Rossi', company: 'Stark', answers: { size: 75, region: 'eu', need: 'buy', source: 'email', known: 'yes' }, ruleId: 'rule-1', booked: true, won: true, host: 'Priya Raman', why: 'owner' },
+        { id: 'd7', at: new Date(now.getTime() - 98 * 3_600_000), name: 'Omar Haddad', company: 'Waynelog', answers: { size: 20, region: 'eu', need: 'help', source: 'web', known: 'yes' }, ruleId: 'rule-2', booked: true, host: 'Jo Mendes', why: 'only_free' },
         { id: 'd8', at: new Date(now.getTime() - 120 * 3_600_000), name: 'Ivy Park', company: 'Soylent', answers: { size: 5, region: 'na', need: 'buy', source: 'ads', known: 'no' }, booked: false },
       ],
       skills: { 'Priya Raman': ['Sales', 'Partnerships'], 'Sam Kim': ['Sales', 'Onboarding'], 'Jo Mendes': ['Support', 'Onboarding'], 'Ava Chen': ['Support', 'Onboarding'] },
       wonMeans: 'won',
+      skillGroups: [{ id: 'sg-teams', name: 'Teams', skills: ['Sales', 'Support', 'Onboarding', 'Partnerships'] }, { id: 'sg-lang', name: 'Languages', skills: ['Hindi', 'Spanish'] }],
     },
   };
 }

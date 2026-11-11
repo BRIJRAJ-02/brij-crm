@@ -42,6 +42,7 @@
 .tf-meetings__place { display: inline-flex; align-items: center; gap: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
 .tf-meetings__place svg { flex: none; }
 .tf-meetings__status { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: var(--space-4); }
+.tf-meetings__note { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); white-space: nowrap; }
 /* Hover or focus reveals the row's actions; their space is always kept so nothing shifts. */
 .tf-meetings__actions { display: inline-flex; gap: var(--space-2); opacity: 0; transform: translateX(var(--distance-micro)); transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
 @media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover .tf-meetings__actions, .tf-meetings__row:focus-within .tf-meetings__actions, .tf-meetings__actions:has([aria-expanded='true']) { opacity: 1; transform: none; } }

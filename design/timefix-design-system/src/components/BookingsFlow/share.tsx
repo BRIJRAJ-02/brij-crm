@@ -5,7 +5,8 @@ import { Download, Link2, Plus } from 'lucide-react';
 import { QrCode, downloadQr } from '../QrCode/QrCode.tsx';
 import { Dialog, ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
-import { TextField } from '../Field/Field.tsx';
+import { TextArea, TextField } from '../Field/Field.tsx';
+import { Switch } from '../Checkbox/Checkbox.tsx';
 import { NumberField } from '../NumberField/NumberField.tsx';
 import { Select } from '../Select/Select.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -16,7 +17,7 @@ import { formatClockRange } from '../WeekCalendar/clock.ts';
 import { formatDate, formatDay } from '../../lib/format.ts';
 import { useToast } from '../Toast/Toast.tsx';
 import { CopyButton, i14 } from './parts.tsx';
-import { dayFrom, hoursFor, isoDay, lengthOf, lengthsText, nextId, openTimes, pageUrl, parseDay, plural, type BookingPage, type BookingsState, type OneTimeLink, handleOf } from './state.ts';
+import { HOST_ZONE, ZONES, dayFrom, hoursFor, isoDay, lengthOf, lengthsText, nextId, openTimes, pageUrl, parseDay, plural, type BookingPage, type BookingsState, type OneTimeLink, handleOf } from './state.ts';
 
 /** Which share dialog is open. */
 export type ShareDialogKind = 'times' | 'once' | 'embed' | 'qr';
@@ -82,9 +83,19 @@ function OfferTimesDialog({ isOpen, page, state, onUpdate, onClose }: { readonly
         <Button variant="primary" isDisabled={picked.size < 2} onPress={create}>{picked.size >= 2 ? `Create link with ${picked.size} times` : 'Create link'}</Button>
       </>}>
       {made ? (
-        <div className="tf-bkf__linkrow">
-          <TextField label="Link" value={made} isReadOnly className="tf-bkf__linkfield" onFocus={(e) => (e.target as HTMLInputElement).select()} />
-          <CopyButton value={made} />
+        <div className="tf-bkf__stack tf-bkf__stack--12">
+          <div className="tf-bkf__linkrow">
+            <TextField label="Link" value={made} isReadOnly className="tf-bkf__linkfield" onFocus={(e) => (e.target as HTMLInputElement).select()} />
+            <CopyButton value={made} />
+          </div>
+          {/* The same times as a few lines to paste into an email or a chat, with the link to pick one. */}
+          {page && (() => {
+            const text = [`Would one of these work for ${page.name} (${lengthOf(page)} min)?`, '', ...options.filter((o) => picked.has(o.id)).map((o) => `• ${o.label}`), '', `Times in ${ZONES.find((z) => z.id === (page.zone ?? HOST_ZONE))?.label ?? 'India Standard Time'}.`, `Pick one here: ${made}`].join('\n');
+            return <div className="tf-bkf__stack tf-bkf__stack--8">
+              <TextArea label="As text" rows={6} value={text} isReadOnly />
+              <span><CopyButton value={text} label="Copy text" variant="secondary" size="sm" /></span>
+            </div>;
+          })()}
         </div>
       ) : options.length === 0 ? (
         <p className="tf-bkf__muted">No open times in the next three weeks. Change the page's hours under When.</p>
@@ -125,6 +136,8 @@ function OneTimeLinksDialog({ isOpen, page, handle, onUpdate, onClose }: { reado
       <Dialog isOpen={isOpen && !revoking} onOpenChange={(o) => { if (!o) onClose(); }} size="md" title="One-time links" description={`Links to ${page.name} that work a set number of times, then stop.`}
         actions={<Button variant="secondary" slot="close">Done</Button>}>
         <div className="tf-bkf__stack">
+          <Switch isSelected={page.inviteOnly ?? false} onChange={(inviteOnly) => { onUpdate({ ...page, inviteOnly }); toast({ message: inviteOnly ? `${page.name} books only through its links now` : `Anyone with ${page.name}’s address can book again`, tone: 'success' }); }}>Book only through these links</Switch>
+          <p className="tf-bkf__muted tf-bkf__hint">{page.inviteOnly ? 'The page’s own address says it books by invitation.' : 'Anyone with the page’s address can book too.'}</p>
           <div className="tf-bkf__otl-form">
             <TextField label="Who it's for" value={label} onChange={setLabel} placeholder="For Liam at Acme" />
             <NumberField label="Bookings" value={uses} minValue={1} maxValue={10} onChange={(n) => { if (Number.isFinite(n)) setUses(n); }} />

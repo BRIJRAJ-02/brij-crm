@@ -11,9 +11,12 @@ import './ComboBox.css';
 export interface RecordRef {
   readonly id: string;
   readonly name: string;
-  readonly kind: 'person' | 'company';
+  /** `record` is a record of any other object (a deal, a project): `object` names it. */
+  readonly kind: 'person' | 'company' | 'record';
   /** The grey line: a person's company and email, a company's domain. */
   readonly sub?: string;
+  /** For `record`: the object's name, in the singular ("Deal"). */
+  readonly object?: string;
 }
 
 /** Props for ReferencePicker. */
@@ -36,7 +39,7 @@ const CREATE = '__tf-create';
 
 /** One record row: a person as PersonLine, a company with a square avatar. */
 function RecordRow({ record }: { readonly record: RecordRef }) {
-  return <PersonLine name={record.name} sub={record.sub} shape={record.kind === 'company' ? 'square' : 'round'} />;
+  return <PersonLine name={record.name} sub={record.kind === 'record' && record.object ? [record.object, record.sub].filter(Boolean).join(' · ') : record.sub} shape={record.kind === 'person' ? 'round' : 'square'} />;
 }
 
 function SkeletonRows() {

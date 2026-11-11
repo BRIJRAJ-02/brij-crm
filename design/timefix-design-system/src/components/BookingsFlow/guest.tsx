@@ -27,11 +27,11 @@ import { GuestView, i14 } from './parts.tsx';
 import { PLACES, at, dayFrom, first, homeUrl, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, plural, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
 
 /** What the guest view plays. */
-export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile' | 'taken' | 'menu';
+export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile' | 'taken' | 'menu' | 'invited';
 /** Each scenario's name in the Demo menu. */
 export const GUEST_SCENARIOS: ReadonlyArray<{ readonly id: GuestScenario; readonly label: string }> = [
   { id: 'book', label: 'Book a time' }, { id: 'profile', label: 'Your profile page' }, { id: 'pending', label: 'A request waiting' }, { id: 'taken', label: 'Someone takes the time first' }, { id: 'manage', label: 'Manage a booking' },
-  { id: 'offered', label: 'Picked times only' }, { id: 'chat', label: 'Book by chat' }, { id: 'expired', label: 'An expired one-time link' }, { id: 'hidden', label: 'A hidden page' },
+  { id: 'offered', label: 'Picked times only' }, { id: 'chat', label: 'Book by chat' }, { id: 'expired', label: 'An expired one-time link' }, { id: 'hidden', label: 'A hidden page' }, { id: 'invited', label: 'A page only by invitation' },
 ];
 
 /** Props for GuestMode. */
@@ -110,6 +110,10 @@ function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, on
   if (scenario === 'hidden' || (!page.isOn && scenario === 'book')) {
     return <GuestCard><EmptyState size="sm" icon={<EyeOff size={20} strokeWidth={1.75} />} title="This page isn't taking bookings right now" description={`${first(page.owner)} has paused ${page.name}. Try again later, or email them.`}
       action={<ContactOwner owner={page.owner} email={`${first(page.owner).toLowerCase()}@${state.business ? `${handleOf(state)}.com` : 'northwind.com'}`} />} /></GuestCard>;
+  }
+  // A page that books only through its one-time links, opened at its own address (AC-6204): its own calm state, no times.
+  if ((scenario === 'book' || scenario === 'invited') && page.inviteOnly) {
+    return <GuestCard><EmptyState size="sm" icon={<Mail size={20} strokeWidth={1.75} />} title="This page books by invitation" description="Ask whoever sent you here for a link." /></GuestCard>;
   }
   if (scenario === 'expired') {
     return <GuestCard><EmptyState size="sm" icon={<Link2Off size={20} strokeWidth={1.75} />} title="This link has been used" description={`It was for one booking with ${first(page.owner)}. Ask them for a new one.`}

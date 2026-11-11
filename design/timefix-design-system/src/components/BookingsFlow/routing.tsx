@@ -17,8 +17,9 @@ import { Tag } from '../Tag/Tag.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Section, TabToolbar, i14, i16 } from './parts.tsx';
 import {
-  ROUTING_FIELDS, TEAM, first, nextId, plural, routeFor,
-  type BookedMeeting, type BookingsAction, type BookingsState, type RouteOutcome, type RouteTag, type Routing, type RoutingAnswers, type RoutingRule, isRecordField } from './state.ts';
+  ROUTING_FIELDS, TEAM, assignedLine, first, holds, nextId, plural, routeFor,
+  type BookedMeeting, type BookingsAction, type BookingsState, type RouteDecision, type RouteOutcome, type RouteTag, type Routing, type RoutingAnswers, type RoutingRule, isRecordField } from './state.ts';
+import { Check, ListFilter, X as XIcon } from 'lucide-react';
 
 const SKILLS = ['Sales', 'Support', 'Onboarding', 'Partnerships'];
 const WON = [{ id: 'won', label: 'The deal moves to Won' }, { id: 'created', label: 'A deal is created' }, { id: 'held', label: 'The meeting happens' }];
@@ -63,7 +64,7 @@ export function RoutingTab({ state, dispatch }: { readonly state: BookingsState;
   const set = (patch: Partial<Routing>) => dispatch({ type: 'routing/set', routing: { ...routing, ...patch } });
   const setRule = (id: string, patch: Partial<RoutingRule>) => set({ rules: routing.rules.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
   const pages = state.pages.map((p) => ({ id: p.id, label: p.name }));
-  const teams = SKILLS.map((s) => ({ id: s, label: s }));
+  const teams = (state.routing.skillGroups?.flatMap((g) => g.skills) ?? SKILLS).map((s) => ({ id: s, label: s }));
   const [answers, setAnswers] = useState<RoutingAnswers>({ size: 80, region: 'eu', need: 'buy', source: 'web', known: 'no' });
   const rule = routeFor(routing, answers);
   const outcome: RouteOutcome = rule ? rule.outcome ?? 'page' : routing.fallbackOutcome ?? 'page';
@@ -205,6 +206,14 @@ function RoutingResults({ state, opt }: { readonly state: BookingsState; readonl
   const now = new Date();
   const rows = [...routing.rules.map((r, n) => ({ id: r.id as string | undefined, label: `Rule ${n + 1}`, tag: r.tag })), { id: undefined, label: 'Otherwise', tag: undefined as RouteTag | undefined }];
   const won = WON.find((w) => w.id === routing.wonMeans)?.label ?? 'Won';
+  // Decision filters: form or page, rule, host, tag and period; a decision opens to what happened, step by step.
+  const [f, setF] = useState<{ readonly source: string; readonly rule: string; readonly host: string; readonly tag: string; readonly period: string }>({ source: 'all', rule: 'all', host: 'all', tag: 'all', period: '30' });
+  const [openD, setOpenD] = useState<RouteDecision>();
+  const ruleTag = (d: RouteDecision) => routing.rules.find((r) => r.id === d.ruleId)?.tag;
+  const shownLog = log.filter((d) => (f.rule === 'all' || (f.rule === 'otherwise' ? !d.ruleId : d.ruleId === f.rule)) && (f.host === 'all' || d.host === f.host)
+    && (f.tag === 'all' || (f.tag === 'none' ? !ruleTag(d) : ruleTag(d) === f.tag)) && now.getTime() - d.at.getTime() <= Number(f.period) * 86_400_000 && (f.source === 'all' || f.source === 'form'));
+  const filterCount = Object.entries(f).filter(([k, v]) => (k === 'period' ? v !== '30' : v !== 'all')).length;
+  const pick = (key: keyof typeof f) => (k: unknown) => { const v = [...(k as Set<string>)][0]; if (v) setF((x) => ({ ...x, [key]: String(v).slice(key.length + 1) })); };
   return (
     <div className="tf-bkf-cards">
       <Section className="tf-bkf-card" title="How each rule did" description={`From the last ${plural(log.length, 'answer')}. Won means: ${won.toLowerCase()}.`}>
@@ -227,10 +236,38 @@ function RoutingResults({ state, opt }: { readonly state: BookingsState; readonl
           })}
         </div>
       </Section>
-      <Section className="tf-bkf-card" title="Latest answers" description="Who answered, what they said, and where the rules sent them.">
-        {log.length === 0 ? <p className="tf-bkf__muted">No answers yet. Share the form and they show up here.</p> : (
+      <Section className="tf-bkf-card" title="Latest answers" description="Who answered, what they said, and where the rules sent them. Open one to see what happened."
+        action={<span className="tf-row">
+          {filterCount > 0 && <Button size="sm" variant="ghost" onPress={() => setF({ source: 'all', rule: 'all', host: 'all', tag: 'all', period: '30' })}>Clear filters</Button>}
+          <MenuTrigger>
+            <Button size="sm" variant={filterCount ? 'secondary' : 'ghost'} icon={<ListFilter {...i14} />}>{filterCount ? `Filter · ${filterCount}` : 'Filter'}</Button>
+            <Menu aria-label="Filter decisions" placement="bottom end">
+              <MenuSection title="Form or page" selectionMode="single" selectedKeys={[`source:${f.source}`]} onSelectionChange={pick('source')}>
+                <MenuItem id="source:all">Every form and page</MenuItem>
+                <MenuItem id="source:form">{routing.formName}</MenuItem>
+                {state.pages.filter((p) => p.linkKind === 'team').map((p) => <MenuItem key={p.id} id={`source:${p.id}`}>{p.name}</MenuItem>)}
+              </MenuSection>
+              <MenuSection title="Rule" selectionMode="single" selectedKeys={[`rule:${f.rule}`]} onSelectionChange={pick('rule')}>
+                <MenuItem id="rule:all">Every rule</MenuItem>
+                {routing.rules.map((r, n) => <MenuItem key={r.id} id={`rule:${r.id}`}>{`Rule ${n + 1}`}</MenuItem>)}
+                <MenuItem id="rule:otherwise">Otherwise</MenuItem>
+              </MenuSection>
+              <MenuSection title="Host" selectionMode="single" selectedKeys={[`host:${f.host}`]} onSelectionChange={pick('host')}>
+                <MenuItem id="host:all">Anyone</MenuItem>
+                {TEAM.map((n) => <MenuItem key={n} id={`host:${n}`} icon={<Avatar name={n} size={20} />}>{n}</MenuItem>)}
+              </MenuSection>
+              <MenuSection title="Tag" selectionMode="single" selectedKeys={[`tag:${f.tag}`]} onSelectionChange={pick('tag')}>
+                <MenuItem id="tag:all">Any tag</MenuItem><MenuItem id="tag:qualified">Qualified</MenuItem><MenuItem id="tag:not">Not qualified</MenuItem><MenuItem id="tag:none">No tag</MenuItem>
+              </MenuSection>
+              <MenuSection title="Period" selectionMode="single" selectedKeys={[`period:${f.period}`]} onSelectionChange={pick('period')}>
+                <MenuItem id="period:1">Last 24 hours</MenuItem><MenuItem id="period:7">Last 7 days</MenuItem><MenuItem id="period:30">Last 30 days</MenuItem>
+              </MenuSection>
+            </Menu>
+          </MenuTrigger>
+        </span>}>
+        {log.length === 0 ? <p className="tf-bkf__muted">No answers yet. Share the form and they show up here.</p> : shownLog.length === 0 ? <p className="tf-bkf__muted">Nothing matches these filters.</p> : (
           <ul className="tf-bkf__list-plain tf-bkf-log">
-            {log.map((d) => {
+            {shownLog.map((d) => {
               const n = routing.rules.findIndex((r) => r.id === d.ruleId);
               const r = routing.rules[n];
               const where = r ? (r.outcome ?? 'page') === 'page' ? state.pages.find((p) => p.id === r.pageId)?.name ?? 'A page' : r.outcome === 'message' ? 'A message' : 'A link'
@@ -238,7 +275,7 @@ function RoutingResults({ state, opt }: { readonly state: BookingsState; readonl
               return (
                 <li key={d.id} className="tf-bkf-log__row">
                   <Avatar name={d.name} size={28} />
-                  <span className="tf-bkf-log__who"><strong>{d.name}</strong><span className="tf-bkf__muted">{d.company} · {ago(d.at, now)}</span></span>
+                  <span className="tf-bkf-log__who"><Button size="sm" variant="ghost" className="tf-bkf-log__open" onPress={() => setOpenD(d)} aria-label={`What happened with ${d.name}`}><strong>{d.name}</strong></Button><span className="tf-bkf__muted">{d.company} · {ago(d.at, now)}{d.host ? ` · ${first(d.host)}` : ''}</span></span>
                   <span className="tf-bkf-log__answers">
                     {typeof d.answers.size === 'number' && <Tag size="sm" hue="gray">{d.answers.size} people</Tag>}
                     {['region', 'need', 'source'].map((k) => opt(k, d.answers[k]) && <Tag key={k} size="sm" hue="gray">{opt(k, d.answers[k])}</Tag>)}
@@ -252,6 +289,27 @@ function RoutingResults({ state, opt }: { readonly state: BookingsState; readonl
           </ul>
         )}
       </Section>
+      <Dialog isOpen={openD !== undefined} onOpenChange={(o) => { if (!o) setOpenD(undefined); }} size="md" title={openD ? `What happened with ${openD.name}` : 'What happened'} description={openD ? `${openD.company} · ${ago(openD.at, now)}` : undefined}
+        actions={<Button variant="secondary" slot="close">Close</Button>}>
+        {openD && <ol className="tf-bkf-steps" aria-label="What happened">
+          <li><span className="tf-bkf-steps__dot" aria-hidden="true" /><span><strong>Answered {routing.formName}</strong><span className="tf-bkf__muted">{[typeof openD.answers.size === 'number' ? `${openD.answers.size} people` : '', ...['region', 'need', 'source'].map((k) => opt(k, openD.answers[k]) ?? '')].filter(Boolean).join(' · ')}</span></span></li>
+          {(() => {
+            // Rules checked top to bottom until one matched.
+            const hit = routing.rules.findIndex((r) => r.id === openD.ruleId);
+            const checked = hit === -1 ? routing.rules : routing.rules.slice(0, hit + 1);
+            return checked.map((r) => {
+              const n = routing.rules.indexOf(r);
+              const ok = r.id === openD.ruleId;
+              const why = r.conditions.map((c) => `${ROUTING_FIELDS.find((x) => x.id === c.attributeId)?.name ?? c.attributeId} ${holds(c, openD.answers) ? 'matched' : 'didn’t match'}`).join(r.conjunction === 'and' ? ', and ' : ', or ');
+              return <li key={r.id} className={ok ? 'is-hit' : undefined}><span className="tf-bkf-steps__dot" aria-hidden="true">{ok ? <Check size={12} strokeWidth={2.5} /> : <XIcon size={12} strokeWidth={2.5} />}</span><span><strong>Rule {n + 1} {ok ? 'matched' : 'didn’t match'}</strong><span className="tf-bkf__muted">{why}</span></span></li>;
+            });
+          })()}
+          {!openD.ruleId && <li className="is-hit"><span className="tf-bkf-steps__dot" aria-hidden="true"><Check size={12} strokeWidth={2.5} /></span><span><strong>None matched: Otherwise</strong><span className="tf-bkf__muted">{(routing.fallbackOutcome ?? 'page') === 'page' ? `Book ${state.pages.find((p) => p.id === routing.fallbackPageId)?.name ?? 'a page'}` : routing.fallbackOutcome === 'message' ? 'Showed a message' : 'Sent to a link'}</span></span></li>}
+          {(() => { const r = routing.rules.find((x) => x.id === openD.ruleId); return r ? <li><span className="tf-bkf-steps__dot" aria-hidden="true" /><span><strong>{(r.outcome ?? 'page') === 'page' ? `Offered ${state.pages.find((p) => p.id === r.pageId)?.name ?? 'a page'} with the ${r.team} team` : r.outcome === 'message' ? 'Showed a message' : 'Sent to a link'}</strong>{r.tag ? <span className="tf-bkf__muted">Tagged {TAG_LABEL[r.tag]}</span> : null}</span></li> : null; })()}
+          {openD.host && <li><span className="tf-bkf-steps__dot" aria-hidden="true" /><span><strong>{openD.host} took it</strong><span className="tf-bkf__muted">{first(openD.host)} {assignedLine({ why: openD.why ?? 'fair' })}</span></span></li>}
+          <li><span className="tf-bkf-steps__dot" aria-hidden="true" /><span><strong>{openD.won ? 'Booked, and won' : openD.noShow ? 'Booked, then didn’t show' : openD.booked ? 'Booked' : 'Didn’t book'}</strong></span></li>
+        </ol>}
+      </Dialog>
     </div>
   );
 }

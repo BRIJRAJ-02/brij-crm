@@ -64,7 +64,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
   const { toast } = useToast();
   const venue = venueOf(state, now);
   const b = state.business;
-  const pages = state.pages.filter((p) => p.isOn && p.visibility !== 'link' && p.whoCanBook === 'anyone' && p.hostMode !== 'collective');
+  const pages = state.pages.filter((p) => p.isOn && p.visibility !== 'link' && !p.inviteOnly && !p.linkKind && p.onLinkPage !== false && p.whoCanBook === 'anyone' && p.hostMode !== 'collective').slice().sort((a, b) => (a.linkOrder ?? 99) - (b.linkOrder ?? 99));
   const table = pages.find((p) => p.kind === 'table');
   const [pageId, setPageId] = useState<string>();
   const [step, setStep] = useState(0);

@@ -1,7 +1,7 @@
 // Step 5: the page editor. One scroll of sections with live summaries, the guest's view beside it, Save changes at the foot.
 import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { AlertTriangle, ArrowRight, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, RotateCcw, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, CalendarCheck, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, Plus, RotateCcw, Settings2, Users } from 'lucide-react';
 import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { TopBar } from '../AppShell/AppShell.tsx';
@@ -25,15 +25,21 @@ import { Tag } from '../Tag/Tag.tsx';
 import { Button } from '../Button/Button.tsx';
 import { NumberRoll } from '../Motion/Motion.tsx';
 import { formatDate, formatDay } from '../../lib/format.ts';
-import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
+import { DaysOffEditor, Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
+import { Link as TextLink } from '../Link/Link.tsx';
+import { MeetingList } from '../MeetingList/MeetingList.tsx';
+import { InsightsTab } from './insights.tsx';
+import { declinesIn } from './meetings.tsx';
 import { uniqueSlug } from './seed.ts';
 import { TablePreview } from './guest-venue.tsx';
 import {
-  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
+  HOST, HOST_ZONE, PLACES, PLACE_ALL, TEAM, ZONES, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
   type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
 } from './state.ts';
 
 const LENGTHS = [15, 30, 45, 60, 90];
+/** Record fields a booking question's answer can fill. */
+const SAVE_TARGETS = [{ id: 'person.title', label: 'Person › Job title' }, { id: 'person.phone', label: 'Person › Phone' }, { id: 'company.industry', label: 'Company › Industry' }, { id: 'company.employees', label: 'Company › Employees' }, { id: 'company.domain', label: 'Company › Website' }, { id: 'deal.value', label: 'Deal › Value' }];
 const BUFFERS = [0, 5, 10, 15, 30].map((n) => ({ id: String(n), label: n ? `${n} min` : 'None' }));
 const NOTICE = [{ id: '0', label: 'None' }, { id: '1', label: '1 hour' }, { id: '4', label: '4 hours' }, { id: '24', label: '1 day' }, { id: '48', label: '2 days' }, { id: '72', label: '3 days' }, { id: '168', label: '1 week' }, { id: '336', label: '2 weeks' }];
 const AHEAD = [7, 14, 30, 60, 90, 180, 365].map((n) => ({ id: String(n), label: n === 365 ? 'A year ahead' : `${n} days ahead` }));
@@ -46,7 +52,7 @@ const FORMS = [{ id: 'Support request', label: 'Support request' }, { id: 'Conta
 
 type SaveState = 'idle' | 'saving' | 'saved';
 /** The sections that can be opened from outside (Fix opens Who). */
-export type EditorSection = 'when' | 'who' | 'questions' | 'after' | 'look' | 'insights';
+export type EditorSection = 'when' | 'who' | 'questions' | 'after' | 'look' | 'insights' | 'bookings';
 
 /** Props for PageEditor. */
 export interface PageEditorProps {
@@ -65,6 +71,8 @@ export interface PageEditorProps {
   readonly onManageGroups: () => void;
   /** Keeps the changes as a draft without publishing. */
   readonly onKeepDraft: (d: BookingPage) => void;
+  /** Opens one of this page's meetings (its Bookings tab). */
+  readonly onOpenMeeting?: (id: string) => void;
 }
 
 /** The page editor. */
@@ -79,7 +87,10 @@ const LOCKABLE: ReadonlyArray<{ readonly id: LockedPart; readonly label: string 
   { id: 'length', label: 'Length' }, { id: 'where', label: 'Where' }, { id: 'questions', label: 'Questions' }, { id: 'look', label: 'Look' },
 ];
 
-export function PageEditor({ page, draft, state, section, onDraft, onBack, onSave, onToggle, onShare, onMore, onGuest, onMeetings, onManageGroups, onKeepDraft }: PageEditorProps) {
+export function PageEditor({ page, draft, state, section, onDraft, onBack, onSave, onToggle, onShare, onMore, onGuest, onMeetings, onManageGroups, onKeepDraft, onOpenMeeting }: PageEditorProps) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customMin, setCustomMin] = useState(40);
+  const [bookingsRange, setBookingsRange] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
   const [versionsOpen, setVersionsOpen] = useState(false);
   const kept = state.drafts?.[page.id] !== undefined;
   const [save, setSave] = useState<SaveState>('idle');
@@ -130,7 +141,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
           <span className="tf-bkf__stats-go">{draft.kind === 'table' ? 'See reservations' : 'See meetings'}<ArrowRight {...i14} aria-hidden="true" /></span>
         </AriaButton>
         <div className="tf-bkf__editor-scroll">
-          <div className="tf-bkf__editor-grid">
+          <div className="tf-bkf__editor-grid" data-wide={tab === 'bookings' || tab === 'insights' || undefined}>
             <div className="tf-bkf__sections" ref={sectionRef}>
               {!page.isOn && <Callout tone="neutral" action={{ label: 'Turn it on', onPress: () => onToggle(true) }}>This page is hidden. Its link tells guests it isn't taking bookings right now.</Callout>}
               {noTimes && <Callout tone="warning" action={{ label: 'Check When', onPress: () => setTab('when') }}>Guests can’t book this page: there are no open times in the next two months.</Callout>}
@@ -142,6 +153,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                   { id: 'questions', label: 'Questions', icon: <MessageSquareText {...i14} /> },
                   { id: 'after', label: 'After booking', icon: <Check {...i14} /> },
                   { id: 'look', label: 'Look', icon: <Palette {...i14} /> },
+                  ...(draft.linkKind ? [] : [{ id: 'bookings', label: 'Bookings', icon: <CalendarCheck {...i14} /> }, { id: 'insights', label: 'Insights', icon: <BarChart3 {...i14} /> }]),
                 ]}>
               <TabPanel id="basics" className="tf-bkf__edpanel">
               <Section className="tf-bkf-card" title="Basics" description="What guests see first: the name, the link, how long and where.">
@@ -168,8 +180,17 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <NumberField label="Largest party online" value={draft.party?.max ?? 8} minValue={draft.party?.min ?? 1} maxValue={20} onChange={(n) => set({ party: { min: draft.party?.min ?? 1, max: Number.isFinite(n) ? n : 8 } })} />
                     </div>
                   )}
-                  <ChoiceChips label={draft.kind === 'table' ? 'Time at the table' : 'Lengths'} selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
-                    onSelectionChange={(keys) => { const d = [...keys].map(Number).sort((a, b) => a - b); if (d.length) set({ durations: d }); }} />
+                  <ChoiceChips label={draft.kind === 'table' ? 'Time at the table' : 'Lengths'} selectionMode="multiple" selectedKeys={[...draft.durations.map(String), ...(customOpen ? ['custom'] : [])]}
+                    items={[...[...new Set([...LENGTHS, ...draft.durations])].sort((a, b) => a - b).map((n) => ({ id: String(n), label: `${n} min`, isDisabled: !draft.durations.includes(n) && draft.durations.length >= 4 })), ...(draft.kind === 'table' ? [] : [{ id: 'custom', label: 'Custom' }])]}
+                    onSelectionChange={(keys) => { setCustomOpen(keys.has('custom')); const d = [...keys].filter((k) => k !== 'custom').map(Number).sort((a, b) => a - b); if (d.length) set({ durations: d }); }} />
+                  {customOpen && (
+                    <div className="tf-bkf-custommin">
+                      <NumberField label="Minutes" description="5 to 480, in steps of 5." value={customMin} minValue={5} maxValue={480} step={5} onChange={(n) => { if (Number.isFinite(n)) setCustomMin(n); }}
+                        isInvalid={customMin < 5 || customMin > 480 || customMin % 5 !== 0} errorMessage="Type 5 to 480 minutes, in steps of 5." />
+                      <Button variant="secondary" icon={<Plus {...i14} />} isDisabled={customMin < 5 || customMin > 480 || customMin % 5 !== 0 || draft.durations.includes(customMin) || draft.durations.length >= 4}
+                        onPress={() => { set({ durations: [...draft.durations, customMin].sort((a, b) => a - b) }); setCustomOpen(false); }}>Add {customMin} min</Button>
+                    </div>
+                  )}
                   {draft.durations.length > 1 && <p className="tf-bkf__muted tf-bkf__hint">Guests choose the length. {draft.durations[0]} min is picked first.</p>}
                   {draft.kind === 'service' && draft.durations.length > 1 && draft.priceType !== 'free' && (
                     <div className="tf-bkf__group"><span className="tf-bkf__label">Price by length</span>
@@ -178,8 +199,19 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                           formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ prices: { ...(draft.prices ?? {}), [String(d)]: Number.isFinite(n) ? n : 0 } })} /></li>))}</ul>
                     </div>
                   )}
-                  {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
-                    onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} /> : null}
+                  {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ALL.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
+                    onSelectionChange={(keys) => { const p = PLACE_ALL.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} /> : null}
+                  {draft.places.includes('custom') && <TextField label="Somewhere else" value={draft.customPlace ?? ''} onChange={(customPlace) => set({ customPlace })} placeholder="The café on Park Street" description="Guests see these words as the place." />}
+                  {(draft.places.includes('meet') || draft.places.includes('zoom')) && (draft.kind === undefined || draft.kind === 'meeting') && (() => {
+                    const canMake = state.calendars.some((c) => c.status === 'connected');
+                    const how = draft.videoLink ?? (canMake ? 'calendar' : 'send');
+                    return <div className="tf-bkf__stack tf-bkf__stack--8">
+                      <Select label="Video link" value={how} onChange={(v) => { if (v) set({ videoLink: v as BookingPage['videoLink'] }); }} description={how === 'send' ? 'You send it before the meeting, by hand. The meeting shows No link yet until you do.' : how === 'own' ? 'Guests get it in their confirmation, never on the page.' : 'Each booking gets its own link.'}
+                        items={[{ id: 'calendar', label: draft.places.includes('zoom') && !draft.places.includes('meet') ? 'Made by Zoom' : 'Made by your calendar', isDisabled: !canMake }, { id: 'own', label: 'Paste your own link' }, { id: 'send', label: 'I’ll send a link' }]} />
+                      {how === 'own' && <TextField label="Meeting link" type="url" value={draft.ownLink ?? ''} onChange={(ownLink) => set({ ownLink })} placeholder="https://zoom.us/j/…"
+                        isInvalid={(draft.ownLink ?? '') !== '' && !/^https:\/\/\S+\.\S+/.test(draft.ownLink ?? '')} errorMessage="Give the meeting link, starting https://." />}
+                    </div>;
+                  })()}
                   {(draft.kind === undefined || draft.kind === 'meeting') && draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
                   {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
                   {draft.kind !== 'table' && <div className="tf-bkf__group">
@@ -231,7 +263,19 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       items={[{ id: 'public', label: 'On your profile' }, { id: 'link', label: 'Only with the link' }]} />
                     <span className="tf-bkf__muted">{(draft.visibility ?? 'public') === 'link' ? 'It’s left off timefix.com/priya. Only people you send the link to can book.' : 'It’s listed on timefix.com/priya with your other pages.'}</span>
                     {draft.visibility === 'link' && <Switch isSelected={draft.inHeldTime ?? false} onChange={(inHeldTime) => set({ inHeldTime })}>Book inside time you’ve held, and skip minimum notice</Switch>}
+                    <Switch isSelected={draft.inviteOnly ?? false} onChange={(inviteOnly) => set({ inviteOnly })}>Book only through these links</Switch>
+                    {draft.inviteOnly && <span className="tf-bkf__muted">The page’s own address says it books by invitation. <TextLink onPress={() => onShare(page, 'once')} weight="strong">One-time links</TextLink></span>}
                   </div>
+                  {(draft.visibility ?? 'public') === 'public' && draft.kind !== 'table' && (() => {
+                    const listed = state.pages.filter((x) => x.isOn && (x.visibility ?? 'public') === 'public' && !x.linkKind && x.onLinkPage !== false);
+                    const count = Math.max(1, listed.length);
+                    return <div className="tf-bkf__group">
+                      <span className="tf-bkf__label">Profile</span>
+                      <Switch isSelected={draft.onLinkPage ?? true} onChange={(onLinkPage) => set({ onLinkPage })}>On your link page</Switch>
+                      {(draft.onLinkPage ?? true) && <Select label="Position" value={String(draft.linkOrder ?? Math.max(1, listed.findIndex((x) => x.id === draft.id) + 1))} onChange={(v) => set({ linkOrder: Number(v ?? 1) })}
+                        items={Array.from({ length: count }, (_, n) => ({ id: String(n + 1), label: n === 0 ? 'First' : n === count - 1 ? `Last (${n + 1})` : String(n + 1) }))} description="Public pages join your link page. Move, hide or archive them there." />}
+                    </div>;
+                  })()}
                   </ShowMore>
                 </div>
               </Section>
@@ -243,7 +287,10 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         onChange={(v) => { if (v) set({ hoursFrom: v, customHours: v === 'custom' ? draft.customHours ?? hoursFor(draft, state) : draft.customHours }); }}
                         items={[...state.savedHours.map((h) => ({ id: h.id === state.defaultHoursId ? 'working' : h.id, label: h.id === state.defaultHoursId ? `Your ${h.name.toLowerCase()}` : h.name })), { id: 'custom', label: 'Just for this page' }]} />
                     </SettingRow>
-                    {draft.hoursFrom === 'custom' && draft.customHours && <div className="tf-bkf-setting__more"><HoursEditor value={draft.customHours} onChange={(h) => set({ customHours: h })} /></div>}
+                    {draft.hoursFrom === 'custom' && draft.customHours && <div className="tf-bkf-setting__more tf-bkf__stack"><HoursEditor value={draft.customHours} onChange={(h) => set({ customHours: h })} /><DaysOffEditor value={draft.daysOff ?? []} onChange={(daysOff) => set({ daysOff })} /></div>}
+                    <SettingRow title="Time zone" description="These hours follow this zone.">
+                      <Select label="Time zone" isLabelHidden className="tf-bkf__inline-select" value={draft.zone ?? HOST_ZONE} onChange={(v) => { if (v) set({ zone: v === HOST_ZONE ? undefined : v }); }} items={ZONES.map((z) => ({ id: z.id, label: z.label, description: z.id === HOST_ZONE ? 'Your time zone' : undefined }))} />
+                    </SettingRow>
                     <SettingRow title="Gap around meetings" description="Free time kept before and after each one.">
                       <span className="tf-bkf-setting__pair">
                         <Select label="Before" isLabelHidden className="tf-bkf__inline-select" items={BUFFERS.map((x) => ({ ...x, label: x.id === '0' ? 'None before' : `${x.label} before` }))} value={String(draft.bufferBefore)} onChange={(v) => set({ bufferBefore: Number(v ?? 0) })} />
@@ -273,6 +320,11 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         <SettingRow title="Start times" description="How often a time can start.">
                       <Select label="Start times" isLabelHidden className="tf-bkf__inline-select" items={STEPS} value={String(draft.slotStep ?? 0)} onChange={(v) => set({ slotStep: Number(v ?? 0) })} />
                     </SettingRow>
+                        {state.calendars.length > 0 && <SettingRow title="Checks for conflicts in" description="Busy time in these calendars is never offered.">
+                          <ChoiceChips label="Checks for conflicts in" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={(draft.conflictIn ?? state.calendars.filter((c) => c.checkConflicts).map((c) => c.id)).filter((id) => state.calendars.some((c) => c.id === id && c.status === 'connected'))}
+                            items={state.calendars.map((c) => ({ id: c.id, label: c.status === 'connected' ? `${c.provider} · ${c.email.split('@')[0]}` : `${c.provider} · needs reconnect`, isDisabled: c.status !== 'connected' }))}
+                            onSelectionChange={(k) => set({ conflictIn: [...k].map(String) })} />
+                        </SettingRow>}
                       </div>
                     </ShowMore>
                     <SettingRow title="Time off" description={hostOff.length === 0 ? 'None planned. Time off is set under Availability.' : 'Guests see no times then.'}>
@@ -408,12 +460,12 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                 </Section></TabPanel>
                 <TabPanel id="questions" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Questions for the guest" description="Name and email are always asked. Add anything else you need before the call.">
                   <div className="tf-bkf__stack" data-section="questions">
-                    <QuestionBuilder questions={draft.questions} onChange={(questions) => set({ questions })} title="Also asked" kinds={['short', 'long', 'phone', 'choice', 'multi', 'dropdown']} />
+                    <QuestionBuilder questions={draft.questions} onChange={(questions) => set({ questions })} title="Also asked" kinds={['short', 'long', 'phone', 'choice', 'multi', 'dropdown']} saveTargets={SAVE_TARGETS} />
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="after" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="After booking" description={afterSummary(draft)}>
                   <div className="tf-bkf-settings" data-section="after">
-                    <SettingRow title="Confirming" description="Requests wait for you in Meetings, under Needs your OK.">
+                    <SettingRow title="Confirming" description={draft.confirmFirst ? 'Requests wait in Meetings, under Needs your OK. Unanswered requests decline after a day.' : 'Requests wait for you in Meetings, under Needs your OK.'}>
                       <SegmentedControl aria-label="Confirming" selectedKey={draft.confirmFirst ? 'me' : 'auto'} onSelectionChange={(v) => set({ confirmFirst: v === 'me' })}
                         items={[{ id: 'auto', label: 'At once' }, { id: 'me', label: 'I confirm first' }]} />
                     </SettingRow>
@@ -468,7 +520,11 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     )}
                       </div>
                     </ShowMore>
-                    {draft.after === 'redirect' && <TextField label="Web address" value={draft.redirectUrl} onChange={(redirectUrl) => set({ redirectUrl })} placeholder="https://northwind.com/thanks" type="url" />}
+                    {draft.after === 'redirect' && <div className="tf-bkf__stack tf-bkf__stack--8">
+                      <TextField label="Web address" value={draft.redirectUrl} onChange={(redirectUrl) => set({ redirectUrl })} placeholder="https://northwind.com/thanks" type="url" />
+                      <Switch isSelected={draft.redirectDetails ?? false} onChange={(redirectDetails) => set({ redirectDetails })}>Add the booking’s details to the address</Switch>
+                      <span className="tf-bkf__muted">{draft.redirectDetails ? <span className="tf-num">{(draft.redirectUrl || 'https://northwind.com/thanks')}?name=Liam+Ortiz&email=liam%40acme.com&start=…&zone=Asia%2FKolkata&page={draft.slug}</span> : 'Name, email, start, time zone and page.'}</span>
+                    </div>}
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="look" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Look" description={lookSummary(draft)}>
@@ -481,6 +537,19 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     </div>
                   </div>
                 </Section></TabPanel>
+              <TabPanel id="bookings" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Bookings" description={`Booked through ${page.name}.`} action={<Button size="sm" variant="ghost" iconEnd={<ArrowRight {...i14} />} onPress={onMeetings}>Open in Bookings</Button>}>
+                <div className="tf-bkf__stack">
+                  <SegmentedControl aria-label="Which bookings" size="sm" selectedKey={bookingsRange} onSelectionChange={(k) => setBookingsRange(k === 'past' ? 'past' : k === 'cancelled' ? 'cancelled' : 'upcoming')}
+                    items={[{ id: 'upcoming', label: 'Upcoming' }, { id: 'past', label: 'Past' }, { id: 'cancelled', label: 'Cancelled' }]} />
+                  {(() => {
+                    const mine = state.meetings.filter((m) => m.pageId === page.id);
+                    const list = bookingsRange === 'cancelled' ? mine.filter((m) => m.status === 'cancelled') : bookingsRange === 'past' ? mine.filter((m) => m.status !== 'cancelled' && m.end <= now).reverse() : mine.filter((m) => m.status !== 'cancelled' && m.end > now);
+                    if (list.length === 0) return <p className="tf-bkf__muted">{bookingsRange === 'upcoming' ? 'No upcoming bookings' : bookingsRange === 'past' ? 'No past bookings' : 'Nothing has been called off'}</p>;
+                    return <MeetingList isFullWidth now={now} meetings={list.filter((m) => m.status !== 'pending').map((m) => ({ ...m, host: draft.hosts.length > 1 ? first(m.host) : undefined }))} requests={bookingsRange === 'upcoming' ? list.filter((m) => m.status === 'pending').map((m) => ({ ...m, note: declinesIn(m, now) })) : []} onOpen={(m) => onOpenMeeting?.(m.id)} />;
+                  })()}
+                </div>
+              </Section></TabPanel>
+              <TabPanel id="insights" className="tf-bkf__edpanel"><div className="tf-bkf-card tf-bkf-edinsights"><InsightsTab state={state} pageId={page.id} /></div></TabPanel>
               </Tabs>
             </div>
             <aside className="tf-bkf__editor-preview" aria-label="Preview">

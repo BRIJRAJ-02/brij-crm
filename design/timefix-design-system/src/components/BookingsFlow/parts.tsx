@@ -3,7 +3,8 @@ import { copyText } from '../../lib/copy.ts';
 import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Clock, Code2, Copy, CopyPlus, History, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2 } from 'lucide-react';
+import { Clock, Code2, Copy, CopyPlus, History, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2, X as XIcon } from 'lucide-react';
+import { DatePicker } from '../DatePicker/DatePicker.tsx';
 import { BookingFlow, type BookingFlowProps, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
@@ -244,5 +245,36 @@ export function WorkspaceItems({ current }: { readonly current: WorkspaceId }) {
     <MenuSection title="Workspaces">
       {WORKSPACES.map((w) => <MenuItem key={w.id} id={`ws:${w.id}`} icon={<Avatar name={w.name} shape="square" size={20} />} description={w.kind}>{w.id === current ? `${w.name} ✓` : w.name}</MenuItem>)}
     </MenuSection>
+  );
+}
+
+/** Days off on a set of hours or a page's own hours: dates with no times, each removable, and a date picker to add one. */
+export function DaysOffEditor({ value, onChange, label = 'Days off' }: { readonly value: ReadonlyArray<string>; readonly onChange: (days: ReadonlyArray<string>) => void; readonly label?: string }) {
+  const [pick, setPick] = useState<CalendarDate | null>(null);
+  const today = todayIn(getLocalTimeZone());
+  const ahead = [...value].filter((d) => d >= today.toString()).sort();
+  const add = () => { if (!pick) return; const d = pick.toString(); if (!value.includes(d)) onChange([...value, d].sort()); setPick(null); };
+  return (
+    <div className="tf-bkf-daysoff">
+      <span className="tf-bkf__label">{label}</span>
+      {ahead.length === 0 ? <span className="tf-bkf__muted">No days off yet</span> : (
+        <ul className="tf-bkf-daysoff__list" aria-label={label}>
+          {ahead.map((d) => {
+            const [y, m, dd] = d.split('-').map(Number);
+            const date = new Date(y ?? 2026, (m ?? 1) - 1, dd ?? 1);
+            return (
+              <li key={d} className="tf-bkf-daysoff__item">
+                <span className="tf-num">{date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                <IconButton size="sm" label={`Remove ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`} onPress={() => onChange(value.filter((x) => x !== d))}><XIcon {...i14} /></IconButton>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="tf-bkf-daysoff__add">
+        <DatePicker label="Add a day off" value={pick} minValue={today} onChange={setPick} />
+        <Button size="sm" variant="secondary" isDisabled={!pick} onPress={add}>Add</Button>
+      </div>
+    </div>
   );
 }

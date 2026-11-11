@@ -548,15 +548,17 @@
 @media (max-width: 40rem) { .tf-bkf__topalert { padding: var(--space-12) var(--space-16) 0; } }
 
 /* Week and Team day fill the page: the panel stops scrolling, the calendar takes what's left and scrolls its own hours. */
-.tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-16); }
-.tf-bkf__meetings[data-view='week'], .tf-bkf__meetings[data-view='team'] { flex: 1; min-height: 0; }
-.tf-bkf__meetings > .tf-bkf__calfill { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='day']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-16); }
+.tf-bkf__meetings[data-view='week'], .tf-bkf__meetings[data-view='day'], .tf-bkf__meetings[data-view='team'] { flex: 1; min-height: 0; }
+.tf-bkf__meetings:is([data-view='week'], [data-view='day'], [data-view='team']) > .tf-bkf-meetbody { flex: 1; min-height: 0; }
+.tf-bkf__meetings:is([data-view='week'], [data-view='day'], [data-view='team']) .tf-bkf-meetbody__main { min-height: 0; }
+.tf-bkf-meetbody__main > .tf-bkf__calfill { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { display: flex; flex-direction: column; flex: 1; min-height: calc(var(--size-row) * 6); }
 .tf-bkf__calfill .tf-week__scroll, .tf-bkf__calfill .tf-bkf-team__scroll { flex: 1; min-height: 0; max-height: none; }
 .tf-bkf__calfill .tf-bkf-team__head { flex: none; }
 /* Phone: the page scrolls again; the calendar keeps a tall, readable box. */
 @media (max-width: 40rem) {
-  .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { overflow-y: auto; }
+  .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='day']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { overflow-y: auto; }
   .tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { min-height: 70dvh; }
 }
 @container tf-bkf-panel (max-width: 34rem) {
@@ -879,3 +881,52 @@ button.tf-bkf-guest__visit:focus-visible { outline: var(--border-width-focus) so
 .tf-bkf-team__event { container: tf-tdevent / size; }
 @container tf-tdevent (max-height: 3.75rem) { .tf-bkf-team__svc { display: none; } }
 @container tf-tdevent (max-height: 2.4rem) { .tf-bkf-team__evtime { display: none; } }
+
+/* Wave C · Meetings: the body beside the calendars panel, filters, Show more, Go to date, a calendar event's About, a block's facts. */
+.tf-bkf-meetbody { display: flex; gap: var(--space-16); min-width: 0; }
+.tf-bkf-meetbody__main { display: flex; flex-direction: column; gap: var(--space-12); flex: 1; min-width: 0; }
+.tf-bkf-cals { flex: none; align-self: flex-start; display: flex; flex-direction: column; gap: var(--space-8); width: var(--size-menu); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.tf-bkf-cals__account { display: flex; flex-direction: column; gap: var(--space-6); padding-top: var(--space-8); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-cals__email { overflow: hidden; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-cals__name { display: inline-flex; align-items: center; gap: var(--space-6); }
+@container tf-bkf-panel (max-width: 760px) { .tf-bkf-meetbody { flex-direction: column; } .tf-bkf-cals { align-self: stretch; width: auto; } }
+.tf-bkf-pagedot { display: inline-block; flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--tag-gray-text); }
+.tf-bkf-pagedot[data-hue='red'] { background: var(--tag-red-text); } .tf-bkf-pagedot[data-hue='orange'] { background: var(--tag-orange-text); } .tf-bkf-pagedot[data-hue='yellow'] { background: var(--tag-yellow-text); }
+.tf-bkf-pagedot[data-hue='lime'] { background: var(--tag-lime-text); } .tf-bkf-pagedot[data-hue='green'] { background: var(--tag-green-text); } .tf-bkf-pagedot[data-hue='sky'] { background: var(--tag-sky-text); }
+.tf-bkf-pagedot[data-hue='blue'] { background: var(--tag-blue-text); } .tf-bkf-pagedot[data-hue='purple'] { background: var(--tag-purple-text); }
+.tf-bkf-more { display: flex; align-items: center; justify-content: center; gap: var(--space-12); padding-top: var(--space-4); }
+.tf-bkf-goto { padding: var(--space-8); }
+.tf-bkf-about__row { display: flex; align-items: center; gap: var(--space-8); margin: 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-bkf-about__row > svg { flex: none; color: var(--text-secondary); }
+.tf-bkf-blockfacts { display: grid; grid-template-columns: auto 1fr; gap: var(--space-4) var(--space-12); margin: 0; font: 400 13px/20px var(--font-sans); }
+.tf-bkf-blockfacts dt { color: var(--text-secondary); }
+.tf-bkf-blockfacts dd { margin: 0; color: var(--text); }
+/* Wave C · the meeting drawer: the meeting link line under the place, and a chat transcript. */
+.tf-bkf__place { flex-wrap: wrap; }
+.tf-bkf-linkline { display: flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); }
+.tf-bkf-linkline__url { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-chatlog { display: flex; flex-direction: column; gap: var(--space-8); margin: var(--space-8) 0 0; padding: var(--space-12); list-style: none; border-radius: var(--radius-md); background: var(--surface-subtle); }
+.tf-bkf-chatlog > li { display: flex; flex-direction: column; gap: var(--space-2); max-width: 85%; font: 400 13px/20px var(--font-sans); }
+.tf-bkf-chatlog > li.is-visitor { align-self: flex-end; text-align: right; }
+.tf-bkf-chatlog__who { color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+/* Wave C · days off on a schedule or a page's own hours. */
+.tf-bkf-daysoff { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-bkf-daysoff__list { display: flex; flex-wrap: wrap; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
+.tf-bkf-daysoff__item { display: inline-flex; align-items: center; gap: var(--space-2); padding-left: var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); font: 400 13px/20px var(--font-sans); }
+.tf-bkf-daysoff__add { display: flex; align-items: flex-end; gap: var(--space-8); }
+.tf-bkf-daysoff__add > :first-child { flex: 1; max-width: calc(var(--size-menu) + var(--space-32)); }
+/* Wave C · the page editor: a custom length beside its Add, and the page's own Insights inside a card. */
+.tf-bkf-custommin { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-8) var(--space-12); }
+.tf-bkf-custommin > .tf-btn, .tf-bkf-custommin > button { margin-top: var(--space-24); }
+/* A page's own Bookings and Insights use the whole width: the guest preview steps aside. */
+.tf-bkf__editor-grid[data-wide] { grid-template-columns: minmax(0, 1fr); }
+.tf-bkf__editor-grid[data-wide] > .tf-bkf__editor-preview { display: none; }
+/* Wave C · Routing: a decision's name opens What happened; its steps run down a hairline. */
+.tf-bkf-log__open { align-self: flex-start; height: auto; margin-left: calc(var(--space-8) * -1); }
+.tf-bkf-steps { position: relative; display: flex; flex-direction: column; gap: var(--space-12); margin: 0; padding: 0; list-style: none; }
+.tf-bkf-steps::before { content: ''; position: absolute; top: var(--space-8); bottom: var(--space-8); left: calc(var(--space-20) / 2 - var(--border-width-hairline) / 2); border-left: var(--border-width-hairline) solid var(--border); }
+.tf-bkf-steps > li { position: relative; display: grid; grid-template-columns: var(--space-20) minmax(0, 1fr); gap: var(--space-12); align-items: start; font: 400 14px/20px var(--font-sans); }
+.tf-bkf-steps > li > span:last-child { display: flex; flex-direction: column; }
+.tf-bkf-steps strong { font-weight: 500; }
+.tf-bkf-steps__dot { display: grid; place-items: center; width: var(--space-20); height: var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-secondary); }
+.tf-bkf-steps > li.is-hit .tf-bkf-steps__dot { border-color: var(--success); background: var(--success-soft); color: var(--success); }

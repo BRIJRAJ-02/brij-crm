@@ -2,7 +2,7 @@
 import { Radio as AriaRadio, RadioGroup as AriaRadioGroup, Label, Button as AriaButton } from 'react-aria-components';
 import { Link } from '../Link/Link.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { CalendarDays, Check, Code2, LayoutList, Mail, MapPin, Phone, Play, Video, Webcam } from 'lucide-react';
+import { CalendarDays, Check, Code2, LayoutList, Mail, MapPin, MapPinned, Phone, Play, Video, Webcam } from 'lucide-react';
 import { Select } from '../Select/Select.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { NumberField } from '../NumberField/NumberField.tsx';
@@ -18,7 +18,7 @@ import { newPage, uniqueSlug } from './seed.ts';
 import { PLACES, PLACE_ORDER, hoursFor, lengthOf, pageUrl, placeOf, slugify, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
 
 const DURATIONS = ['15', '30', '45', '60'];
-const PLACE_ICON: Readonly<Record<PlaceKind, typeof Video>> = { meet: Video, zoom: Webcam, phone: Phone, 'in-person': MapPin };
+const PLACE_ICON: Readonly<Record<PlaceKind, typeof Video>> = { meet: Video, zoom: Webcam, phone: Phone, 'in-person': MapPin, custom: MapPinned };
 
 /** Where: four compact tiles in a 2 × 2 grid (icon well and label; the chosen one gets an accent edge and a check badge). */
 export function PlaceTiles({ value, onChange }: { readonly value: PlaceKind; readonly onChange: (k: PlaceKind) => void }) {

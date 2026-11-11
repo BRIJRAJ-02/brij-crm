@@ -9,3 +9,5 @@ ReferencePicker searches records as you type and picks one: the editor for recor
 **Interaction**: focusing opens Recent; typing searches; ↑ ↓ move the highlight (a grey wash, the same for pointer and keyboard), Enter picks, Esc clears then closes. The list grows from the field (transitions.dev 05); arriving results fade up out of a small fade (14 skeleton reveal). People draw as PersonLine with round avatars, companies with square ones.
 
 **Replaces**: ReferencePicker, the RecordReference editor, SuggestionList.
+
+**Any object**: a `RecordRef` of `kind: 'record'` is a record of another object (a deal, a project); its `object` ("Deal") leads its grey line and it draws square like a company.

@@ -39,7 +39,7 @@ const copyText = (text: string) => navigator.clipboard.writeText(text).then(() =
 export const handleFor = (state: AppState, bookings: BookingsState | undefined) => bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase() || 'me';
 
 /** The link page editor: edit beside the phone; Publish keeps it in the workspace. Unpublished work is kept in the app, so See it and leaving never lose it. */
-export function LinkPageScreen({ state, dispatch, handle, onBack, bookings }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void; readonly bookings?: BookingsState }) {
+export function LinkPageScreen({ state, dispatch, handle, onBack, bookings, isEmbedded = false }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void; readonly bookings?: BookingsState; /** Inside a partner's frame: no way back into the rest of Timefix. */ readonly isEmbedded?: boolean }) {
   const { toast } = useToast();
   const live = state.linkPage ?? STARTER;
   const published = (state.linkPage !== undefined || state.setupDone.includes('link')) && !state.linkOffline;
@@ -66,7 +66,7 @@ export function LinkPageScreen({ state, dispatch, handle, onBack, bookings }: { 
       )}
       <div className="tf-grow" hidden={seeing}>
         <div className="tf-rec__bar">
-          <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>
+          {!isEmbedded && <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>}
           <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : state.linkOffline ? 'Offline' : 'Not published'}</Tag>
           <span className="tf-rec__spacer" />
           <Button variant="ghost" icon={<Copy {...i14} />} isDisabled={!published} onPress={copy}>Copy link</Button>

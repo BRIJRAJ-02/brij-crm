@@ -41,6 +41,8 @@
 .tf-week__event--meeting { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
 .tf-week__event--internal { background: var(--tag-gray-bg); color: var(--tag-gray-text); }
 .tf-week__event--in-person { background: var(--tag-orange-bg); color: var(--tag-orange-text); }
+/* A connected calendar's own event: the busy hatch with its name, opened to read but never moved. */
+.tf-week__event--calendar { color: var(--text-secondary); background: var(--surface) repeating-linear-gradient(135deg, var(--border-subtle) 0 1px, transparent 1px var(--space-6)); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); }
 .tf-week__event[data-hovered] { box-shadow: 0 0 0 1px var(--surface), var(--shadow-sm); }
 .tf-week__event[aria-expanded='true'] { box-shadow: 0 0 0 1px var(--surface), inset 0 0 0 1px currentColor, var(--shadow-sm); }
 .tf-week__event[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
