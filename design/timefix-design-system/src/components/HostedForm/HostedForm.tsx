@@ -10,6 +10,7 @@ import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { ProgressBar } from '../Progress/Progress.tsx';
 import { answerText, checkAnswer, type AnswerValue, type BookingSource, type FormAnswers, type FormQuestion } from './answers.ts';
 import { QuestionInput, type UploadFile } from './QuestionInput.tsx';
+import { guestLookProps, type GuestLookValue } from '../GuestLook/GuestLook.tsx';
 import './HostedForm.css';
 
 export * from './answers.ts';
@@ -45,6 +46,8 @@ export interface HostedFormProps {
   readonly brand?: { readonly name: string; readonly logoSrc?: string; readonly line?: string };
   /** Jumps between questions by answer (one question at a time). */
   readonly logic?: ReadonlyArray<FormRule>;
+  /** What the form wears (the same four looks and Custom as booking pages): its accent on buttons and choices, its face, light or dark. */
+  readonly look?: GuestLookValue;
 }
 
 /** transitions.dev 08 page side-by-side in a box that eases to the showing page's height (01 card resize). */
@@ -200,7 +203,7 @@ function Thanks({ show, title, line, action, children }: { readonly show: boolea
  * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), or every question on one
  * card. Required answers and emails are checked; a refused step shakes. Ends on a thank you with the sent answers.
  */
-export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, onReach, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
+export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, onReach, look, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
   // Hidden fields never show: they carry their value (from the link or the default) straight into the answers.
   const questions = allQuestions.filter((q) => q.kind !== 'hidden');
   const hiddenAnswers = Object.fromEntries(allQuestions.filter((q) => q.kind === 'hidden').map((q) => [q.id, prefill[q.id] ?? q.defaultValue ?? '']));
@@ -350,7 +353,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   );
 
   return (
-    <div className="tf-hform">
+    <div className={look ? 'tf-hform tf-hform--look' : 'tf-hform'} {...(look ? guestLookProps(look) : {})}>
       <div className="tf-hform__card">
         {brand && <div className="tf-hform__brand">
           <span className="tf-hform__cover" aria-hidden="true" />

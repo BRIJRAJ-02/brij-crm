@@ -5,6 +5,7 @@ import type { SchemaAttribute } from '../AttributeSettings/AttributeSettings.tsx
 // Bookings keeps its own state (BookingsFlow); everything else reads this. One pure reducer, new objects only.
 
 /** Someone in the workspace. */
+import type { GuestLookValue } from '../GuestLook/GuestLook.tsx';
 export interface Member { readonly id: string; readonly name: string; readonly email: string; readonly role: 'Owner' | 'Admin' | 'Member' | 'Guest'; readonly title: string }
 /** The kinds of record the workspace keeps; custom objects add more. */
 export type ObjectId = 'people' | 'companies' | 'deals';
@@ -66,6 +67,8 @@ export interface AppForm {
   readonly liveConfig?: string;
   /** A line under the title on the form. */
   readonly subtitle?: string;
+  /** What the form wears for visitors: one of the four looks or Custom (accent, face, light or dark). Unset is Calm. */
+  readonly look?: GuestLookValue;
   /** Which People attribute each answer fills, by question id ("email", "title", or an owner-made attribute). */
   readonly mapping?: Readonly<Record<string, string>>;
   /** "If <question> is <answer>, go to <question>" rules (one question at a time). */

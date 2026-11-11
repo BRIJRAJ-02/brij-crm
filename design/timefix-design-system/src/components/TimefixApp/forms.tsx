@@ -2,7 +2,7 @@
 // Settings (layout, where answers go, what happens after), Share (link and embeds), Responses (with Add to People, spam, delete + Undo),
 // Results (views, finishes, where people stop). Edits are a draft until Publish; the visitor's page is HostedForm itself.
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Copy, Download, ExternalLink, FileText, MoreHorizontal, Pause, Play, Plus, QrCode as QrIcon, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Palette, ChevronDown, ChevronUp, Copy, Download, ExternalLink, FileText, MoreHorizontal, Pause, Play, Plus, QrCode as QrIcon, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
 import { saveFile } from '../../lib/saveFile.ts';
 import { QrSheet } from './grow.tsx';
 import { FormCard, FormStatusTag, HostedFormPreview } from '../FormPicture/FormPicture.tsx';
@@ -26,6 +26,14 @@ import { useToast } from '../Toast/Toast.tsx';
 import { STAGES, formWho, newId, type AppAction, type AppForm, type AppState, type FormResponse, type ObjectId } from './data.ts';
 import { SettingsSection } from '../SettingsLayout/SettingsLayout.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
+import { DialogTrigger } from 'react-aria-components';
+import { Popover } from '../Popover/Popover.tsx';
+import { GUEST_LOOKS, GuestLook, type GuestLookValue } from '../GuestLook/GuestLook.tsx';
+
+/** Calm, what a form wears until its owner picks a look. */
+const CALM_LOOK: GuestLookValue = { look: 'calm', ...(GUEST_LOOKS[0]?.value ?? { accent: '#1F5FD6', font: 'sans', scheme: 'light' }) };
+/** "Look · Night" on the preview's button. */
+const lookName = (v?: GuestLookValue) => `Look · ${v?.look === 'custom' ? 'Custom' : GUEST_LOOKS.find((l) => l.id === (v?.look ?? 'calm'))?.title ?? 'Calm'}`;
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -36,11 +44,11 @@ const statusOf = (f: AppForm) => (f.status === 'paused' ? 'closed' : f.status ==
 const closedNow = (f: AppForm) => Boolean((f.closesOn && new Date(`${f.closesOn}T23:59`) < new Date()) || (f.maxResponses && f.responses.filter((r) => !r.spam).length >= f.maxResponses));
 /** A question's key in links: its title in lower case with underscores ("work_email"). */
 const keyOf = (q: FormQuestion) => (q.title || q.kind).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || q.id;
-const configOf = (f: AppForm) => JSON.stringify({ name: f.name, mode: f.mode, after: f.after, subtitle: f.subtitle, logic: f.logic, mapping: f.mapping });
+const configOf = (f: AppForm) => JSON.stringify({ name: f.name, mode: f.mode, after: f.after, subtitle: f.subtitle, logic: f.logic, mapping: f.mapping, look: f.look });
 /** What visitors see now: the published questions and settings, or the draft before the first publish. */
-const liveView = (f: AppForm): Pick<AppForm, 'name' | 'mode' | 'after' | 'subtitle' | 'logic' | 'mapping' | 'questions'> => {
+const liveView = (f: AppForm): Pick<AppForm, 'name' | 'mode' | 'after' | 'subtitle' | 'logic' | 'mapping' | 'questions' | 'look'> => {
   const cfg = f.liveConfig ? (JSON.parse(f.liveConfig) as Partial<AppForm>) : {};
-  return { name: cfg.name ?? f.name, mode: cfg.mode ?? f.mode, after: cfg.after ?? f.after, subtitle: cfg.subtitle, logic: cfg.logic, mapping: cfg.mapping ?? f.mapping, questions: f.live ?? f.questions };
+  return { name: cfg.name ?? f.name, mode: cfg.mode ?? f.mode, after: cfg.after ?? f.after, subtitle: cfg.subtitle, logic: cfg.logic, mapping: cfg.mapping ?? f.mapping, questions: f.live ?? f.questions, look: f.liveConfig ? cfg.look : f.look };
 };
 /** The People attribute a question fills when nobody picked one: email, phone, name and job title are guessed from the question. */
 export const guessAttr = (q: FormQuestion) => (q.kind === 'email' ? 'email' : q.kind === 'phone' ? 'phone' : q.kind === 'short' && /name/i.test(q.title) ? 'name' : q.kind === 'short' && /title|role/i.test(q.title) ? 'title' : 'none');
@@ -180,7 +188,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
         <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => { setGuest(false); setPrefill(undefined); }}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
           {!live && <Tag size="sm" hue="orange">Preview · answers aren’t saved</Tag>}</div>
         {form.status === 'paused' || closedNow(form) ? <EmptyState icon={<Pause size={20} strokeWidth={1.75} />} title="This form is closed" description={form.closedMessage || `${form.owner.split(' ')[0]} isn't taking answers right now.`} /> : (
-          <HostedForm title={live ? shownToVisitors.name : form.name} description={live ? shownToVisitors.subtitle : form.subtitle} logic={(live ? shownToVisitors.mode : form.mode) === 'one' ? (live ? shownToVisitors.logic : form.logic) : undefined} questions={live ? questions : form.questions} mode={live ? shownToVisitors.mode : form.mode} thanks={{ title: 'Thanks, we got it.', line: after.kind === 'redirect' && after.url ? `${after.message} Visitors now go to ${after.url}.` : after.message, action: after.kind === 'thanks' && after.button?.label && after.button.url ? { label: after.button.label, href: after.button.url } : undefined }} onReach={live ? reach : undefined} submitLabel={form.submitLabel || undefined} prefill={prefill} brand={{ name: state.prefs.workspace.name, logoSrc: state.prefs.workspace.logo, line: form.owner ? `Answers go to ${form.owner.split(' ')[0]}` : undefined }}
+          <HostedForm look={live ? shownToVisitors.look : form.look} title={live ? shownToVisitors.name : form.name} description={live ? shownToVisitors.subtitle : form.subtitle} logic={(live ? shownToVisitors.mode : form.mode) === 'one' ? (live ? shownToVisitors.logic : form.logic) : undefined} questions={live ? questions : form.questions} mode={live ? shownToVisitors.mode : form.mode} thanks={{ title: 'Thanks, we got it.', line: after.kind === 'redirect' && after.url ? `${after.message} Visitors now go to ${after.url}.` : after.message, action: after.kind === 'thanks' && after.button?.label && after.button.url ? { label: after.button.label, href: after.button.url } : undefined }} onReach={live ? reach : undefined} submitLabel={form.submitLabel || undefined} prefill={prefill} brand={{ name: state.prefs.workspace.name, logoSrc: state.prefs.workspace.logo, line: form.owner ? `Answers go to ${form.owner.split(' ')[0]}` : undefined }}
             onSubmit={(answers) => new Promise<void>((resolve) => {
               const flat = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' || typeof v === 'number' ? String(v) : Array.isArray(v) ? v.join(', ') : '']));
               window.setTimeout(() => {
@@ -234,7 +242,13 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
           <div className="tf-forms__build">
             <div className="tf-forms__builder"><QuestionBuilder title="" questions={form.questions} onChange={(questions) => { if (questions.length > MAX_QUESTIONS) { toast({ message: `A form holds up to ${MAX_QUESTIONS} questions. Split it into two forms.`, tone: 'danger' }); return; } set({ questions }); }} />
               {form.questions.length >= MAX_QUESTIONS - 10 ? <p className="tf-rec__muted tf-num">{form.questions.length} of {MAX_QUESTIONS} questions</p> : null}</div>
-            <div className="tf-forms__preview"><HostedFormPreview title={form.name} description={form.subtitle} questions={form.questions} mode={form.mode} logic={form.mode === 'one' ? form.logic : undefined} address={url} onSubmit={() => Promise.resolve()} /></div>
+            <div className="tf-forms__preview"><HostedFormPreview title={form.name} description={form.subtitle} questions={form.questions} mode={form.mode} logic={form.mode === 'one' ? form.logic : undefined} address={url} onSubmit={() => Promise.resolve()} look={form.look}
+              barAction={<DialogTrigger>
+                <Button size="sm" variant="ghost" icon={<Palette {...i14} />}>{lookName(form.look)}</Button>
+                <Popover label="Form look" placement="bottom end" offset={6}>
+                  <div className="tf-forms__look"><GuestLook value={form.look ?? CALM_LOOK} onChange={(look) => set({ look })} isPreviewHidden /></div>
+                </Popover>
+              </DialogTrigger>} /></div>
           </div>
         </TabPanel>
         <TabPanel id="settings" className="tf-forms__panel">

@@ -40,6 +40,21 @@ const lookVars = (v: Omit<GuestLookValue, 'look'>) => ({
   '--tf-look-font': FONTS[v.font].family,
 }) as CSSProperties;
 
+/** What a guest page wears for a look: its light or dark theme, and the accent standing in for the primary button, accent and face.
+ *  Spread onto the page's root element; everything inside follows through the tokens. */
+export function guestLookProps(v: GuestLookValue): { readonly 'data-theme': 'light' | 'dark'; readonly style: CSSProperties } {
+  const on = contrastOnWhiteText(v.accent) >= 3 ? 'var(--on-accent)' : 'var(--text)';
+  return {
+    'data-theme': v.scheme,
+    style: {
+      '--accent': v.accent, '--accent-hover': `color-mix(in srgb, ${v.accent} 88%, black)`, '--on-accent': on,
+      '--accent-soft': `color-mix(in srgb, ${v.accent} 14%, transparent)`,
+      '--primary': v.accent, '--primary-hover': `color-mix(in srgb, ${v.accent} 88%, black)`, '--on-primary': on,
+      '--font-sans': FONTS[v.font].family === 'var(--font-sans)' ? undefined : FONTS[v.font].family,
+    } as CSSProperties,
+  };
+}
+
 /** A look as a tiny swatch for its tile: its ground, "Aa" in its face and a bar in its accent. */
 function LookSwatch({ value }: { readonly value: Omit<GuestLookValue, 'look'> }) {
   return (
@@ -83,10 +98,12 @@ export interface GuestLookProps {
   /** Whose page the preview draws. */
   readonly host?: string;
   readonly title?: string;
+  /** The page has its own live preview beside the picker (a form's builder): draw only the controls. */
+  readonly isPreviewHidden?: boolean;
 }
 
 /** The guest pages' look picker: four looks and Custom as choice cards, then accent, face and light or dark, beside a live preview. Changing anything by hand makes it Custom. */
-export function GuestLook({ value, onChange, host, title }: GuestLookProps) {
+export function GuestLook({ value, onChange, host, title, isPreviewHidden = false }: GuestLookProps) {
   // Custom keeps the last look made by hand, so going to a preset and back loses nothing.
   const [custom, setCustom] = useState<Omit<GuestLookValue, 'look'>>(value);
   useEffect(() => { if (value.look === 'custom') setCustom(value); }, [value]);
@@ -101,7 +118,7 @@ export function GuestLook({ value, onChange, host, title }: GuestLookProps) {
   ];
   return (
     <div className="tf-look">
-      <div className="tf-look__grid">
+      <div className={isPreviewHidden ? 'tf-look__grid tf-look__grid--solo' : 'tf-look__grid'}>
       <div className="tf-look__controls">
         <TileGrid label="Look" items={items} value={value.look} onChange={pick} columns={3} />
         <AccentPicker label="Accent" value={value.accent} onChange={(accent) => tweak({ accent })} />
@@ -116,7 +133,7 @@ export function GuestLook({ value, onChange, host, title }: GuestLookProps) {
             items={[{ id: 'light', label: 'Light', icon: <Sun size={14} strokeWidth={1.75} /> }, { id: 'dark', label: 'Dark', icon: <Moon size={14} strokeWidth={1.75} /> }]} />
         </div>
       </div>
-      <GuestLookPreview value={value} host={host} title={title} />
+      {!isPreviewHidden && <GuestLookPreview value={value} host={host} title={title} />}
       </div>
     </div>
   );

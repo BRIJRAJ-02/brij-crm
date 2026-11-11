@@ -873,3 +873,12 @@ button.tf-bkf-guest__visit:focus-visible { outline: var(--border-width-focus) so
 .tf-bkf__turns--shifts li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 12rem) minmax(0, 12rem); align-items: center; gap: var(--space-12); }
 .tf-bkf__turns--shifts .tf-bkf__turns-head { padding-block: 0; border: 0; color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
 .tf-bkf-always { padding-bottom: var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+
+/* Reminders in a booking's drawer: sent ones ticked and quiet, the next one plain. */
+.tf-bkf-remind { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-12); }
+.tf-bkf-remind__item { display: inline-flex; align-items: center; gap: var(--space-4); color: var(--text); font-variant-numeric: tabular-nums; }
+.tf-bkf-remind__item.is-sent { color: var(--text-secondary); }
+.tf-bkf-remind__item.is-sent > svg { color: var(--success); }
+/* What the reminder says, under the setting, as the guest reads it. */
+.tf-bkf-remind__sample { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font: 400 13px/20px var(--font-sans); }
+.tf-bkf-remind__sample > .tf-bkf__muted { font-size: 12px; }

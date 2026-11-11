@@ -44,3 +44,7 @@
   .tf-fcard, .tf-fprev__viewport { transition: none; }
   .tf-fprev__screen { animation: none; }
 }
+.tf-fprev__end { display: inline-flex; align-items: center; gap: var(--space-8); }
+/* A form with a look paints the whole screen in it, padding included. */
+.tf-fprev__screen:has(> .tf-hform--look) { display: flex; flex-direction: column; padding: 0; }
+.tf-fprev__frame--phone .tf-fprev__screen:has(> .tf-hform--look) > .tf-hform--look { padding: var(--space-20) var(--space-12); }

@@ -233,3 +233,5 @@
 .tf-hform__from strong { overflow: hidden; color: var(--text); font: 600 15px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 .tf-hform__from span { overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 @container tf-hform (max-width: 34rem) { .tf-hform__brand { margin: calc(var(--space-16) * -1) calc(var(--space-20) * -1) var(--space-16); } .tf-hform__logo { margin-left: var(--space-20); } .tf-hform__from { padding-right: var(--space-20); } }
+/* A look: the form paints its own ground in the look's theme, filling the page or the preview's screen. */
+.tf-hform--look { align-self: stretch; flex: 1; min-height: 100%; padding: var(--space-32) var(--space-16); background: var(--canvas); }

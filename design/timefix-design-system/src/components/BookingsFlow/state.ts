@@ -130,6 +130,8 @@ export interface BookingPage {
   readonly redirectUrl: string;
   /** 'day' (a day before), 'hour' (an hour before). */
   readonly reminders: ReadonlyArray<string>;
+  /** A salon's or restaurant's reminders go by text as well as email (guests give a mobile when they book). */
+  readonly remindByText?: boolean;
   readonly look: GuestLookValue;
   readonly showPhoto: boolean;
   readonly socials: ReadonlyArray<SocialLink>;
@@ -342,6 +344,18 @@ export interface BookingsState {
   readonly insightsShared?: boolean;
   /** What the staff keep about a guest or client, by guestKey: tags, notes, birthday, diet, colour formulas, patch test. */
   readonly guests?: Readonly<Record<string, GuestProfile>>;
+}
+
+/** When reminders go, before the meeting. */
+export const REMINDERS: ReadonlyArray<{ readonly id: string; readonly label: string; readonly minutes: number }> = [
+  { id: 'week', label: 'A week before', minutes: 7 * 1440 }, { id: 'day', label: 'A day before', minutes: 1440 },
+  { id: '2h', label: '2 hours before', minutes: 120 }, { id: 'hour', label: 'An hour before', minutes: 60 },
+];
+/** A booking's reminders: when each goes, and whether it has gone. One that would have gone before the booking was made is skipped. */
+export function remindersFor(p: BookingPage, m: BookedMeeting, now: Date): ReadonlyArray<{ readonly id: string; readonly label: string; readonly at: Date; readonly sent: boolean }> {
+  const booked = m.activity[0]?.at;
+  return REMINDERS.filter((r) => p.reminders.includes(r.id)).map((r) => ({ id: r.id, label: r.label, at: new Date(m.start.getTime() - r.minutes * 60_000), sent: false }))
+    .filter((r) => !booked || r.at > booked).map((r) => ({ ...r, sent: r.at <= now }));
 }
 
 /** One shift's own rules on a table page. */

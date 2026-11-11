@@ -2,7 +2,7 @@ FormPicture shows forms before anyone answers them: as cards on the forms list, 
 
 **Use it for**: `FormCard` on the forms list (a picture of the form, its name, a rolling response count and its status), `FormStatusTag` wherever a form's status shows, `HostedFormPreview` beside the builder. **Don't use it for** the hosted page itself: use HostedForm.
 
-**The consumer provides**: `FormCard` takes `name`, `status` (`draft`, `live`, `closed`), `responses`, `updated` ("Edited 2h ago"), `questions` (the picture draws the first choice or rating question), and `href` or `onPress`. `HostedFormPreview` takes every HostedForm prop plus `device` or `defaultDevice` (`desktop`, `phone`), `onDeviceChange` and `address` for the browser bar.
+**The consumer provides**: `FormCard` takes `name`, `status` (`draft`, `live`, `closed`), `responses`, `updated` ("Edited 2h ago"), `questions` (the picture draws the first choice or rating question), and `href` or `onPress`. `HostedFormPreview` takes every HostedForm prop plus `device` or `defaultDevice` (`desktop`, `phone`), `onDeviceChange` and `address` for the browser bar. `HostedFormPreview` takes `barAction`, placed before the device switch (the form's Look button); a form with a look paints the whole screen in it.
 
 **States**: Draft (dashed circle), Live (green check), Closed (crossed circle); hovered card (edge and shadow), pressed; desktop and phone frames.
 

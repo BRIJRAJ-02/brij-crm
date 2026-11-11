@@ -115,7 +115,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />{g.title}<span className="tf-rec__muted tf-num">{g.tasks.filter((t) => !t.done).length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
           <div className="tf-you__card">
-            <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
+            <TaskList isFlush tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
               record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
           </div>
           </DisclosurePanel>
@@ -127,7 +127,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h"><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />Completed<span className="tf-rec__muted tf-num">{done.length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
             <div className="tf-you__card">
-              <TaskList isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
+              <TaskList isFlush isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
                 record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
             </div>
           </DisclosurePanel>

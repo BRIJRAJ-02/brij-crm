@@ -377,3 +377,9 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Always joins: `alwaysWith` on round robin pages, `coHosts` on meetings, `isWith` used for clashes, limits, team day, roster; drawer says "with". Walk w6rr.
 - Record Meetings section (person by email or name, deal contact, company people), opening the booking. Walk w6rec.
 - w5guests dark flaked once under load, passed on rerun. regress "manage move" still time-dependent (before ~10:00).
+
+## Wave 7 (11 Nov)
+- Owner: task row hover was a box inside the card. TaskList `isFlush`; Tasks page cards drop their padding and clip, so hover fills the row.
+- Form looks: AppForm `look` (published with the form), Look button in the preview bar opens GuestLook (`isPreviewHidden`) in a Popover; HostedForm `look` via `guestLookProps` (data-theme + accent as primary/accent, face). Walk w7look (incl. publish + visitor view).
+- Reminders: REMINDERS (week, day, 2 h, hour), `remindByText` for service/table pages, sample text under the setting, drawer lists sent/next reminders (`remindersFor`). Walk w7remind.
+- Dot week dropped: no real empty/loading moment in the week view to put it on.

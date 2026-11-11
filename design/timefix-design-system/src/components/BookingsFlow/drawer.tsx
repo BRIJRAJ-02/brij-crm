@@ -2,7 +2,7 @@
 import { copyText } from '../../lib/copy.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'react-aria-components';
-import { Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
+import { Bell, Check, Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -22,7 +22,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
 import { ProfileButton } from './guests.tsx';
-import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
 export interface MeetingDrawerProps {
@@ -101,6 +101,15 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <PersonLine name={m.invitee.name} sub={m.invitee.email} end={onProfile && page?.kind === 'service' ? <ProfileButton restaurant={false} onPress={() => { saveNotes(); onProfile(m); }} /> : undefined} />
           {m.guests && m.guests.length > 0 && <span className="tf-bkf__sub">and {m.guests.join(', ')}</span>}
         </dd>
+        {page && open && (() => {
+          // The reminders this booking gets: sent ones with when, the next one with when it goes.
+          const rs = remindersFor(page, m, new Date());
+          if (rs.length === 0) return null;
+          const at = (d: Date) => `${relativeDayLabel(d)}, ${formatClock(minutesOf(d))}`;
+          return <><dt><Bell {...i16} aria-label="Reminders" /></dt>
+            <dd><span className="tf-bkf-remind">{rs.map((r) => <span key={r.id} className={r.sent ? 'tf-bkf-remind__item is-sent' : 'tf-bkf-remind__item'}>{r.sent ? <Check {...i14} aria-hidden /> : null}{r.sent ? `Sent ${at(r.at)}` : `${r.label}, ${at(r.at)}`}</span>)}</span>
+              <span className="tf-bkf__sub">{page.remindByText ? 'By email and text' : 'By email'}</span></dd></>;
+        })()}
         <dt><PlaceIcon place={m.place} /></dt>
         <dd className="tf-bkf__place">
           <span>{m.placeLabel}{m.host !== HOST ? ` · hosted by ${m.host}` : ''}{m.coHosts?.length ? `${m.host !== HOST ? ',' : ' ·'} with ${m.coHosts.map((c) => (c === HOST ? 'you' : c)).join(' and ')}` : ''}</span>

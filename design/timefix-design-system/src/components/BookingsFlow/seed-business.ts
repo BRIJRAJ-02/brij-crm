@@ -31,7 +31,7 @@ export function lumen(now = new Date()): BookingsState {
   const pages: BookingPage[] = [];
   const svc = (id: string, name: string, cat: string, minutes: number, price: number, hosts: ReadonlyArray<string>, extra: Partial<BookingPage> = {}) => {
     const p = newPage(pages, { id, name, kind: 'service', categoryId: cat, durations: [minutes], price, priceType: 'fixed', places: ['in-person'], address: '14 Hill Road, Bandra West',
-      hostMode: hosts.length > 1 ? 'roundrobin' : 'one', hosts, shareOut: 'equal', owner: HOST, noticeHours: 1, bufferAfter: 10, accent: cat === 'c-colour' ? 'purple' : cat === 'c-care' ? 'green' : 'blue',
+      hostMode: hosts.length > 1 ? 'roundrobin' : 'one', hosts, shareOut: 'equal', owner: HOST, noticeHours: 1, bufferAfter: 10, reminders: ['day', '2h'], remindByText: true, accent: cat === 'c-colour' ? 'purple' : cat === 'c-care' ? 'green' : 'blue',
       stats: { views: 60 + minutes, bookings: Math.round(price / 120), showRate: 94 }, ...extra });
     pages.push(p);
     return p;
@@ -99,7 +99,7 @@ export function olive(now = new Date()): BookingsState {
   const tables: Table[] = [t('t1', 'T1', 2, 'Main room'), t('t2', 'T2', 2, 'Main room'), t('t3', 'T3', 4, 'Main room', true), t('t4', 'T4', 4, 'Main room', true), t('t5', 'T5', 6, 'Main room'),
     t('t6', 'T6', 2, 'Terrace', true), t('t7', 'T7', 2, 'Terrace', true), t('t8', 'T8', 4, 'Terrace'), { ...t('t9', 'T9', 8, 'Terrace'), online: false }];
   const table = newPage([], { id: 'p-table', name: 'Book a table', kind: 'table', party: { min: 1, max: 8 }, durations: [90], places: ['in-person'], address: '7 Apollo Bunder, Colaba',
-    hostMode: 'one', hosts: [HOST], noticeHours: 1, slotStep: 15, accent: 'green', pacing: 16, shifts: { Lunch: { pacing: 10, lastSeating: 45 }, Dinner: { lastSeating: 60 } }, holdLate: 15, pickArea: true, bigTurn: { from: 5, minutes: 120 }, turns: [{ upTo: 2, minutes: 75 }, { upTo: 4, minutes: 90 }, { upTo: 6, minutes: 120 }, { upTo: 99, minutes: 150 }], cancelCutoff: 2,
+    hostMode: 'one', hosts: [HOST], noticeHours: 1, slotStep: 15, accent: 'green', reminders: ['day'], remindByText: true, pacing: 16, shifts: { Lunch: { pacing: 10, lastSeating: 45 }, Dinner: { lastSeating: 60 } }, holdLate: 15, pickArea: true, bigTurn: { from: 5, minutes: 120 }, turns: [{ upTo: 2, minutes: 75 }, { upTo: 4, minutes: 90 }, { upTo: 6, minutes: 120 }, { upTo: 99, minutes: 150 }], cancelCutoff: 2,
     stats: { views: 1840, bookings: 412, showRate: 93 } });
   const meetings: BookedMeeting[] = [];
   type Extra = { readonly status?: BookedMeeting['status']; readonly offset?: number; readonly tags?: ReadonlyArray<string>; readonly occasion?: string; readonly note?: string; readonly area?: string };

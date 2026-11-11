@@ -64,10 +64,12 @@ export interface TaskListProps {
   readonly onOpen?: (id: string) => void;
   /** Only done tasks, as plain rows (for a page that gives Completed its own section). Unticking one reopens it. */
   readonly isDoneList?: boolean;
+  /** Inside a bordered card: rows run edge to edge, so a row's hover fills the whole row (the card clips its corners). */
+  readonly isFlush?: boolean;
 }
 
 /** A record's or a person's tasks: round checks, due chips (red when overdue), the record and the assignee. A done task strikes through, then folds into "Completed". */
-export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen, isDoneList = false }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen, isDoneList = false, isFlush = false }: TaskListProps) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [folding, setFolding] = useState<ReadonlySet<string>>(new Set());
   const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
@@ -93,12 +95,12 @@ export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen, isDoneList 
   const add = () => { const t = draft.trim(); if (t && onAdd) { onAdd(t); setDraft(''); } };
 
   if (isDoneList) return (
-    <section className="tf-tasks" aria-label="Completed tasks">
+    <section className={isFlush ? 'tf-tasks tf-tasks--flush' : 'tf-tasks'} aria-label="Completed tasks">
       <ul className="tf-tasks__list">{done.map((t) => <li key={t.id}><TaskRow task={t} checked open onChange={(v) => { if (!v) onToggle(t.id, false); }} onOpen={onOpen} /></li>)}</ul>
     </section>
   );
   return (
-    <section className="tf-tasks" aria-label="Tasks">
+    <section className={isFlush ? 'tf-tasks tf-tasks--flush' : 'tf-tasks'} aria-label="Tasks">
       <ul className="tf-tasks__list">
         {open.map((t) => (
           <li key={t.id}><DropIn animate={(freshIds?.has(t.id) ?? false) || reopened.has(t.id)}>

@@ -71,7 +71,7 @@
 .tf-you__group { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-you__h { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; padding: 0 var(--space-4); color: var(--text); font: 600 15px/22px var(--font-sans); }
 .tf-you__h[data-tone='danger'] { color: var(--tag-red-text); }
-.tf-you__card { padding: var(--space-8) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-you__card { overflow: hidden; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
 .tf-you__open { align-self: flex-start; font-size: 13px; }
 /* Tasks › Completed: its own section at the bottom, open; the head folds it (transitions.dev 21 accordion). */
 .tf-you__fold { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-left: calc(var(--space-24) * -1); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }
@@ -342,3 +342,6 @@
 .tf-rec__rel--meeting .tf-rec__relname .tf-rec__muted { font-weight: 400; }
 .tf-rec__rel--meeting:disabled { cursor: default; }
 .tf-rec__subhead { display: block; padding: var(--space-6) var(--space-8) var(--space-2); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
+/* The form's Look popover: the look picker's controls, no preview of its own (the builder's preview is beside it). */
+.tf-forms__look { width: min(calc(var(--size-menu) * 1.9), calc(100vw - var(--space-32))); padding: var(--space-16); }
+.tf-forms__guest > .tf-hform--look { border-radius: var(--radius-xl); }

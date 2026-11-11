@@ -28,7 +28,7 @@ import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, Scaled
 import { uniqueSlug } from './seed.ts';
 import { TablePreview } from './guest-venue.tsx';
 import {
-  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName,
+  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary, shiftName, REMINDERS,
   type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut, type ShiftRule,
 } from './state.ts';
 
@@ -422,10 +422,20 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     <SettingRow title="Add to People" description="Guests become people, linked to their company.">
                       <Switch aria-label="Add guests to People" isSelected={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) !== 'none'} onChange={(on) => set({ addToPeople: on, fileTo: on ? (draft.fileTo && draft.fileTo !== 'none' ? draft.fileTo : 'people') : 'none' })} />
                     </SettingRow>
-                    <SettingRow title="Reminders" description="Emails to the guest before the meeting.">
+                    <SettingRow title="Reminders" description={draft.remindByText ? 'An email and a text to the guest before they come.' : `Emails to the guest before the ${draft.kind === 'table' ? 'booking' : draft.kind === 'service' ? 'appointment' : 'meeting'}.`}>
                       <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" selectedKeys={draft.reminders}
-                        items={[{ id: 'day', label: 'A day before' }, { id: 'hour', label: 'An hour before' }]} onSelectionChange={(k) => set({ reminders: [...k] })} />
+                        items={REMINDERS.map((r) => ({ id: r.id, label: r.label }))} onSelectionChange={(k) => set({ reminders: REMINDERS.filter((r) => k.has(r.id)).map((r) => r.id) })} />
                     </SettingRow>
+                    {(draft.kind === 'service' || draft.kind === 'table') && draft.reminders.length > 0 && (
+                      <SettingRow title="Also by text" description="To the mobile they give when they book.">
+                        <Switch aria-label="Also send reminders by text" isSelected={draft.remindByText ?? false} onChange={(remindByText) => set({ remindByText })} />
+                      </SettingRow>
+                    )}
+                    {draft.reminders.length > 0 && <p className="tf-bkf-remind__sample"><span className="tf-bkf__muted">{draft.remindByText ? 'The text reads' : 'The email says'}</span>“{(() => {
+                      const when = draft.reminders.includes('day') ? 'tomorrow at 10:30 AM' : draft.reminders.includes('week') ? 'next Tuesday at 10:30 AM' : 'today at 10:30 AM';
+                      const who = draft.kind === 'table' ? `your table for 2 at ${state.workspace}` : draft.kind === 'service' ? `${draft.name} with ${first(draft.hosts[0] ?? draft.owner)} at ${state.workspace}` : `${draft.name} with ${first(draft.owner)}`;
+                      return `See you ${when}: ${who}. Need to change it? Use the link in your booking email.`;
+                    })()}”</p>}
                     <SettingRow title="Emails to the guest" description="Each one goes from your address, with the meeting details.">
                       <ChoiceChips label="Emails to the guest" isLabelHidden selectionMode="multiple" selectedKeys={draft.emails ?? ALL_EMAILS}
                         items={[{ id: 'confirm', label: 'Confirmation' }, { id: 'change', label: 'Changes' }, { id: 'cancel', label: 'Cancellations' }, { id: 'after', label: 'Thank-you after' }]}

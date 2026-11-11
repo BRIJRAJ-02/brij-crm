@@ -35,3 +35,4 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-look-preview__page, .tf-look-preview__card, .tf-look-preview__day, .tf-look-preview__book { transition: none; }
 }
+.tf-look__grid--solo { grid-template-columns: minmax(0, 1fr); }
