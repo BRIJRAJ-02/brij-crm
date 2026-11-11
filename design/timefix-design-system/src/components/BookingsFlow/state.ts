@@ -340,6 +340,8 @@ export interface BookingsState {
   readonly menuLive?: MenuBook;
   /** Tables taken out for a while (a private event, a wobbly leg): no bookings or walk-ins on them then. */
   readonly tableBlocks?: ReadonlyArray<TableBlock>;
+  /** What guests asked for from a table's QR menu (a waiter, the bill), until staff mark it done. */
+  readonly tableRequests?: ReadonlyArray<TableRequest>;
   /** A restaurant's waitlist, every day. */
   readonly waitlist?: ReadonlyArray<WaitParty>;
   /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
@@ -365,6 +367,8 @@ export function remindersFor(p: BookingPage, m: BookedMeeting, now: Date): Reado
     .filter((r) => !booked || r.at > booked).map((r) => ({ ...r, sent: r.at <= now }));
 }
 
+/** A guest at a table asking for a waiter or the bill from the QR menu. */
+export interface TableRequest { readonly id: string; readonly tableId: string; readonly kind: 'waiter' | 'bill'; readonly at: Date }
 /** A table taken out from one time to another on one day, with why. */
 export interface TableBlock { readonly id: string; readonly tableId: string; readonly day: string; readonly start: number; readonly end: number; readonly note: string }
 /** The block on a table at a time on a day, if any. */
@@ -486,6 +490,8 @@ export type BookingsAction =
   | { readonly type: 'busy/add'; readonly block: BusyBlock }
   | { readonly type: 'block/add'; readonly block: TimeBlock }
   | { readonly type: 'tableblock/add'; readonly block: TableBlock }
+  | { readonly type: 'request/add'; readonly request: TableRequest }
+  | { readonly type: 'request/done'; readonly id: string }
   | { readonly type: 'tableblock/remove'; readonly id: string }
   | { readonly type: 'block/remove'; readonly id: string }
   | { readonly type: 'groups/set'; readonly groups: ReadonlyArray<RoundRobinGroup> }
@@ -549,6 +555,9 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
+    // One open request of a kind per table: asking twice doesn't stack.
+    case 'request/add': return (state.tableRequests ?? []).some((r) => r.tableId === action.request.tableId && r.kind === action.request.kind) ? state : { ...state, tableRequests: [...(state.tableRequests ?? []), action.request] };
+    case 'request/done': return { ...state, tableRequests: (state.tableRequests ?? []).filter((r) => r.id !== action.id) };
     case 'tableblock/add': return { ...state, tableBlocks: [...(state.tableBlocks ?? []), action.block] };
     case 'tableblock/remove': return { ...state, tableBlocks: (state.tableBlocks ?? []).filter((b) => b.id !== action.id) };
     case 'block/remove': return { ...state, blocks: state.blocks.filter((b) => b.id !== action.id) };

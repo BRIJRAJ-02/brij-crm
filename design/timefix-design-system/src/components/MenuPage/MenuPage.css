@@ -72,3 +72,6 @@
 .tf-menupage__sum .is-total { font: 600 16px/24px var(--font-sans); }
 @keyframes tf-menupage-rise { from { opacity: 0; transform: translateY(var(--distance-base)); } }
 @media (prefers-reduced-motion: reduce) { .tf-menupage__bagbar { animation: none; } .tf-menupage__dish, .tf-menupage__filter, .tf-menupage__pill, .tf-menupage__bagbtn { transition: none; } }
+/* From a table's QR: call a waiter or ask for the bill, under the menu's name; a sent ask turns into what's happening. */
+.tf-menupage__ask { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-menupage__ask > .tf-btn { flex: 1 1 auto; }

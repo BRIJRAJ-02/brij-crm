@@ -3,7 +3,7 @@
 import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban, BellRing, Receipt } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -280,6 +280,19 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
         {wait.length > 0 && <span>{wait.length} waiting</span>}
       </p>
       <div className="tf-bkf-res-layout">
+        {isToday && (state.tableRequests ?? []).length > 0 && (
+          // Asks from table QR menus, oldest first: the floor clears each with Done.
+          <ul className="tf-bkf-asks" aria-label="Table requests">
+            {[...(state.tableRequests ?? [])].sort((a, b) => a.at.getTime() - b.at.getTime()).map((r) => {
+              const t = state.tables?.find((x) => x.id === r.tableId); const m = Math.max(0, Math.round((now.getTime() - r.at.getTime()) / 60_000));
+              return <li key={r.id} className="tf-bkf-asks__item" data-kind={r.kind}>
+                {r.kind === 'bill' ? <Receipt {...i16} aria-hidden /> : <BellRing {...i16} aria-hidden />}
+                <span><strong>{t?.name ?? 'A table'}</strong> {r.kind === 'bill' ? 'asks for the bill' : 'calls a waiter'}<span className="tf-bkf__muted tf-num"> · {m === 0 ? 'just now' : `${m} min ago`}</span></span>
+                <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'request/done', id: r.id }); toast({ message: `${t?.name ?? 'Table'}: done`, action: { label: 'Undo', onAction: () => dispatch({ type: 'request/add', request: r }) } }); }}>Done</Button>
+              </li>;
+            })}
+          </ul>
+        )}
         {view === 'list' ? listView : <FloorView onNew={() => setEditing('new')} state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
           onSeat={seat} onFinish={finish} onOpen={setEditing} onWalkIn={(t) => setSeating({ kind: 'walkin', table: t })} onBlock={setBlocking}
           onUnblock={(b) => { dispatch({ type: 'tableblock/remove', id: b.id }); toast({ message: `${state.tables?.find((t) => t.id === b.tableId)?.name ?? 'Table'} is open again`, action: { label: 'Undo', onAction: () => dispatch({ type: 'tableblock/add', block: b }) } }); }} />}
@@ -405,7 +418,7 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                 <li key={t.id}>
                   <MenuTrigger>
                     <AriaButton className="tf-bkf-floor__table" data-state={state_} data-seats={t.seats > 4 ? 'big' : t.seats > 2 ? 'mid' : 'small'} aria-label={`${t.name}, ${t.seats} seats, ${sat ? `seated, ${sat.invitee.name}` : next ? `free until ${formatClock(minutesOf(next.start))}, then ${next.invitee.name}` : 'free'}`}>
-                      <span className="tf-bkf-floor__name">{t.name}<span className="tf-bkf__muted tf-num"> · {t.seats}</span></span>
+                      <span className="tf-bkf-floor__name">{t.name}<span className="tf-bkf__muted tf-num"> · {t.seats}</span>{isToday && (state.tableRequests ?? []).some((r) => r.tableId === t.id) && <span className="tf-bkf-floor__asks">{(state.tableRequests ?? []).filter((r) => r.tableId === t.id).map((r) => <Tag key={r.id} size="sm" hue="orange">{r.kind === 'bill' ? 'Bill' : 'Waiter'}</Tag>)}</span>}</span>
                       {sat ? (
                         <>
                           <span className="tf-bkf-floor__who">{sat.invitee.name} · {sat.party}</span>

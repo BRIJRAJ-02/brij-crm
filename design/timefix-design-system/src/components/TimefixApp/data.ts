@@ -30,6 +30,23 @@ export interface RecordLink { readonly object: ObjectId; readonly id: string }
 export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; /** More records the task is about (a deal and its two people); it shows on each one's page. */ readonly also?: ReadonlyArray<RecordLink>; readonly description?: string; readonly created: Date;
   /** High or low; unset is normal. */ readonly priority?: 'high' | 'low';
   /** Repeats from its due day: ticking it done adds the next one. */ readonly repeat?: TaskRepeat }
+/** A note to start from: a title and headings with an empty line or to-do under each (meeting, call and discovery notes). */
+export interface NoteTemplate { readonly id: string; readonly label: string; readonly title: string; readonly sections: ReadonlyArray<{ readonly heading: string; readonly todo?: boolean }> }
+/** The note templates; Blank is no template. */
+export const NOTE_TEMPLATES: ReadonlyArray<NoteTemplate> = [
+  { id: 'meeting', label: 'Meeting notes', title: 'Meeting notes', sections: [{ heading: 'Who was there' }, { heading: 'What we talked about' }, { heading: 'Decisions' }, { heading: 'Next steps', todo: true }] },
+  { id: 'call', label: 'Call notes', title: 'Call notes', sections: [{ heading: 'Why we spoke' }, { heading: 'What they said' }, { heading: 'Follow-ups', todo: true }] },
+  { id: 'discovery', label: 'Discovery', title: 'Discovery call', sections: [{ heading: 'Their goal' }, { heading: 'What gets in the way' }, { heading: 'Who decides, and when' }, { heading: 'Budget' }, { heading: 'Next steps', todo: true }] },
+];
+/** A template as the editor's document, with the plain text beside it for search and previews. */
+export function noteFromTemplate(t: NoteTemplate): { readonly title: string; readonly body: string; readonly doc: import('@tiptap/react').JSONContent } {
+  const content = t.sections.flatMap((x) => [
+    { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: x.heading }] },
+    x.todo ? { type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] } : { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }] },
+  ]);
+  return { title: t.title, body: t.sections.map((x) => x.heading).join('\n'), doc: { type: 'doc', content } };
+}
+
 /** How a task repeats. */
 export type TaskRepeat = 'day' | 'weekday' | 'week' | 'month';
 /** The repeat rules, as people say them. */

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import { BellRing, Check, Minus, Plus, Receipt, ShoppingBag, Trash2, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { SearchField } from '../SearchField/SearchField.tsx';
@@ -91,11 +91,15 @@ export interface MenuPageProps {
   readonly isPreview?: boolean;
   /** Under everything (Powered by Timefix). */
   readonly foot?: ReactNode;
+  /** From a table's QR: "Call a waiter" and "Ask for the bill" under the menu's name; each says it's on its way once sent. */
+  readonly onRequest?: (kind: 'waiter' | 'bill') => void;
+  /** What this table has asked for and staff haven't done yet. */
+  readonly requested?: ReadonlyArray<'waiter' | 'bill'>;
 }
 
 /** A restaurant's public menu at timefix.com/<handle>/menu: a menu switcher, search and dietary filters, sections as pills, dishes with
  *  photos, a sheet for sizes and add-ons, and a selection to show the server. Nothing is ordered or sent from the page. */
-export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, money = inr, onBookTable, isPreview = false, foot }: MenuPageProps) {
+export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, money = inr, onBookTable, isPreview = false, foot, onRequest, requested = [] }: MenuPageProps) {
   const live = menus.filter((m) => m.isLive && m.sections.some((s) => s.dishIds.length > 0));
   const firstServing = live.find((m) => servingNow(m, now)) ?? live[0];
   const [menuId, setMenuId] = useState(firstServing?.id);
@@ -139,6 +143,15 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
             items={live.map((m) => ({ id: m.id, label: m.name }))} />
         )}
       </header>
+      {table && onRequest && (
+        <div className="tf-menupage__ask" role="group" aria-label={`Table ${table}`}>
+          {(['waiter', 'bill'] as const).map((k) => {
+            const sent = requested.includes(k);
+            return <Button key={k} variant={sent ? 'secondary' : k === 'bill' ? 'primary' : 'secondary'} isDisabled={sent} icon={sent ? <Check size={16} strokeWidth={2} /> : k === 'waiter' ? <BellRing size={16} strokeWidth={1.75} /> : <Receipt size={16} strokeWidth={1.75} />}
+              onPress={() => onRequest(k)}>{sent ? (k === 'waiter' ? 'Someone’s coming' : 'Bill on its way') : k === 'waiter' ? 'Call a waiter' : 'Ask for the bill'}</Button>;
+          })}
+        </div>
+      )}
       {cover && <img className="tf-menupage__cover" src={cover} alt="" />}
       <div className="tf-menupage__brand">
         <h1 className="tf-menupage__title">{menu.name}</h1>

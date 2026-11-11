@@ -1,6 +1,7 @@
 // The "You" pages: Inbox (mentions, replies, assignments and booking notices; Done keeps the handled ones), Tasks (grouped by when
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
 import { useEffect, useState } from 'react';
+import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { Plus, X } from 'lucide-react';
 import { SearchField } from '../SearchField/SearchField.tsx';
 import { NotificationList } from '../NotificationList/NotificationList.tsx';
@@ -18,7 +19,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { parseDate } from '@internationalized/date';
 import { Inbox, CheckSquare, ChevronRight, NotebookPen } from 'lucide-react';
 import { Button as AriaButton, Disclosure, DisclosurePanel } from 'react-aria-components';
-import { REPEATS, isEmptyNote, newId, type TaskRepeat, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
+import { NOTE_TEMPLATES, REPEATS, isEmptyNote, newId, noteFromTemplate, type TaskRepeat, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
 
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -200,6 +201,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
   const [openId, setOpenId] = useState<string | undefined>(openNote);
   const [picking, setPicking] = useState(false);
   const [rec, setRec] = useState('');
+  const [template, setTemplate] = useState('blank');
   const [noteQuery, setNoteQuery] = useState('');
   const note = state.notes.find((n) => n.id === openId);
   if (note) {
@@ -232,9 +234,12 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
         <Dialog isOpen onOpenChange={(o) => { if (!o) setPicking(false); }} title="New note" description="Every note sits on a record, so the team finds it there too."
           actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!rec} onPress={() => {
             const [o, i] = rec.split(':') as [ObjectId, string];
-            const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, record: { object: o, id: i }, updated: new Date() };
+            const tpl = NOTE_TEMPLATES.find((x) => x.id === template);
+            const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, record: { object: o, id: i }, updated: new Date(), ...(tpl ? noteFromTemplate(tpl) : {}) };
             dispatch({ type: 'note/set', note: n }); setPicking(false); setOpenId(n.id);
           }}>Start writing</Button></>}>
+          <ChoiceChips label="Start from" selectionMode="single" size="sm" selectedKeys={[template]} onSelectionChange={(k) => setTemplate([...k][0] ?? 'blank')}
+            items={[{ id: 'blank', label: 'Blank' }, ...NOTE_TEMPLATES.map((t) => ({ id: t.id, label: t.label }))]} />
           <Select label="On" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="Pick a person, company or deal"
             items={[...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))]} />
         </Dialog>

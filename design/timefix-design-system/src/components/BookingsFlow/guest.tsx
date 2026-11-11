@@ -41,6 +41,8 @@ export interface GuestPlayerProps {
   readonly onBooked: (page: BookingPage, r: BookingRequest & { readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => boolean | void;
   /** A restaurant guest asked to be told when a table frees up. */
   readonly onWaitlist?: OnWaitlist;
+  /** A guest at a table (from its QR menu) calls a waiter or asks for the bill. */
+  readonly onTableRequest?: (tableId: string, kind: 'waiter' | 'bill') => void;
   readonly onGuestCancel: (m: BookedMeeting, reason: string) => void;
   readonly onGuestMove: (m: BookedMeeting, start: Date) => boolean | void;
   /** The guest changes the booking they just made, on its success screen: the host side gets the change, not the original. */
@@ -51,7 +53,7 @@ export type BookedChange = { readonly kind: 'cancel' } | { readonly kind: 'move'
 
 /** Guest mode: the admin app steps aside for the public page exactly as a guest sees it, on the canvas, with a slim bar to switch
  *  Desktop / Phone and get Back to Bookings. Esc goes back too (unless a picker inside the page is open). */
-export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: GuestPlayerProps) {
+export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist, onTableRequest }: GuestPlayerProps) {
   const [device, setDevice] = useState<'desktop' | 'phone'>('desktop');
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -80,7 +82,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
       </header>
       <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || scenario === 'menu' || (scenario === 'book' && page?.kind === 'table') || undefined}>
         <div className="tf-bkf-guestmode__frame" data-device={device}>
-          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} table={play.table} prefill={play.prefill} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />
+          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} table={play.table} prefill={play.prefill} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} onTableRequest={onTableRequest} />
         </div>
       </main>
     </div>
@@ -101,7 +103,7 @@ function GuestCard({ children, align = 'center' }: { readonly children: ReactNod
   );
 }
 
-function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist'>) {
+function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist, onTableRequest }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist' | 'onTableRequest'>) {
   if (scenario === 'hidden' || (!page.isOn && scenario === 'book')) {
     return <GuestCard><EmptyState size="sm" icon={<EyeOff size={20} strokeWidth={1.75} />} title="This page isn't taking bookings right now" description={`${first(page.owner)} has paused ${page.name}. Try again later, or email them.`}
       action={<ContactOwner owner={page.owner} email={`${first(page.owner).toLowerCase()}@${state.business ? `${handleOf(state)}.com` : 'northwind.com'}`} />} /></GuestCard>;
@@ -115,14 +117,14 @@ function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, on
   if (scenario === 'offered') return <Offered page={page} state={state} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
   if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />;
-  if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} startOnMenu table={table} />;
+  if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} startOnMenu table={table} onTableRequest={onTableRequest} />;
   // A table page's own link opens the restaurant's page with the table card, as booking sites do.
   if (page.kind === 'table') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />;
   return <Book page={page} state={state} onBooked={onBooked} onBookedChange={onBookedChange} failFirst={scenario === 'taken'} prefill={prefill} />;
 }
 
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
-function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMenu = false, table }: { readonly owner: string; readonly state: BookingsState; readonly startOnMenu?: boolean; readonly table?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onBookedChange' | 'onWaitlist'>) {
+function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMenu = false, table, onTableRequest }: { readonly owner: string; readonly state: BookingsState; readonly startOnMenu?: boolean; readonly table?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onBookedChange' | 'onWaitlist' | 'onTableRequest'>) {
   const [open, setOpen] = useState<string>();
   // The menu link and the venue page lead to each other: "See the full menu" one way, "Book a table" the other.
   const [onMenu, setOnMenu] = useState(startOnMenu);
@@ -141,7 +143,8 @@ function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMe
     const now = new Date();
     return (
       <MenuPage venue={state.workspace} line={state.business?.address} cover={state.business?.photos[0]} menus={live?.menus ?? []} dishes={live?.dishes ?? []} addOns={live?.addOns ?? []}
-        table={at?.name.replace(/^T/, '')} now={now.getHours() * 60 + now.getMinutes()} onBookTable={state.pages.some((p) => p.kind === 'table' && p.isOn) ? () => setOnMenu(false) : undefined} foot={<PoweredBy />} />
+        table={at?.name.replace(/^T/, '')} now={now.getHours() * 60 + now.getMinutes()} onBookTable={state.pages.some((p) => p.kind === 'table' && p.isOn) ? () => setOnMenu(false) : undefined} foot={<PoweredBy />}
+        onRequest={at && onTableRequest ? (k) => onTableRequest(at.id, k) : undefined} requested={(state.tableRequests ?? []).filter((r) => r.tableId === at?.id).map((r) => r.kind)} />
     );
   }
   return <VenueGuest state={state} onBooked={onBooked} onWaitlist={onWaitlist} onOpenPage={(p) => setOpen(p.id)} onOpenMenu={() => setOnMenu(true)} />;

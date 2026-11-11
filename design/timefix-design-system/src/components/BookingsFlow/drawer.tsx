@@ -86,6 +86,11 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
             : <Button variant="primary" onPress={() => { onUpdate({ ...m, status: 'completed' }); toast({ message: 'Finished', tone: 'success', action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Finish</Button>}
         {!m.arrivedAt && <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel</Button>}
         <span className="tf-bkf__muted tf-num">{m.startedAt ? `Started ${m.startedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : m.arrivedAt ? `Here since ${m.arrivedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : ''}</span>
+      </span> : m.status === 'no-show' ? <span className="tf-bkf__row">
+        {/* A no-show gets one easy way back: the page's link in an email, once (Calendly's and Chili Piper's no-show follow-up). */}
+        {m.activity.some((a) => a.text.startsWith('Rebook link sent'))
+          ? <span className="tf-bkf__muted">Link to book again sent to {first(m.invitee.name)}</span>
+          : <Button variant="secondary" icon={<Link2 {...i14} />} onPress={() => { onUpdate({ ...m, activity: [...m.activity, { id: `a-${Date.now()}`, text: `Rebook link sent to ${m.invitee.email || m.invitee.name}`, at: new Date() }] }); toast({ message: `${first(m.invitee.name)} gets an email with a link to book again`, tone: 'success' }); }}>Send a link to book again</Button>}
       </span> : open && !past ? <span className="tf-bkf__row">
         <Button variant="secondary" onPress={() => onReschedule(m)}>Reschedule</Button>
         <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel meeting</Button>

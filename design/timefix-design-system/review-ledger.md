@@ -402,3 +402,9 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Inbox snooze: NotificationList onSnooze + snoozeTimes (later today rounded to the half hour, tomorrow 9, next Monday 9); InboxItem.snoozedUntil; Snoozed box with "Back …" times; comes back unread; Undo. Walk w10.
 - Insights share: AppState.insightsLink (key, expiry 30 days or none), ShareInsights popover with Copy and Stop sharing (Undo). Walk w10.
 - regress made clock-proof: manage move accepts the cut-off refusal; taken clears books a day ahead. Full suite green at 12:14.
+
+## Wave 11 (11 Nov)
+- Table requests: MenuPage onRequest/requested (Call a waiter, Ask for the bill from a table's QR), BookingsState.tableRequests + request/add|done (one open ask per kind per table), Reservations asks strip (Done with Undo) and Floor tile tags.
+- No-show rebook: a no-show's drawer offers Send a link to book again once, logged on the meeting.
+- Note templates: NOTE_TEMPLATES + noteFromTemplate (Meeting, Call, Discovery), Start from chips in New note.
+- A machine restart wiped the scratch folders mid-wave 12: wave 11's source was re-applied from the session record; its artifacts had already been published (Timefix v23, Bookings v51, Business v25, DS v46).

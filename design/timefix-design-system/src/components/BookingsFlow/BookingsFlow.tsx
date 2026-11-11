@@ -507,6 +507,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         onFinish={finishSetup} onSignOut={() => { setOnboarding(false); dispatch({ type: 'reset', state: northwind() }); }} />
     ) : guest ? (
       <GuestMode play={guest} state={guestState} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
+        onTableRequest={(tableId, kind) => dispatch({ type: 'request/add', request: { id: nextId('rq'), tableId, kind, at: new Date() } })}
         onWaitlist={(w) => dispatch({ type: 'waitlist/set', waitlist: [...(state.waitlist ?? []), { id: nextId('w'), name: w.name, phone: w.phone, party: w.party, day: w.day, wanted: w.wanted, added: new Date(), online: true }] })}
         onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled', cancelledBy: 'guest', cancelReason: reason || undefined }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
         onGuestMove={(m, start) => {
