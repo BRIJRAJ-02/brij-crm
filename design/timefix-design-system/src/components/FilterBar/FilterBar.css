@@ -1,6 +1,5 @@
 .tf-fbar { display: flex; flex-direction: column; gap: var(--space-8); font: 400 14px/20px var(--font-sans); color: var(--text); }
 .tf-fbar__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); min-height: var(--size-control-sm); }
-.tf-fbar__spacer { flex: 1; }
 
 /* A filter chip: "Stage · is · Qualified ×", each part its own hit area, one hairline pill. */
 .tf-fbar__chipwrap { position: relative; display: inline-flex; }

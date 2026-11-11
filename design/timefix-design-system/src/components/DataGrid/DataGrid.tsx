@@ -318,7 +318,7 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
             if (d !== undefined) commit(editRow.id, editCol.id, d.trim()); else setEditing(undefined);
           }}
           placement="bottom start"
-          offset={-44}
+          offset={-editing.anchor.getBoundingClientRect().height}
           className="tf-grid__editor"
           {...((editCol.type === 'select' || editCol.type === 'status') && !editCol.attribute ? {} : { label: `Edit ${editCol.name}` })}
         >

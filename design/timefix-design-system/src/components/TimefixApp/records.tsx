@@ -284,6 +284,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
 
   return (
     <div className="tf-rec">
+      <div className="tf-rec__main">
       <div className="tf-rec__bar">
         {/* One view menu: pick a view, or act on this one. Layout and search sit beside it; the view's unsaved changes sit with the filters below. */}
         <MenuTrigger>
@@ -388,12 +389,13 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
           })) : grid(sorted, { summary })}
         </div>
       )}
+      </div>
+      </div>
       {peek !== undefined && !peekGone && <RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={w.One} recordKey={peek ?? ''}
         label={String((sorted[peekIndex] ?? all.find((r) => r.id === peek))?.values.name ?? '')} onExpand={() => { if (peek) onOpen(object, peek); }}
         position={peekIndex >= 0 ? { index: peekIndex + 1, total: sorted.length, onPrevious: () => setPeek(sorted[Math.max(0, peekIndex - 1)]?.id), onNext: () => setPeek(sorted[Math.min(sorted.length - 1, peekIndex + 1)]?.id) } : undefined}>
         {peek && <PeekBody state={state} object={object} id={peek} onCell={(c, v) => setCell(peek, c, v)} onOpen={onOpen} />}
       </RecordPanel>}
-      </div>
       <BulkActionBar count={ids.length} onClear={() => setSelected(new Set())}>
         {ids.length < sorted.length && <BarButton icon={<ListChecks {...i16} />} onPress={() => setSelected('all')}>Select all {sorted.length}</BarButton>}
         {!canEdit && <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>}
@@ -485,7 +487,7 @@ function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppSt
     if (!rec) return null;
     return (
       <div className="tf-rec__peek">
-        <div className="tf-rec__peekhead"><Avatar name={rec.name} size={44} shape="square" /><span><strong>{rec.name}</strong><span className="tf-rec__muted">{wordsOf(state, object).One}</span></span></div>
+        <div className="tf-rec__peekhead"><Avatar name={rec.name} size={44} shape="square" /><span className="tf-rec__peektext"><strong>{rec.name}</strong><span className="tf-rec__muted">{wordsOf(state, object).One}</span></span></div>
         {row(ownerAttr, { id: rec.owner, name: rec.owner }, 'owner')}
         {extras}
       </div>
@@ -497,7 +499,7 @@ function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppSt
     const deals = state.deals.filter((d) => d.contactId === p.id);
     return (
       <div className="tf-rec__peek">
-        <div className="tf-rec__peekhead"><Avatar name={p.name} size={44} /><span><strong>{p.name}</strong><span className="tf-rec__muted">{[p.title, co?.name].filter(Boolean).join(' · ')}</span></span></div>
+        <div className="tf-rec__peekhead"><Avatar name={p.name} size={44} /><span className="tf-rec__peektext"><strong>{p.name}</strong><span className="tf-rec__muted">{[p.title, co?.name].filter(Boolean).join(' · ')}</span></span></div>
         {row({ id: 'email', name: 'Email', type: 'email' }, p.email, 'email')}
         {row({ id: 'phone', name: 'Phone', type: 'phone' }, p.phone, 'phone')}
         {row({ id: 'title', name: 'Job title', type: 'text' }, p.title, 'title')}

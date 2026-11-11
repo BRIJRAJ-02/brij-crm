@@ -30,7 +30,8 @@
 }
 /* Records: one toolbar, the then the table or board filling the page. */
 .tf-app__body:has(> .tf-app__keep:not([hidden]) > .tf-rec) { display: flex; flex-direction: column; padding-bottom: var(--space-16); }
-.tf-rec { display: flex; flex: 1; flex-direction: column; gap: var(--space-12); min-height: 0; }
+.tf-rec { display: flex; flex: 1; gap: var(--space-16); min-height: 0; }
+.tf-rec__main { display: flex; flex: 1; flex-direction: column; gap: var(--space-12); min-width: 0; min-height: 0; }
 .tf-rec__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .tf-rec__view { max-width: calc(var(--size-menu) * 1.2); }
 .tf-rec__view > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -45,7 +46,7 @@
 .tf-rec__grid, .tf-rec__board { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 .tf-rec__peek { display: flex; flex-direction: column; gap: var(--space-4); }
 .tf-rec__peekhead { display: flex; align-items: center; gap: var(--space-12); margin-bottom: var(--space-12); }
-.tf-rec__peekhead > span { display: flex; flex-direction: column; min-width: 0; }
+.tf-rec__peektext { display: flex; flex-direction: column; min-width: 0; }
 .tf-rec__peekhead strong { color: var(--text); font: 600 17px/24px var(--font-sans); }
 .tf-rec__rel { display: flex; align-items: center; gap: var(--space-8); width: 100%; min-height: var(--size-row); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md); background: none; color: var(--text); font: 500 14px/20px var(--font-sans); text-align: left; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .tf-rec__rel:hover { background: var(--surface-hover); } }

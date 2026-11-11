@@ -177,7 +177,6 @@ export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSort
             </span>
           </span>
         ))}
-        <span className="tf-fbar__spacer" />
         {onSortsChange && <SortPills fields={fields} sorts={sorts} onSortsChange={onSortsChange} />}
         {columns && onColumnsChange && <ViewSettings columns={columns} onColumnsChange={onColumnsChange} density={density} onDensityChange={onDensityChange} extra={viewOptions} />}
       </div>
