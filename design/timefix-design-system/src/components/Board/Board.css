@@ -1,4 +1,4 @@
-.tf-board { display: flex; align-items: flex-start; gap: var(--space-12); overflow-x: auto; padding-bottom: var(--space-4); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-board { display: flex; align-items: stretch; min-height: 100%; gap: var(--space-12); overflow-x: auto; padding-bottom: var(--space-4); font: 400 14px/20px var(--font-sans); color: var(--text); }
 
 /* A column is a grey shell (6px padding, radius-xl) of white radius-lg cards. Folding eases its width (01 card resize). */
 .tf-board__col {
@@ -39,8 +39,8 @@
 .tf-board__status--blue { color: var(--tag-blue-text); }
 .tf-board__status--purple { color: var(--tag-purple-text); }
 
-.tf-board__list { display: flex; flex-direction: column; min-height: var(--size-control-lg); padding: 0; outline: none; border-radius: var(--radius-lg); transition: box-shadow var(--duration-quick) var(--ease-out); }
-/* The whole column is the target (an empty column, or below the last card). */
+.tf-board__list { display: flex; flex: 1; flex-direction: column; min-height: var(--size-control-lg); padding: 0; outline: none; border-radius: var(--radius-lg); transition: box-shadow var(--duration-quick) var(--ease-out); }
+/* Every lane runs the board's full height and its list fills it, so a card drops anywhere down the lane: on a card's edge to slot it there, anywhere else to put it last. */
 .tf-board__list[data-drop-target] { box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
 .tf-board__empty {
   display: grid; place-items: center; height: calc(var(--size-row) * 1.5); border-radius: var(--radius-lg);

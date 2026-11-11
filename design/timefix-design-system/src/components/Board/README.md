@@ -11,3 +11,5 @@ A kanban board: a column per status, white cards that move between and within co
 **Production note**: virtualise long columns with RAC's `Virtualizer` and a `ListLayout`.
 
 **Replaces**: Board.
+
+**Lanes**: every lane runs the board's full height (the tallest lane, or the space the screen gives the board), and the whole lane takes a drop: between cards slots it there, anywhere below the last card puts it last.

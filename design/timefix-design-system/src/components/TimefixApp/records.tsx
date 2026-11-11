@@ -391,11 +391,11 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       )}
       </div>
       </div>
-      {peek !== undefined && !peekGone && <RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={w.One} recordKey={peek ?? ''}
+      {peek !== undefined && !peekGone && <div className="tf-rec__peekdock"><RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={w.One} recordKey={peek ?? ''}
         label={String((sorted[peekIndex] ?? all.find((r) => r.id === peek))?.values.name ?? '')} onExpand={() => { if (peek) onOpen(object, peek); }}
         position={peekIndex >= 0 ? { index: peekIndex + 1, total: sorted.length, onPrevious: () => setPeek(sorted[Math.max(0, peekIndex - 1)]?.id), onNext: () => setPeek(sorted[Math.min(sorted.length - 1, peekIndex + 1)]?.id) } : undefined}>
         {peek && <PeekBody state={state} object={object} id={peek} onCell={(c, v) => setCell(peek, c, v)} onOpen={onOpen} />}
-      </RecordPanel>}
+      </RecordPanel></div>}
       <BulkActionBar count={ids.length} onClear={() => setSelected(new Set())}>
         {ids.length < sorted.length && <BarButton icon={<ListChecks {...i16} />} onPress={() => setSelected('all')}>Select all {sorted.length}</BarButton>}
         {!canEdit && <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>}
@@ -516,7 +516,7 @@ function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppSt
     const deals = state.deals.filter((d) => d.companyId === c.id);
     return (
       <div className="tf-rec__peek">
-        <div className="tf-rec__peekhead"><Avatar name={c.name} size={44} shape="square" /><span><strong>{c.name}</strong><span className="tf-rec__muted">{[c.domain, c.city].filter(Boolean).join(' · ')}</span></span></div>
+        <div className="tf-rec__peekhead"><Avatar name={c.name} size={44} shape="square" /><span className="tf-rec__peektext"><strong>{c.name}</strong><span className="tf-rec__muted">{[c.domain, c.city].filter(Boolean).join(' · ')}</span></span></div>
         {row({ id: 'domain', name: 'Domain', type: 'domain' }, c.domain, 'domain')}
         {row({ id: 'industry', name: 'Industry', type: 'select', options: objectDef('companies', state).columns.find((x) => x.id === 'industry')?.options?.map((o) => ({ id: o.id, label: o.label, hue: o.hue ?? 'gray' })) ?? [] }, c.industry, 'industry')}
         {row({ id: 'size', name: 'Employees', type: 'text' }, c.size, 'size')}
@@ -532,7 +532,7 @@ function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppSt
   const open = isOpenDeal(state, d); const days = Math.max(0, Math.floor((Date.now() - (d.stageAt ?? d.created).getTime()) / 86_400_000));
   return (
     <div className="tf-rec__peek">
-      <div className="tf-rec__peekhead"><Avatar name={co?.name ?? d.name} size={44} shape="square" /><span><strong>{d.name}</strong><span className="tf-rec__muted tf-num">{[co?.name, d.amount ? inr(d.amount) : ''].filter(Boolean).join(' · ')}</span></span></div>
+      <div className="tf-rec__peekhead"><Avatar name={co?.name ?? d.name} size={44} shape="square" /><span className="tf-rec__peektext"><strong>{d.name}</strong><span className="tf-rec__muted tf-num">{[co?.name, d.amount ? inr(d.amount) : ''].filter(Boolean).join(' · ')}</span></span></div>
       {row({ id: 'stage', name: 'Stage', type: 'status', options: stagesOf(state).map((x) => ({ id: x.id, label: x.label, hue: STAGE_LOOK[x.id as Stage]?.hue ?? 'gray', shape: STAGE_LOOK[x.id as Stage]?.status })) }, d.stage, 'stage')}
       {row({ id: 'amount', name: 'Amount', type: 'currency', currency: 'INR' }, d.amount, 'amount')}
       {row({ id: 'close', name: 'Close date', type: 'date' }, ymd(d.close), 'close')}

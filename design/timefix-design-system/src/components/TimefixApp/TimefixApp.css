@@ -30,7 +30,9 @@
 }
 /* Records: one toolbar, the then the table or board filling the page. */
 .tf-app__body:has(> .tf-app__keep:not([hidden]) > .tf-rec) { display: flex; flex-direction: column; padding-bottom: var(--space-16); }
-.tf-rec { display: flex; flex: 1; gap: var(--space-16); min-height: 0; }
+/* The record panel floats over the page's right side, full height, so opening it never reflows the table or board. */
+.tf-rec { position: relative; display: flex; flex: 1; min-height: 0; }
+.tf-rec__peekdock { position: absolute; top: 0; right: 0; bottom: 0; display: flex; max-width: 100%; z-index: var(--z-drawer); }
 .tf-rec__main { display: flex; flex: 1; flex-direction: column; gap: var(--space-12); min-width: 0; min-height: 0; }
 .tf-rec__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .tf-rec__view { max-width: calc(var(--size-menu) * 1.2); }
