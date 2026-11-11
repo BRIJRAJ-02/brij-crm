@@ -2,6 +2,7 @@
 // Settings (layout, where answers go, what happens after), Share (link and embeds), Responses (with Add to People, spam, delete + Undo),
 // Results (views, finishes, where people stop). Edits are a draft until Publish; the visitor's page is HostedForm itself.
 import { useGuestScale } from '../../lib/guest-scale.ts';
+import { BarList } from '../Chart/Chart.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { PublishBar } from '../FloatingBar/FloatingBar.tsx';
 import { ArrowLeft, Palette, ChevronDown, ChevronUp, Copy, Download, FileText, MoreHorizontal, Pause, Play, Plus, QrCode as QrIcon, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
@@ -396,11 +397,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
                 return (
                   <div key={q.id} className="tf-forms__sum">
                     <h4 className="tf-forms__sumq">{q.title} <span className="tf-rec__muted tf-num">{got.length} {got.length === 1 ? 'answer' : 'answers'}</span></h4>
-                    {counts.length === 0 ? <p className="tf-rec__muted">No one has answered this yet.</p> : <ul className="tf-forms__drop">
-                      {counts.map(([v, n]) => { const pct = Math.round((n / Math.max(1, got.length)) * 100); return (
-                        <li key={v}><span>{v}</span><span className="tf-forms__bar" aria-hidden><span data-w={Math.round(pct / 10) * 10} /></span><span className="tf-num tf-rec__muted">{n} · {pct}%</span></li>
-                      ); })}
-                    </ul>}
+                    {counts.length === 0 ? <p className="tf-rec__muted">No one has answered this yet.</p> : <BarList label={`Answers to ${q.title}`} items={counts.map(([v, n]) => ({ id: v, label: v, value: n }))} />}
                   </div>
                 );
               })}

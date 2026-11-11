@@ -7,28 +7,31 @@ Five read-only audits (CRM core, scheduling, grow + hospitality, settings + auth
 Real app paths: R = apps/web/src/features. Prototype paths: P = tfds/src/components.
 
 ## Breakage sweep (rt/every.mjs, 45 pages x 3 workspaces, 278 popups opened)
-- [ ] Salon › Meetings team day: "Haircut and blow dry" cut off vertically in a short block
-- [ ] Stacked toasts: Undo and Dismiss buttons sit on top of each other (salon Links/Forms/Insights)
+- [x] Salon › Meetings team day: "Haircut and blow dry" cut off vertically in a short block
+- [x] Stacked toasts: the overlap is the stack itself (older toasts sit behind the newest by design); nothing to fix
 - No page scrolls, nothing off screen, no popup outside the window (light, dark, 1440)
 
 ## Wave A: house rules (shows everywhere)
-- [ ] No press scale: remove every [data-pressed]/:active transform (Button.css:10,18, Checkbox.css:6, Card.css:54, BookingsFlow.css:117,179,441 and ~50 more); --scale-press: 1; fix CONVENTIONS.md
-- [ ] No blur in motion (48 CSS files: Drawer, Toast, StepDialog pages, BookingsFlow accordion/page slides/icon swaps, AuthLayout, Onboarding...): opacity + translate only
-- [ ] Undefined tokens: --warning-text (BookingsFlow.css:891,899), --text-muted (Board.css:12)
-- [ ] Create sheet (BF/create.tsx:183, BookingsFlow.css:85-103) is a hand-made modal: use Dialog (add a divider-footer variant if needed)
-- [ ] Sign-in door (TimefixApp/auth.tsx:58) is a hand-made modal with no focus trap: full-screen Dialog size at --z-modal
-- [ ] Three link styles (.tf-rec__link, .tf-bkf__textbtn, Link): one Link with onPress
+- [x] No press scale: remove every [data-pressed]/:active transform (Button.css:10,18, Checkbox.css:6, Card.css:54, BookingsFlow.css:117,179,441 and ~50 more); --scale-press: 1; fix CONVENTIONS.md
+- [x] No blur in motion (48 CSS files: Drawer, Toast, StepDialog pages, BookingsFlow accordion/page slides/icon swaps, AuthLayout, Onboarding...): opacity + translate only
+- [x] Undefined tokens: --warning-text (BookingsFlow.css:891,899), --text-muted (Board.css:12)
+- [x] Create sheet (BF/create.tsx:183, BookingsFlow.css:85-103) is a hand-made modal: use Dialog (add a divider-footer variant if needed)
+- [x] Sign-in door (TimefixApp/auth.tsx:58) is a hand-made modal with no focus trap: full-screen Dialog size at --z-modal
+- [x] Three link styles (.tf-rec__link, .tf-bkf__textbtn, Link): one Link with onPress
 - [ ] Choice tiles copied (.tf-bkf-tile, .tf-door__choice, .tf-forms__tpl): TileGrid (+ compact variant)
-- [ ] Section cards differ (.tf-bkf-card radius-xl, .tf-you__card): Card / SettingsSection
-- [ ] Team day events: second event design with a coloured stripe and hand-made chip; also .tf-bkf-svc::before, .tf-bkf-profile__dot stripes
-- [ ] Hand-drawn bar charts (forms.tsx:401,440, insights.tsx:149,172): BarList / Meter
-- [ ] Empty / no-match states in four styles: EmptyState size="sm" and NoResults
-- [ ] Toolbars two sizes (records small vs you/availability/menu medium); availability saved hours in a SegmentedControl -> Select
+- [x] Section cards differ (.tf-bkf-card radius-xl, .tf-you__card): Card / SettingsSection
+- [x] Team day events: second event design with a coloured stripe and hand-made chip; also .tf-bkf-svc::before, .tf-bkf-profile__dot stripes
+- [x] Hand-drawn bar charts (forms.tsx:401,440, insights.tsx:149,172): BarList / Meter
+- [x] Empty / no-match states in four styles: EmptyState size="sm" and NoResults
+- [x] Toolbars two sizes (records small vs you/availability/menu medium); availability saved hours in a SegmentedControl -> Select
 - [ ] Hand copies: .tf-bkf-guestmode__back pill -> Button secondary sm; Settings › Brand redraws a booking page -> GuestLook
 - [ ] Screen CSS reaching into library parts: BookingsFlow.css:536-547 (.tf-btn__label, .tf-seg__item), TimefixApp.css:108-112 (.tf-qbuilder), :352 (.tf-hform--look), BookingsFlow.css:652 hides the service Switch below 46rem
-- [ ] Raw values: z-index 40/2/30/1, opacity .7/.8/.85/.4, 1px borders/shadows, 56px logo, bare font-size, color: var(--surface) on danger/brand fills
-- [ ] :hover without (hover: hover) guard (TimefixApp.css:52,100,123,208,239,259,329; BookingsFlow.css:178,224,632,677,697,746,817,852)
+- [x] Raw values: z-index 40/2/30/1, opacity .7/.8/.85/.4, 1px borders/shadows, 56px logo, bare font-size, color: var(--surface) on danger/brand fills
+- [x] :hover without (hover: hover) guard (TimefixApp.css:52,100,123,208,239,259,329; BookingsFlow.css:178,224,632,677,697,746,817,852)
 - Note for the port: the prototype's token set (tokens.json v2) has 53 tokens packages/tokens lacks; sync through the artifact before porting
+
+Wave A notes: bar charts done for form answers (funnels keep their own drop-off rows, a different chart); empty states done for notes, links, roster, reservations, teams; toolbars small in Inbox, Tasks, Menu, Availability; guest-mode back is the library Button.
+Wave A left: choice tiles to TileGrid, Brand preview to GuestLook, phone-only reach-ins (.tf-btn__label, .tf-seg__item, .tf-qbuilder, .tf-hform--look).
 
 ## Wave B: CRM core
 - [ ] Automations: list with on/off, builder (When / Only if / Then: create task, set field, notify), runs history (R/automations)

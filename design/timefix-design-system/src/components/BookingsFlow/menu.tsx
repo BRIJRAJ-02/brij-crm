@@ -75,7 +75,7 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
         start={<>
           {menu && <Select label="Menu" isLabelHidden className="tf-bkf__whose" value={menu.id} onChange={(v) => { if (v === 'new') setNaming(true); else if (v) setMenuId(v); }}
             items={[...book.menus.map((m) => ({ id: m.id, label: m.isLive ? m.name : `${m.name} · hidden` })), { id: 'new', label: 'New menu…' }]} />}
-          <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={(k) => setView(k === 'qr' ? 'qr' : 'dishes')}
+          <SegmentedControl aria-label="View" size="sm" selectedKey={view} onSelectionChange={(k) => setView(k === 'qr' ? 'qr' : 'dishes')}
             items={[{ id: 'dishes', label: 'Dishes', icon: <UtensilsCrossed {...i14} /> }, { id: 'qr', label: 'QR codes', icon: <QrIcon {...i14} /> }]} />
         </>}
         count={changes.length > 0 ? `Not published: ${changes.join(', ')}` : 'Guests see what’s here'}

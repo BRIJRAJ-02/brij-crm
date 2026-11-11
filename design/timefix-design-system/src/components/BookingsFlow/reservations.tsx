@@ -3,7 +3,7 @@
 import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban, BellRing, Receipt } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban, BellRing, Receipt } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -194,7 +194,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
               return at0 ? ` · busiest ${formatClock(at0[0])}, ${at0[1]} of ${cap}` : null;
             })()}</span></h3>
             {rows.length > 0 && <PaceStrip state={state} page={page} day={day} shift={s} now={isToday ? now : undefined} />}
-            {rows.length === 0 ? <p className="tf-bkf__muted tf-bkf-res-group__empty">No reservations yet.</p> : <ul className="tf-bkf-res-rows">{rows.map(row)}</ul>}
+            {rows.length === 0 ? <EmptyState size="sm" icon={<CalendarDays size={20} strokeWidth={1.75} />} title="No reservations yet" /> : <ul className="tf-bkf-res-rows">{rows.map(row)}</ul>}
           </section>
         );
       })}

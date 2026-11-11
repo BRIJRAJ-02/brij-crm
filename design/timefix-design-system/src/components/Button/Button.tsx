@@ -1,5 +1,5 @@
 import { Button as AriaButton, type ButtonProps as AriaButtonProps } from 'react-aria-components';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { Spinner } from '../Motion/Motion.tsx';
 import './Button.css';
@@ -19,6 +19,8 @@ export interface ButtonProps extends Omit<AriaButtonProps, 'children' | 'classNa
   readonly iconEnd?: ReactNode;
   readonly children?: ReactNode;
   readonly className?: string;
+  /** The button element, for moving focus to it. */
+  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /** A pill that starts an action. Ink primary, white secondary, grey soft, bare ghost, red danger. */

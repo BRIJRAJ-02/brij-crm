@@ -116,7 +116,7 @@ function SavedHoursSwitch({ state, dispatch, set, onPick: setCurrent }: { readon
   };
   return (
     <>
-          <SegmentedControl aria-label="Saved hours" selectedKey={set.id} onSelectionChange={setCurrent} items={state.savedHours.map((h) => ({ id: h.id, label: h.name }))} />
+          <SegmentedControl aria-label="Saved hours" size="sm" selectedKey={set.id} onSelectionChange={setCurrent} items={state.savedHours.map((h) => ({ id: h.id, label: h.name }))} />
           <Button size="sm" variant="ghost" icon={<Plus {...i14} />} onPress={() => setNaming({ name: '' })}>New</Button>
         <MenuTrigger>
           <IconButton size="sm" label={`More for ${set.name}`}><MoreHorizontal {...i16} /></IconButton>

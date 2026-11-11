@@ -1,6 +1,7 @@
 // Roster: the team's week as a grid of shifts. A shift can change for one date or every week; weeks copy forward;
 // several people's usual hours set at once; each day's totals at the foot; search and a team filter.
 import { useState } from 'react';
+import { NoResults } from '../EmptyState/EmptyState.tsx';
 import { Button as AriaButton, DialogTrigger, type Key } from 'react-aria-components';
 import { CalendarX2, ChevronLeft, ChevronRight, Copy, Globe, MoreHorizontal, RotateCcw, Settings2, Users } from 'lucide-react';
 import { HoursEditor, summarizeHours, HOURS_DAYS, type DayHours, type WeekHours } from '../HoursEditor/HoursEditor.tsx';
@@ -123,7 +124,7 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
             </span>
           ))}
         </div>
-        {people.length === 0 && <p className="tf-bkf__muted tf-bkf-roster__empty">No one matches. Clear the search or pick All teams.</p>}
+        {people.length === 0 && <NoResults size="sm" query={query || undefined} noun="people" onClearFilters={() => { setQuery(''); setTeam('all'); }} />}
         {people.map((name) => {
           const hours = memberHours(state, name);
           return (

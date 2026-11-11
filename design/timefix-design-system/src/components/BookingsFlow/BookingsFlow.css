@@ -15,7 +15,8 @@
 .tf-bkf-sections > * + * { margin-top: var(--space-32); padding-top: var(--space-32); border-top: var(--border-width-hairline) solid var(--border-subtle); }
 /* Cards: each settings section sits in its own white card with a clear edge; cards stack with a 16px gap, no hairlines between. */
 .tf-bkf-cards { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
-.tf-bkf-card { padding: var(--space-20) var(--space-24); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-xs); }
+/* Same surface as the library Card: hairline border-subtle, radius-lg, shadow-xs, 20 padding. */
+.tf-bkf-card { padding: var(--space-20); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
 .tf-bkf-card > .tf-bkf-section { gap: var(--space-16); }
 .tf-bkf-section { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
 .tf-bkf-section__head { display: flex; align-items: flex-start; gap: var(--space-12); }
@@ -277,7 +278,6 @@
 .tf-bkf-roster__hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-16); margin-top: var(--space-12); }
 .tf-bkf-roster__legend { display: inline-flex; align-items: center; gap: var(--space-6); color: var(--text); }
 .tf-bkf-roster__search { width: calc(var(--size-menu) - var(--space-64) - var(--space-16)); }
-.tf-bkf-roster__empty { margin: 0; padding: var(--space-16); }
 /* Each day's totals: who is working and the span the team covers. */
 .tf-bkf-roster__row--foot { border-top: var(--border-width-hairline) solid var(--border); background: var(--surface-subtle); }
 .tf-bkf-roster__foot { display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); min-height: var(--size-row); padding: var(--space-6) var(--space-12); font: 500 12px/16px var(--font-sans); }
@@ -413,10 +413,6 @@
 .tf-bkf-guestmode__bar { display: flex; flex: none; align-items: center; gap: var(--space-12); height: var(--size-control-lg); padding: 0 var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface); }
 .tf-bkf-guestmode__label { display: inline-flex; align-items: center; gap: var(--space-6); font: 500 13px/20px var(--font-sans); white-space: nowrap; }
 .tf-bkf-guestmode__url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-tertiary); font: 400 13px/20px var(--font-sans); }
-.tf-bkf-guestmode__back { display: inline-flex; align-items: center; gap: var(--space-6); height: var(--size-control-sm); padding: 0 var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full);
-  background: var(--surface); color: var(--text); font: 500 13px/20px var(--font-sans); white-space: nowrap; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
-.tf-bkf-guestmode__back[data-hovered] { background: var(--surface-hover); }
-.tf-bkf-guestmode__back[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 /* The guest page sits in the middle of the screen, both ways; tall pages still scroll from the top. */
 .tf-bkf-guestmode__page { display: flex; flex-direction: column; justify-content: safe center; flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-48) var(--space-24); }
 .tf-bkf-guestmode__page[data-device='phone'] { padding: var(--space-24); }
@@ -436,7 +432,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tf-bkf__reveal, .tf-bkf__reveal-clip, .tf-bkf__swapicon > svg, .tf-bkf__scaled, .tf-bkf__slide.is-resizing, .tf-bkf__slide-page, .tf-bkf__pagerow, .tf-bkf__pagerow-inner,
-  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event, .tf-bkf-guestmode__back { transition: none; }
+  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event { transition: none; }
   .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, .tf-bkf__guest-card, .tf-bkf-try__dest { animation: none; }
 }
 
@@ -449,7 +445,8 @@
 .tf-bkf-profile__row[data-hovered] { border-color: var(--border-strong); background: var(--surface-hover); }
 .tf-bkf-profile__row[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
 .tf-bkf-profile__row > svg { flex: none; color: var(--text-tertiary); }
-.tf-bkf-profile__dot { flex: none; width: var(--space-4); align-self: stretch; border-radius: var(--radius-full); background: var(--accent); }
+/* A round colour dot (no side stripes, CONVENTIONS). */
+.tf-bkf-profile__dot { flex: none; width: var(--space-8); height: var(--space-8); align-self: center; border-radius: var(--radius-full); background: var(--accent); }
 .tf-bkf-profile__dot[data-hue="purple"] { background: var(--tag-purple-text); }
 .tf-bkf-profile__dot[data-hue="green"] { background: var(--tag-green-text); }
 .tf-bkf-profile__dot[data-hue="orange"] { background: var(--tag-orange-text); }
@@ -605,7 +602,6 @@
 .tf-bkf-svcs { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
 /* A service card: a colour strip on the left, name and length, price, who does it, then On, Share and more. */
 .tf-bkf-svc { --tf-bkf-svc-hue: var(--dot-blue); position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto auto; align-items: center; gap: var(--space-12); padding: var(--space-12) var(--space-12) var(--space-12) var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
-.tf-bkf-svc::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--space-4); background: var(--tf-bkf-svc-hue); }
 @media (hover: hover) and (pointer: fine) { .tf-bkf-svc:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); } }
 .tf-bkf-svc[data-hue='purple'] { --tf-bkf-svc-hue: var(--dot-purple); }
 .tf-bkf-svc[data-hue='green'] { --tf-bkf-svc-hue: var(--dot-green); }
@@ -625,8 +621,9 @@
   .tf-bkf-menu__cats { position: static; flex-direction: row; overflow-x: auto; padding: var(--space-4); }
   .tf-bkf-menu__title { display: none; }
   .tf-bkf-menu__cat { flex: none; gap: var(--space-6); }
-  .tf-bkf-svc { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .tf-bkf-svc__who, .tf-bkf-svc > .tf-switch { display: none; }
+  /* Narrow: who does it folds away, but the on/off switch stays so a service can still be turned off. */
+  .tf-bkf-svc { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .tf-bkf-svc__who { display: none; }
 }
 /* The workspace link sits on white, like a real site, and its steps start at the top. */
 .tf-bkf-guestmode__page[data-venue] { justify-content: flex-start; background: var(--surface); }
@@ -640,7 +637,6 @@
 .tf-bkf-res-group { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-bkf-res-group__h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12); margin: 0; padding: 0 var(--space-4); color: var(--text); font: 600 15px/22px var(--font-sans); }
 .tf-bkf-res-group__h .tf-bkf__muted { font-weight: 400; }
-.tf-bkf-res-group__empty { padding: var(--space-12) var(--space-16); border: var(--border-width-hairline) dashed var(--border); border-radius: var(--radius-lg); }
 .tf-bkf-res-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
 .tf-bkf-res, .tf-bkf-res-w { display: grid; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16); }
 .tf-bkf-res { grid-template-columns: calc(var(--space-64) + var(--space-12)) minmax(0, 1fr) auto calc(var(--space-64) + var(--space-8)) auto auto; }
@@ -759,13 +755,14 @@
 .tf-bkf-team__whotext { display: flex; flex-direction: column; min-width: 0; }
 .tf-bkf-team__whotext strong { overflow: hidden; color: var(--text); font: 600 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 .tf-bkf-team__whotext span { font: 400 12px/16px var(--font-sans); }
-.tf-bkf-team__event { gap: var(--space-2); border-left: var(--border-width-focus) solid var(--accent); }
-.tf-bkf-team__event[data-standing='booked'] { background: var(--tag-blue-bg); border-left-color: var(--tag-blue-text); }
-.tf-bkf-team__event[data-standing='now'] { background: var(--tag-purple-bg); border-left-color: var(--tag-purple-text); }
-.tf-bkf-team__event[data-standing='done'] { background: var(--tag-green-bg); border-left-color: var(--tag-green-text); }
-.tf-bkf-team__event[data-standing='pending'] { background: var(--surface); border-left-color: var(--tag-orange-text); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); }
-.tf-bkf-team__event[data-standing='noshow'] { background: var(--tag-red-bg); border-left-color: var(--tag-red-text); opacity: var(--opacity-busy); }
-.tf-bkf-team__event .tf-bkf-team__event-title { overflow: hidden; color: var(--text); font: 600 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-team__event { gap: var(--space-2); }
+/* Same event look as WeekCalendar: a tag fill with its text colour, no side stripe. */
+.tf-bkf-team__event[data-standing='booked'] { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
+.tf-bkf-team__event[data-standing='now'] { background: var(--tag-purple-bg); color: var(--tag-purple-text); }
+.tf-bkf-team__event[data-standing='done'] { background: var(--tag-green-bg); color: var(--tag-green-text); }
+.tf-bkf-team__event[data-standing='pending'] { background: var(--surface); color: var(--tag-orange-text); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); }
+.tf-bkf-team__event[data-standing='noshow'] { background: var(--tag-red-bg); color: var(--tag-red-text); opacity: var(--opacity-busy); }
+.tf-bkf-team__event .tf-bkf-team__event-title { overflow: hidden; color: inherit; font: 500 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 .tf-bkf-team__evtop { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; min-width: 0; }
 .tf-bkf-team__evtime { color: var(--text-secondary); font: 400 11px/16px var(--font-sans); white-space: nowrap; }
 .tf-bkf-team__chip { flex: none; padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--surface); color: var(--text-secondary); font: 500 11px/16px var(--font-sans); }
@@ -876,3 +873,9 @@ button.tf-bkf-guest__visit:focus-visible { outline: var(--border-width-focus) so
 .tf-bkf-asks__item[data-kind='bill'] > svg { color: var(--warning); }
 .tf-bkf-floor__asks { display: inline-flex; gap: var(--space-4); margin-left: var(--space-6); vertical-align: middle; }
 @media (prefers-reduced-motion: no-preference) { .tf-bkf-asks__item { animation: tf-bkf-rise var(--duration-fast) var(--ease-smooth-out); } }
+
+/* Team day events show only the lines that fit whole: the box is a size container, so a short booking drops its
+   service line, then its times, instead of cutting a line in half. */
+.tf-bkf-team__event { container: tf-tdevent / size; }
+@container tf-tdevent (max-height: 3.75rem) { .tf-bkf-team__svc { display: none; } }
+@container tf-tdevent (max-height: 2.4rem) { .tf-bkf-team__evtime { display: none; } }

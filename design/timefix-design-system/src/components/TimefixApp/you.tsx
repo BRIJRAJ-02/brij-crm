@@ -1,6 +1,7 @@
 // The "You" pages: Inbox (mentions, replies, assignments and booking notices; Done keeps the handled ones), Tasks (grouped by when
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
 import { useEffect, useState } from 'react';
+import { NoResults } from '../EmptyState/EmptyState.tsx';
 import { Link } from '../Link/Link.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { Plus, X } from 'lucide-react';
@@ -67,7 +68,7 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
   return (
     <div className="tf-you">
       <div className="tf-you__bar">
-        <SegmentedControl aria-label="Box" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : k === 'snoozed' ? 'snoozed' : 'inbox')}
+        <SegmentedControl aria-label="Box" size="sm" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : k === 'snoozed' ? 'snoozed' : 'inbox')}
           items={[{ id: 'inbox', label: `Inbox · ${state.inbox.filter((x) => !x.done && !asleep(x)).length}` }, ...(state.inbox.some(asleep) || box === 'snoozed' ? [{ id: 'snoozed', label: `Snoozed · ${state.inbox.filter(asleep).length}` }] : []), { id: 'done', label: 'Done' }]} />
         <Select label="Kind" isLabelHidden className="tf-you__select" value={kind} onChange={(v) => setKind((v ?? 'all') as typeof kind)}
           items={[{ id: 'all', label: 'Everything' }, { id: 'due', label: 'Tasks due by today' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
@@ -115,7 +116,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
   return (
     <div className="tf-you">
       <div className="tf-you__bar">
-        <SegmentedControl aria-label="Whose tasks" selectedKey={whose} onSelectionChange={(k) => setWhose(k === 'all' ? 'all' : 'mine')} items={[{ id: 'mine', label: 'Mine' }, { id: 'all', label: 'Everyone' }]} />
+        <SegmentedControl aria-label="Whose tasks" size="sm" selectedKey={whose} onSelectionChange={(k) => setWhose(k === 'all' ? 'all' : 'mine')} items={[{ id: 'mine', label: 'Mine' }, { id: 'all', label: 'Everyone' }]} />
         <span className="tf-rec__spacer" />
         <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setEditing('new')}>New task</Button>
       </div>
@@ -228,7 +229,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
         <span className="tf-rec__spacer" />
         <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setPicking(true)}>New note</Button>
       </div>}
-      {all.length > 0 && notes.length === 0 ? <p className="tf-rec__muted">No notes match. <Link onPress={() => setNoteQuery('')}>Clear search</Link></p> : null}
+      {all.length > 0 && notes.length === 0 ? <NoResults size="sm" query={noteQuery} noun="notes" onClearFilters={() => setNoteQuery('')} /> : null}
       {all.length === 0 ? <EmptyState icon={<NotebookPen size={20} strokeWidth={1.75} />} title="No notes yet" description="Notes sit on a person, company or deal." action={<Button size="sm" variant="primary" onPress={() => setPicking(true)}>New note</Button>} />
         : notes.length === 0 ? null : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: n.record ? `${ago(n.updated)} · ${recordName(state, n.record).name}` : ago(n.updated) }))} onOpen={setOpenId} isHeadless />}
       {picking && (

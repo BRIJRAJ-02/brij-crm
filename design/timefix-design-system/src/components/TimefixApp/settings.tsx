@@ -314,7 +314,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         </div>
       </SettingsSection>
       <SettingsSection title="Teams" description="Use teams in round robins and to share views." action={<Button variant="secondary" onPress={() => { setTeamName(''); setTeamMembers([]); setTeamAccess({}); setAsk({ kind: 'team' }); }}>New team</Button>}>
-        {p.teams.length === 0 ? <p className="tf-rec__muted">No teams yet.</p> : <ul className="tf-set__list">{p.teams.map((t) => <li key={t.id}><button type="button" className="tf-set__open" onClick={() => { setTeamName(t.name); setTeamMembers(t.members); setTeamAccess(t.access ?? {}); setAsk({ kind: 'team', id: t.id }); }}>
+        {p.teams.length === 0 ? <EmptyState size="sm" icon={<Users size={20} strokeWidth={1.75} />} title="No teams yet" description="Teams share round robins and views." /> : <ul className="tf-set__list">{p.teams.map((t) => <li key={t.id}><button type="button" className="tf-set__open" onClick={() => { setTeamName(t.name); setTeamMembers(t.members); setTeamAccess(t.access ?? {}); setAsk({ kind: 'team', id: t.id }); }}>
           <strong>{t.name}</strong><span className="tf-rec__muted">{t.members.length === 0 ? 'Nobody yet' : t.members.map((n) => n.split(' ')[0]).join(', ')}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden /></button></li>)}</ul>}</SettingsSection>
     </>; break;
     case 'roles': { const custom = p.roles ?? []; const all = [{ id: 'owner', name: 'Owner', isLocked: true }, { id: 'admin', name: 'Admin' }, { id: 'member', name: 'Member' }, { id: 'guest', name: 'Guest' }, ...custom];

@@ -81,7 +81,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
           items={[{ id: 'desktop', label: 'Desktop', icon: <Monitor {...i14} /> }, { id: 'phone', label: 'Phone', icon: <Smartphone {...i14} /> }]} />
         <span className="tf-bkf-guestmode__url">{scenario === 'profile' ? homeUrl(state) : scenario === 'menu' ? `${homeUrl(state)}/menu${play.table ? `?t=${play.table}` : ''}` : pageUrl(page.slug, state.business?.handle)}</span>
         <span className="tf-bkf__spacer" />
-        <AriaButton ref={back} className="tf-bkf-guestmode__back" onPress={onClose}><ArrowLeft {...i14} aria-hidden="true" />Back to Bookings</AriaButton>
+        <Button ref={back} size="sm" variant="secondary" icon={<ArrowLeft {...i14} aria-hidden="true" />} onPress={onClose}>Back to Bookings</Button>
       </header>
       <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || scenario === 'menu' || (scenario === 'book' && page?.kind === 'table') || undefined}>
         <div className="tf-bkf-guestmode__frame" data-device={device}>

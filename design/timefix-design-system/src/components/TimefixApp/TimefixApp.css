@@ -70,11 +70,11 @@
 .tf-you { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; }
 .tf-you__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); }
 .tf-you__select { width: calc(var(--size-menu) * 0.7); }
-.tf-you__list { padding: var(--space-8); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-you__list { padding: var(--space-8); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
 .tf-you__group { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-you__h { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; padding: 0 var(--space-4); color: var(--text); font: 600 15px/22px var(--font-sans); }
 .tf-you__h[data-tone='danger'] { color: var(--tag-red-text); }
-.tf-you__card { overflow: hidden; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-you__card { overflow: hidden; border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
 .tf-you__open { align-self: flex-start; }
 /* Tasks › Completed: its own section at the bottom, open; the head folds it (transitions.dev 21 accordion). */
 .tf-you__fold { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-left: calc(var(--space-24) * -1); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }

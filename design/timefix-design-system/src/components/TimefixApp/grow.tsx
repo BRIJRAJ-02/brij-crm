@@ -2,6 +2,7 @@
 // the Link page editor (beside the phone; Publish keeps it in the workspace), and Insights, one analytics home with two tabs:
 // Pages (what came in through your links, from real bookings and form answers) and Reports (saved CRM charts: new, rename, delete).
 import { useRef, useState, type ReactNode } from 'react';
+import { NoResults } from '../EmptyState/EmptyState.tsx';
 import { Link } from '../Link/Link.tsx';
 import { DialogTrigger } from 'react-aria-components';
 import { Popover } from '../Popover/Popover.tsx';
@@ -135,7 +136,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
         <SearchField label="Search links" placeholder="Search links" size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
         <span className="tf-rec__muted tf-num">{total} links · {live} live</span>
       </div>
-      {shown.length === 0 && <p className="tf-rec__muted">No links match. <Link onPress={() => setQuery('')}>Clear search</Link></p>}
+      {shown.length === 0 && <NoResults size="sm" query={query} noun="links" onClearFilters={() => setQuery('')} />}
       {shown.map((g) => (
         <section key={g.title} className="tf-links__group" aria-label={g.title}>
           <h2 className="tf-links__h">{g.title}</h2>
