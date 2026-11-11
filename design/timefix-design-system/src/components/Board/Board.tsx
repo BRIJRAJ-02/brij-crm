@@ -1,5 +1,8 @@
-import { Button as AriaButton, DropIndicator, GridList, GridListItem, isTextDropItem, useDragAndDrop, type DropTarget } from 'react-aria-components';
-import { useEffect, useRef, useState } from 'react';
+import { Button as AriaButton } from 'react-aria-components';
+import { closestCorners, DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, PointerSensor, pointerWithin, useDroppable, useSensor, useSensors, type Announcements, type ClientRect, type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter, type Modifier } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS as DndCss } from '@dnd-kit/utilities';
+import { useEffect, useRef, useState, type KeyboardEventHandler, type PointerEventHandler } from 'react';
 import { ArrowRight, Calendar, ChevronsLeft, GripVertical, Plus } from 'lucide-react';
 import { IconButton } from '../Button/Button.tsx';
 import { AvatarGroup } from '../Avatar/Avatar.tsx';
@@ -64,15 +67,83 @@ export interface BoardProps {
   readonly noun?: string;
 }
 
-const CARD_TYPE = 'application/x-timefix-card';
-/** How long a column waits after its last drop target is left before it stops being "the target" (moving between slots exits then enters). */
-const EXIT_GRACE_MS = 60;
+/** Card shifts and the drop glide: --duration-fast on --ease-smooth-out. */
+const SHIFT = { duration: 250, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };
+const SETTLE_MS = 250; // --duration-fast
+const LANE = 'lane:';
 
 /** Where a drag is: the column it started in and the column it is over. */
-type DragState = { readonly from: string; readonly over?: string };
-const SETTLE_MS = 250; // --duration-fast
+type DragState = { readonly from: string; readonly over?: string; readonly card: string };
+type Lanes = Readonly<Record<string, ReadonlyArray<string>>>;
+const lanesOf = (columns: ReadonlyArray<BoardColumn>): Lanes => Object.fromEntries(columns.map((c) => [c.id, c.cards.map((card) => card.id)]));
 
-/** A kanban board: status columns of white cards that drag between and within columns, columns that fold to a 24px rail, and counts that roll. Replaces Board. */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => { const m = window.matchMedia('(prefers-reduced-motion: reduce)'); const f = () => setReduced(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  return reduced;
+}
+
+/** The CSS zoom an element draws at (the product of its ancestors' zoom); 1 on a page that isn't zoomed. */
+function zoomOf(el: Element | null): number {
+  let z = 1;
+  for (let n = el; n; n = n.parentElement) z *= parseFloat(getComputedStyle(n).zoom) || 1;
+  return z;
+}
+/** dnd-kit measures on screen but moves things in the page's own units, so under a CSS zoom every length is divided by it.
+ *  Cards and lanes are measured where they sit without their live slide (as dnd-kit does by default); the lifted copy as drawn. */
+const rectIn = (el: HTMLElement, withSlide: boolean): ClientRect => {
+  const r = el.getBoundingClientRect(); const z = zoomOf(el);
+  let dx = 0; let dy = 0;
+  if (!withSlide) { const m = getComputedStyle(el).transform; if (m && m !== 'none') { const v = m.slice(m.indexOf('(') + 1, -1).split(',').map(Number); dx = v.length === 6 ? v[4] ?? 0 : v[12] ?? 0; dy = v.length === 6 ? v[5] ?? 0 : v[13] ?? 0; } }
+  const top = r.top / z - dy; const left = r.left / z - dx; const width = r.width / z; const height = r.height / z;
+  return { top, left, width, height, bottom: top + height, right: left + width };
+};
+const measuring = {
+  draggable: { measure: (el: HTMLElement) => rectIn(el, false) },
+  droppable: { measure: (el: HTMLElement) => rectIn(el, false), strategy: MeasuringStrategy.WhileDragging },
+  dragOverlay: { measure: (el: HTMLElement) => rectIn(el, true) },
+};
+
+/** The pointer's lane first (so a drop anywhere down a lane counts), then the nearest card corners inside it. */
+const collideAt = (z: number): CollisionDetection => (args) => {
+  const at = args.pointerCoordinates ? { x: args.pointerCoordinates.x / z, y: args.pointerCoordinates.y / z } : null;
+  const within = at ? pointerWithin({ ...args, pointerCoordinates: at }) : [];
+  const lane = within.find((c) => String(c.id).startsWith(LANE));
+  if (!lane) return within.length ? within : closestCorners(args);
+  const laneId = String(lane.id).slice(LANE.length);
+  const cards = args.droppableContainers.filter((d) => d.data.current?.lane === laneId);
+  const near = closestCorners({ ...args, droppableContainers: cards });
+  return near.length ? near : [lane];
+};
+
+/** Keyboard steps on a board: Left and Right jump to the next open lane at the same height, Up and Down step past the card above or below. */
+const boardKeys: KeyboardCoordinateGetter = (event, { context: { active, collisionRect, droppableRects, droppableContainers } }) => {
+  if (!active || !collisionRect) return undefined;
+  const lanes = droppableContainers.getEnabled()
+    .filter((d) => d.data.current?.isLane && (droppableRects.get(d.id)?.width ?? 0) > 60)
+    .map((d) => ({ id: String(d.data.current?.lane), rect: droppableRects.get(d.id) }))
+    .filter((l): l is { id: string; rect: NonNullable<typeof l.rect> } => Boolean(l.rect))
+    .sort((a, b) => a.rect.left - b.rect.left);
+  const mid = collisionRect.left + collisionRect.width / 2;
+  const here = lanes.findIndex((l) => mid >= l.rect.left && mid <= l.rect.right);
+  if (event.code === 'ArrowRight' || event.code === 'ArrowLeft') {
+    const next = lanes[(here < 0 ? 0 : here) + (event.code === 'ArrowRight' ? 1 : -1)];
+    return next ? { x: next.rect.left + (next.rect.width - collisionRect.width) / 2, y: Math.max(next.rect.top, collisionRect.top) } : undefined;
+  }
+  if (event.code === 'ArrowDown' || event.code === 'ArrowUp') {
+    const lane = lanes[here]; if (!lane) return undefined;
+    const cards = droppableContainers.getEnabled()
+      .filter((d) => d.id !== active.id && d.data.current?.lane === lane.id && !d.data.current?.isLane)
+      .map((d) => droppableRects.get(d.id)).filter((r): r is NonNullable<typeof r> => Boolean(r))
+      .sort((a, b) => a.top - b.top);
+    const centre = collisionRect.top + collisionRect.height / 2;
+    const past = event.code === 'ArrowDown' ? cards.find((r) => r.top + r.height / 2 > centre) : [...cards].reverse().find((r) => r.top + r.height / 2 < centre);
+    return past ? { x: collisionRect.left, y: event.code === 'ArrowDown' ? past.bottom - collisionRect.height + 1 : past.top - 1 } : undefined;
+  }
+  return undefined;
+};
+
+/** A kanban board: status columns of white cards that drag between and within columns, columns that fold to a 24px rail, and counts that roll. While a card is lifted the others slide aside live, in its lane and the one it is over; the drop glides into the gap. Replaces Board. */
 export function Board({ label, columns, onMove, onAdd, onToggleCollapse, onOpen, noun = 'cards' }: BoardProps) {
   const [settled, setSettled] = useState<ReadonlySet<string>>(new Set());
   const seen = useRef<ReadonlySet<string> | undefined>(undefined);
@@ -81,41 +152,97 @@ export function Board({ label, columns, onMove, onAdd, onToggleCollapse, onOpen,
   const fresh = new Set(seen.current ? all.filter((id) => !seen.current?.has(id)) : []);
   useEffect(() => { seen.current = new Set(all); });
 
+  const reduced = useReducedMotion();
   const [drag, setDrag] = useState<DragState | undefined>(undefined);
-  const exitTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(exitTimer.current), []);
-  const transit = {
-    start: (from: string) => setDrag({ from }),
-    end: () => { window.clearTimeout(exitTimer.current); setDrag(undefined); },
-    enter: (id: string) => { window.clearTimeout(exitTimer.current); setDrag((d) => (d ? { ...d, over: id } : d)); },
-    exit: (id: string) => {
-      window.clearTimeout(exitTimer.current);
-      exitTimer.current = window.setTimeout(() => setDrag((d) => (d && d.over === id ? { from: d.from } : d)), EXIT_GRACE_MS);
-    },
+  // The live order while a card is lifted; the columns' own order otherwise.
+  const [live, setLive] = useState<Lanes | undefined>(undefined);
+  const lanes = live ?? lanesOf(columns);
+  const laneOf = (id: string, from: Lanes = lanes): string | undefined =>
+    id.startsWith(LANE) ? id.slice(LANE.length) : Object.keys(from).find((k) => from[k]?.includes(id));
+  const byId = new Map(columns.flatMap((c) => c.cards.map((card) => [card.id, card] as const)));
+
+  const boardRef = useRef<HTMLDivElement>(null);
+  const zoom = useRef(1);
+  // The pointer moves in screen pixels; keyboard steps are already in the page's units.
+  const unzoom: Modifier = ({ transform, activatorEvent }) => (activatorEvent instanceof KeyboardEvent ? transform : { ...transform, x: transform.x / zoom.current, y: transform.y / zoom.current });
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: boardKeys }),
+  );
+
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id); const from = laneOf(id);
+    if (!from) return;
+    zoom.current = zoomOf(boardRef.current);
+    setLive(lanesOf(columns)); setDrag({ from, card: id });
   };
-  const move = (m: BoardMove) => {
-    onMove(m);
-    transit.end();
-    setSettled(new Set(m.cardIds));
+  const onDragOver = (e: DragOverEvent) => {
+    const id = String(e.active.id); const overId = e.over ? String(e.over.id) : undefined;
+    if (!overId) return;
+    setLive((cur) => {
+      const now = cur ?? lanesOf(columns);
+      const a = laneOf(id, now); const b = laneOf(overId, now);
+      if (!a || !b || a === b) return now;
+      // Crossing lanes: the card joins the lane it is over, where the pointer is (above the card it is over, or last).
+      const target = now[b] ?? [];
+      const at = overId.startsWith(LANE) ? target.length : Math.max(0, target.indexOf(overId));
+      const rect = e.active.rect.current.translated; const overRect = e.over?.rect;
+      const below = rect && overRect && !overId.startsWith(LANE) ? rect.top + rect.height / 2 > overRect.top + overRect.height / 2 : false;
+      const index = below ? at + 1 : at;
+      return { ...now, [a]: (now[a] ?? []).filter((x) => x !== id), [b]: [...target.slice(0, index), id, ...target.slice(index)] };
+    });
+    setDrag((d) => (d ? { ...d, over: laneOf(overId) } : d));
+  };
+  const finish = (e: DragEndEvent) => {
+    const id = String(e.active.id); const overId = e.over ? String(e.over.id) : undefined;
+    const now = live ?? lanesOf(columns);
+    const to = laneOf(id, now); const order = to ? [...(now[to] ?? [])] : [];
+    if (to && overId && !overId.startsWith(LANE) && laneOf(overId, now) === to && overId !== id) {
+      // Within one lane: dnd-kit's sortable order.
+      const from = order.indexOf(id); const at = order.indexOf(overId);
+      order.splice(from, 1); order.splice(at, 0, id);
+    }
+    setLive(undefined); setDrag(undefined);
+    if (!to) return;
+    const before = lanesOf(columns);
+    const was = laneOf(id, before);
+    if (was === to && (before[to] ?? []).join() === order.join()) return;
+    const i = order.indexOf(id);
+    const target: BoardMove['target'] = order[i + 1] ? { id: order[i + 1] ?? '', position: 'before' } : order[i - 1] ? { id: order[i - 1] ?? '', position: 'after' } : undefined;
+    onMove({ cardIds: [id], toColumnId: to, target });
+    setSettled(new Set([id]));
     window.setTimeout(() => setSettled(new Set()), SETTLE_MS * 2);
   };
+  const cancel = () => { setLive(undefined); setDrag(undefined); };
+
+  const title = (id: string) => byId.get(id)?.title ?? 'card';
+  const laneTitle = (id?: string) => columns.find((c) => c.id === (id ? laneOf(id) : undefined))?.title ?? '';
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${title(String(active.id))}.`,
+    onDragOver: ({ active, over }) => (over ? `${title(String(active.id))} is over ${laneTitle(String(over.id))}.` : `${title(String(active.id))} is not over a column.`),
+    onDragEnd: ({ active, over }) => (over ? `${title(String(active.id))} dropped in ${laneTitle(String(over.id))}.` : `${title(String(active.id))} put back.`),
+    onDragCancel: ({ active }) => `Moving ${title(String(active.id))} was cancelled. It is back where it was.`,
+  };
+  const lifted = drag ? byId.get(drag.card) : undefined;
   const source = drag && columns.find((c) => c.id === drag.from);
   return (
-    <div className="tf-board" role="group" aria-label={label}>
-      {columns.map((col) => (
-        <KanbanColumn key={col.id} column={col} noun={noun} onMove={move} onAdd={onAdd} onToggleCollapse={onToggleCollapse} onOpen={onOpen} settled={settled} fresh={fresh}
-          transit={transit} incoming={drag?.over === col.id && source && source.id !== col.id ? source : undefined} />
-      ))}
-    </div>
+    <DndContext sensors={sensors} collisionDetection={collideAt(zoom.current)} measuring={measuring} modifiers={[unzoom]} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={finish} onDragCancel={cancel}
+      accessibility={{ announcements, screenReaderInstructions: { draggable: 'To pick up a card, press Space or Enter on its grip. Use the arrow keys to move it, Space or Enter to drop it, Escape to put it back.' } }}>
+      <div ref={boardRef} className="tf-board" role="group" aria-label={label}>
+        {columns.map((col) => {
+          const ids = lanes[col.id] ?? [];
+          const cards = ids.map((id) => byId.get(id)).filter((c): c is BoardCard => Boolean(c));
+          return (
+            <KanbanColumn key={col.id} column={col} cards={cards} noun={noun} onAdd={onAdd} onToggleCollapse={onToggleCollapse} onOpen={onOpen} settled={settled} fresh={fresh}
+              reduced={reduced} isOver={Boolean(drag && drag.over === col.id)} incoming={drag?.over === col.id && source && source.id !== col.id ? source : undefined} />
+          );
+        })}
+      </div>
+      <DragOverlay dropAnimation={reduced ? null : { duration: SHIFT.duration, easing: SHIFT.easing }}>
+        {lifted ? <div className="tf-board__lifted"><CardBody card={lifted} /></div> : null}
+      </DragOverlay>
+    </DndContext>
   );
-}
-
-/** The drag handlers a column reports to the board, so the target column can say where the card came from. */
-interface Transit {
-  readonly start: (from: string) => void;
-  readonly end: () => void;
-  readonly enter: (id: string) => void;
-  readonly exit: (id: string) => void;
 }
 
 /** Jira's "Lead → Qualified": crossfades over a column's header while a card from another column is over it. */
@@ -138,38 +265,14 @@ function TransitHeader({ from, to }: { readonly from?: BoardColumn; readonly to:
   );
 }
 
-function KanbanColumn({ column, noun, onMove, onAdd, onToggleCollapse, onOpen, settled, fresh, transit, incoming }: {
-  readonly column: BoardColumn; readonly noun: string; readonly onMove: (m: BoardMove) => void; readonly onAdd?: (id: string) => void;
+function KanbanColumn({ column, cards, noun, onAdd, onToggleCollapse, onOpen, settled, fresh, reduced, isOver, incoming }: {
+  readonly column: BoardColumn; readonly cards: ReadonlyArray<BoardCard>; readonly noun: string; readonly onAdd?: (id: string) => void;
   readonly onToggleCollapse?: (id: string) => void; readonly onOpen?: (id: string) => void; readonly settled: ReadonlySet<string>; readonly fresh: ReadonlySet<string>;
-  readonly transit: Transit; readonly incoming?: BoardColumn;
+  readonly reduced: boolean; readonly isOver: boolean; readonly incoming?: BoardColumn;
 }) {
   const hue = column.hue ?? STATUS_HUE[column.status];
   const count = column.cards.length;
-  const targetOf = (t: DropTarget): BoardMove['target'] =>
-    t.type === 'item' && t.dropPosition !== 'on' ? { id: String(t.key), position: t.dropPosition } : undefined;
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((k) => ({ [CARD_TYPE]: String(k), 'text/plain': column.cards.find((c) => c.id === k)?.title ?? String(k) })),
-    acceptedDragTypes: [CARD_TYPE],
-    getDropOperation: () => 'move',
-    onDragStart: () => transit.start(column.id),
-    onDragEnd: () => transit.end(),
-    onDropEnter: () => transit.enter(column.id),
-    onDropExit: () => transit.exit(column.id),
-    onReorder: (e) => onMove({ cardIds: [...e.keys].map(String), toColumnId: column.id, target: targetOf(e.target) }),
-    onInsert: async (e) => {
-      const ids = await Promise.all(e.items.filter(isTextDropItem).map((it) => it.getText(CARD_TYPE)));
-      onMove({ cardIds: ids, toColumnId: column.id, target: targetOf(e.target) });
-    },
-    onRootDrop: async (e) => {
-      const ids = await Promise.all(e.items.filter(isTextDropItem).map((it) => it.getText(CARD_TYPE)));
-      onMove({ cardIds: ids, toColumnId: column.id });
-    },
-    renderDropIndicator: (target) => <DropIndicator target={target} className="tf-board__slot" />,
-    renderDragPreview: (items) => {
-      const card = column.cards.find((c) => c.id === items[0]?.[CARD_TYPE]);
-      return <div className="tf-board__preview"><div className="tf-board__lifted">{card ? <CardBody card={card} /> : null}</div></div>;
-    },
-  });
+  const { setNodeRef } = useDroppable({ id: LANE + column.id, data: { lane: column.id, isLane: true } });
 
   if (column.isCollapsed) {
     return (
@@ -195,24 +298,35 @@ function KanbanColumn({ column, noun, onMove, onAdd, onToggleCollapse, onOpen, s
           {onAdd && <IconButton size="sm" label={`Add to ${column.title}`} onPress={() => onAdd(column.id)}><Plus size={14} strokeWidth={1.75} /></IconButton>}
         </span>
       </header>
-      <GridList
-        aria-label={`${column.title}, ${count} ${noun}`}
-        items={column.cards}
-        dragAndDropHooks={dragAndDropHooks}
-        onAction={onOpen ? (k) => onOpen(String(k)) : undefined}
-        className="tf-board__list"
-        renderEmptyState={() => <div className="tf-board__empty">No {noun}</div>}
-      >
-        {(card) => (
-          <GridListItem id={card.id} textValue={card.title} className={cx('tf-board__card', settled.has(card.id) && 'is-settling', fresh.has(card.id) && 'is-new')}>
-            <div className="tf-board__cardin">
-              <AriaButton slot="drag" className="tf-board__grip" aria-label={`Move ${card.title}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
-              <CardBody card={card} />
-            </div>
-          </GridListItem>
-        )}
-      </GridList>
+      <SortableContext id={column.id} items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+        <ul ref={setNodeRef} className="tf-board__list" aria-label={`${column.title}, ${count} ${noun}`} data-over={isOver || undefined}>
+          {cards.length === 0 ? <li className="tf-board__empty">No {noun}</li> : cards.map((card) => (
+            <SortableCard key={card.id} card={card} lane={column.id} onOpen={onOpen} reduced={reduced} isSettling={settled.has(card.id)} isNew={fresh.has(card.id)} />
+          ))}
+        </ul>
+      </SortableContext>
     </section>
+  );
+}
+
+/** One card: press opens it; a drag from anywhere on it (or Space on its grip) lifts it, and it slides aside while others move. */
+function SortableCard({ card, lane, onOpen, reduced, isSettling, isNew }: {
+  readonly card: BoardCard; readonly lane: string; readonly onOpen?: (id: string) => void; readonly reduced: boolean; readonly isSettling: boolean; readonly isNew: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { lane }, transition: reduced ? null : SHIFT });
+  const style = { transform: DndCss.Translate.toString(transform), transition: transition ?? undefined };
+  return (
+    // eslint-disable-next-line react/forbid-dom-props -- dnd-kit's live offset
+    <li ref={setNodeRef} style={style} className={cx('tf-board__card', isSettling && 'is-settling', isNew && 'is-new')} data-dragging={isDragging || undefined}
+      onPointerDown={listeners?.onPointerDown as PointerEventHandler<HTMLLIElement> | undefined}>
+      <div className="tf-board__cardin">
+        <button type="button" className="tf-board__open" onClick={() => onOpen?.(card.id)} aria-label={`Open ${card.title}`} />
+        <CardBody card={card} />
+        <button type="button" ref={setActivatorNodeRef} className="tf-board__grip" aria-label={`Move ${card.title}`} {...attributes} onKeyDown={listeners?.onKeyDown as KeyboardEventHandler<HTMLButtonElement> | undefined}>
+          <GripVertical size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+    </li>
   );
 }
 

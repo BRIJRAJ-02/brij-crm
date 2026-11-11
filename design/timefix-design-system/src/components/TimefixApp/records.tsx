@@ -83,6 +83,8 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   const canEdit = canEditRecords(state);
   const allViews = viewsOf(state, object);
   const views = visibleViews(state, object);
+  // A board card's place inside its lane, set by dropping it there (used while the view has no sort).
+  const [rank, setRank] = useState<Readonly<Record<string, number>>>({});
   const [viewId, setViewId] = useState(startView && views.some((v) => v.id === startView) ? startView : views[0]?.id ?? '');
   const saved = views.find((v) => v.id === viewId) ?? views[0];
   const [draft, setDraft] = useState<SavedView | undefined>();
@@ -215,6 +217,14 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   };
 
   // Board: grouped by any status, select or owner field. Dragging a card sets that field.
+  // Cards keep the place they are dropped in while the view has no sort (a sort decides the order otherwise).
+  const handOrder = !view?.sorts.length;
+  const rankOf = (rows: ReadonlyArray<{ readonly id: string }>) => (id: string): number => rank[id] ?? rows.findIndex((r) => r.id === id);
+  const inHandOrder = <T extends { readonly id: string }>(rows: ReadonlyArray<T>): ReadonlyArray<T> => {
+    if (!handOrder) return rows;
+    const r = rankOf(rows);
+    return [...rows].sort((a, b) => r(a.id) - r(b.id));
+  };
   const groupables = groupableFields(state, object);
   const defaultGroup = object === 'deals' ? 'stage' : object === 'companies' ? 'industry' : object === 'people' ? 'owner' : groupables.find((f) => f.type === 'status' || f.type === 'select')?.id ?? 'owner';
   const boardField = groupables.find((f) => f.id === (view.groupBy ?? defaultGroup)) ?? groupables.find((f) => f.id === defaultGroup) ?? own.find((f) => f.id === 'owner');
@@ -231,7 +241,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     const look = boardField?.id === 'stage' ? STAGE_LOOK[g.id as Stage] : undefined;
     return { id: g.id, title: g.label, status: look?.status ?? g.status ?? 'draft', hue: look?.hue ?? g.hue ?? 'gray', isCollapsed: folded.has(g.id),
       meta: sumField && sum ? (wsum && wsum !== sum ? `${cell(sumField, sum)} · ${inr(wsum)} weighted` : cell(sumField, sum)) : undefined,
-      cards: g.rows.map((r) => {
+      cards: inHandOrder(g.rows).map((r) => {
         const d = object === 'deals' ? state.deals.find((x) => x.id === r.id) : undefined;
         const open = d && isOpenDeal(state, d); const days = Number(r.values.inStage ?? 0);
         const parts = cardFields.filter((id) => id !== 'owner' && id !== 'close').map((id) => (id === 'inStage' && d ? (open ? `${days}d in ${d.stage}` : '') : cell(own.find((f) => f.id === id), r.values[id]))).filter(Boolean);
@@ -364,7 +374,20 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
         <div className="tf-rec__board">
           <Board label={`${w.Many} by ${boardField?.name.toLowerCase() ?? 'owner'}`} noun={def.many} columns={board} onOpen={setPeek}
             onToggleCollapse={(id) => setFolded((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-            onMove={(m) => { if (!canEdit || !boardField) return; const field = boardField.id; const to = m.toColumnId; const moved = m.cardIds.filter((id) => String(all.find((r) => r.id === id)?.values[field] ?? '') !== to); if (moved.length === 0) return;
+            onMove={(m) => { if (!canEdit || !boardField) return; const field = boardField.id; const to = m.toColumnId; const moved = m.cardIds.filter((id) => String(all.find((r) => r.id === id)?.values[field] ?? '') !== to);
+              // Where it was dropped: between its new neighbours (only while the view has no sort).
+              const lane = board.find((c) => c.id === to)?.cards.filter((c) => !m.cardIds.includes(c.id)) ?? [];
+              if (handOrder) {
+                const laneRows = boardGroups.find((g) => g.id === to)?.rows ?? [];
+                const r = (id: string) => rank[id] ?? laneRows.findIndex((x) => x.id === id);
+                const at = m.target ? lane.findIndex((c) => c.id === m.target?.id) + (m.target.position === 'after' ? 1 : 0) : lane.length;
+                const prev = lane[at - 1]; const next = lane[at];
+                const lo = prev ? r(prev.id) : (next ? r(next.id) - 1 : 0); const hi = next ? r(next.id) : lo + 1;
+                setRank((cur) => ({ ...cur, ...Object.fromEntries(m.cardIds.map((id, i) => [id, lo + ((hi - lo) * (i + 1)) / (m.cardIds.length + 1)])) }));
+              } else if (moved.length === 0) {
+                toast({ message: `Sorted by ${view?.sorts.map((x) => own.find((f) => f.id === x.field)?.name ?? x.field).join(', ')}, so cards keep that order. Remove the sort to arrange them by hand.` });
+              }
+              if (moved.length === 0) return;
               if (field === 'stage' && !to) return;
               const many = moved.length === 1 ? def.one[0]?.toUpperCase() + def.one.slice(1) : `${moved.length} ${def.many}`;
               const label = boardGroups.find((g) => g.id === to)?.label ?? to;

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 const require = createRequire('/Users/brijraj/Desktop/brijraj/crm/packages/ui/package.json');
 export const { chromium } = require('playwright');
 export const out = new URL('./sweep/', import.meta.url).pathname;
-export async function open(theme, url = 'app.html', width = 1440) {
+export async function open(theme, url = process.env.TF_PAGE ?? 'app.html', width = 1440) {
   const b = await chromium.launch(); const errs = []; const res = [];
   const p = await b.newPage({ viewport: { width, height: 900 }, colorScheme: theme }); p.setDefaultTimeout(4000); p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(`http://127.0.0.1:5391/${url}?r=${Date.now()}`); await p.waitForTimeout(1500);
