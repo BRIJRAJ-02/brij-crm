@@ -2,7 +2,7 @@ import { copyText } from '../../lib/copy.ts';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users, Contact } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
@@ -29,13 +29,14 @@ import { AvailabilityTab } from './availability.tsx';
 import { RosterTab } from './roster.tsx';
 import { InsightsTab } from './insights.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
+import { GuestsTab, GuestDrawer } from './guests.tsx';
 import { GuestMode, GUEST_SCENARIOS, type BookedChange, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, newPage, northwind, uniqueSlug } from './seed.ts';
 import { lumen, olive } from './seed-business.ts';
 import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
-  HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
+  HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural, guestKey,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
@@ -90,6 +91,7 @@ const saveWhose = (workspace: string, w: Whose) => { try { window.localStorage.s
 /** Bookings' own pages in the sidebar: one job each, no tabs. */
 const SECTIONS = [
   { id: 'meetings', label: 'Meetings', icon: <CalendarDays {...i16} /> },
+  { id: 'guests', label: 'Clients', icon: <Contact {...i16} /> },
   { id: 'pages', label: 'Booking pages', icon: <Link2 {...i16} /> },
   { id: 'menu', label: 'Menu', icon: <UtensilsCrossed {...i16} /> },
   { id: 'availability', label: 'Availability', icon: <Clock {...i16} /> },
@@ -98,7 +100,7 @@ const SECTIONS = [
   { id: 'insights', label: 'Insights', icon: <BarChart3 {...i16} /> },
 ] as const;
 /** One word each under the phone tab bar's icons. */
-const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
+const SHORT: Record<string, string> = { meetings: 'Meetings', guests: 'Clients', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
 export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
   const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
@@ -110,6 +112,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const lastCmd = useRef(0);
   useEffect(() => { (commands ?? []).forEach((c) => { if (c.seq > lastCmd.current) { lastCmd.current = c.seq; dispatch(c.action); } }); }, [commands, dispatch]);
   const [tab, setTab] = useState('meetings');
+  /** The guest or client whose profile is open (by guestKey). */
+  const [profileKey, setProfileKey] = useState<string>();
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openTab) { setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!openGuest) return; const p = state.pages.find((x) => x.id === openGuest.pageId) ?? state.pages.find((x) => x.isOn && x.kind !== 'table') ?? state.pages[0]; if (p) setGuest({ scenario: openGuest.scenario ?? 'book', pageId: p.id, prefill: openGuest.prefill }); }, [openGuest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -421,11 +425,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const hideRouting = state.business !== undefined;
   // A restaurant's home is the host stand: reservations by service, not a calendar of meetings.
   const restaurant = state.business?.kind === 'restaurant';
-  const labelOf = (x: { readonly id: string; readonly label: string }) => (restaurant && x.id === 'meetings' ? 'Reservations' : x.label);
+  const labelOf = (x: { readonly id: string; readonly label: string }) => (restaurant && x.id === 'meetings' ? 'Reservations' : restaurant && x.id === 'guests' ? 'Guests' : x.label);
+  /** Guests and Clients are a business's: a team's people are records in the app. */
+  const shows = (id: string) => ((id !== 'routing' && id !== 'roster') || isTeam) && !(id === 'routing' && hideRouting) && (id !== 'menu' || state.menu !== undefined) && (id !== 'guests' || state.business !== undefined);
 
   const bookingsNav = (
       <NavSection title="Bookings">
-        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined) && !(appNav && x.id === 'insights') && !hiddenSections.includes(x.id)).map((x) => (
+        {SECTIONS.filter((x) => shows(x.id) && !(appNav && x.id === 'insights') && !hiddenSections.includes(x.id)).map((x) => (
           <NavItem key={x.id} label={labelOf(x)} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id && appContent === undefined} onPress={() => { leaveEditor(); setTab(x.id); onBookingsNav?.(); }} />
         ))}
       </NavSection>
@@ -518,7 +524,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
       mobileNav={appMobileNav ?? <TabBar aria-label="Bookings" current={tab}
-        items={SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined)).map((x) => ({ id: x.id, label: restaurant && x.id === 'meetings' ? 'Bookings' : SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
+        items={SECTIONS.filter((x) => shows(x.id)).map((x) => ({ id: x.id, label: restaurant && x.id === 'meetings' ? 'Bookings' : restaurant && x.id === 'guests' ? 'Guests' : SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
         onChange={(id) => { leaveEditor(); setTab(id); }} />}>
       {appContent !== undefined ? appContent : (editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
@@ -552,7 +558,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
           )}
           <div className="tf-bkf__body">
               {tab === 'meetings' && restaurant && (<div className="tf-bkf__panel">
-                <ReservationsTab state={state} dispatch={dispatch} fresh={freshMeeting} openId={meetingId} onOpened={() => setMeetingId(undefined)} onCancel={(m) => cancelNow(m)} onConfirm={confirm} onDecline={setDeclineId} />
+                <ReservationsTab state={state} dispatch={dispatch} onProfile={setProfileKey} fresh={freshMeeting} openId={meetingId} onOpened={() => setMeetingId(undefined)} onCancel={(m) => cancelNow(m)} onConfirm={confirm} onDecline={setDeclineId} />
               </div>)}
               {tab === 'meetings' && !restaurant && (<div className="tf-bkf__panel">
                 <MeetingsTab state={state} view={view} onView={(v) => { setView(v); if (v === 'list') setFocusHour(undefined); }} whose={whose} onWhose={setWhose}
@@ -592,6 +598,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list: ReadonlyArray<BookedMeeting>, pool?: ReadonlyArray<string>) => reassignMany(list, pool)} />
               </div>)}
               {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={tellOthers} onReassignMany={(list) => reassignMany(list)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
+              {tab === 'guests' && state.business && (<div className="tf-bkf__panel"><GuestsTab state={state} onOpen={setProfileKey} /></div>)}
               {tab === 'insights' && (<div className="tf-bkf__panel"><InsightsTab state={state} dispatch={dispatch} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
@@ -618,7 +625,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       <MeetingDrawer meeting={restaurant ? undefined : openMeeting} page={pageById(openMeeting?.pageId)} onClose={() => setMeetingId(undefined)}
         onUpdate={(m) => update(m)} onCancel={cancelFromDrawer} onReschedule={(m) => setRescheduleId(m.id)} onReassign={(m) => setReassignId(m.id)}
         onNoShow={(m) => { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'No-show undone' }) } }); }}
-        onJoin={(m) => { const x = meetingById(m.id); if (x) join(x); }} onConfirm={(m) => confirm(m.id)} onDecline={(m) => setDeclineId(m.id)} />
+        onJoin={(m) => { const x = meetingById(m.id); if (x) join(x); }} onConfirm={(m) => confirm(m.id)} onDecline={(m) => setDeclineId(m.id)}
+        onProfile={state.business ? (m) => { const k = guestKey(m); if (k) { setMeetingId(undefined); setProfileKey(k); } } : undefined} />
+      <GuestDrawer state={state} dispatch={dispatch} guestKey={profileKey} onClose={() => setProfileKey(undefined)} isReadOnly={isReadOnly}
+        onBooking={(m) => { setProfileKey(undefined); leaveEditor(); setTab('meetings'); setMeetingId(m.id); }} />
       <RescheduleDialog meeting={meetingById(rescheduleId)} state={state} onClose={() => setRescheduleId(undefined)}
         onMove={(m, start) => { setRescheduleId(undefined); move(m, start, 'gets an email with the new time'); }} />
       <ReassignDialog meeting={meetingById(reassignId)} state={state} onClose={() => setReassignId(undefined)}

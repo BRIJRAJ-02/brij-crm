@@ -3,7 +3,7 @@
 import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserX, Users, X } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -23,7 +23,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf } from './state.ts';
+  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey } from './state.ts';
 
 /** Where a table booking is tonight. */
 type Stage = 'request' | 'booked' | 'late' | 'seated' | 'left' | 'no-show' | 'cancelled';
@@ -47,13 +47,15 @@ export interface ReservationsTabProps {
   readonly onCancel: (m: BookedMeeting) => void;
   readonly onConfirm: (id: string) => void;
   readonly onDecline: (id: string) => void;
+  /** Opens the guest's profile (by guestKey). */
+  readonly onProfile?: (key: string) => void;
   /** A booking to open (from a toast or the inbox): the tab goes to its day and opens it. */
   readonly openId?: string;
   readonly onOpened?: () => void;
 }
 
 /** The Reservations tab. */
-export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCancel, onConfirm, onDecline }: ReservationsTabProps) {
+export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCancel, onConfirm, onDecline, onProfile }: ReservationsTabProps) {
   const { toast } = useToast();
   const now = new Date();
   const page = state.pages.find((p) => p.kind === 'table');
@@ -122,8 +124,10 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
             else if (k === 'unseat') withUndo(m, { ...m, seating: undefined, seatedAt: undefined }, 'Back to booked', `${first(m.invitee.name)} isn't seated`);
             else if (k === 'reseat') withUndo(m, { ...m, seating: 'seated', status: 'confirmed', seatedAt: m.seatedAt ?? new Date() }, 'Back to seated', `${first(m.invitee.name)} is seated again`);
             else if (k === 'cancel') onCancel(m);
+            else if (k === 'profile') { const g = guestKey(m); if (g) onProfile?.(g); }
           }}>
             <MenuItem id="edit" icon={<Pencil {...i16} />}>Edit reservation</MenuItem>
+            {onProfile && guestKey(m) && <MenuItem id="profile" icon={<UserRound {...i16} />}>Guest profile</MenuItem>}
             {(stage === 'booked' || stage === 'late' || stage === 'seated') && <MenuItem id="move" icon={<Repeat {...i16} />}>Change table</MenuItem>}
             {stage === 'seated' && <MenuItem id="unseat" icon={<Clock {...i16} />}>Not seated yet</MenuItem>}
             {(stage === 'left' || stage === 'no-show') && isToday && <MenuItem id="reseat" icon={<Users {...i16} />}>{stage === 'left' ? 'Still at the table' : 'They came: seat them'}</MenuItem>}
@@ -144,7 +148,8 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
         <button type="button" className="tf-bkf-res__who" onClick={() => setEditing(m)} aria-label={`Open ${m.invitee.name}, ${plural(m.party ?? 2, 'guest')}`}>
           <span className="tf-bkf-res__name">{m.invitee.name}{m.walkIn && <span className="tf-bkf__muted"> · walk-in</span>}</span>
           <span className="tf-bkf-res__meta">
-            {(m.tags ?? []).map((t) => <Tag key={t} size="sm" hue={t === 'VIP' ? 'purple' : t === 'Allergy' ? 'red' : 'gray'}>{t}</Tag>)}
+            {(() => { const g = state.guests?.[guestKey(m) ?? '']; return [...new Set([...(m.tags ?? []), ...(g?.tags ?? []).filter((t) => t === 'VIP' || t === 'Regular' || t === 'Wheelchair' || t === 'High chair'), ...(g?.diet?.length ? ['Allergy'] : [])])]; })()
+              .map((t) => <Tag key={t} size="sm" hue={t === 'VIP' ? 'purple' : t === 'Allergy' ? 'red' : 'gray'}>{t}</Tag>)}
             {m.occasion && <Tag size="sm" hue="yellow">{m.occasion}</Tag>}
             {(() => { const v = visitsOf(state, m); return v.count > 0 ? <span className="tf-bkf__muted tf-num">{ordinal(v.count + 1)} visit{v.noShows ? ` · ${plural(v.noShows, 'no-show')} before` : ''}</span> : null; })()}
             {m.source && m.source !== 'online' && !m.walkIn && <span className="tf-bkf__muted">{m.source === 'phone' ? 'By phone' : m.source === 'waitlist' ? 'From the waitlist' : 'Walk-in'}</span>}

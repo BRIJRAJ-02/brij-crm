@@ -247,7 +247,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
             <StatCard label="Form views, all time" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: `${formsShown.reduce((n, f) => n + f.views, 0) ? Math.round((formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0) / formsShown.reduce((n, f) => n + f.views, 0)) * 100) : 0}% answered`, direction: 'flat' }} />
           </div>
           <div className="tf-home__grid">
-            <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>
+            <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" look="dots" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>
             <ChartCard title={funnel.length && (formId || kind === 'forms') ? 'Where people stop (all time)' : 'Which pages and forms'}>
               {funnel.length && (formId || kind === 'forms') ? <BarList label="From opening to filed" items={funnel} /> : byPage.length ? <BarList label="By page" items={byPage} /> : <p className="tf-rec__muted">Nothing came in yet in this period.</p>}
             </ChartCard>

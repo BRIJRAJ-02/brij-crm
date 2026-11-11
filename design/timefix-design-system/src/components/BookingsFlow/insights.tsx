@@ -136,7 +136,7 @@ export function InsightsTab({ state, pageId: only, dispatch }: {
 
         <div className="tf-bkf-insights__grid">
           <Section className="tf-bkf-card tf-bkf-insights__wide" title="Bookings over time" description={days > 30 ? 'Each bar is a week.' : 'Each bar is a day. Weekends are quiet.'}>
-            <BarChart label="Bookings over time" points={bars} height={200} />
+            <BarChart label="Bookings over time" points={bars} height={200} look="dots" />
           </Section>
           <Section className="tf-bkf-card" title="From view to meeting" description="Where people drop off on the way.">
             <ol className="tf-bkf-funnel">

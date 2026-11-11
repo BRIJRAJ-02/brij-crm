@@ -1,7 +1,7 @@
 // The whole Timefix app as one prototype: the sidebar from app-ia.md (You, Records, Lists, Bookings, Forms, Link page, Insights),
 // ⌘K over everything, Home, and each module as it's rebuilt. Bookings is the module already built: it stays mounted inside, so its state is kept.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { Boxes, BarChart3, Building2, CalendarDays, CalendarRange, CheckSquare, ChevronRight, CircleDollarSign, Clock, FileText, Home, IdCard, Inbox, Link2, ListChecks, LogOut, Menu, NotebookPen, Plus, Route, Search, Settings, UserPlus, UserRound, Users, UtensilsCrossed } from 'lucide-react';
+import { Boxes, BarChart3, Building2, CalendarDays, CalendarRange, CheckSquare, ChevronRight, CircleDollarSign, Clock, Contact, FileText, Home, IdCard, Inbox, Link2, ListChecks, LogOut, Menu, NotebookPen, Plus, Route, Search, Settings, UserPlus, UserRound, Users, UtensilsCrossed } from 'lucide-react';
 import { NavItem, NavSection } from '../Sidebar/Sidebar.tsx';
 import { TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -157,6 +157,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     ...state.tasks.filter((t) => !t.done).map((t) => ({ id: `task:${t.id}`, label: t.title, group: 'Tasks', kind: 'action' as const, icon: <CheckSquare {...i16} />, keywords: t.assignee })),
     ...pagesToGo.map((x) => ({ id: `go:${x.id}`, label: `Go to ${x.label}`, group: 'Go to', kind: 'action' as const, icon: x.icon, keywords: x.keywords })),
     { id: 'go:bookings', label: kind === 'restaurant' ? 'Go to Reservations' : 'Go to Meetings', group: 'Go to', kind: 'action' as const, icon: <CalendarDays {...i16} />, keywords: 'bookings calendar meetings reservations' },
+    ...(kind === 'team' ? [] : [{ id: 'bk:guests', label: kind === 'restaurant' ? 'Go to Guests' : 'Go to Clients', group: 'Go to', kind: 'action' as const, icon: <Contact {...i16} />, keywords: 'guests clients guest book customers visits' }]),
     { id: 'bk:pages', label: kind === 'team' ? 'Go to Booking pages' : 'Go to Your business page', group: 'Go to', kind: 'action' as const, icon: <CalendarDays {...i16} />, keywords: 'bookings links' },
     { id: 'bk:availability', label: kind === 'team' ? 'Go to Availability' : 'Go to Opening hours', group: 'Go to', kind: 'action' as const, icon: <CalendarDays {...i16} />, keywords: 'hours time off' },
     ...state.reports.map((r) => ({ id: `report:${r.id}`, label: r.name, group: 'Reports', kind: 'action' as const, icon: <BarChart3 {...i16} />, keywords: 'report chart insights' })),
@@ -315,6 +316,7 @@ function MoreScreen({ state, bookings, kind, unread, onGo, onBookings, onSetting
       {!hide.has('lists') && group('Lists', [...state.lists.filter((l) => !l.archived).map((l) => row(l.id, l.name, <ListChecks {...i16} />, () => onGo(`list:${l.id}`), liveEntries(state, l).length)), row('new-list', 'New list', <Plus {...i16} />, onNewList)])}
       {group('Bookings', [
         row('meetings', kind === 'restaurant' ? 'Reservations' : 'Meetings', <CalendarDays {...i16} />, () => onBookings('meetings')),
+        ...(team ? [] : [row('guests', kind === 'restaurant' ? 'Guests' : 'Clients', <Contact {...i16} />, () => onBookings('guests'))]),
         row('pages', team ? 'Booking pages' : 'Your business page', <Link2 {...i16} />, () => onBookings('pages')),
         ...(bookings?.menu && state.prefs.apps.menu ? [row('menu', 'Menu', <UtensilsCrossed {...i16} />, () => onBookings('menu'))] : []),
         row('availability', team ? 'Availability' : 'Opening hours', <Clock {...i16} />, () => onBookings('availability')),

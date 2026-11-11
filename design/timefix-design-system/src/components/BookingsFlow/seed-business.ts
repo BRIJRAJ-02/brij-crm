@@ -58,6 +58,11 @@ export function lumen(now = new Date()): BookingsState {
   book(cut, 0, 14, 0, 'Priya Raman', 'Tara Iyer'); book(balayage, 0, 14, 30, 'Jo Mendes', 'Zoya Khan'); book(mask, 0, 16, 0, 'Sam Kim', 'Kabir Rao');
   book(cut, 1, 12, 0, 'Sam Kim', 'Isha Nair'); book(trim, 1, 10, 0, 'Ava Chen', 'Maya Pillai'); book(roots, 2, 11, 30, 'Priya Raman', 'Sana Ali');
   book(cut, 3, 15, 0, 'Ava Chen', 'Dev Rao'); book(balayage, 4, 11, 0, 'Jo Mendes', 'Anya Sen');
+  // Earlier visits, so a client's record has a history: Neha's root colour every five weeks, Riya's cuts, Anya's consultation.
+  book(roots, -35, 11, 0, 'Jo Mendes', 'Neha Kapoor'); book(roots, -70, 12, 0, 'Jo Mendes', 'Neha Kapoor'); book(mask, -70, 13, 30, 'Sam Kim', 'Neha Kapoor');
+  book(cut, -42, 10, 30, 'Priya Raman', 'Riya Shah', 60); book(cut, -91, 11, 0, 'Priya Raman', 'Riya Shah'); book(trim, -63, 10, 0, 'Ava Chen', 'Riya Shah');
+  book(roots, -28, 15, 0, 'Priya Raman', 'Sana Ali', 75, 'no-show'); book(cut, -56, 15, 0, 'Sam Kim', 'Sana Ali');
+  book(cut, -21, 16, 0, 'Jo Mendes', 'Anya Sen'); book(mask, -30, 16, 0, 'Sam Kim', 'Kabir Rao');
   meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const hours: WeekHours = { mon: open('hm', 10, 19), tue: open('ht', 10, 20), wed: open('hw', 10, 20), thu: open('hh', 10, 20), fri: open('hf', 10, 20), sat: open('hs', 9, 20), sun: open('hu', 11, 18) };
@@ -76,6 +81,15 @@ export function lumen(now = new Date()): BookingsState {
       photos: [scene('salon', '#efe3d3'), scene('chairs', '#e6ddd2'), scene('basin', '#e9e2d8')],
     },
     categories: [{ id: 'c-hair', name: 'Hair' }, { id: 'c-colour', name: 'Colour' }, { id: 'c-care', name: 'Treatments' }],
+    guests: {
+      'neha@mail.com': { tags: ['Regular'], birthday: '08-22', notes: 'Sensitive scalp: keep the colour off the skin. Likes a quiet chair.',
+        formulas: [
+          { id: 'f-2', date: dayFrom(now, -35), text: 'Koleston 6/0 + 6/7, 30 ml each, 6% developer, 35 min at the roots', by: 'Jo Mendes' },
+          { id: 'f-1', date: dayFrom(now, -70), text: 'Koleston 6/0 + 6/7, 30 ml each, 6% developer, 30 min. Lifted warm, add 5 min next time', by: 'Jo Mendes' },
+        ], patch: { date: dayFrom(now, -72), result: 'clear' } },
+      'riya@mail.com': { tags: ['Regular'], notes: 'Long layers, keeps the length. Books the 60 minute cut.' },
+      'anya@mail.com': { notes: 'Wants a soft, low-maintenance blonde. Balayage booked after the consultation.' },
+    },
   };
 }
 
@@ -104,6 +118,11 @@ export function olive(now = new Date()): BookingsState {
   res(19, 0, 2, ['t2'], 'Aarav Nair', { occasion: 'Date night' }); res(19, 30, 2, ['t6'], 'Sara Fernandes', { area: 'Terrace', occasion: 'Anniversary' }); res(19, 30, 4, ['t8'], 'Neha Kapoor', { tags: ['VIP'], note: 'Owner’s guest. Send the octopus.' });
   res(20, 0, 6, ['t5'], 'Vikram Shetty', { occasion: 'Birthday', note: 'Bringing a cake, candles at dessert.' }); res(18, 30, 4, ['t3'], 'Leela Menon', { status: 'pending' });
   res(20, 30, 8, ['t3', 't4'], 'Dev Malhotra', { tags: ['Allergy'], note: 'One guest allergic to tree nuts.' }); res(21, 0, 2, ['t2'], 'Priya Joshi'); res(21, 15, 2, ['t7'], 'Kabir Rao', { area: 'Terrace' });
+  // Earlier visits, so a guest's profile has a history: Anika's weekly lunch, Neha's dinners, Tom's earlier no-show.
+  [-7, -14, -28, -42, -63].forEach((d) => res(12, 30, 2, ['t1'], 'Anika Desai', { offset: d }));
+  res(20, 0, 4, ['t8'], 'Neha Kapoor', { offset: -12, area: 'Terrace', note: 'Sparkling water, no ice.' }); res(19, 30, 2, ['t6'], 'Neha Kapoor', { offset: -40, area: 'Terrace' });
+  res(20, 0, 2, ['t2'], 'Tom Walsh', { offset: -30, status: 'no-show' }); res(20, 30, 6, ['t5'], 'Dev Malhotra', { offset: -60, tags: ['Allergy'], note: 'Tree nut allergy at the table.' });
+  res(21, 0, 4, ['t3'], 'Kiran Bose', { offset: -20 }); res(20, 0, 2, ['t2'], 'Kiran Bose', { offset: -49 });
   res(20, 0, 4, ['t3'], 'Kiran Bose', { offset: 1, tags: ['VIP'] }); res(13, 0, 2, ['t6'], 'Lara Dias', { offset: 2 }); res(20, 30, 6, ['t5'], 'Ishaan Mehta', { offset: 2, occasion: 'Birthday' });
   const book = oliveMenus();
   const today = isoDay(now);
@@ -132,5 +151,10 @@ export function olive(now = new Date()): BookingsState {
       photos: [scene('dining', '#e8d9c3'), scene('terrace', '#f4c9a0'), scene('bar', '#d8c3a5')],
     },
     tables, waitlist, menu: book, menuLive: book,
+    guests: {
+      'anika@mail.com': { tags: ['Regular'], birthday: '03-14', notes: 'Prefers T1 by the window. Usually the burrata and a lime soda.' },
+      'neha@mail.com': { tags: ['VIP'], notes: 'Owner’s guest. Terrace when it’s open.' },
+      'dev@mail.com': { diet: ['Tree nuts'] },
+    },
   };
 }

@@ -333,6 +333,68 @@ export interface BookingsState {
   readonly memberCalendars?: Readonly<Record<string, MemberCalendar>>;
   /** Insights shared by a read-only link. */
   readonly insightsShared?: boolean;
+  /** What the staff keep about a guest or client, by guestKey: tags, notes, birthday, diet, colour formulas, patch test. */
+  readonly guests?: Readonly<Record<string, GuestProfile>>;
+}
+
+/** One colour formula, kept per visit so the next colourist mixes the same. */
+export interface ColourFormula { readonly id: string; readonly date: Date; readonly text: string; readonly by: string }
+/** What the staff keep about one guest (restaurant) or client (salon). Their visits come from bookings, never typed in. */
+export interface GuestProfile {
+  readonly tags?: ReadonlyArray<string>;
+  readonly notes?: string;
+  /** "MM-DD", no year. */
+  readonly birthday?: string;
+  /** Restaurant: what they can't eat, carried onto every booking. */
+  readonly diet?: ReadonlyArray<string>;
+  /** Salon: formulas, newest first, and the last patch test. */
+  readonly formulas?: ReadonlyArray<ColourFormula>;
+  readonly patch?: { readonly date: Date; readonly result: 'clear' | 'reaction' };
+}
+/** One guest or client, gathered from every booking with the same email or phone. */
+export interface GuestSummary {
+  readonly key: string; readonly name: string; readonly email: string; readonly phone?: string;
+  /** Visits that happened (not cancelled, not a no-show), newest first. */
+  readonly visits: ReadonlyArray<BookedMeeting>;
+  readonly upcoming: ReadonlyArray<BookedMeeting>;
+  readonly noShows: number; readonly cancelled: number;
+  readonly last?: Date; readonly next?: Date; readonly first?: Date;
+  /** Salon: what their visits cost, at each service's price. */
+  readonly spend: number;
+  /** Salon: who they see most. Restaurant: the area they sit in most. */
+  readonly usual?: string;
+  readonly profile: GuestProfile;
+}
+/** Who a booking is for: their email, else their phone's digits. Undefined when it has neither (a walk-in with no details). */
+export function guestKey(m: Pick<BookedMeeting, 'invitee' | 'phone'>): string | undefined {
+  const mail = m.invitee.email.trim().toLowerCase(); if (mail) return mail;
+  const tel = (m.phone ?? '').replace(/\D/g, ''); return tel.length >= 6 ? `tel:${tel}` : undefined;
+}
+/** Every guest or client of a business, A to Z, like a contact book. Team workspaces have People records instead. */
+export function guestsOf(state: BookingsState, now = new Date()): ReadonlyArray<GuestSummary> {
+  if (!state.business) return [];
+  const restaurant = state.business.kind === 'restaurant';
+  const groups = new Map<string, BookedMeeting[]>();
+  for (const m of state.meetings) {
+    if (restaurant ? !m.tables : !state.pages.some((p) => p.id === m.pageId && p.kind === 'service')) continue;
+    const k = guestKey(m); if (!k) continue;
+    groups.set(k, [...(groups.get(k) ?? []), m]);
+  }
+  const most = (xs: ReadonlyArray<string>) => { const c = new Map<string, number>(); xs.forEach((x) => c.set(x, (c.get(x) ?? 0) + 1)); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]; };
+  return [...groups.entries()].map(([key, ms]) => {
+    const newest = [...ms].sort((a, b) => b.start.getTime() - a.start.getTime());
+    const visits = newest.filter((m) => m.start <= now && m.status !== 'cancelled' && m.status !== 'no-show');
+    const upcoming = newest.filter((m) => m.start > now && (m.status === 'confirmed' || m.status === 'pending')).reverse();
+    const head = newest[0] as BookedMeeting;
+    const spend = restaurant ? 0 : visits.reduce((n, m) => { const p = state.pages.find((x) => x.id === m.pageId); const len = String(Math.round((m.end.getTime() - m.start.getTime()) / 60_000)); return n + (p?.prices?.[len] ?? p?.price ?? 0); }, 0);
+    const areas = visits.map((m) => m.area ?? state.tables?.find((t) => t.id === m.tables?.[0])?.area).filter((x): x is string => Boolean(x));
+    return {
+      key, name: head.invitee.name, email: newest.find((m) => m.invitee.email)?.invitee.email ?? '', phone: newest.find((m) => m.phone)?.phone,
+      visits, upcoming, noShows: ms.filter((m) => m.status === 'no-show').length, cancelled: ms.filter((m) => m.status === 'cancelled').length,
+      last: visits[0]?.start, next: upcoming[0]?.start, first: visits[visits.length - 1]?.start, spend,
+      usual: restaurant ? most(areas) : most(visits.map((m) => m.host)), profile: state.guests?.[key] ?? {},
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** A teammate's calendar health, as their colleagues see it. */
@@ -344,6 +406,7 @@ export type BookingsAction =
   | { readonly type: 'draft/set'; readonly id: string; readonly draft: BookingPage | undefined }
   | { readonly type: 'member/calendar'; readonly name: string; readonly calendar: MemberCalendar }
   | { readonly type: 'insights/share'; readonly on: boolean }
+  | { readonly type: 'guest/patch'; readonly key: string; readonly patch: Partial<GuestProfile> }
   | { readonly type: 'business/set'; readonly business: BusinessProfile }
   | { readonly type: 'tables/set'; readonly tables: ReadonlyArray<Table> }
   | { readonly type: 'waitlist/set'; readonly waitlist: ReadonlyArray<WaitParty> }
@@ -419,6 +482,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'business/set': return { ...state, business: action.business };
     case 'tables/set': return { ...state, tables: action.tables };
     case 'waitlist/set': return { ...state, waitlist: action.waitlist };
+    case 'guest/patch': return { ...state, guests: { ...state.guests, [action.key]: { ...state.guests?.[action.key], ...action.patch } } };
     case 'menu/draft': return { ...state, menu: action.menu };
     case 'menu/publish': return state.menu ? { ...state, menuLive: state.menu } : state;
     case 'menu/discard': return state.menuLive ? { ...state, menu: state.menuLive } : state;

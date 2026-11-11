@@ -242,7 +242,7 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
             const until = (h: number) => { const by = new Date(meeting.start.getTime() - h * 3_600_000); return `${formatDay(by)}, ${formatClock(by.getHours() * 60 + by.getMinutes())}`; };
             // The owner's own "too late" message covers the case where nothing can be changed online; a partial block gets the plain line.
             const reach = `Reply to your confirmation email to reach ${first(meeting.host)}.`;
-            if (!canMove && !canCancel) return <p className="tf-bkf__muted">It’s too close to change online (within {plural(Math.min(page.moveCutoff ?? 0, page.cancelCutoff ?? 0) || Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0), 'hour')}). {page.tooLateMessage ?? reach}</p>;
+            if (!canMove && !canCancel) return <p className="tf-bkf__muted">{page.tooLateMessage || <>It’s too close to change online (within {plural(Math.min(page.moveCutoff ?? 0, page.cancelCutoff ?? 0) || Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0), 'hour')}). {reach}</>}</p>;
             if (!canMove) return <p className="tf-bkf__muted tf-num">You can cancel this online{page.cancelCutoff ? ` until ${until(page.cancelCutoff)}` : ''}. It’s too close to move it online (within {plural(page.moveCutoff ?? 0, 'hour')}). {reach}</p>;
             if (!canCancel) return <p className="tf-bkf__muted tf-num">You can move this online{page.moveCutoff ? ` until ${until(page.moveCutoff)}` : ''}. It’s too close to cancel online (within {plural(page.cancelCutoff ?? 0, 'hour')}). {reach}</p>;
             const h = Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0);

@@ -21,6 +21,7 @@ import { cx } from '../../lib/cx.ts';
 import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
+import { ProfileButton } from './guests.tsx';
 import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
@@ -37,10 +38,12 @@ export interface MeetingDrawerProps {
   readonly onJoin: (m: BookedMeeting) => void;
   readonly onConfirm: (m: BookedMeeting) => void;
   readonly onDecline: (m: BookedMeeting) => void;
+  /** A business: opens the client's record from the guest line. */
+  readonly onProfile?: (m: BookedMeeting) => void;
 }
 
 /** The meeting: time (both zones when they differ), guest, place with Join, answers, notes, the linked record and activity. */
-export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onReschedule, onReassign, onNoShow, onJoin, onConfirm, onDecline }: MeetingDrawerProps) {
+export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onReschedule, onReassign, onNoShow, onJoin, onConfirm, onDecline, onProfile }: MeetingDrawerProps) {
   const { toast } = useToast();
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('I can’t make it');
@@ -95,7 +98,7 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         </dd>
         <dt><UserRound {...i16} aria-label="Guest" /></dt>
         <dd>
-          <PersonLine name={m.invitee.name} sub={m.invitee.email} />
+          <PersonLine name={m.invitee.name} sub={m.invitee.email} end={onProfile && page?.kind === 'service' ? <ProfileButton restaurant={false} onPress={() => { saveNotes(); onProfile(m); }} /> : undefined} />
           {m.guests && m.guests.length > 0 && <span className="tf-bkf__sub">and {m.guests.join(', ')}</span>}
         </dd>
         <dt><PlaceIcon place={m.place} /></dt>

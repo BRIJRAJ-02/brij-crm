@@ -364,3 +364,10 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - [x] Forms publish fix: visitors to a live form get the published after-send settings (thanks, button, booking, website), not the draft; a live form without a stored baseline (the seed) gets one when opened, so its settings edits wait for Publish and show "Edited, not published".
 - [x] Setup steps rail (reference): onboarding already uses Steps with done ticks and the current halo; kept the approved split layout.
 - [ ] Next wave: restaurant guest profile, salon client record, forms look options, restaurant shifts + 15 min pacing, meetings rotating hosts; marketing candidates (frosted rim, dot chart, boxed labels, dot week).
+
+## Wave 5 (11 Nov)
+- Guests (restaurant) / Clients (salon): BookingsFlow `guests.tsx`, `guestsOf`/`guestKey`/`guest/patch` in state, seeded history and profiles; opens from reservation row menu and salon booking drawer. Walk w5guests (light, dark), phone check w5phone.
+- Fix: stats strip collapsed to 0 height in the drawer's flex body (flex-shrink 0).
+- Chart: BarChart `look="dots"` (marketing dot columns), used on Insights per day and Bookings Insights. Walk w5dots.
+- Fix: guest manage page showed the default cut-off line and the host's own too-late message together; the host's message now stands alone.
+- regress "manage move" fails before ~10:00 local because the seeded 10:00 booking is inside the 4 hour cut-off; correct behaviour, time-dependent walk.

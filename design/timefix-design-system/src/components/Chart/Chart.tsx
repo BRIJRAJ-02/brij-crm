@@ -1,5 +1,5 @@
 import { ToggleButton, ToggleButtonGroup } from 'react-aria-components';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { StatusDot, type Hue } from '../Tag/Tag.tsx';
 import { cx } from '../../lib/cx.ts';
@@ -121,8 +121,10 @@ function barPath(x: number, y: number, w: number, h: number): string {
   return `M${x} ${y + h}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h}Z`;
 }
 
-/** Bars per period or group (BarStrip). Points undefined draws Mercury's dotted placeholder; hover or focus a bar for its value. */
-export function BarChart({ label, points, height = 168, ghostCount = 7, emptyText }: { readonly label: string; readonly points?: ReadonlyArray<ChartPoint>; readonly height?: number; readonly ghostCount?: number; readonly emptyText?: string }) {
+/** Bars per period or group (BarStrip). Points undefined draws Mercury's dotted placeholder; hover or focus a bar for its value.
+ *  `look="dots"` stacks one dot per step instead of a bar (the marketing site's dot columns), for counts over time; each change
+ *  fades the columns in left to right, 12ms apart. */
+export function BarChart({ label, points, height = 168, ghostCount = 7, emptyText, look = 'bars' }: { readonly label: string; readonly points?: ReadonlyArray<ChartPoint>; readonly height?: number; readonly ghostCount?: number; readonly emptyText?: string; readonly look?: 'bars' | 'dots' }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | undefined>(undefined);
   const plotH = height - 24;
@@ -133,19 +135,29 @@ export function BarChart({ label, points, height = 168, ghostCount = 7, emptyTex
   const max = real ? Math.max(1, ...points.map((p) => p.value)) : 1;
   const heights = useTween(real ? points.map((p) => (p.value / max) * (plotH - 8)) : undefined, ref.current);
   const showEvery = Math.max(1, Math.ceil(56 / Math.max(1, slot)));
+  // Dots: one pitch per step, as wide as a column allows (6 to 12px), so the tallest column fills the plot.
+  const pitch = Math.max(6, Math.min(12, slot * 0.8));
+  const rows = Math.max(1, Math.floor((plotH - 4) / pitch));
+  const dotsOf = (v: number) => (v <= 0 ? 0 : Math.max(1, Math.round((v / max) * rows)));
+  const runKey = real ? points.map((p) => p.value).join(',') : '';
   const a = active !== undefined && real ? points[active] : undefined;
   return (
     <div ref={ref} className="tf-chart" style={{ height }} aria-busy={points === undefined || undefined}>
       {width > 0 && (
         <svg width={width} height={height} role="list" aria-label={label} className="tf-chart__svg">
-          <line x1={0} x2={width} y1={plotH + 0.5} y2={plotH + 0.5} className="tf-chart__base" />
+          {!(look === 'dots' && real) && <line x1={0} x2={width} y1={plotH + 0.5} y2={plotH + 0.5} className="tf-chart__base" />}
           {Array.from({ length: n }, (_, i) => {
             const x = i * slot + (slot - bw) / 2;
             const p = real ? points[i] : undefined;
             const h = real ? heights?.[i] ?? 0 : (GHOST[i % GHOST.length] ?? 0.5) * (plotH - 8);
             return (
               <g key={p?.id ?? i} role="listitem">
-                <path d={barPath(x, plotH - h, bw, h)} className={cx(real ? 'tf-chart__bar' : 'tf-chart__ghost', active !== undefined && active !== i && 'is-dim')} />
+                {look === 'dots' && p
+                  ? <g key={runKey} className={cx('tf-chart__dots', active !== undefined && active !== i && 'is-dim')} style={{ '--i': i } as CSSProperties}>
+                    {dotsOf(p.value) === 0 ? <circle cx={i * slot + slot / 2} cy={plotH - pitch / 2} r={pitch * 0.3} className="tf-chart__dot-off" />
+                      : Array.from({ length: dotsOf(p.value) }, (_, r) => <circle key={r} cx={i * slot + slot / 2} cy={plotH - pitch / 2 - r * pitch} r={pitch * 0.3} />)}
+                  </g>
+                  : <path d={barPath(x, plotH - h, bw, h)} className={cx(real ? 'tf-chart__bar' : 'tf-chart__ghost', active !== undefined && active !== i && 'is-dim')} />}
                 {p && (
                   <rect x={i * slot} y={0} width={slot} height={plotH} className="tf-chart__hit" tabIndex={0} aria-label={`${p.label}: ${p.valueText ?? p.value}`}
                     onPointerEnter={() => setActive(i)} onPointerLeave={() => setActive(undefined)} onFocus={() => setActive(i)} onBlur={() => setActive(undefined)} />
@@ -159,7 +171,7 @@ export function BarChart({ label, points, height = 168, ghostCount = 7, emptyTex
       {points !== undefined && points.length === 0 && emptyText && <p className="tf-chart__empty">{emptyText}</p>}
       {a && active !== undefined && (
         <div key={active} className="tf-chart__tip" role="presentation"
-          style={{ left: active * slot + slot / 2, top: plotH - (heights?.[active] ?? 0) - 8 }}>
+          style={{ left: active * slot + slot / 2, top: plotH - (look === 'dots' ? dotsOf(a.value) * pitch : heights?.[active] ?? 0) - 8 }}>
           <span className="tf-chart__tiplabel">{a.label}</span>{a.valueText ?? a.value.toLocaleString('en-US')}
         </div>
       )}

@@ -27,6 +27,12 @@
 .tf-chart__base { stroke: var(--border); stroke-width: 1; }
 .tf-chart__bar { fill: var(--dot-blue); transition: opacity var(--duration-quick) var(--ease-out); }
 .tf-chart__bar.is-dim { opacity: 0.4; }
+/* Dot columns: one dot per step in the data hue; the run fades in column by column (12ms apart) whenever the numbers change. */
+.tf-chart__dots { fill: var(--dot-blue); transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-chart__dots.is-dim { opacity: 0.4; }
+.tf-chart__dots .tf-chart__dot-off { fill: var(--border-strong); }
+@media (prefers-reduced-motion: no-preference) { .tf-chart__dots { animation: tf-chart-dots var(--duration-fast) var(--ease-smooth-out) both; animation-delay: calc(var(--i, 0) * var(--duration-stagger) * 0.3); } }
+@keyframes tf-chart-dots { from { opacity: 0; transform: translateY(var(--distance-micro)); } }
 .tf-chart__ghost { fill: none; stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 3; }
 .tf-chart__hit { fill: transparent; outline: none; cursor: default; }
 .tf-chart__hit:focus-visible { stroke: var(--focus-ring); stroke-width: 2; }
@@ -87,6 +93,6 @@
 .tf-barlist__fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--dot-blue); transition: width var(--duration-slow) var(--ease-smooth-out); }
 
 @media (prefers-reduced-motion: reduce) {
-  .tf-period__item, .tf-chart__bar, .tf-donut__seg, .tf-donut__row, .tf-barlist__fill { transition: none; }
+  .tf-period__item, .tf-chart__bar, .tf-chart__dots, .tf-donut__seg, .tf-donut__row, .tf-barlist__fill { transition: none; }
   .tf-chart__tip { animation: none; }
 }
