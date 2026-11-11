@@ -144,3 +144,18 @@
 @container tf-venue (max-width: 40rem) { .tf-venue__head--cover { padding-left: var(--space-16); } }
 /* Narrow: the meta line wraps, so its dots would dangle at line ends; drop them and let the gap separate. */
 @container tf-venue (max-width: 44rem) { .tf-venue__line { column-gap: var(--space-12); } .tf-venue__line > span[aria-hidden='true'] { display: none; } }
+
+/* Opening hours: a live Open or Closed pill (green or red, a soft wash and a dot), then the week; today sits in a pill row, closed days are quiet. */
+.tf-ophours { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.tf-ophours__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); flex-wrap: wrap; padding-left: var(--space-12); }
+.tf-ophours__title { margin: 0; color: var(--text); font: 600 14px/20px var(--font-sans); }
+.tf-ophours__status { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12) var(--space-4) var(--space-8); border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font: 500 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-ophours__status.is-open { background: var(--success-soft); color: var(--success); }
+.tf-ophours__dot { width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: currentColor; }
+.tf-ophours__status.is-open .tf-ophours__dot { box-shadow: 0 0 0 var(--space-2) var(--success-soft); }
+.tf-ophours__rows { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.tf-ophours__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-12); padding: var(--space-6) var(--space-12); border: var(--border-width-hairline) solid transparent; border-radius: var(--radius-lg); color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-ophours__times { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.tf-ophours__row.is-closed .tf-ophours__times { color: var(--text-tertiary); }
+.tf-ophours__row.is-today { border-color: var(--border-subtle); background: var(--surface-subtle); color: var(--text); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) { .tf-ophours__status { transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); } }

@@ -9,7 +9,7 @@ import { Button } from '../Button/Button.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { inr, recordName, type AppAction, type AppState } from './data.ts';
+import { REPEATS, inr, recordName, type AppAction, type AppState } from './data.ts';
 import type { AppPage } from './TimefixApp.tsx';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -49,7 +49,7 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
   const mine = state.tasks.filter((t) => t.assignee === state.me);
   const due = mine.filter((t) => !t.done && t.due && t.due <= endOfToday);
   const shown = [...due, ...mine.filter((t) => !t.done && (!t.due || t.due > endOfToday))].slice(0, 6);
-  const toTask = (t: (typeof mine)[number]): Task => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
+  const toTask = (t: (typeof mine)[number]): Task => ({ id: t.id, title: t.title, done: t.done, due: t.due, priority: t.priority, repeats: REPEATS.find((r) => r.id === t.repeat)?.label, assignee: t.assignee === state.me ? undefined : t.assignee,
     record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length });
   const open = state.deals.filter((d) => d.stage !== 'Won' && d.stage !== 'Lost');
   // This quarter against the last one, from the deals' own close dates; no made-up trend.

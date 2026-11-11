@@ -1,6 +1,6 @@
 import { Button as AriaButton, Disclosure, DisclosurePanel, Input, TextField } from 'react-aria-components';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Calendar, ChevronRight, CircleCheck } from 'lucide-react';
+import { Plus, Calendar, ChevronRight, CircleCheck, Flag, Repeat } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
 import { IconButton } from '../Button/Button.tsx';
@@ -24,6 +24,10 @@ export interface Task {
   readonly record?: AttributeRecordRef;
   /** How many more records it's about: "+2" after the name. */
   readonly more?: number;
+  /** High priority shows a small red flag; low and normal show nothing. */
+  readonly priority?: 'high' | 'low';
+  /** A repeating task: its rule in words ("Every week"), shown as a repeat mark on the due day. */
+  readonly repeats?: string;
 }
 
 /** A due chip's words and whether the day has passed: Yesterday, Today and Tomorrow by name, other days as "13 Nov". */
@@ -41,8 +45,9 @@ function TaskRow({ task, checked, open, onChange, onOpen }: { readonly task: Tas
       <div className={cx('tf-task', checked && 'is-done')}>
         <Checkbox round isSelected={checked} onChange={onChange} className="tf-task__check">{task.title}</Checkbox>
         <span className="tf-task__meta">
+          {task.priority === 'high' && !checked && <Tooltip label="High priority"><AriaButton className="tf-task__flag" aria-label="High priority"><Flag size={14} strokeWidth={1.75} aria-hidden="true" /></AriaButton></Tooltip>}
           {task.record && <span className="tf-task__rec"><Avatar name={task.record.name} src={task.record.src} size={20} shape={task.record.kind === 'person' ? 'round' : 'square'} /><span className="tf-task__rec-name">{task.record.name}</span>{task.more ? <span className="tf-task__rec-more tf-num" aria-label={`and ${task.more} more`}>+{task.more}</span> : null}</span>}
-          {due && <span className="tf-task__due" data-overdue={due.overdue && !checked ? true : undefined}><Calendar size={14} strokeWidth={1.75} aria-hidden="true" />{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}{task.dueTime && task.due ? ` ${task.due.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}</span>}
+          {due && <span className="tf-task__due" data-overdue={due.overdue && !checked ? true : undefined}><Calendar size={14} strokeWidth={1.75} aria-hidden="true" />{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}{task.dueTime && task.due ? ` ${task.due.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}{task.repeats ? <Repeat size={12} strokeWidth={1.75} className="tf-task__repeat" aria-label={task.repeats} /> : null}</span>}
           {task.assignee && <Tooltip label={`Assigned to ${task.assignee}`}><AriaButton className="tf-task__who" aria-label={`Assigned to ${task.assignee}`}><Avatar name={task.assignee} size={20} /></AriaButton></Tooltip>}
           {onOpen && <span className="tf-task__go"><IconButton size="sm" label={`Open ${task.title}`} onPress={() => onOpen(task.id)}><ChevronRight size={14} strokeWidth={1.75} /></IconButton></span>}
         </span>

@@ -50,3 +50,6 @@
 /* Flush, inside a bordered card: square rows with the card's side padding, so hover fills the row and the card rounds its corners. */
 .tf-tasks--flush .tf-task, .tf-tasks--flush .tf-tasks__add { border-radius: 0; padding-inline: var(--space-16); }
 .tf-tasks--flush .tf-tasks__clear { padding-inline: var(--space-16); }
+.tf-task__flag { display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--danger); cursor: default; outline: none; }
+.tf-task__flag[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-task__repeat { margin-left: var(--space-2); color: var(--text-tertiary); }

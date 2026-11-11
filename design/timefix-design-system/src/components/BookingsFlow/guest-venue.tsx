@@ -47,7 +47,7 @@ function venueOf(state: BookingsState, now: Date): Venue {
     name: b ? state.workspace : HOST, kind: b?.kindLabel ?? 'Meetings', rating: b?.rating, reviews: b?.reviews, address: b?.address ?? 'Online, by video call', area: b?.area,
     phone: b?.phone, status, isOpen: b ? Boolean(openRange) : Boolean(openRange || next), isOnline: !b,
     about: b?.about ?? 'Pick a meeting to see open times. You get a calendar invite with the video link.', photos: b?.photos ?? [], amenities: b?.amenities,
-    hours: week ? HOURS_DAYS.map((d, i) => ({ day: DAY_NAMES[i] ?? d, text: week[d].on ? week[d].ranges.map((r) => formatClockRange(r.start, r.end)).join('\n') : 'Closed', isToday: d === todayKey, isOpen: week[d].on })) : undefined,
+    hours: week ? HOURS_DAYS.map((d, i) => ({ day: DAY_NAMES[i] ?? d, ranges: week[d].on ? week[d].ranges.map((r) => ({ start: r.start, end: r.end })) : [] })) : undefined,
   };
 }
 

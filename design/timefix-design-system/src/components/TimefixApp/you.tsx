@@ -18,7 +18,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { parseDate } from '@internationalized/date';
 import { Inbox, CheckSquare, ChevronRight, NotebookPen } from 'lucide-react';
 import { Button as AriaButton, Disclosure, DisclosurePanel } from 'react-aria-components';
-import { isEmptyNote, newId, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
+import { REPEATS, isEmptyNote, newId, type TaskRepeat, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
 
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -92,12 +92,14 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
   const now = new Date(); const today = startOf(now); const tomorrow = new Date(today.getTime() + 86_400_000);
   const list = state.tasks.filter((t) => whose === 'all' || t.assignee === state.me);
   const open = list.filter((t) => !t.done);
+  const rank = (t: AppTask) => (t.priority === 'high' ? 0 : t.priority === 'low' ? 2 : 1);
   const groups = [
     { id: 'overdue', title: 'Overdue', tasks: open.filter((t) => t.due && t.due < today) },
+    // High priority first in each group, low last; otherwise as they were.
     { id: 'today', title: 'Today', tasks: open.filter((t) => t.due && t.due >= today && t.due < tomorrow) },
     { id: 'upcoming', title: 'Upcoming', tasks: open.filter((t) => t.due && t.due >= tomorrow).sort((a, b) => (a.due?.getTime() ?? 0) - (b.due?.getTime() ?? 0)) },
     { id: 'none', title: 'No date', tasks: open.filter((t) => !t.due) },
-  ].filter((g) => g.tasks.length > 0);
+  ].filter((g) => g.tasks.length > 0).map((g) => ({ ...g, tasks: [...g.tasks].sort((a, b) => rank(a) - rank(b)) }));
   // Done tasks get their own section at the bottom, open, newest first; its head folds it away.
   const done = list.filter((t) => t.done).reverse();
   const toggle = (id: string, done: boolean) => { const t = state.tasks.find((x) => x.id === id); if (!t) return; dispatch({ type: 'task/set', task: { ...t, done } }); toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); };
@@ -115,7 +117,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />{g.title}<span className="tf-rec__muted tf-num">{g.tasks.filter((t) => !t.done).length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
           <div className="tf-you__card">
-            <TaskList isFlush tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
+            <TaskList isFlush tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, priority: t.priority, repeats: REPEATS.find((r) => r.id === t.repeat)?.label, assignee: t.assignee === state.me ? undefined : t.assignee,
               record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
           </div>
           </DisclosurePanel>
@@ -127,7 +129,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h"><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />Completed<span className="tf-rec__muted tf-num">{done.length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
             <div className="tf-you__card">
-              <TaskList isFlush isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
+              <TaskList isFlush isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, priority: t.priority, repeats: REPEATS.find((r) => r.id === t.repeat)?.label, assignee: t.assignee === state.me ? undefined : t.assignee,
                 record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
             </div>
           </DisclosurePanel>
@@ -148,11 +150,13 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
   const [assignee, setAssignee] = useState(task?.assignee ?? state.me);
   const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : record ? `${record.object}:${record.id}` : '');
   const [description, setDescription] = useState(task?.description ?? '');
+  const [priority, setPriority] = useState<string>(task?.priority ?? 'normal');
+  const [repeat, setRepeat] = useState<string>(task?.repeat ?? 'none');
   const [also, setAlso] = useState<ReadonlyArray<string>>(() => (task?.also ?? []).map((r) => `${r.object}:${r.id}`));
   const records = [...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))];
   const toLink = (key: string): RecordLink => { const [o, i] = key.split(':') as [ObjectId, string]; return { object: o, id: i }; };
   const link = (): RecordLink | undefined => (rec ? toLink(rec) : undefined);
-  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? (() => { const d = dayFrom(due, 17); if (!d || at === 'none') return d; return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(Number(at) / 60), Number(at) % 60); })() : undefined, dueTime: Boolean(due) && at !== 'none', assignee, record: link(), also: also.filter((k) => k !== rec).length ? also.filter((k) => k !== rec).map(toLink) : undefined, description: description.trim() || undefined, created: task?.created ?? new Date() }); };
+  const save = () => { if (title.trim()) onSave({ priority: priority === 'high' || priority === 'low' ? priority : undefined, repeat: due && REPEATS.some((r) => r.id === repeat) ? (repeat as TaskRepeat) : undefined, id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? (() => { const d = dayFrom(due, 17); if (!d || at === 'none') return d; return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(Number(at) / 60), Number(at) % 60); })() : undefined, dueTime: Boolean(due) && at !== 'none', assignee, record: link(), also: also.filter((k) => k !== rec).length ? also.filter((k) => k !== rec).map(toLink) : undefined, description: description.trim() || undefined, created: task?.created ?? new Date() }); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={task ? 'Task' : 'New task'}
       actions={<>{onDelete && <Button variant="ghost" onPress={onDelete}>Delete</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button>
@@ -163,8 +167,10 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
           <DatePicker label="Due" value={due ? parseDate(due) : null} onChange={(d) => setDue(d ? d.toString() : undefined)} />
           <Select label="At" value={at} isDisabled={!due} onChange={(v) => setAt(v ?? 'none')} items={[{ id: 'none', label: 'Any time that day' }, ...Array.from({ length: 23 }, (_, n) => 7 * 60 + n * 30).map((m) => ({ id: String(m), label: new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }))]} />
         </div>
+        {due && <Select label="Repeat" value={repeat} onChange={(v) => setRepeat(v ?? 'none')} items={[{ id: 'none', label: 'Doesn’t repeat' }, ...REPEATS.map((r) => ({ id: r.id, label: r.label, description: 'The next one is added when you tick this one' }))]} />}
         <div className="tf-bkf__pair">
           <Select label="Assignee" value={assignee} onChange={(v) => setAssignee(v ?? state.me)} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
+          <Select label="Priority" value={priority} onChange={(v) => setPriority(v ?? 'normal')} items={[{ id: 'high', label: 'High' }, { id: 'normal', label: 'Normal' }, { id: 'low', label: 'Low' }]} />
         </div>
         <Select label="About" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="A person, company or deal" items={records} />
         {rec && onOpenRecord && <button type="button" className="tf-rec__link tf-you__open" onClick={() => { const l = link(); if (!l) return; if (title.trim()) save(); else onClose(); onOpenRecord(l.object, l.id); }}>Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</button>}

@@ -390,3 +390,9 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Table blocks: tableBlocks + tableblock/add|remove, heldTables treats them as taken (bookings, walk-ins, online), Floor tile/menu, BlockTableDialog warns about bookings on the table.
 - Fix: board column names were squeezed to "L…"/"Qu…" by long amounts; title no longer shrinks.
 - All walks green both themes (regress passes after 10:00). Walk w8.
+
+## Wave 9 (11 Nov)
+- Owner reference (Osmo opening hours): OpeningHours in VenuePage (live Open/Closed pill with closes/opens time, re-checks each minute and on tab return, today row aria-current, each range on its own line, closed days quiet). Classes tf-ophours (tf-hours belongs to HoursEditor; the collision check caught it). Walk w9hours.
+- Tasks: priority (high flag, high first) and repeat (next task added on tick, once). Walk w9task.
+- Owner reference (Osmo events calendar): held. Restyling the booking calendar touches every booking page; asked owner: embed restyle vs events calendar.
+- Moved to wave 10: inbox snooze, Insights share link controls.

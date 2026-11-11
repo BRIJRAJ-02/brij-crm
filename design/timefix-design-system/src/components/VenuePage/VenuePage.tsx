@@ -5,7 +5,10 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { StatusDot } from '../Tag/Tag.tsx';
 import { cx } from '../../lib/cx.ts';
+import { OpeningHours, type OpeningDay } from './OpeningHours.tsx';
 import './VenuePage.css';
+
+export { OpeningHours, openStatus, type OpeningDay, type OpeningHoursProps } from './OpeningHours.tsx';
 
 /** The business a public page is for. */
 export interface Venue {
@@ -24,8 +27,8 @@ export interface Venue {
   readonly photos: ReadonlyArray<string>;
   readonly about?: string;
   readonly amenities?: ReadonlyArray<string>;
-  /** Monday first; `today` is bold. */
-  readonly hours?: ReadonlyArray<{ readonly day: string; readonly text: string; readonly isToday?: boolean; readonly isOpen: boolean }>;
+  /** Monday first, with each day's open times: drawn by OpeningHours (a live Open or Closed pill, today picked out). */
+  readonly hours?: ReadonlyArray<OpeningDay>;
   /** Meets online only: no directions or map. */
   readonly isOnline?: boolean;
   /** The business's logo; its initials on a tile when there is none. */
@@ -151,14 +154,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
               {!venue.isOnline && <VenueMap label={venue.area ?? venue.address} />}
               {!venue.isOnline && <p className="tf-venue__muted">{venue.address} · <a className="tf-venue__link" href={`https://maps.google.com/?q=${encodeURIComponent(venue.address)}`} target="_blank" rel="noreferrer">Get directions</a></p>}
               <div className="tf-venue__facts">
-                {venue.hours && (
-                  <div>
-                    <h3 className="tf-venue__h3">Opening times</h3>
-                    <ul className="tf-venue__hours">
-                      {venue.hours.map((h) => <li key={h.day} className={cx(h.isToday && 'is-today')}><StatusDot hue={h.isOpen ? 'green' : 'gray'}>{h.day}</StatusDot><span className="tf-num">{h.text}</span></li>)}
-                    </ul>
-                  </div>
-                )}
+                {venue.hours && <OpeningHours week={venue.hours} />}
                 {venue.amenities && venue.amenities.length > 0 && (
                   <div>
                     <h3 className="tf-venue__h3">Good to know</h3>

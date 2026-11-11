@@ -27,7 +27,23 @@ export interface Deal { readonly id: string; readonly name: string; readonly com
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
-export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; /** More records the task is about (a deal and its two people); it shows on each one's page. */ readonly also?: ReadonlyArray<RecordLink>; readonly description?: string; readonly created: Date }
+export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; /** More records the task is about (a deal and its two people); it shows on each one's page. */ readonly also?: ReadonlyArray<RecordLink>; readonly description?: string; readonly created: Date;
+  /** High or low; unset is normal. */ readonly priority?: 'high' | 'low';
+  /** Repeats from its due day: ticking it done adds the next one. */ readonly repeat?: TaskRepeat }
+/** How a task repeats. */
+export type TaskRepeat = 'day' | 'weekday' | 'week' | 'month';
+/** The repeat rules, as people say them. */
+export const REPEATS: ReadonlyArray<{ readonly id: TaskRepeat; readonly label: string }> = [
+  { id: 'day', label: 'Every day' }, { id: 'weekday', label: 'Every weekday' }, { id: 'week', label: 'Every week' }, { id: 'month', label: 'Every month' },
+];
+/** The next due day after this one, by the rule (weekdays skip Saturday and Sunday). */
+export function nextDue(due: Date, r: TaskRepeat): Date {
+  const d = new Date(due);
+  if (r === 'month') { d.setMonth(d.getMonth() + 1); return d; }
+  d.setDate(d.getDate() + (r === 'week' ? 7 : 1));
+  if (r === 'weekday') while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
 export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly record: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
 /** One thing for you in the Inbox. */
 export interface InboxItem {
@@ -268,7 +284,15 @@ const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item:
 /** The one reducer: new objects only. */
 export function appReducer(state: AppState, a: AppAction): AppState {
   switch (a.type) {
-    case 'task/set': return { ...state, tasks: upsert(state.tasks, a.task) };
+    case 'task/set': {
+      // Ticking a repeating task done adds the next one, due on the next day by its rule (once: undoing and re-ticking adds no second copy).
+      const was = state.tasks.find((t) => t.id === a.task.id);
+      const tasks = upsert(state.tasks, a.task);
+      if (!a.task.done || was?.done || !a.task.repeat || !a.task.due) return { ...state, tasks };
+      const due = nextDue(a.task.due, a.task.repeat);
+      if (state.tasks.some((t) => !t.done && t.title === a.task.title && t.due?.getTime() === due.getTime())) return { ...state, tasks };
+      return { ...state, tasks: [...tasks, { ...a.task, id: newId('t'), done: false, due, created: new Date() }] };
+    }
     case 'task/remove': return { ...state, tasks: state.tasks.filter((t) => t.id !== a.id) };
     case 'note/set': return { ...state, notes: upsert(state.notes, a.note) };
     case 'note/remove': return { ...state, notes: state.notes.filter((n) => n.id !== a.id) };
@@ -463,10 +487,10 @@ export function northwindCrm(now = new Date()): AppState {
   const tasks: AppTask[] = [
     { ...t('t-1', 'Send the revised proposal to Liam', 0, me, { object: 'deals', id: 'd-acme' }), also: [{ object: 'people', id: 'p-liam' }] },
     t('t-2', 'Book a security review with Amara', 1, me, { object: 'people', id: 'p-amara' }),
-    t('t-3', 'Chase signed order form', -2, me, { object: 'deals', id: 'd-umbrella' }),
+    { ...t('t-3', 'Chase signed order form', -2, me, { object: 'deals', id: 'd-umbrella' }), priority: 'high' },
     t('t-4', 'Prepare QBR deck for Globex', 3, 'Sam Kim', { object: 'companies', id: 'c-globex' }),
     t('t-5', 'Intro call follow-up', 0, me, { object: 'people', id: 'p-pepper' }),
-    t('t-6', 'Update forecast for the quarter', 6, me),
+    { ...t('t-6', 'Update forecast for the quarter', 6, me), repeat: 'month' },
     t('t-7', 'Share case study with Ravi', undefined, me, { object: 'people', id: 'p-ravi' }),
     t('t-8', 'Confirm pilot scope', -1, 'Jo Mendes', { object: 'deals', id: 'd-initech' }),
     t('t-9', 'Send welcome pack', -6, me, { object: 'deals', id: 'd-pied' }, true),
