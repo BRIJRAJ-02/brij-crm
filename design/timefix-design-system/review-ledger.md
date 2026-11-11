@@ -397,3 +397,8 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Owner reference (Osmo events calendar): held. Restyling the booking calendar touches every booking page; asked owner: embed restyle vs events calendar.
 - Moved to wave 10: inbox snooze, Insights share link controls.
 - Calendar embed (owner: "whatever is best"): BookingFlow month days become rounded-square tiles, today a dot, nearly full days (1-3 left) carry a corner count read as "N times left"; BookingPagePicture and GuestLook preview days match. Walk w9cal. regress "taken clears" needs two free times today: fails after ~11:00 (minimum notice), time-dependent like "manage move".
+
+## Wave 10 (11 Nov)
+- Inbox snooze: NotificationList onSnooze + snoozeTimes (later today rounded to the half hour, tomorrow 9, next Monday 9); InboxItem.snoozedUntil; Snoozed box with "Back …" times; comes back unread; Undo. Walk w10.
+- Insights share: AppState.insightsLink (key, expiry 30 days or none), ShareInsights popover with Copy and Stop sharing (Undo). Walk w10.
+- regress made clock-proof: manage move accepts the cut-off refusal; taken clears books a day ahead. Full suite green at 12:14.

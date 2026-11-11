@@ -49,6 +49,8 @@ export interface AppNote { readonly id: string; readonly title: string; readonly
 export interface InboxItem {
   readonly id: string; readonly kind: 'mention' | 'reply' | 'assignment' | 'booking'; readonly actor: string; readonly text: string; readonly excerpt?: string;
   readonly at: Date; readonly read: boolean; readonly done: boolean; readonly record?: RecordLink; readonly taskId?: string;
+  /** Snoozed: out of the inbox until then, back unread. */
+  readonly snoozedUntil?: Date;
 }
 /** A comment thread on a record. */
 export interface Comment { readonly id: string; readonly record: RecordLink; readonly author: string; readonly body: string; readonly at: Date; readonly resolved: boolean; readonly replies: ReadonlyArray<{ readonly id: string; readonly author: string; readonly body: string; readonly at: Date }> }
@@ -217,6 +219,8 @@ export interface AppState {
   readonly linkDraft?: LinkPageDraft;
   /** Saved charts in Insights › Reports. */
   readonly reports: ReadonlyArray<Report>;
+  /** Insights shared by a view-only link: its own key (stopping sharing kills it) and when it stops working, if ever. */
+  readonly insightsLink?: { readonly key: string; readonly expires?: Date; readonly made: Date };
   /** Records of objects owners made (Projects, Vendors), by object id. */
   readonly customRecords: Readonly<Record<string, ReadonlyArray<CustomRecord>>>;
   /** "Preview as": see the app as a member or guest would, read only where they can't change things. */
@@ -256,6 +260,7 @@ export type AppAction =
   | { readonly type: 'link/offline'; readonly offline: boolean }
   | { readonly type: 'link/draft'; readonly page: LinkPageDraft | undefined }
   | { readonly type: 'report/set'; readonly report: Report }
+  | { readonly type: 'insights/link'; readonly link: AppState['insightsLink'] }
   | { readonly type: 'report/remove'; readonly id: string }
   | { readonly type: 'custom/set'; readonly object: string; readonly record: CustomRecord }
   | { readonly type: 'custom/remove'; readonly object: string; readonly ids: ReadonlyArray<string> }
@@ -367,6 +372,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'link/draft': return { ...state, linkDraft: a.page };
     case 'link/offline': return { ...state, linkOffline: a.offline, history: [line(`${state.me} took the link page ${a.offline ? 'offline' : 'back online'}`), ...state.history] };
     case 'link/publish': return { ...state, linkPage: a.page, linkOffline: false, linkDraft: undefined, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
+    case 'insights/link': return { ...state, insightsLink: a.link };
     case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
     case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
     case 'custom/set': { const list = state.customRecords[a.object] ?? []; return { ...state, customRecords: { ...state.customRecords, [a.object]: list.some((r) => r.id === a.record.id) ? list.map((r) => (r.id === a.record.id ? a.record : r)) : [a.record, ...list] } }; }

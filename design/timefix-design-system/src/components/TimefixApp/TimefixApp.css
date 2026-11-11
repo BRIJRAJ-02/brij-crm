@@ -345,3 +345,8 @@
 /* The form's Look popover: the look picker's controls, no preview of its own (the builder's preview is beside it). */
 .tf-forms__look { width: min(calc(var(--size-menu) * 1.9), calc(100vw - var(--space-32))); padding: var(--space-16); }
 .tf-forms__guest > .tf-hform--look { border-radius: var(--radius-xl); }
+/* Insights › Share: a short panel with the link, when it stops working, and Stop sharing. */
+.tf-grow__share { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); width: min(calc(var(--size-menu) * 1.5), calc(100vw - var(--space-32))); padding: var(--space-16); }
+.tf-grow__share-title { color: var(--text); font: 600 14px/20px var(--font-sans); }
+.tf-grow__share-link { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.tf-grow__share-link > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; user-select: all; }

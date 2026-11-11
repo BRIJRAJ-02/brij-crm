@@ -1,6 +1,7 @@
 import { Button as AriaButton, Dialog, DialogTrigger, GridList, GridListHeader, GridListItem, GridListSection, Popover } from 'react-aria-components';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bell, Archive, Check, CheckCheck, Inbox } from 'lucide-react';
+import { Bell, Archive, Check, CheckCheck, Clock, Inbox } from 'lucide-react';
+import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
 import { cx } from '../../lib/cx.ts';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -55,12 +56,28 @@ export interface NotificationListProps {
   /** What Archive does here ("Move to inbox" in a Done list) and what the row says after. */
   readonly archiveLabel?: string;
   readonly archivedLabel?: string;
+  /** Hides a notification until a time (later today, tomorrow morning, next Monday); it comes back unread. Without it there is no Snooze. */
+  readonly onSnooze?: (id: string, until: Date) => void;
+}
+
+/** When a snooze can end, from now: later today (about 3 hours on, offered before 6 PM), tomorrow at 9 and next Monday at 9. */
+export function snoozeTimes(now: Date): ReadonlyArray<{ readonly id: string; readonly label: string; readonly until: Date }> {
+  const at = (days: number, h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, h, 0);
+  // Three hours on, rounded up to the next half hour (2:58 becomes 3:00).
+  const later = new Date(Math.ceil((now.getTime() + 3 * 3_600_000) / 1_800_000) * 1_800_000);
+  const toMonday = ((8 - now.getDay()) % 7) || 7;
+  const clock = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return [
+    ...(now.getHours() < 18 ? [{ id: 'later', label: `Later today, ${clock(later)}`, until: later }] : []),
+    { id: 'tomorrow', label: `Tomorrow, ${clock(at(1, 9))}`, until: at(1, 9) },
+    { id: 'monday', label: `Next Monday, ${clock(at(toMonday, 9))}`, until: at(toMonday, 9) },
+  ];
 }
 
 const UNDO_MS = 5000;
 
 /** The inbox: unread dots, who did what and when, grouped Today and Earlier; Mark all read fades the dots; Archive folds a row into "Archived · Undo" before it goes. */
-export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive, title = 'Inbox', archiveLabel = 'Archive', archivedLabel = 'Archived', allLabel = 'Mark all read' }: NotificationListProps) {
+export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive, onSnooze, title = 'Inbox', archiveLabel = 'Archive', archivedLabel = 'Archived', allLabel = 'Mark all read' }: NotificationListProps) {
   const [archiving, setArchiving] = useState<ReadonlyMap<string, 'undo' | 'gone'>>(new Map());
   const timers = useRef(new Map<string, number[]>());
   const latest = useRef(onArchive); latest.current = onArchive;
@@ -115,6 +132,12 @@ export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArc
                           <time className="tf-inbox__time">{n.time}</time>
                           <span className="tf-inbox__actions">
                             <Tooltip label={n.read ? 'Mark unread' : 'Mark read'}><IconButton size="sm" label={n.read ? 'Mark unread' : 'Mark read'} onPress={() => onReadChange(n.id, !n.read)}>{n.read ? <span className="tf-inbox__dot-icon" /> : <Check size={14} strokeWidth={1.75} />}</IconButton></Tooltip>
+                            {onSnooze && <MenuTrigger>
+                              <Tooltip label="Snooze"><IconButton size="sm" label="Snooze"><Clock size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+                              <Menu aria-label="Snooze until" placement="bottom end" onAction={(k) => { const t = snoozeTimes(new Date()).find((x) => x.id === String(k)); if (t) onSnooze(n.id, t.until); }}>
+                                {snoozeTimes(new Date()).map((t) => <MenuItem key={t.id} id={t.id}>{t.label}</MenuItem>)}
+                              </Menu>
+                            </MenuTrigger>}
                             <Tooltip label={archiveLabel} shortcut="E"><IconButton size="sm" label={archiveLabel} onPress={() => archive(n.id)}><Archive size={14} strokeWidth={1.75} /></IconButton></Tooltip>
                           </span>
                         </div>

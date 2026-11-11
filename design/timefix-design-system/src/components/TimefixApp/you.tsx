@@ -1,6 +1,6 @@
 // The "You" pages: Inbox (mentions, replies, assignments and booking notices; Done keeps the handled ones), Tasks (grouped by when
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { SearchField } from '../SearchField/SearchField.tsx';
 import { NotificationList } from '../NotificationList/NotificationList.tsx';
@@ -41,14 +41,19 @@ export interface YouProps {
 /** Inbox: what needs you. Opening one marks it read; Done moves it out of the way, with Undo. */
 export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouProps) {
   const { toast } = useToast();
-  const [box, setBox] = useState<'inbox' | 'done'>('inbox');
+  const [box, setBox] = useState<'inbox' | 'snoozed' | 'done'>('inbox');
+  // Snoozes end as time passes: checked each minute so an item comes back without a reload.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = window.setInterval(() => setNow(new Date()), 60_000); return () => window.clearInterval(t); }, []);
+  const asleep = (x: InboxItem) => !x.done && x.snoozedUntil !== undefined && x.snoozedUntil > now;
+  const back = (d: Date) => { const days = Math.round((startOf(d).getTime() - startOf(now).getTime()) / 86_400_000); return `Back ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`; };
   const [kind, setKind] = useState<'all' | 'due' | InboxItem['kind']>('all');
   const [unread, setUnread] = useState(false);
   const [taskId, setTaskId] = useState<string>();
   const today = startOf(new Date());
   const tomorrow = new Date(today.getTime() + 86_400_000);
   const dueToday = (x: InboxItem) => { const t = state.tasks.find((y) => y.id === x.taskId); return t !== undefined && !t.done && t.due !== undefined && t.due < tomorrow; };
-  const items = state.inbox.filter((x) => (box === 'done' ? x.done : !x.done) && (kind === 'all' || (kind === 'due' ? dueToday(x) : x.kind === kind)) && (!unread || !x.read));
+  const items = state.inbox.filter((x) => (box === 'done' ? x.done : box === 'snoozed' ? asleep(x) : !x.done && !asleep(x)) && (kind === 'all' || (kind === 'due' ? dueToday(x) : x.kind === kind)) && (!unread || !x.read));
   const filtered = kind !== 'all' || unread;
   const set = (x: InboxItem, patch: Partial<InboxItem>) => dispatch({ type: 'inbox/set', item: { ...x, ...patch } });
   const open = (id: string) => {
@@ -60,8 +65,8 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
   return (
     <div className="tf-you">
       <div className="tf-you__bar">
-        <SegmentedControl aria-label="Box" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : 'inbox')}
-          items={[{ id: 'inbox', label: `Inbox · ${state.inbox.filter((x) => !x.done).length}` }, { id: 'done', label: 'Done' }]} />
+        <SegmentedControl aria-label="Box" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : k === 'snoozed' ? 'snoozed' : 'inbox')}
+          items={[{ id: 'inbox', label: `Inbox · ${state.inbox.filter((x) => !x.done && !asleep(x)).length}` }, ...(state.inbox.some(asleep) || box === 'snoozed' ? [{ id: 'snoozed', label: `Snoozed · ${state.inbox.filter(asleep).length}` }] : []), { id: 'done', label: 'Done' }]} />
         <Select label="Kind" isLabelHidden className="tf-you__select" value={kind} onChange={(v) => setKind((v ?? 'all') as typeof kind)}
           items={[{ id: 'all', label: 'Everything' }, { id: 'due', label: 'Tasks due by today' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
         <Switch isSelected={unread} onChange={setUnread}>Unread only</Switch>
@@ -73,9 +78,11 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
           description={box === 'done' ? 'What you mark done lands here, out of the way.' : 'Mentions, replies, tasks given to you and new bookings show up here.'} />
       ) : (
         <div className="tf-you__list">
-          <NotificationList key={box} title="" archiveLabel={box === 'done' ? 'Move to inbox' : 'Mark done'} archivedLabel={box === 'done' ? 'Moved to inbox' : 'Done'} items={items.map((x) => ({ id: x.id, actor: x.actor, action: x.text, object: x.record ? recordName(state, x.record).name : '', excerpt: x.excerpt, time: ago(x.at), group: x.at >= today ? 'Today' : 'Earlier', read: x.read }))}
+          <NotificationList key={box} title="" archiveLabel={box === 'done' ? 'Move to inbox' : box === 'snoozed' ? 'Back to inbox now' : 'Mark done'} archivedLabel={box === 'done' || box === 'snoozed' ? 'Moved to inbox' : 'Done'}
+            onSnooze={box === 'inbox' ? (id, until) => { const x = state.inbox.find((y) => y.id === id); if (!x) return; set(x, { snoozedUntil: until, read: false }); toast({ message: back(until).replace('Back', 'Snoozed till'), action: { label: 'Undo', onAction: () => set(x, { snoozedUntil: x.snoozedUntil, read: x.read }) } }); } : undefined}
+            items={items.map((x) => ({ id: x.id, actor: x.actor, action: x.text, object: x.record ? recordName(state, x.record).name : '', excerpt: x.excerpt, time: box === 'snoozed' && x.snoozedUntil ? back(x.snoozedUntil) : ago(x.at), group: x.at >= today ? 'Today' : 'Earlier', read: x.read }))}
             onOpen={open} onReadChange={(id, read) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { read }); }} allLabel={box === 'done' ? 'Mark all read' : 'Mark all done'} onReadAll={() => { if (box === 'done') { items.forEach((x) => { if (!x.read) set(x, { read: true }); }); return; } const was = items; was.forEach((x) => set(x, { done: true, read: true })); toast({ message: `${was.length} moved to Done`, action: { label: 'Undo', onAction: () => was.forEach((x) => set(x, { done: x.done, read: x.read })) } }); }}
-            onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { done: !x.done, read: true }); }} />
+            onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (!x) return; if (box === 'snoozed') set(x, { snoozedUntil: undefined }); else set(x, { done: !x.done, read: true }); }} />
         </div>
       )}
       {task && <TaskDialog state={state} task={task} onClose={() => setTaskId(undefined)} onOpenRecord={onOpenRecord} onSave={(t) => { dispatch({ type: 'task/set', task: t }); setTaskId(undefined); toast({ message: 'Task saved', tone: 'success' }); }}

@@ -2,6 +2,8 @@
 // the Link page editor (beside the phone; Publish keeps it in the workspace), and Insights, one analytics home with two tabs:
 // Pages (what came in through your links, from real bookings and form answers) and Reports (saved CRM charts: new, rename, delete).
 import { useRef, useState, type ReactNode } from 'react';
+import { DialogTrigger } from 'react-aria-components';
+import { Popover } from '../Popover/Popover.tsx';
 import { SearchField } from '../SearchField/SearchField.tsx';
 import { ArrowLeft, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, UtensilsCrossed } from 'lucide-react';
 import { LinkEditor, type LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
@@ -184,6 +186,37 @@ export function reportPoints(state: AppState, r: Report): ReadonlyArray<{ readon
 }
 
 /** Insights: Pages (from real bookings and form answers) and Reports (saved charts: one tab each, new, change, delete). */
+/** Share Insights by a view-only link: its own key, an expiry, Copy, and Stop sharing (the link dies at once; Undo brings it back). Numbers only, never names. */
+function ShareInsights({ state, dispatch, query }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly query: string }) {
+  const { toast } = useToast();
+  const link = state.insightsLink;
+  const live = link && (!link.expires || link.expires > new Date()) ? link : undefined;
+  const url = live ? `https://timefix.com/insights/${state.prefs.workspace.slug}?k=${live.key}&${query}` : '';
+  const copy = (u: string) => { void copyText(u).then((ok) => toast(ok ? { message: 'View-only link copied', tone: 'success' } : { message: `Copy didn’t work. The link is ${u}`, tone: 'danger' })); };
+  const make = (days: number) => dispatch({ type: 'insights/link', link: { key: Math.random().toString(36).slice(2, 10), made: new Date(), expires: days ? new Date(Date.now() + days * 86_400_000) : undefined } });
+  return (
+    <DialogTrigger>
+      <Button variant="ghost" icon={<Share2 {...i14} />}>{live ? 'Shared' : 'Share'}</Button>
+      <Popover label="Share Insights" placement="bottom end" offset={6}>
+        <div className="tf-grow__share">
+          <span className="tf-grow__share-title">Share a view-only link</span>
+          <span className="tf-rec__muted">Anyone with it sees these numbers and charts, never names or answers.</span>
+          {live ? <>
+            <div className="tf-grow__share-link"><span className="tf-num">{url.replace('https://', '')}</span><Button size="sm" variant="secondary" icon={<Copy {...i14} />} onPress={() => copy(url)}>Copy</Button></div>
+            <span className="tf-rec__muted tf-num">{live.expires ? `Stops working ${live.expires.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Works until you stop sharing'}</span>
+            <Button size="sm" variant="ghost" onPress={() => { const was = link; dispatch({ type: 'insights/link', link: undefined }); toast({ message: 'The link stopped working', action: { label: 'Undo', onAction: () => dispatch({ type: 'insights/link', link: was }) } }); }}>Stop sharing</Button>
+          </> : <>
+            <span className="tf-bkf__row">
+              <Button size="sm" variant="primary" onPress={() => { make(30); }}>Share for 30 days</Button>
+              <Button size="sm" variant="ghost" onPress={() => { make(0); }}>No end date</Button>
+            </span>
+          </>}
+        </div>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
 export function InsightsScreen({ state, dispatch, bookings, startTab, startReport }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly bookings: BookingsState | undefined; readonly startTab?: 'pages' | 'reports'; readonly startReport?: string }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<string>(startTab ?? 'pages');
@@ -238,7 +271,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
             </>}
             <span className="tf-rec__spacer" />
             <Button variant="ghost" icon={<Download {...i14} />} onPress={() => { void exportCsv(); }}>Export CSV</Button>
-            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => { void copyText(`https://timefix.com/insights/${state.prefs.workspace.slug}?${new URLSearchParams({ tab, show: kind, ...(range === 'custom' ? { from: ymdOf(from), to: ymdOf(new Date(until.getTime() - 86_400_000)) } : { days: range }) }).toString()}`).then((ok) => toast(ok ? { message: 'View-only link copied, with these filters. It shows numbers, never names.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}>Share</Button>
+            <ShareInsights state={state} dispatch={dispatch} query={new URLSearchParams({ tab, show: kind, ...(range === 'custom' ? { from: ymdOf(from), to: ymdOf(new Date(until.getTime() - 86_400_000)) } : { days: range }) }).toString()} />
           </div>
           <div className="tf-home__stats">
             <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />
