@@ -374,3 +374,92 @@
 @keyframes tf-as-block { from { opacity: 0; transform: translate(var(--tf-as-x, 0), var(--tf-as-y, var(--distance-medium))) scale(var(--scale-large)); } }
 @keyframes tf-as-fill { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tf-assemble__surface, .tf-assemble__side, .tf-assemble__block, .tf-assemble__block > * { animation: none; } }
+
+/* ---- Wave B: records, record page, dialogs ---- */
+/* Grouped table rows: a quiet header per group (chevron, the value's tag, count and total), its rows under it. */
+.tf-rec__grid { display: flex; flex-direction: column; }
+.tf-rec__rowgroup { display: flex; flex-direction: column; }
+.tf-rec__rowgroup + .tf-rec__rowgroup { margin-top: var(--space-8); }
+.tf-rec__grouphead { display: inline-flex; align-items: center; gap: var(--space-8); align-self: flex-start; min-height: var(--size-control-sm); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none; }
+.tf-rec__grouphead[data-hovered] { background: var(--surface-hover); }
+.tf-rec__grouphead[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-rec__groupchev { color: var(--text-tertiary); transition: transform var(--duration-quick) var(--ease-out); }
+.tf-rec__groupchev.is-open { transform: rotate(90deg); }
+.tf-rec__groupwho { display: inline-flex; align-items: center; gap: var(--space-6); }
+/* Board options in the View popover: which fields a card shows. */
+.tf-rec__cardfields { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; border: 0; }
+.tf-rec__cardfields legend { padding: 0 0 var(--space-4); color: var(--text-secondary); font: 500 13px/18px var(--font-sans); }
+/* New record: more fields as labelled rows with a remove ×; a missing required one is marked. */
+.tf-rec__morefields { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-8) 0; border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-rec__morefield { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); border-radius: var(--radius-md); }
+.tf-rec__morefield[data-missing] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--danger); }
+.tf-rec__addmore { align-self: flex-start; }
+.tf-rec__radiohint { display: block; color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
+/* Bulk edit: one change per row (field, how, value, ×). */
+.tf-bulk { list-style: none; margin: 0 0 var(--space-8); padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-bulk__row { display: grid; grid-template-columns: minmax(0, 11rem) auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-8); }
+.tf-bulk__value { min-width: 0; }
+@container tf-app (max-width: 40rem) { .tf-bulk__row { grid-template-columns: minmax(0, 1fr) auto; } .tf-bulk__value { grid-column: 1 / -1; } }
+/* Record page: the facts strip under the header. */
+.tf-recp__stats { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-32); margin: 0; padding: var(--space-12) 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-recp__stat { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-recp__stat dt { color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
+.tf-recp__stat dd { margin: 0; color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-recp__twinline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8) var(--space-16); }
+.tf-recp__twinline .tf-set__row { gap: var(--space-6); }
+.tf-recp__feedbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-recp__notebar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); }
+.tf-recp__notebar .tf-rec__muted { margin-right: auto; }
+.tf-recp__logwhen { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-12); }
+@container tf-app (max-width: 40rem) { .tf-recp__logwhen { grid-template-columns: minmax(0, 1fr); } }
+.tf-recp__attracts { display: flex; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-4) 0 var(--space-8); }
+/* A related record with its unlink ×. */
+.tf-rec__relrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.tf-rec__relrow > .tf-iconbtn, .tf-rec__relrow > button:last-child:not(.tf-rec__rel) { opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .tf-rec__relrow:hover > button:last-child:not(.tf-rec__rel), .tf-rec__relrow:focus-within > button:last-child:not(.tf-rec__rel) { opacity: 1; } }
+@media (hover: none) { .tf-rec__relrow > button:last-child:not(.tf-rec__rel) { opacity: 1; } }
+.tf-rec__relrow > button:last-child:not(.tf-rec__rel):focus-visible { opacity: 1; }
+.tf-rec__relnone { margin: 0; padding: var(--space-4) var(--space-8); }
+/* Settings › Automations: a row per automation (switch, what it does, a state tag, ⋯), and the builder's three parts. */
+.tf-auto { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-auto__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-8) 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-auto__text { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; padding: var(--space-4) var(--space-8); border: 0; border-radius: var(--radius-md); background: none; color: var(--text); text-align: start; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .tf-auto__text:hover { background: var(--surface-hover); } }
+.tf-auto__text:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-auto__what { font: 500 14px/20px var(--font-sans); }
+.tf-auto__start { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding-top: var(--space-12); }
+.tf-auto__run { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-auto__part { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-12) 0; border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-auto__part:first-of-type { border-top: 0; padding-top: 0; }
+.tf-auto__h { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; font: 600 13px/20px var(--font-sans); color: var(--text); }
+.tf-auto__line { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-8); align-items: end; }
+.tf-auto__fixed { align-self: center; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-auto__cond { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--space-8); align-items: center; }
+.tf-auto__act { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--space-8); align-items: center; }
+.tf-auto__act:has(> :nth-child(4):last-child) { grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) minmax(0, 1.4fr) auto; }
+.tf-auto__value { min-width: 0; }
+.tf-auto__runas { margin-inline-end: auto; }
+@container tf-app (max-width: 48rem) { .tf-auto__cond, .tf-auto__act, .tf-auto__act:has(> :nth-child(4):last-child) { grid-template-columns: minmax(0, 1fr) auto; } .tf-auto__row { grid-template-columns: auto minmax(0, 1fr) auto; } .tf-auto__row > .tf-tag { display: none; } }
+/* Import: the three choices side by side, then each row's result. */
+.tf-imp__policies { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-12); }
+.tf-imp__preview { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-imp__previewhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-imp__lines { max-height: calc(var(--size-row) * 8); overflow: auto; }
+/* Settings: stage rules, the computed preview, Trash's bar and rows, objects you drag. */
+.tf-stage li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 10rem) minmax(0, 8rem); align-items: center; gap: var(--space-12); }
+.tf-set__preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: var(--space-12); padding-top: var(--space-8); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-set__previewval { margin: 0; padding-bottom: var(--space-8); font: 500 15px/22px var(--font-sans); }
+.tf-trash__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-trash li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-12); }
+.tf-trash li.tf-trash__all { display: flex; }
+.tf-trash__open { display: block; min-width: 0; padding: var(--space-4) var(--space-8); border: 0; border-radius: var(--radius-md); background: none; color: var(--text); text-align: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .tf-trash__open:hover { background: var(--surface-hover); } }
+.tf-trash__open:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-set__open--drag { flex: 1; min-width: 0; }
+@container tf-app (max-width: 40rem) { .tf-stage li, .tf-set__preview { grid-template-columns: minmax(0, 1fr); } .tf-trash li { grid-template-columns: auto minmax(0, 1fr); } .tf-trash li > .tf-set__row { grid-column: 2; } }
+/* Insights › Forecast: a stage per row with its editable win chance; a report shown as one number. */
+.tf-forecast li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 6rem); align-items: center; gap: var(--space-12); }
+.tf-forecast__pct input { text-align: right; }
+.tf-grow__one { grid-template-columns: minmax(0, 24rem); }
+.tf-rec__addrow { display: flex; justify-content: flex-start; }
+.tf-stage__name { display: flex; min-width: 0; }

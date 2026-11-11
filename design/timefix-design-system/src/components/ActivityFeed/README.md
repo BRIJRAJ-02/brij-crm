@@ -9,3 +9,5 @@ A record's timeline: what happened, newest first, grouped by day.
 **Interaction**: new events drop in at the top: the row opens from 0 height and rises 12px into place (250ms). "Show all changes" and "Show n older" fold open on the measured height (accordion), and their labels flip to Hide.
 
 **Replaces**: ActivityFeed, BookingChanges.
+
+**More kinds**: `logged` (a call or meeting someone logged: title, a facts line such as "30 min · Interested · with Liam Ortiz", and notes), `task` (added or finished) and `line` (anything else in a line after who did it, with a `mark` for the icon: change, form, email, call or meeting). `actions` puts a small control at the end of an event's line, such as a ⋯ menu with Edit and Delete for a logged call.

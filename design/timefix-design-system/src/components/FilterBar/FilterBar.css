@@ -86,3 +86,15 @@
 button.tf-fbar__join[data-hovered] { background: var(--surface-hover); color: var(--text-secondary); }
 .tf-fbar__join[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
 span.tf-fbar__join { cursor: default; }
+
+/* A filter group: its chips in a soft bracket, with their own and/or, a + to add one more, and × to drop the group. */
+.tf-fbar__group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-6); border-radius: var(--radius-lg); background: var(--surface-subtle); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); }
+.tf-fbar__ungroup { height: var(--size-control-sm); border-left: 0; border-radius: var(--radius-full); }
+/* A range's two ends, or a number of days. */
+.tf-fbar__range { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8); }
+.tf-fbar__unit { color: var(--text-tertiary); font: 400 13px/20px var(--font-sans); }
+/* The screen's own view options sit above the columns. */
+.tf-fbar__extra { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-8) var(--space-8) var(--space-12); margin-bottom: var(--space-6); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-fbar__col--drag { flex: 1; padding: 0; }
+.tf-fbar__cols .tf-fbar__col { padding-inline-start: calc(var(--space-4) + var(--space-20) + var(--space-8)); padding-inline-end: var(--space-12); }
+.tf-fbar__extra--only { margin-bottom: 0; border-bottom: 0; }

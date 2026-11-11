@@ -7,8 +7,12 @@ import type { SchemaAttribute } from '../AttributeSettings/AttributeSettings.tsx
 /** Someone in the workspace. */
 import type { GuestLookValue } from '../GuestLook/GuestLook.tsx';
 export interface Member { readonly id: string; readonly name: string; readonly email: string; readonly role: 'Owner' | 'Admin' | 'Member' | 'Guest'; readonly title: string }
-/** The kinds of record the workspace keeps; custom objects add more. */
-export type ObjectId = 'people' | 'companies' | 'deals';
+/** The three objects every workspace starts with. */
+export type BuiltIn = 'people' | 'companies' | 'deals';
+/** The kinds of record the workspace keeps: the three built in, or an owner-made object's id. */
+export type ObjectId = string;
+/** Is this one of the three built-in objects? */
+export const isBuiltIn = (o: string): o is BuiltIn => o === 'people' || o === 'companies' || o === 'deals';
 /** A deal's stage, in pipeline order. */
 export type Stage = 'Lead' | 'Qualified' | 'Proposal' | 'Won' | 'Lost';
 export const STAGES: ReadonlyArray<Stage> = ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost'];
@@ -29,7 +33,8 @@ export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
 export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; /** More records the task is about (a deal and its two people); it shows on each one's page. */ readonly also?: ReadonlyArray<RecordLink>; readonly description?: string; readonly created: Date;
   /** High or low; unset is normal. */ readonly priority?: 'high' | 'low';
-  /** Repeats from its due day: ticking it done adds the next one. */ readonly repeat?: TaskRepeat }
+  /** Repeats from its due day: ticking it done adds the next one. */ readonly repeat?: TaskRepeat;
+  /** Who made it (the Tasks page's "Created by me"); unset is the assignee. */ readonly createdBy?: string }
 /** A note to start from: a title and headings with an empty line or to-do under each (meeting, call and discovery notes). */
 export interface NoteTemplate { readonly id: string; readonly label: string; readonly title: string; readonly sections: ReadonlyArray<{ readonly heading: string; readonly todo?: boolean }> }
 /** The note templates; Blank is no template. */
@@ -61,25 +66,52 @@ export function nextDue(due: Date, r: TaskRepeat): Date {
   if (r === 'weekday') while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
   return d;
 }
-export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; /** The record it sits on; a note can stand on its own. */ readonly record?: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
+export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; /** The record it sits on; a note can stand on its own. */ readonly record?: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent;
+  /** More records it's about: it shows on each one's page too. */ readonly also?: ReadonlyArray<RecordLink> }
 /** One thing for you in the Inbox. */
 export interface InboxItem {
-  readonly id: string; readonly kind: 'mention' | 'reply' | 'assignment' | 'booking'; readonly actor: string; readonly text: string; readonly excerpt?: string;
+  readonly id: string; readonly kind: 'mention' | 'reply' | 'assignment' | 'booking' | 'form' | 'automation'; readonly actor: string; readonly text: string; readonly excerpt?: string;
   readonly at: Date; readonly read: boolean; readonly done: boolean; readonly record?: RecordLink; readonly taskId?: string;
   /** Snoozed: out of the inbox until then, back unread. */
   readonly snoozedUntil?: Date;
 }
 /** A comment thread on a record. */
-export interface Comment { readonly id: string; readonly record: RecordLink; readonly author: string; readonly body: string; readonly at: Date; readonly resolved: boolean; readonly replies: ReadonlyArray<{ readonly id: string; readonly author: string; readonly body: string; readonly at: Date }> }
+export interface Comment { readonly id: string; readonly record: RecordLink; readonly author: string; readonly body: string; readonly at: Date; readonly resolved: boolean; readonly replies: ReadonlyArray<CommentReply>;
+  /** Earlier wordings, oldest first: an edited comment says so and shows them. */ readonly history?: ReadonlyArray<{ readonly body: string; readonly at: Date }> }
+/** A reply in a thread; edits keep the earlier wordings too. */
+export interface CommentReply { readonly id: string; readonly author: string; readonly body: string; readonly at: Date; readonly history?: ReadonlyArray<{ readonly body: string; readonly at: Date }> }
 /** A line on a record's timeline. */
-export interface Activity { readonly id: string; readonly record: RecordLink; readonly kind: 'created' | 'changed' | 'call' | 'meeting' | 'note' | 'task' | 'email' | 'form'; readonly actor: string; readonly text: string; readonly at: Date }
+export interface Activity { readonly id: string; readonly record: RecordLink; readonly kind: 'created' | 'changed' | 'call' | 'meeting' | 'note' | 'task' | 'email' | 'form'; readonly actor: string; readonly text: string; readonly at: Date;
+  /** A logged call or meeting: what it was about, how long, how it went, notes, and the other records it was with. */
+  readonly title?: string; readonly minutes?: number; readonly outcome?: string; readonly notes?: string; readonly also?: ReadonlyArray<RecordLink> }
+
+/** One filter: a field (or a related record's field, "company.industry"), an operator in words, and its values. */
+export interface ViewFilter { readonly id: string; readonly field: string; readonly operator: string; readonly values: ReadonlyArray<string> }
+/** Filters in brackets, joined by their own and/or. */
+export interface ViewFilterGroup { readonly id: string; readonly match: 'all' | 'any'; readonly rules: ReadonlyArray<ViewFilter> }
+/** What a column's footer works out over every matching record. */
+export type CalcKind = 'none' | 'count' | 'empty' | 'filled' | 'sum' | 'avg' | 'min' | 'max';
+/** Who sees a saved view, and who may change it. */
+export type ViewAccess = 'private' | 'everyone' | 'admins';
 
 /** A saved way to look at an object: its filters, sorts, columns and layout. Private views are only yours. */
 export interface SavedView {
   readonly id: string; readonly name: string; readonly layout: 'table' | 'board';
-  /** A deals board's columns: by stage (default) or by owner. */
-  readonly groupBy?: 'stage' | 'owner';
-  readonly filters: ReadonlyArray<{ readonly id: string; readonly field: string; readonly operator: string; readonly values: ReadonlyArray<string> }>;
+  /** The board's columns: any status, select or owner field (stage for deals by default). */
+  readonly groupBy?: string;
+  /** The table's rows in groups by a status, select or owner field; unset is one list. */
+  readonly rowGroup?: string;
+  readonly filters: ReadonlyArray<ViewFilter>;
+  /** Bracketed filters, each with its own and/or, joined to the rest by `match`. */
+  readonly groups?: ReadonlyArray<ViewFilterGroup>;
+  /** Column order (ids), and widths the person dragged to. */
+  readonly order?: ReadonlyArray<string>; readonly widths?: Readonly<Record<string, number>>;
+  /** Footer calculations by column. */
+  readonly calcs?: Readonly<Record<string, CalcKind>>;
+  /** Board: the number field each column totals, the fields each card shows, and whether empty columns hide. */
+  readonly boardSum?: string; readonly cardFields?: ReadonlyArray<string>; readonly hideEmpty?: boolean;
+  /** Who sees it: only its maker, everyone, or everyone with only admins changing it. Locked views can't be saved over. */
+  readonly access?: ViewAccess; readonly locked?: boolean; readonly createdBy?: string;
   readonly sorts: ReadonlyArray<{ readonly field: string; readonly direction: 'ascending' | 'descending' }>;
   readonly hidden: ReadonlyArray<string>; readonly isPrivate?: boolean;
   /** Filters joined by and (every one, the default) or or (any one). */
@@ -137,22 +169,41 @@ export interface ObjectSchema { readonly id: string; readonly one: string; reado
   readonly access?: Readonly<Record<string, 'edit' | 'view' | 'none'>> }
 
 /** A deleted record, kept 30 days so it can come back. */
-export interface TrashItem { readonly id: string; readonly object: ObjectId; /** Set when a merge removed it: the record it went into. */ readonly mergedInto?: string; readonly record: Person | Company | Deal; readonly at: Date; readonly by: string }
+export interface TrashItem { readonly id: string; readonly object: ObjectId; /** Set when a merge removed it: the record it went into. */ readonly mergedInto?: string; readonly record: AnyRecord; readonly at: Date; readonly by: string }
+/** Any record: a person, company, deal or an owner-made object's record. */
+export type AnyRecord = Person | Company | Deal | CustomRecord;
 /** One line of the workspace's history: who did what. */
 export interface HistoryLine { readonly id: string; readonly text: string; readonly at: Date }
 
 /** A record of an owner-made object: a name plus its attribute values. */
 export interface CustomRecord { readonly id: string; readonly name: string; readonly owner: string; readonly created: Date; readonly extra: Readonly<Record<string, string>> }
 
-/** A saved chart of deals. */
+/** A saved chart of any object's records. */
 export interface Report {
-  readonly id: string; readonly name: string; readonly measure: 'count' | 'amount';
-  /** What it counts (deals by default) and how it groups them. Amount is for deals only. */
-  readonly object?: 'deals' | 'people' | 'companies';
-  readonly group: 'stage' | 'owner' | 'industry' | 'company' | 'tag' | 'city';
+  readonly id: string; readonly name: string;
+  /** Count records, or add up / average a number field (`field`). "amount" is the deals' value, kept from older reports. */
+  readonly measure: 'count' | 'amount' | 'sum' | 'avg'; readonly field?: string;
+  /** What it counts (deals by default): any object's id. */
+  readonly object?: ObjectId;
+  /** The field it groups by; dates group by month or week. */
+  readonly group: string; readonly dateBy?: 'month' | 'week';
   /** Only records owned by this person; none means everyone's. */
   readonly owner?: string;
+  /** Only the records a saved view shows. */
+  readonly viewId?: string;
+  /** Bars, a line, or one number. */
+  readonly chart?: 'bar' | 'line' | 'number';
 }
+
+/** What starts an automation: a record made, a field changing (to anything or to one value), or a task falling due. */
+export type AutomationTrigger = { readonly kind: 'created'; readonly object: ObjectId } | { readonly kind: 'changed'; readonly object: ObjectId; readonly field: string; readonly to?: string } | { readonly kind: 'taskDue' };
+/** What an automation does: make a task, set a field, or tell someone. "owner" means the record's owner. */
+export type AutomationAction = { readonly kind: 'task'; readonly title: string; readonly who: string; readonly days: number } | { readonly kind: 'set'; readonly field: string; readonly value: string } | { readonly kind: 'notify'; readonly who: string; readonly message: string };
+/** "When X, only if Y, then Z": runs as the member who last saved or switched it on. */
+export interface Automation { readonly id: string; readonly on: boolean; readonly runAs: string; readonly trigger: AutomationTrigger; readonly conditions: ReadonlyArray<ViewFilter>; readonly match: 'all' | 'any'; readonly actions: ReadonlyArray<AutomationAction>; readonly lastRun?: Date; readonly created: Date;
+  /** Why it switched itself off (five failures in a row, or the person it ran as left). */ readonly offReason?: string; readonly failures?: number }
+/** One run of an automation: when, for which record, and how it went. */
+export interface AutomationRun { readonly id: string; readonly automationId: string; readonly at: Date; readonly record?: RecordLink; readonly taskId?: string; readonly status: 'done' | 'failed'; readonly reason?: string; readonly did: string }
 
 /** A file on a record. The prototype keeps the file itself in memory so Download gives it back. */
 export interface RecordFile { readonly id: string; readonly record: RecordLink; readonly name: string; readonly size: number; readonly type: string; readonly at: Date; readonly by: string; readonly blob?: Blob }
@@ -201,8 +252,16 @@ export interface Prefs {
   /** Who sees my scheduling (calendar, hours, meetings). */
   readonly schedSee?: 'everyone' | 'teams' | 'admins';
   /** Imports and exports, newest first, with the file to download again. */
-  readonly jobs?: ReadonlyArray<{ readonly id: string; readonly kind: 'import' | 'export'; readonly what: string; readonly rows: number; readonly by: string; readonly at: Date; readonly file?: string; readonly name?: string }>;
+  readonly jobs?: ReadonlyArray<ImportJob>;
+  /** How likely a deal in each stage is to close (%), for weighted amounts and the forecast; unset stages use the defaults. */
+  readonly winChance?: Readonly<Record<string, number>>;
 }
+
+/** An import or export in Settings › Imports and exports. Imports keep their rows, errors and what Undo needs for 7 days. */
+export interface ImportJob { readonly id: string; readonly kind: 'import' | 'export'; readonly what: string; readonly rows: number; readonly by: string; readonly at: Date; readonly file?: string; readonly name?: string;
+  readonly object?: ObjectId; readonly made?: number; readonly updated?: number; readonly skipped?: number;
+  readonly lines?: ReadonlyArray<{ readonly row: number; readonly name: string; readonly result: 'added' | 'updated' | 'skipped' | 'error'; readonly reason?: string }>;
+  readonly undo?: { readonly created: ReadonlyArray<string>; readonly before: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }>; readonly newCompanies?: ReadonlyArray<string> }; readonly undone?: boolean }
 
 /** The CRM side of the app. */
 export interface AppState {
@@ -245,6 +304,9 @@ export interface AppState {
   /** "Preview as": see the app as a member or guest would, read only where they can't change things. */
   readonly previewRole?: 'Member' | 'Guest';
   readonly reactions: Readonly<Record<string, Readonly<Record<string, ReadonlyArray<string>>>>>;
+  /** Settings › Automations and what they did. */
+  readonly automations: ReadonlyArray<Automation>;
+  readonly runs: ReadonlyArray<AutomationRun>;
 }
 
 export type AppAction =
@@ -299,10 +361,24 @@ export type AppAction =
   | { readonly type: 'prefs/update'; readonly fn: (p: Prefs) => Partial<Prefs> }
   | { readonly type: 'member/set'; readonly member: Member; readonly note?: string }
   | { readonly type: 'member/remove'; readonly id: string; readonly reassignTo?: string }
-  | { readonly type: 'me/rename'; readonly name: string };
+  | { readonly type: 'me/rename'; readonly name: string }
+  | { readonly type: 'activity/set'; readonly activity: Activity }
+  | { readonly type: 'activity/remove'; readonly id: string }
+  | { readonly type: 'comment/remove'; readonly id: string }
+  | { readonly type: 'objects/order'; readonly ids: ReadonlyArray<string> }
+  | { readonly type: 'automation/set'; readonly automation: Automation }
+  | { readonly type: 'automation/remove'; readonly id: string }
+  | { readonly type: 'automation/insert'; readonly automation: Automation; readonly at: number }
+  /** Time passing: tasks that fell due run "When a task is due" automations. */
+  | { readonly type: 'automations/tick'; readonly now: Date }
+  | { readonly type: 'run/add'; readonly runs: ReadonlyArray<AutomationRun> };
 
 let lineSeq = 0;
 const line = (text: string): HistoryLine => ({ id: `h-${Date.now().toString(36)}-${(lineSeq++).toString(36)}`, text, at: new Date() });
+/** Every record of an object: the three built in, or an owner-made object's. */
+export const recordsIn = (state: AppState, object: ObjectId): ReadonlyArray<AnyRecord> => (object === 'people' ? state.people : object === 'companies' ? state.companies : object === 'deals' ? state.deals : state.customRecords[object] ?? []);
+/** The state with one object's records replaced. */
+const withRecords = (state: AppState, object: ObjectId, list: ReadonlyArray<AnyRecord>): AppState => (object === 'people' ? { ...state, people: list as ReadonlyArray<Person> } : object === 'companies' ? { ...state, companies: list as ReadonlyArray<Company> } : object === 'deals' ? { ...state, deals: list as ReadonlyArray<Deal> } : { ...state, customRecords: { ...state.customRecords, [object]: list as ReadonlyArray<CustomRecord> } });
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
 /** The one reducer: new objects only. */
@@ -327,14 +403,14 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'deal/set': return { ...state, deals: upsert(state.deals, a.deal) };
     case 'records/remove': {
       const gone = new Set(a.ids);
-      const list: ReadonlyArray<Person | Company | Deal> = a.object === 'people' ? state.people : a.object === 'companies' ? state.companies : state.deals;
+      const list = recordsIn(state, a.object);
       const binned = list.filter((x) => gone.has(x.id)).map((record) => ({ id: `tr-${record.id}`, object: a.object, record, at: new Date(), by: state.me }));
-      const kept = a.object === 'people' ? { people: state.people.filter((x) => !gone.has(x.id)) } : a.object === 'companies' ? { companies: state.companies.filter((x) => !gone.has(x.id)) } : { deals: state.deals.filter((x) => !gone.has(x.id)) };
-      return { ...state, ...kept, trash: [...binned, ...state.trash], history: [line(`${state.me} deleted ${binned.length === 1 ? binned[0]?.record.name ?? 'a record' : `${binned.length} ${a.object}`}`), ...state.history] };
+      const many = state.objects.find((o) => o.id === a.object)?.many.toLowerCase() ?? a.object;
+      return { ...withRecords(state, a.object, list.filter((x) => !gone.has(x.id))), trash: [...binned, ...state.trash], history: [line(`${state.me} deleted ${binned.length === 1 ? binned[0]?.record.name ?? 'a record' : `${binned.length} ${many}`}`), ...state.history] };
     }
     case 'records/fields': {
       // A stage move stamps when it happened; every real change becomes a line on the record's timeline.
-      const list = a.object === 'people' ? state.people : a.object === 'companies' ? state.companies : state.deals;
+      const list = recordsIn(state, a.object);
       const LABEL: Readonly<Record<string, string>> = { name: 'Name', title: 'Job title', email: 'Email', phone: 'Phone', stage: 'Stage', lostReason: 'Lost reason', lostNote: 'Lost note', amount: 'Amount', owner: 'Owner', companyId: 'Company', close: 'Close date', industry: 'Industry', city: 'City', domain: 'Domain', size: 'Size' };
       const show = (k: string, v: unknown) => (k === 'companyId' ? state.companies.find((c) => c.id === v)?.name ?? 'none' : k === 'amount' ? inr(Number(v) || 0) : v instanceof Date ? v.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : String(v ?? '') || 'empty');
       const lines: Activity[] = [];
@@ -351,19 +427,19 @@ export function appReducer(state: AppState, a: AppAction): AppState {
       const by = new Map(changes.map((c) => [c.id, c.patch]));
       // `extra` merges key by key, so an Undo of one custom field never touches the others.
       const apply = <T extends { readonly id: string }>(x: T): T => { const patch = by.get(x.id); if (!patch) return x; const ex = patch.extra as Readonly<Record<string, string>> | undefined; return { ...x, ...patch, ...(ex ? { extra: { ...((x as { readonly extra?: Readonly<Record<string, string>> }).extra ?? {}), ...ex } } : {}) }; };
-      const next = a.object === 'people' ? { ...state, people: state.people.map(apply) } : a.object === 'companies' ? { ...state, companies: state.companies.map(apply) } : { ...state, deals: state.deals.map(apply) };
+      const next = withRecords(state, a.object, list.map(apply));
       return lines.length ? { ...next, activity: [...lines, ...next.activity] } : next;
     }
     case 'records/untrash': {
       const items = state.trash.filter((t) => a.ids.includes(t.record.id)); if (items.length === 0) return state;
-      const back = (o: ObjectId) => items.filter((t) => t.object === o).map((t) => t.record);
-      return { ...state, trash: state.trash.filter((t) => !items.includes(t)), people: [...(back('people') as ReadonlyArray<Person>), ...state.people], companies: [...(back('companies') as ReadonlyArray<Company>), ...state.companies],
-        deals: [...(back('deals') as ReadonlyArray<Deal>), ...state.deals], history: [line(`${state.me} restored ${items.length === 1 ? items[0]?.record.name ?? 'a record' : `${items.length} records`}`), ...state.history] };
+      const objects = [...new Set(items.map((t) => t.object))];
+      const back = objects.reduce((st, o) => withRecords(st, o, [...items.filter((t) => t.object === o).map((t) => t.record), ...recordsIn(st, o)]), state);
+      return { ...back, trash: state.trash.filter((t) => !items.includes(t)), history: [line(`${state.me} restored ${items.length === 1 ? items[0]?.record.name ?? 'a record' : `${items.length} records`}`), ...state.history] };
     }
     case 'records/drop': {
       const gone = new Set(a.ids);
-      const kept = a.object === 'people' ? { people: state.people.filter((x) => !gone.has(x.id)) } : a.object === 'companies' ? { companies: state.companies.filter((x) => !gone.has(x.id)) } : { deals: state.deals.filter((x) => !gone.has(x.id)) };
-      return { ...state, ...kept, history: a.note ? [line(a.note), ...state.history] : state.history };
+      const next = withRecords(state, a.object, recordsIn(state, a.object).filter((x) => !gone.has(x.id)));
+      return { ...next, history: a.note ? [line(a.note), ...state.history] : state.history };
     }
     case 'records/relink': {
       const hit = (r: RecordLink | undefined, id: string) => r !== undefined && r.object === a.from.object && r.id === a.from.id && (!a.only || a.only.includes(id));
@@ -403,7 +479,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'trash/restore': {
       const t = state.trash.find((x) => x.id === a.id); if (!t) return state;
       const rest = { ...state, trash: state.trash.filter((x) => x.id !== a.id), history: [line(`${state.me} restored ${t.record.name}`), ...state.history] };
-      return t.object === 'people' ? { ...rest, people: [t.record as Person, ...state.people] } : t.object === 'companies' ? { ...rest, companies: [t.record as Company, ...state.companies] } : { ...rest, deals: [t.record as Deal, ...state.deals] };
+      return withRecords(rest, t.object, [t.record, ...recordsIn(state, t.object)]);
     }
     case 'trash/purge': return { ...state, trash: state.trash.filter((x) => !a.ids.includes(x.id)), history: [line(`${state.me} deleted ${a.ids.length} ${a.ids.length === 1 ? 'record' : 'records'} for good`), ...state.history] };
     case 'file/set': return { ...state, files: upsert(state.files, a.file) };
@@ -431,6 +507,15 @@ export function appReducer(state: AppState, a: AppAction): AppState {
         history: [line(`${was} changed their name to ${to}`), ...state.history] };
     }
     case 'history/add': return { ...state, history: [line(a.text), ...state.history] };
+    case 'activity/set': return { ...state, activity: upsert(state.activity, a.activity) };
+    case 'activity/remove': return { ...state, activity: state.activity.filter((x) => x.id !== a.id) };
+    case 'comment/remove': return { ...state, comments: state.comments.filter((c) => c.id !== a.id) };
+    case 'objects/order': return { ...state, objects: [...a.ids.map((id) => state.objects.find((o) => o.id === id)).filter((o): o is ObjectSchema => o !== undefined), ...state.objects.filter((o) => !a.ids.includes(o.id))] };
+    case 'automation/set': return { ...state, automations: state.automations.some((x) => x.id === a.automation.id) ? state.automations.map((x) => (x.id === a.automation.id ? a.automation : x)) : [...state.automations, a.automation] };
+    case 'automation/remove': return { ...state, automations: state.automations.filter((x) => x.id !== a.id) };
+    case 'automation/insert': return { ...state, automations: [...state.automations.slice(0, a.at), a.automation, ...state.automations.slice(a.at)].filter((x, n, all) => all.findIndex((y) => y.id === x.id) === n) };
+    case 'automations/tick': return state;
+    case 'run/add': return { ...state, runs: [...a.runs, ...state.runs].slice(0, 200) };
     case 'object/set': return { ...state, objects: state.objects.some((o) => o.id === a.object.id) ? state.objects.map((o) => (o.id === a.object.id ? a.object : o)) : [...state.objects, a.object] };
   }
 }
@@ -508,16 +593,16 @@ export function northwindCrm(now = new Date()): AppState {
     d('d-umbrella2', 'Umbrella renewal', 'c-umbrella', 'p-ravi', 'Won', 380000, 'Priya Raman', -20, 50),
   ];
   const me = 'Priya Raman';
-  const t = (id: string, title: string, due: number | undefined, assignee: string, record?: RecordLink, done = false): AppTask => ({ id, title, due: due === undefined ? undefined : dayAt(now, due, 17), assignee, record, done, created: dayAt(now, -3) });
+  const t = (id: string, title: string, due: number | undefined, assignee: string, record?: RecordLink, done = false, createdBy?: string): AppTask => ({ id, title, due: due === undefined ? undefined : dayAt(now, due, 17), assignee, record, done, created: dayAt(now, -3), createdBy });
   const tasks: AppTask[] = [
     { ...t('t-1', 'Send the revised proposal to Liam', 0, me, { object: 'deals', id: 'd-acme' }), also: [{ object: 'people', id: 'p-liam' }] },
     t('t-2', 'Book a security review with Amara', 1, me, { object: 'people', id: 'p-amara' }),
     { ...t('t-3', 'Chase signed order form', -2, me, { object: 'deals', id: 'd-umbrella' }), priority: 'high' },
-    t('t-4', 'Prepare QBR deck for Globex', 3, 'Sam Kim', { object: 'companies', id: 'c-globex' }),
+    t('t-4', 'Prepare QBR deck for Globex', 3, 'Sam Kim', { object: 'companies', id: 'c-globex' }, false, 'Priya Raman'),
     t('t-5', 'Intro call follow-up', 0, me, { object: 'people', id: 'p-pepper' }),
     { ...t('t-6', 'Update forecast for the quarter', 6, me), repeat: 'month' },
     t('t-7', 'Share case study with Ravi', undefined, me, { object: 'people', id: 'p-ravi' }),
-    t('t-8', 'Confirm pilot scope', -1, 'Jo Mendes', { object: 'deals', id: 'd-initech' }),
+    t('t-8', 'Confirm pilot scope', -1, 'Jo Mendes', { object: 'deals', id: 'd-initech' }, false, 'Priya Raman'),
     t('t-9', 'Send welcome pack', -6, me, { object: 'deals', id: 'd-pied' }, true),
   ];
   const n = (id: string, title: string, body: string, author: string, record: RecordLink, ago: number): AppNote => ({ id, title, body, author, record, updated: dayAt(now, -ago, 15) });
@@ -534,6 +619,7 @@ export function northwindCrm(now = new Date()): AppState {
     i('i-3', 'booking', 'Pepper Potts', 'booked Discovery call', 130, false, { excerpt: 'Tomorrow, 11:00 – 11:30 AM' }),
     i('i-4', 'reply', 'Ava Chen', 'replied in', 300, true, { excerpt: 'They want a demo for the regional managers too.', record: { object: 'deals', id: 'd-stark' } }),
     i('i-5', 'mention', 'Jo Mendes', 'mentioned you on', 1500, true, { excerpt: '@Priya pricing sheet is in the files tab.', record: { object: 'companies', id: 'c-initech' } }),
+    i('i-6', 'form', 'Pepper Potts', 'sent Talk to sales, filed as', 35, false, { excerpt: 'Our stores book demos by phone. We lose half of them.', record: { object: 'people', id: 'p-pepper' } }),
   ];
   const comments: Comment[] = [
     { id: 'cm-1', record: { object: 'deals', id: 'd-globex' }, author: 'Sam Kim', body: '@Priya can you join the pricing call on Thursday?', at: new Date(now.getTime() - 12 * 60_000), resolved: false, replies: [] },
@@ -584,6 +670,14 @@ export function northwindCrm(now = new Date()): AppState {
     files: [{ id: 'fl-1', record: { object: 'companies', id: 'c-acme' }, name: 'Acme pricing.pdf', size: 248_000, type: 'application/pdf', at: dayAt(now, -2, 14), by: 'Jo Mendes' },
       { id: 'fl-2', record: { object: 'deals', id: 'd-acme' }, name: 'Rollout plan v3.docx', size: 91_000, type: 'application/msword', at: dayAt(now, -1, 11), by: 'Priya Raman' }],
     reactions: { 'cm-1': { agree: ['Jo Mendes'] } },
+    automations: [
+      { id: 'au-1', on: true, runAs: me, created: dayAt(now, -14), lastRun: dayAt(now, -2, 15), trigger: { kind: 'changed', object: 'deals', field: 'stage', to: 'Won' }, conditions: [], match: 'all', actions: [{ kind: 'task', title: 'Send contract', who: 'owner', days: 1 }] },
+      { id: 'au-2', on: false, runAs: 'Sam Kim', created: dayAt(now, -20), trigger: { kind: 'created', object: 'deals' }, conditions: [{ id: 'ac1', field: 'amount', operator: 'is greater than', values: ['1000000'] }], match: 'all', actions: [{ kind: 'notify', who: 'Priya Raman', message: 'A big deal just came in' }] },
+    ],
+    runs: [
+      { id: 'run-1', automationId: 'au-1', at: dayAt(now, -2, 15), record: { object: 'deals', id: 'd-pied' }, status: 'done', did: 'Made the task “Send contract” for Ava Chen' },
+      { id: 'run-2', automationId: 'au-1', at: dayAt(now, -9, 11), record: { object: 'deals', id: 'd-umbrella2' }, status: 'failed', reason: 'A required value is missing', did: 'Couldn’t make the task' },
+    ],
     notDupes: [],
     customRecords: {},
     reports: [{ id: 'r-stage', name: 'Pipeline by stage', measure: 'amount', group: 'stage' }, { id: 'r-owner', name: 'Deals by owner', measure: 'count', group: 'owner' }],
@@ -618,6 +712,7 @@ export const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 export function recordName(state: AppState, r: RecordLink): { readonly name: string; readonly sub: string } {
   if (r.object === 'people') { const x = state.people.find((y) => y.id === r.id); const co = state.companies.find((y) => y.id === x?.companyId); return { name: x?.name ?? 'Deleted person', sub: [x?.title, co?.name].filter(Boolean).join(' · ') }; }
   if (r.object === 'companies') { const x = state.companies.find((y) => y.id === r.id); return { name: x?.name ?? 'Deleted company', sub: x?.domain ?? '' }; }
+  if (!isBuiltIn(r.object)) { const o = state.objects.find((y) => y.id === r.object); const x = (state.customRecords[r.object] ?? []).find((y) => y.id === r.id); return { name: x?.name ?? `Deleted ${o?.one.toLowerCase() ?? 'record'}`, sub: o?.one ?? '' }; }
   const x = state.deals.find((y) => y.id === r.id); const co = state.companies.find((y) => y.id === x?.companyId);
   return { name: x?.name ?? 'Deleted deal', sub: x ? `${co?.name ?? ''} · ${inr(x.amount)}` : '' };
 }

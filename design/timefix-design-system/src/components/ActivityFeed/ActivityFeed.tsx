@@ -1,6 +1,6 @@
 import { Button as AriaButton, Disclosure, DisclosurePanel } from 'react-aria-components';
 import { Fragment, createContext, useContext, type ReactNode } from 'react';
-import { ArrowRight, Plus, CalendarCheck, Mail, StickyNote, ChevronDown, CalendarX } from 'lucide-react';
+import { ArrowRight, Plus, CalendarCheck, Mail, StickyNote, ChevronDown, CalendarX, Phone, Users, CheckSquare, FileText, PenLine } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { AttributeDisplay, AttributeIcon, type Attribute, type AttributeValue } from '../AttributeField/AttributeField.tsx';
@@ -21,10 +21,16 @@ export type ActivityEvent = { readonly id: string; readonly at: Date; readonly a
   | { readonly kind: 'emailed'; readonly subject: string; readonly preview?: string }
   | { readonly kind: 'note'; readonly title: string }
   | { readonly kind: 'comment'; readonly body: string }
+  /** A call or meeting someone logged: what about, a line of facts (duration, outcome, who else), and notes. */
+  | { readonly kind: 'logged'; readonly what: 'call' | 'meeting'; readonly title: string; readonly detail?: string; readonly notes?: string }
+  /** A task made or ticked on the record. */
+  | { readonly kind: 'task'; readonly title: string; readonly done: boolean }
+  /** Anything else said in a line after who did it ("changed Stage to Won", "sent the Contact us form"); `mark` picks the icon. */
+  | { readonly kind: 'line'; readonly text: string; readonly mark?: 'change' | 'form' | 'email' | 'call' | 'meeting' }
 );
 
 /** The clock the feed reads in, and the moment "Today" is counted from. */
-const FeedClock = createContext<{ readonly now: Date; readonly hour12: boolean }>({ now: new Date(), hour12: true });
+const FeedClock = createContext<{ readonly now: Date; readonly hour12: boolean; readonly actions?: (e: ActivityEvent) => ReactNode }>({ now: new Date(), hour12: true });
 
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 /** A meeting's moment: "Thu 13 Nov, 2:00 PM". */
@@ -55,6 +61,9 @@ function Marker({ e }: { readonly e: ActivityEvent }) {
     case 'cancelled': return icon(<CalendarX size={14} strokeWidth={1.75} />);
     case 'emailed': return icon(<Mail size={14} strokeWidth={1.75} />);
     case 'note': return icon(<StickyNote size={14} strokeWidth={1.75} />);
+    case 'logged': return icon(e.what === 'call' ? <Phone size={14} strokeWidth={1.75} /> : <Users size={14} strokeWidth={1.75} />, 'time');
+    case 'task': return icon(<CheckSquare size={14} strokeWidth={1.75} />);
+    case 'line': return icon(e.mark === 'form' ? <FileText size={14} strokeWidth={1.75} /> : e.mark === 'email' ? <Mail size={14} strokeWidth={1.75} /> : e.mark === 'call' ? <Phone size={14} strokeWidth={1.75} /> : e.mark === 'meeting' ? <Users size={14} strokeWidth={1.75} /> : <PenLine size={14} strokeWidth={1.75} />, e.mark === 'call' || e.mark === 'meeting' ? 'time' : undefined);
     default: return <Avatar name={e.actor} size={20} />;
   }
 }
@@ -73,12 +82,16 @@ function Line({ e }: { readonly e: ActivityEvent }) {
     case 'emailed': return <>{who} emailed <strong>{e.subject}</strong></>;
     case 'note': return <>{who} added a note <strong>{e.title}</strong></>;
     case 'comment': return <>{who} commented</>;
+    case 'logged': return <>{who} logged a {e.what} <strong>{e.title}</strong></>;
+    case 'task': return <>{who} {e.done ? 'finished' : 'added'} the task <strong>{e.title}</strong></>;
+    case 'line': return <>{who} {e.text}</>;
   }
 }
 
 function Body({ e }: { readonly e: ActivityEvent }) {
   if (e.kind === 'comment') return <p className="tf-feed__comment">{e.body}</p>;
   if (e.kind === 'emailed' && e.preview) return <p className="tf-feed__preview">{e.preview}</p>;
+  if (e.kind === 'logged' && (e.detail || e.notes)) return <>{e.detail && <p className="tf-feed__preview tf-num">{e.detail}</p>}{e.notes && <p className="tf-feed__comment">{e.notes}</p>}</>;
   if (e.kind !== 'change') return null;
   const [first, ...rest] = e.changes;
   return (
@@ -99,7 +112,8 @@ function Body({ e }: { readonly e: ActivityEvent }) {
 }
 
 function Item({ e, fresh }: { readonly e: ActivityEvent; readonly fresh: boolean }) {
-  const { now, hour12 } = useContext(FeedClock);
+  const { now, hour12, actions } = useContext(FeedClock);
+  const acts = actions?.(e);
   const time = timeLabel(e.at, now, hour12);
   return (
     <li className="tf-feed__li">
@@ -107,7 +121,7 @@ function Item({ e, fresh }: { readonly e: ActivityEvent; readonly fresh: boolean
         <article className="tf-feed__item" aria-label={`${e.actor}, ${time}`}>
           <span className="tf-feed__marker"><Marker e={e} /></span>
           <div className="tf-feed__main">
-            <p className="tf-feed__line"><span className="tf-feed__text"><Line e={e} /></span><time className="tf-feed__time" dateTime={e.at.toISOString()}>{time}</time></p>
+            <p className="tf-feed__line"><span className="tf-feed__text"><Line e={e} /></span><time className="tf-feed__time" dateTime={e.at.toISOString()}>{time}</time>{acts && <span className="tf-feed__acts">{acts}</span>}</p>
             <Body e={e} />
           </div>
         </article>
@@ -152,12 +166,14 @@ export interface ActivityFeedProps {
   readonly hour12?: boolean;
   /** What "Today" is counted from; the current time by default. */
   readonly now?: Date;
+  /** A small control at the end of an event's line (a ⋯ menu with Edit and Delete for a logged call); nothing for most events. */
+  readonly actions?: (e: ActivityEvent) => ReactNode;
 }
 
 /** A record's timeline, newest first under day headings: who did what, value changes as old → new, meetings, emails, notes and comments. */
-export function ActivityFeed({ events, older = [], freshIds, hour12 = true, now }: ActivityFeedProps) {
+export function ActivityFeed({ events, older = [], freshIds, hour12 = true, now, actions }: ActivityFeedProps) {
   return (
-    <FeedClock.Provider value={{ now: now ?? new Date(), hour12 }}>
+    <FeedClock.Provider value={{ now: now ?? new Date(), hour12, actions }}>
     <section className="tf-feed" aria-label="Activity">
       <Days events={events} freshIds={freshIds} />
       {older.length > 0 && (

@@ -91,3 +91,11 @@
 
 /* Archive sits at the start of the dialog's actions, away from Save. */
 .tf-attributesettings__archive { margin-inline-end: auto; }
+
+/* New attribute beside More kinds; the Archived list under the live one; the "required when" pair. */
+.tf-attributesettings__adds { display: inline-flex; align-items: center; gap: var(--space-8); }
+.tf-attributesettings__archived { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-16); }
+.tf-attributesettings__archived h3 { display: flex; align-items: center; gap: var(--space-6); margin: 0; }
+.tf-attributesettings__gone { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-attributesettings__gone li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: 0 var(--space-8); border-bottom: var(--border-width-hairline) solid var(--border-subtle); color: var(--text-secondary); }
+.tf-attributesettings__when { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-12); padding: var(--space-12) 0; }

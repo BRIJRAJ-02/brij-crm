@@ -29,14 +29,16 @@ import { ListSettings } from './lists.tsx';
 import { STARTER, handleFor } from './grow.tsx';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
-import { newId, type AppAction, type AppState, type Member, type ObjectSchema, type Prefs, LISTS_ON } from './data.ts';
+import { newId, type AppAction, type AppState, type Member, type ObjectId, type ObjectSchema, type Prefs, LISTS_ON } from './data.ts';
+import { JobsPage, ObjectAttributes, ObjectsList, StageRules, TrashPage } from './datasettings.tsx';
+import { AutomationsPage } from './automations.tsx';
 import type { Door } from './auth.tsx';
 import { RenameDialog } from './records.tsx';
 import { HOME_SECTIONS } from './home.tsx';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'brand' | 'members' | 'roles' | 'apps' | 'history' | 'jobs'
-  | 'availability' | 'roundrobin' | 'routing' | 'schedaccess' | 'business' | 'services' | 'staff' | 'tables' | 'menu' | 'objects' | 'lists' | 'trash' | 'developer';
+  | 'availability' | 'roundrobin' | 'routing' | 'schedaccess' | 'business' | 'services' | 'staff' | 'tables' | 'menu' | 'objects' | 'lists' | 'trash' | 'developer' | 'automations';
 type NavItem = { readonly id: Page; readonly label: string; readonly icon: ReactNode; readonly words?: string };
 /** The settings tree for this workspace: Business shows only for a salon or a restaurant. The app's sidebar draws it while Settings is open. */
 export const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<Omit<SettingsNavGroup, 'items'> & { readonly items: ReadonlyArray<NavItem> }> => [
@@ -49,7 +51,7 @@ export const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<
     { id: 'schedaccess', label: 'Scheduling access', icon: <Eye {...i16} />, words: 'who can see manage hours calendar' }] },
   ...(kind === 'team' ? [] : [{ title: 'Business', items: [{ id: 'business' as const, label: 'Business page', icon: <Store {...i16} />, words: 'public page photos address' }, { id: 'services' as const, label: kind === 'restaurant' ? 'Table bookings' : 'Services', icon: <Scissors {...i16} />, words: 'prices categories' },
     { id: 'staff' as const, label: 'Staff and shifts', icon: <UserCog {...i16} />, words: 'roster shifts' }, ...(kind === 'restaurant' ? [{ id: 'tables' as const, label: 'Places and tables', icon: <LayoutGrid {...i16} />, words: 'areas seats floor' }, { id: 'menu' as const, label: 'Menu', icon: <UtensilsCrossed {...i16} />, words: 'dishes qr codes' }] : [])] }]),
-  { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, ...(LISTS_ON ? [{ id: 'lists' as const, label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }] : []), { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
+  { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, ...(LISTS_ON ? [{ id: 'lists' as const, label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }] : []), { id: 'automations', label: 'Automations', icon: <Workflow {...i16} />, words: 'workflow rules trigger when if then runs' }, { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
   { title: 'Developer', items: [{ id: 'developer', label: 'API keys', icon: <Code2 {...i16} />, words: 'api keys tokens' }] },
 ];
 
@@ -61,7 +63,8 @@ export interface SettingsScreenProps {
   /** The workspace's kind, from Bookings: decides which apps and Bookings links fit. */ readonly kind?: 'team' | 'salon' | 'restaurant';
   /** Opens a list from Settings › Lists. */ readonly onOpenList?: (id: string) => void;
   /** Bookings' connected calendars, shown in Settings › Calendars. */ readonly calendars?: ReadonlyArray<{ readonly id: string; readonly provider: string; readonly email: string; readonly calendars: number; readonly status: string }>;
-  /** Opens a restored record. */ readonly onOpenRecord?: (object: 'people' | 'companies' | 'deals', id: string) => void;
+  /** Opens a restored record. */ readonly onOpenRecord?: (object: ObjectId, id: string) => void;
+  /** Opens a record still in Trash, read only. */ readonly onOpenTrashed?: (object: ObjectId, id: string) => void;
   /** Bookings as it stands, for the Scheduling and Business pages and Calendars. */ readonly bookings?: BookingsState;
   /** A change to Bookings made here (calendars, who changes whose hours). */ readonly onBookingsAction?: (a: BookingsAction) => void;
   /** Opens the CSV import. */ readonly onImport?: () => void;
@@ -71,7 +74,7 @@ export interface SettingsScreenProps {
 }
 
 /** Settings. */
-export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage, page: shownPage, onPage }: SettingsScreenProps) {
+export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList, calendars = [], onOpenRecord, onOpenTrashed, bookings, onBookingsAction, onImport, onLinkPage, page: shownPage, onPage }: SettingsScreenProps) {
   const GROUPS = groupsFor(kind);
   const [ownPage, setOwnPage] = useState<Page>(((start ?? '').split(':')[0] as Page | '') || 'profile');
   const page = (shownPage as Page | undefined) ?? ownPage;
@@ -92,7 +95,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
-        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} openObject={page === 'objects' ? openObject : undefined} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} bookings={bookings} onBookingsAction={onBookingsAction} onImport={onImport} onLinkPage={onLinkPage} />
+        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} openObject={page === 'objects' ? openObject : undefined} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} onOpenTrashed={onOpenTrashed} sub={(start ?? '').split(':')[0] === page ? (start ?? '').split(':').slice(1).join(':') : undefined} bookings={bookings} onBookingsAction={onBookingsAction} onImport={onImport} onLinkPage={onLinkPage} />
       </SettingsLayout>
     </div>
   );
@@ -116,7 +119,7 @@ const APPS = [
   { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'] },
 ] as const;
 
-function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, openObject, onOpenList, onGoPage, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage }: { readonly bookings?: BookingsState; readonly onBookingsAction?: (a: BookingsAction) => void; readonly onImport?: () => void; readonly onLinkPage?: () => void; readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly openObject?: string; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
+function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, openObject, onOpenList, onGoPage, calendars = [], onOpenRecord, onOpenTrashed, sub, bookings, onBookingsAction, onImport, onLinkPage }: { readonly onOpenTrashed?: SettingsScreenProps['onOpenTrashed']; readonly sub?: string; readonly bookings?: BookingsState; readonly onBookingsAction?: (a: BookingsAction) => void; readonly onImport?: () => void; readonly onLinkPage?: () => void; readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly openObject?: string; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
   const { toast } = useToast();
   const p = state.prefs;
   const ws = p.workspace;
@@ -363,15 +366,11 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         : <SettingsSection title="Sign-ins" description="Everyone in the workspace, last 90 days. Failed ones are marked.">
           <ul className="tf-set__list">{(p.signIns ?? []).map((x) => <li key={x.id}><span><strong>{x.who}</strong> <span className="tf-rec__muted">{x.what} · {x.where} · {when(x.at)}</span></span><Tag size="sm" hue={x.ok ? 'gray' : 'red'}>{x.ok ? 'Signed in' : 'Wrong code'}</Tag></li>)}</ul></SettingsSection>}
     </>; break;
-    case 'jobs': body = <SettingsSection title="Imports and exports" description="Every CSV that came in or went out. Exports can be downloaded again for 7 days."
-      action={onImport ? <Button variant="secondary" onPress={onImport}>Import a CSV</Button> : undefined}>
-      {(p.jobs ?? []).length === 0 ? <EmptyState size="sm" icon={<FileDown size={20} strokeWidth={1.75} />} title="Nothing yet" description="Imports and exports show here when they finish." />
-        : <ul className="tf-set__list">{(p.jobs ?? []).map((j) => <li key={j.id}><span><strong>{j.what}</strong> <span className="tf-rec__muted tf-num">{j.kind === 'import' ? 'Import' : 'Export'} · {j.rows.toLocaleString('en-IN')} rows · {j.by} · {when(j.at)}</span></span>
-          {j.file !== undefined && j.name ? <Button size="sm" variant="secondary" onPress={() => { void saveFile(j.name ?? 'export.csv', new Blob([j.file ?? ''], { type: 'text/csv' })).then((o) => { if (o === 'saved') toast({ message: `${j.name} downloaded`, tone: 'success' }); }); }}>Download</Button> : <Tag size="sm" hue="green">Done</Tag>}</li>)}</ul>}
-    </SettingsSection>; break;
+    case 'jobs': body = <JobsPage state={state} dispatch={dispatch} onImport={onImport} startJob={sub || undefined} />; break;
     case 'objects': body = <ObjectsPage key={openObject ?? 'all'} state={state} dispatch={dispatch} startMaking={newObject} startOpen={openObject} />; break;
     case 'lists': body = <ListsPage state={state} dispatch={dispatch} onOpenList={onOpenList} />; break;
-    case 'trash': body = <TrashPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} />; break;
+    case 'trash': body = <TrashPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} onOpenTrashed={onOpenTrashed} startObject={sub || undefined} />; break;
+    case 'automations': body = <AutomationsPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} />; break;
     case 'availability': { const def = bookings?.savedHours.find((h) => h.id === bookings.defaultHoursId) ?? bookings?.savedHours[0]; const today = new Date().toISOString().slice(0, 10);
       body = summary(kind === 'team' ? 'Availability' : 'Opening hours', kind === 'team' ? 'Your weekly hours, other schedules, time off and meeting limits.' : 'When you’re open, other schedules and days off.', bookings ? [
         ['Default schedule', def ? `${def.name} · ${Object.values(def.hours).filter((d) => d.on).length} days a week` : 'None'],
@@ -586,10 +585,9 @@ function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { read
     return (
       <div className="tf-set__obj">
         <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setOpenId(undefined)}>Objects</Button>
-        <Tabs aria-label={o.many} items={[{ id: 'attributes', label: 'Attributes', count: o.attributes.length }, { id: 'config', label: 'Configuration' }, { id: 'access', label: 'Access' }]}>
-          <TabPanel id="attributes"><AttributeSettings objectName={o.one} objectPlural={o.many} attributes={o.attributes} valueCounts={Object.fromEntries(o.attributes.map((a) => [a.id, counts[o.id] ?? 0]))}
-            onChange={(attributes) => dispatch({ type: 'object/set', object: { ...o, attributes } })} /></TabPanel>
-          <TabPanel id="config"><ObjectConfig o={o} save={save} /></TabPanel>
+        <Tabs aria-label={o.many} items={[{ id: 'attributes', label: 'Attributes', count: o.attributes.filter((a) => !a.archived).length }, { id: 'config', label: 'Configuration' }, { id: 'access', label: 'Access' }]}>
+          <TabPanel id="attributes"><ObjectAttributes state={state} dispatch={dispatch} o={o} /></TabPanel>
+          <TabPanel id="config"><ObjectConfig o={o} save={save} /><StageRules o={o} save={save} /></TabPanel>
           <TabPanel id="access"><SettingsSection title="Who can do what" description={`For ${o.many.toLowerCase()} only. Owners can always edit.`}>
             <ul className="tf-set__list">{[['admin', 'Admin'], ['member', 'Member'], ['guest', 'Guest'], ...(state.prefs.roles ?? []).map((r) => [r.id, r.name])].map(([id, name]) => <li key={id}><strong>{name}</strong>
               <Select label={`${name} on ${o.many}`} isLabelHidden className="tf-you__select" value={o.access?.[id ?? ''] ?? (id === 'guest' ? 'view' : 'edit')} onChange={(v) => v && save({ access: { ...(o.access ?? {}), [id ?? '']: v === 'none' ? 'none' : v === 'view' ? 'view' : 'edit' } }, `${name} access saved`)}
@@ -600,16 +598,10 @@ function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { read
     );
   }
   return (
-    <SettingsSection title="Objects" description="What your workspace keeps records of. Open one to add or change its attributes." action={<Button variant="secondary" onPress={() => setMaking(true)}>New object</Button>}>
-      <ul className="tf-set__list">
-        {state.objects.map((x) => (
-          <li key={x.id}><button type="button" className="tf-set__open" onClick={() => setOpenId(x.id)}>
-            <strong>{x.many}</strong><span className="tf-rec__muted tf-num">{counts[x.id] ?? (state.customRecords[x.id] ?? []).length} records · {x.attributes.length} attributes{x.custom ? ' · yours' : ''}{x.archived ? ' · archived' : ''}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden />
-          </button></li>
-        ))}
-      </ul>
+    <>
+      <ObjectsList state={state} dispatch={dispatch} onOpen={setOpenId} onNew={() => setMaking(true)} />
       {making && <NewObjectDialog onClose={() => setMaking(false)} onCreate={(obj) => { dispatch({ type: 'object/set', object: obj }); setMaking(false); setOpenId(obj.id); toast({ message: `${obj.many} made. Add its attributes next.`, tone: 'success' }); }} />}
-    </SettingsSection>
+    </>
   );
 }
 
@@ -630,34 +622,6 @@ function ObjectConfig({ o, save }: { readonly o: ObjectSchema; readonly save: (p
       {o.custom && <SettingsSection title={o.archived ? 'Archived' : 'Archive'} description={o.archived ? `${o.many} are out of the sidebar. Their records are kept.` : `Takes ${o.many} out of the sidebar. Records are kept and it can come back.`}
         action={<Button variant="secondary" onPress={() => save({ archived: !o.archived }, o.archived ? `${o.many} are back` : `${o.many} archived`)}>{o.archived ? 'Bring back' : 'Archive'}</Button>}><span /></SettingsSection>}
     </>
-  );
-}
-
-/** Settings › Trash: deleted records for 30 days. Restore is one click; deleting for good asks first. */
-function TrashPage({ state, dispatch, onOpenRecord }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord'] }) {
-  const { toast } = useToast();
-  const [purge, setPurge] = useState<ReadonlyArray<string>>();
-  const days = (d: Date) => Math.max(0, 30 - Math.floor((Date.now() - d.getTime()) / 86_400_000));
-  const kind = { people: 'Person', companies: 'Company', deals: 'Deal' } as const;
-  return (
-    <SettingsSection title="Trash" description="Deleted records wait here for 30 days, then they're gone for good."
-      action={state.trash.length > 0 ? <Button variant="ghost" onPress={() => setPurge(state.trash.map((t) => t.id))}>Empty trash</Button> : undefined}>
-      {state.trash.length === 0 ? <EmptyState size="sm" icon={<Trash2 size={20} strokeWidth={1.75} />} title="Trash is empty" description="Records you delete land here, and you can restore them." /> : (
-        <ul className="tf-set__list">
-          {state.trash.map((t) => (
-            <li key={t.id}><span><strong>{t.record.name}</strong> <span className="tf-rec__muted">{kind[t.object]} · deleted by {t.by} · {days(t.at) === 0 ? 'goes today' : `${days(t.at)} ${days(t.at) === 1 ? 'day' : 'days'} left`}</span></span>
-              <span className="tf-set__row">
-                <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'trash/restore', id: t.id }); toast({ message: `${t.record.name} restored`, tone: 'success', action: onOpenRecord ? { label: 'Open', onAction: () => onOpenRecord(t.object, t.record.id) } : undefined }); }}>Restore</Button>
-                <Button size="sm" variant="ghost" onPress={() => setPurge([t.id])}>Delete for good</Button>
-              </span></li>
-          ))}
-        </ul>
-      )}
-      {purge && (
-        <Dialog isOpen onOpenChange={(o) => { if (!o) setPurge(undefined); }} title={purge.length === 1 ? 'Delete for good?' : `Delete ${purge.length} records for good?`} description="They can't be restored after this."
-          actions={<><Button variant="ghost" slot="close">Keep them</Button><Button variant="danger" onPress={() => { dispatch({ type: 'trash/purge', ids: purge }); setPurge(undefined); toast({ message: 'Deleted for good' }); }}>Delete for good</Button></>} />
-      )}
-    </SettingsSection>
   );
 }
 

@@ -24,6 +24,10 @@ export interface EditableOption extends AttributeOption {
   readonly group?: StatusGroup;
   /** Archived options keep their values on old records but can't be picked. */
   readonly archived?: boolean;
+  /** A stage that ends a pipeline: won or lost (forecasts and open counts read it). */
+  readonly outcome?: 'won' | 'lost';
+  /** A stage's target time, in whole days; a record sitting longer reads as stale. */
+  readonly targetDays?: number;
 }
 
 /** The three status groups, with the shape each new stage in them takes. */

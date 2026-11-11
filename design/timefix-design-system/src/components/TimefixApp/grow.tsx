@@ -25,7 +25,9 @@ import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { lengthOf, placeLabel } from '../BookingsFlow/state.ts';
-import { STAGES, dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type Report } from './data.ts';
+import { dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type ObjectId, type Report } from './data.ts';
+import { isOpenDeal, kindOf, oddsOf, ownFields, stagesOf, viewRows, wordsOf } from './model.tsx';
+import { Stat } from '../Chart/Chart.tsx';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -163,27 +165,37 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
   );
 }
 
-/** The bars of one report, from the workspace's records. */
+/** The points of one report, from the workspace's records: any object, filtered by a saved view and an owner, grouped by any field (dates by month or week), counted or summed or averaged. */
 export function reportPoints(state: AppState, r: Report): ReadonlyArray<{ readonly id: string; readonly label: string; readonly value: number; readonly valueText: string }> {
   const object = r.object ?? 'deals';
-  const mine = <T extends { readonly owner: string }>(xs: ReadonlyArray<T>) => (r.owner ? xs.filter((x) => x.owner === r.owner) : xs);
-  const amount = (ds: ReadonlyArray<{ readonly amount: number }>) => ds.reduce((n, d) => n + d.amount, 0);
-  const keyOf = (rec: Readonly<Record<string, unknown>>): ReadonlyArray<string> => {
-    if (r.group === 'owner') return [String(rec.owner ?? 'No owner')];
-    if (r.group === 'stage') return [String(rec.stage ?? '')];
-    if (r.group === 'industry') return [String(rec.industry || 'No industry')];
-    if (r.group === 'city') return [String(rec.city || 'No city')];
-    if (r.group === 'company') return [state.companies.find((c) => c.id === rec.companyId)?.name ?? 'No company'];
-    if (r.group === 'tag') { const t = rec.tags as ReadonlyArray<string> | undefined; return t && t.length ? t : ['No tags']; }
-    return [''];
+  const view = r.viewId ? (state.views[object] ?? []).find((v) => v.id === r.viewId) : undefined;
+  const rows = viewRows(state, object, view).filter((x) => !r.owner || x.values.owner === r.owner);
+  const fields = ownFields(state, object);
+  const groupId = r.group === 'tag' ? 'tags' : r.group;
+  const gf = fields.find((f) => f.id === groupId);
+  const measureId = r.measure === 'amount' ? 'amount' : r.field;
+  const mf = fields.find((f) => f.id === measureId);
+  const isDate = gf ? kindOf(gf.type) === 'date' : false;
+  const bucket = (v: unknown): ReadonlyArray<string> => {
+    const s0 = v === undefined || v === '' ? '' : String(v);
+    if (!s0) return [`No ${gf?.name.toLowerCase() ?? 'value'}`];
+    if (isDate) { const d = dayFrom(s0); if (!d) return [s0]; if (r.dateBy === 'week') { const m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [ymdOf(m)]; } return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`]; }
+    if (gf?.type === 'multiSelect') return s0.split(/,\s*/).filter(Boolean);
+    return [s0];
   };
-  const rows = (object === 'deals' ? mine(state.deals) : object === 'people' ? mine(state.people) : mine(state.companies)) as unknown as ReadonlyArray<Readonly<Record<string, unknown>> & { readonly amount?: number }>;
-  const groups = new Map<string, Array<Readonly<Record<string, unknown>> & { readonly amount?: number }>>();
-  if (object === 'deals' && r.group === 'stage') STAGES.forEach((st) => groups.set(st, []));
-  rows.forEach((x) => keyOf(x).forEach((k) => groups.set(k, [...(groups.get(k) ?? []), x])));
-  return [...groups].map(([k, xs]) => {
-    const value = r.measure === 'amount' && object === 'deals' ? amount(xs as ReadonlyArray<{ readonly amount: number }>) : xs.length;
-    return { id: k, label: r.group === 'owner' ? k.split(' ')[0] ?? k : k, value, valueText: r.measure === 'amount' && object === 'deals' ? inr(value) : String(value) };
+  const groups = new Map<string, Array<typeof rows[number]>>();
+  if (gf?.options && !isDate) gf.options.filter((o) => o.id !== '').forEach((o) => groups.set(o.id, []));
+  if (groupId === 'owner') state.members.forEach((m) => groups.set(m.name, []));
+  rows.forEach((x) => bucket(x.values[groupId]).forEach((k) => groups.set(k, [...(groups.get(k) ?? []), x])));
+  const keys = isDate ? [...groups.keys()].sort() : [...groups.keys()];
+  const money = mf?.money === true;
+  return keys.map((k) => {
+    const xs = groups.get(k) ?? [];
+    const nums = xs.map((x) => Number(x.values[measureId ?? ''] ?? 0)).filter((n) => !Number.isNaN(n));
+    const value = r.measure === 'count' || !measureId ? xs.length : r.measure === 'avg' ? (nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0) : nums.reduce((a, b) => a + b, 0);
+    const label = isDate ? (r.dateBy === 'week' ? `${dayFrom(k)?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) ?? k}` : `${dayFrom(`${k}-01`)?.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) ?? k}`)
+      : groupId === 'owner' ? k.split(' ')[0] ?? k : gf?.options?.find((o) => o.id === k)?.label ?? k;
+    return { id: k, label, value, valueText: r.measure === 'count' || !measureId ? String(value) : money ? inr(value) : value.toLocaleString('en-IN') };
   });
 }
 
@@ -259,7 +271,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
   const points = r ? reportPoints(state, r) : [];
   return (
     <div className="tf-grow tf-grow--wide">
-      <Tabs aria-label="Insights" selectedKey={tab} onSelectionChange={setTab} items={[{ id: 'pages', label: 'Pages' }, { id: 'reports', label: 'Reports', count: reports.length }]}>
+      <Tabs aria-label="Insights" selectedKey={tab} onSelectionChange={setTab} items={[{ id: 'pages', label: 'Pages' }, { id: 'reports', label: 'Reports', count: reports.length }, { id: 'forecast', label: 'Forecast' }]}>
         <TabPanel id="pages" className="tf-forms__panel">
           <div className="tf-rec__bar">
             <Select label="What" isLabelHidden className="tf-rec__view" value={kind} onChange={(v) => setKind(v ?? 'all')}
@@ -293,52 +305,119 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
           {reports.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No reports yet" description="Chart your deals, people or companies, and keep it for the team." action={<Button size="sm" variant="primary" onPress={() => setMaking('new')}>New report</Button>} /> : (
             <>
               <div className="tf-rec__bar">
-                <Select label="Report" isLabelHidden className="tf-rec__view" value={r?.id ?? null} onChange={(v) => { if (v) setReport(v); }} items={reports.map((x) => ({ id: x.id, label: x.name, description: `${(x.object ?? 'deals') === 'deals' ? (x.measure === 'amount' ? 'Deal value' : 'Deals') : x.object === 'people' ? 'People' : 'Companies'} by ${x.group}${x.owner ? `, ${x.owner}'s` : ''}` }))} />
+                <Select label="Report" isLabelHidden className="tf-rec__view" value={r?.id ?? null} onChange={(v) => { if (v) setReport(v); }} items={reports.map((x) => ({ id: x.id, label: x.name, description: `${wordsOf(state, x.object ?? 'deals').Many} by ${ownFields(state, x.object ?? 'deals').find((f) => f.id === (x.group === 'tag' ? 'tags' : x.group))?.name.toLowerCase() ?? x.group}${x.owner ? `, ${x.owner}'s` : ''}` }))} />
                 <span className="tf-rec__spacer" />
                 {r && <Button size="sm" variant="ghost" icon={<Pencil {...i14} />} onPress={() => setMaking(r)}>Change</Button>}
                 {r && <Button size="sm" variant="ghost" icon={<Trash2 {...i14} />} onPress={() => { const was = r; const at = reports.findIndex((y) => y.id === r.id); dispatch({ type: 'report/remove', id: r.id }); setReport(reports.find((y) => y.id !== r.id)?.id ?? ''); toast({ message: `${was.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'report/set', report: was }); void at; setReport(was.id); } } }); }}>Delete</Button>}
                 <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={() => setMaking('new')}>New report</Button>
               </div>
-              {r && (points.every((p) => p.value === 0) ? <p className="tf-rec__muted">Nothing to count yet.</p> : (
-                <div className="tf-home__grid">
-                  <ChartCard title={r.name}><BarChart label={r.name} points={points} /></ChartCard>
-                  <ChartCard title="Share of the total"><DonutChart label={r.name} segments={points.filter((p) => p.value > 0).map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
-                    total={r.measure === 'amount' && (r.object ?? 'deals') === 'deals' ? inr(points.reduce((n, p) => n + p.value, 0)) : String(points.reduce((n, p) => n + p.value, 0))} /></ChartCard>
-                </div>
-              ))}
+              {r && (() => {
+                const totalNum = r.measure === 'avg' ? Math.round(points.reduce((n, p) => n + p.value, 0) / Math.max(1, points.filter((p) => p.value).length)) : points.reduce((n, p) => n + p.value, 0);
+                const money = r.measure !== 'count' && (ownFields(state, r.object ?? 'deals').find((f) => f.id === (r.measure === 'amount' ? 'amount' : r.field))?.money ?? false);
+                const totalText = money ? inr(totalNum) : totalNum.toLocaleString('en-IN');
+                if (points.every((p) => p.value === 0)) return <p className="tf-rec__muted">Nothing to count yet.</p>;
+                if (r.chart === 'number') return <div className="tf-home__stats tf-grow__one"><Stat label={r.name} value={totalText} delta={`${points.filter((p) => p.value).length} groups · ${r.measure === 'avg' ? 'average' : 'total'}`} /></div>;
+                return (
+                  <div className="tf-home__grid">
+                    <ChartCard title={r.name}><BarChart label={r.name} points={points} look={r.chart === 'line' ? 'line' : 'bars'} /></ChartCard>
+                    <ChartCard title="Share of the total"><DonutChart label={r.name} segments={points.filter((p) => p.value > 0).map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
+                      total={totalText} totalLabel={r.measure === 'avg' ? 'Average' : 'Total'} /></ChartCard>
+                  </div>
+                );
+              })()}
             </>
           )}
         </TabPanel>
+        <TabPanel id="forecast" className="tf-forms__panel"><Forecast state={state} dispatch={dispatch} /></TabPanel>
       </Tabs>
-      {making && <ReportDialog report={making === 'new' ? undefined : making} members={state.members.map((m) => m.name)} onClose={() => setMaking(undefined)} onSave={(x) => { dispatch({ type: 'report/set', report: x }); setReport(x.id); setMaking(undefined); toast({ message: `${x.name} saved`, tone: 'success' }); }} />}
+      {making && <ReportDialog state={state} report={making === 'new' ? undefined : making} members={state.members.map((m) => m.name)} onClose={() => setMaking(undefined)} onSave={(x) => { dispatch({ type: 'report/set', report: x }); setReport(x.id); setMaking(undefined); toast({ message: `${x.name} saved`, tone: 'success' }); }} />}
     </div>
   );
 }
 
-const GROUPS: Readonly<Record<'deals' | 'people' | 'companies', ReadonlyArray<{ readonly id: Report['group']; readonly label: string }>>> = {
-  deals: [{ id: 'stage', label: 'Stage' }, { id: 'owner', label: 'Owner' }, { id: 'company', label: 'Company' }],
-  people: [{ id: 'owner', label: 'Owner' }, { id: 'company', label: 'Company' }, { id: 'tag', label: 'Tag' }],
-  companies: [{ id: 'industry', label: 'Industry' }, { id: 'owner', label: 'Owner' }, { id: 'city', label: 'City' }],
-};
-
-function ReportDialog({ report, members, onClose, onSave }: { readonly report?: Report; readonly members: ReadonlyArray<string>; readonly onClose: () => void; readonly onSave: (r: Report) => void }) {
-  const [object, setObject] = useState<'deals' | 'people' | 'companies'>(report?.object ?? 'deals');
-  const [measure, setMeasure] = useState<'count' | 'amount'>(report?.measure ?? 'amount');
-  const [group, setGroup] = useState<Report['group']>(report?.group ?? 'stage');
+/** A chart of any object's records: count, total or average of a number field, grouped by any field (dates by month or week), from a saved view, as bars, a line or one number. */
+function ReportDialog({ state, report, members, onClose, onSave }: { readonly state: AppState; readonly report?: Report; readonly members: ReadonlyArray<string>; readonly onClose: () => void; readonly onSave: (r: Report) => void }) {
+  const [object, setObject] = useState<ObjectId>(report?.object ?? 'deals');
+  const [measure, setMeasure] = useState<'count' | 'sum' | 'avg'>(report?.measure === 'amount' ? 'sum' : report?.measure ?? 'sum');
+  const fields = ownFields(state, object);
+  const numbers = fields.filter((f) => kindOf(f.type) === 'number');
+  const [field, setField] = useState(report?.measure === 'amount' ? 'amount' : report?.field ?? numbers[0]?.id ?? '');
+  const groupable = fields.filter((f) => ['select', 'status', 'multiSelect', 'actor', 'date', 'timestamp', 'checkbox'].includes(f.type) || f.id === 'company' || f.id === 'city');
+  const [group, setGroup] = useState<string>(report?.group === 'tag' ? 'tags' : report?.group ?? groupable[0]?.id ?? 'owner');
+  const [dateBy, setDateBy] = useState<'month' | 'week'>(report?.dateBy ?? 'month');
   const [owner, setOwner] = useState<string>(report?.owner ?? 'all');
+  const [viewId, setViewId] = useState<string>(report?.viewId ?? 'all');
+  const [chart, setChart] = useState<'bar' | 'line' | 'number'>(report?.chart ?? 'bar');
   const [name, setName] = useState(report?.name ?? '');
-  const amount = object === 'deals' && measure === 'amount';
-  const auto = `${amount ? 'Deal value' : object === 'deals' ? 'Deals' : object === 'people' ? 'People' : 'Companies'} by ${GROUPS[object].find((g) => g.id === group)?.label.toLowerCase() ?? group}`;
+  const gf = fields.find((f) => f.id === group);
+  const isDate = gf ? kindOf(gf.type) === 'date' : false;
+  const useMeasure = numbers.length > 0 ? measure : 'count';
+  const w = wordsOf(state, object);
+  const auto = `${useMeasure === 'count' ? w.Many : `${useMeasure === 'avg' ? 'Average' : 'Total'} ${numbers.find((f) => f.id === field)?.name.replace(/ \(₹\)$/, '').toLowerCase() ?? ''}`} by ${gf?.name.toLowerCase() ?? group}${isDate ? ` (${dateBy})` : ''}`;
+  const objects = state.objects.filter((o) => !o.archived);
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={report ? 'Change report' : 'New report'} description="A chart of your records, saved for the team."
-      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => onSave({ id: report?.id ?? newId('rep'), name: name.trim() || auto, object, measure: object === 'deals' ? measure : 'count', group, owner: owner === 'all' ? undefined : owner })}>Save report</Button></>}>
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!gf} onPress={() => onSave({ id: report?.id ?? newId('rep'), name: name.trim() || auto, object, measure: useMeasure, field: useMeasure === 'count' ? undefined : field, group, dateBy: isDate ? dateBy : undefined, owner: owner === 'all' ? undefined : owner, viewId: viewId === 'all' ? undefined : viewId, chart })}>Save report</Button></>}>
       <div className="tf-rec__form">
-        <Select label="Count" value={object} onChange={(v) => { const o = (v ?? 'deals') as 'deals' | 'people' | 'companies'; setObject(o); setGroup(GROUPS[o][0]?.id ?? 'owner'); }} items={[{ id: 'deals', label: 'Deals' }, { id: 'people', label: 'People' }, { id: 'companies', label: 'Companies' }]} />
-        {object === 'deals' && <Select label="Measure" value={measure} onChange={(v) => setMeasure(v === 'count' ? 'count' : 'amount')} items={[{ id: 'amount', label: 'Total deal value' }, { id: 'count', label: 'Number of deals' }]} />}
-        <Select label="Grouped by" value={group} onChange={(v) => { if (v) setGroup(v as Report['group']); }} items={GROUPS[object]} />
-        <Select label="Owned by" value={owner} onChange={(v) => setOwner(v ?? 'all')} items={[{ id: 'all', label: 'Everyone' }, ...members.map((m) => ({ id: m, label: m }))]} />
+        <div className="tf-bkf__pair">
+          <Select label="Records" value={object} onChange={(v) => { const o = v ?? 'deals'; setObject(o); const f = ownFields(state, o); setGroup(f.find((x) => ['status', 'select', 'actor'].includes(x.type))?.id ?? 'owner'); setField(f.find((x) => kindOf(x.type) === 'number')?.id ?? ''); setViewId('all'); }} items={objects.map((o) => ({ id: o.id, label: o.many }))} />
+          <Select label="From view" value={viewId} onChange={(v) => setViewId(v ?? 'all')} items={[{ id: 'all', label: `All ${w.many}` }, ...(state.views[object] ?? []).map((v) => ({ id: v.id, label: v.name }))]} />
+        </div>
+        <div className="tf-bkf__pair">
+          <Select label="Measure" value={useMeasure} onChange={(v) => setMeasure(v === 'count' ? 'count' : v === 'avg' ? 'avg' : 'sum')} items={[{ id: 'count', label: `Number of ${w.many}` }, ...(numbers.length ? [{ id: 'sum', label: 'Total of a number' }, { id: 'avg', label: 'Average of a number' }] : [])]} />
+          {useMeasure !== 'count' && <Select label="Of" value={field || null} onChange={(v) => setField(v ?? '')} items={numbers.map((f) => ({ id: f.id, label: f.name }))} />}
+        </div>
+        <div className="tf-bkf__pair">
+          <Select label="Grouped by" value={group} onChange={(v) => { if (v) setGroup(v); }} items={groupable.map((f) => ({ id: f.id, label: f.name }))} />
+          {isDate && <Select label="Per" value={dateBy} onChange={(v) => setDateBy(v === 'week' ? 'week' : 'month')} items={[{ id: 'month', label: 'Month' }, { id: 'week', label: 'Week' }]} />}
+        </div>
+        <div className="tf-bkf__pair">
+          <Select label="Owned by" value={owner} onChange={(v) => setOwner(v ?? 'all')} items={[{ id: 'all', label: 'Everyone' }, ...members.map((m) => ({ id: m, label: m }))]} />
+          <Select label="Show as" value={chart} onChange={(v) => setChart(v === 'line' ? 'line' : v === 'number' ? 'number' : 'bar')} items={[{ id: 'bar', label: 'Bars' }, { id: 'line', label: 'A line' }, { id: 'number', label: 'One number' }]} />
+        </div>
         <TextField label="Name" aside="Optional" value={name} onChange={setName} placeholder={auto} />
       </div>
     </Dialog>
+  );
+}
+
+/** Forecast: open pipeline, won, and the weighted forecast; each stage's win chance can be changed, and the forecast follows. */
+function Forecast({ state, dispatch }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void }) {
+  const { toast } = useToast();
+  const stages = stagesOf(state);
+  const open = state.deals.filter((d) => isOpenDeal(state, d));
+  const wonIds = new Set(stages.filter((s) => s.outcome === 'won').map((s) => s.id));
+  const won = state.deals.filter((d) => wonIds.has(d.stage));
+  const pipeline = open.reduce((n, d) => n + d.amount, 0);
+  const weighted = open.reduce((n, d) => n + Math.round((d.amount * oddsOf(state, d.stage)) / 100), 0);
+  const byMonth = new Map<string, number>();
+  open.forEach((d) => { const k = `${d.close.getFullYear()}-${String(d.close.getMonth() + 1).padStart(2, '0')}`; byMonth.set(k, (byMonth.get(k) ?? 0) + Math.round((d.amount * oddsOf(state, d.stage)) / 100)); });
+  const months = [...byMonth.keys()].sort().map((k) => ({ id: k, label: dayFrom(`${k}-01`)?.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) ?? k, value: byMonth.get(k) ?? 0, valueText: inr(byMonth.get(k) ?? 0) }));
+  return (
+    <>
+      <div className="tf-home__stats">
+        <StatCard label="Open pipeline" value={pipeline} delta={{ value: `${open.length} open ${open.length === 1 ? 'deal' : 'deals'}`, direction: 'flat' }} format={inr} />
+        <StatCard label="Won" value={won.reduce((n, d) => n + d.amount, 0)} delta={{ value: `${won.length} won`, direction: 'flat' }} format={inr} />
+        <StatCard label="Weighted forecast" value={weighted} delta={{ value: pipeline ? `${Math.round((weighted / pipeline) * 100)}% of open` : '—', direction: 'flat' }} format={inr} />
+      </div>
+      <div className="tf-home__grid">
+        <ChartCard title="Expected by close month"><BarChart label="Weighted amount by close month" points={months} emptyText="No open deals." /></ChartCard>
+        <ChartCard title="Win chance by stage">
+          <ul className="tf-set__list tf-forecast">
+            {stages.filter((s) => !s.outcome).map((s) => {
+              const ds = open.filter((d) => d.stage === s.id); const amt = ds.reduce((n, d) => n + d.amount, 0);
+              return (
+                <li key={s.id}>
+                  <span><strong>{s.label}</strong> <span className="tf-rec__muted tf-num">{ds.length} · {inr(amt)} · {inr(Math.round((amt * oddsOf(state, s.id)) / 100))} weighted</span></span>
+                  <TextField aria-label={`${s.label} win chance`} className="tf-forecast__pct" value={String(oddsOf(state, s.id))} suffix={<span className="tf-rec__muted">%</span>} inputMode="numeric"
+                    onChange={(v) => { const n = Math.max(0, Math.min(100, Number(v.replace(/[^\d]/g, '')) || 0)); const was = state.prefs.winChance; dispatch({ type: 'prefs/update', fn: (p) => ({ winChance: { ...(p.winChance ?? {}), [s.id]: n } }) }); void was; }}
+                    onBlur={() => toast({ message: `${s.label}: ${oddsOf(state, s.id)}% likely`, tone: 'success' })} />
+                </li>
+              );
+            })}
+          </ul>
+        </ChartCard>
+      </div>
+    </>
   );
 }

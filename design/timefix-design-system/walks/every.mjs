@@ -33,7 +33,7 @@ const inspect = () => p.evaluate(() => {
 
 const popupCheck = (where) => p.evaluate(() => {
   const W = innerWidth, H = innerHeight; const out = [];
-  for (const el of document.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"], [role="tooltip"], .tf-popover, [data-trigger]')) {
+  for (const el of document.querySelectorAll('[data-placement], .tf-dialog, .tf-drawer, .tf-fullscreen')) {
     const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
     if (r.left < -1 || r.top < -1 || r.right > W + 1 || r.bottom > H + 1) out.push(`popup outside window (${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)},${Math.round(r.bottom)})`);
     if (el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== 'auto') out.push('popup content wider than popup');

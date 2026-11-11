@@ -34,31 +34,33 @@ Wave A notes: bar charts done for form answers (funnels keep their own drop-off 
 Wave A left: choice tiles to TileGrid, Brand preview to GuestLook, phone-only reach-ins (.tf-btn__label, .tf-seg__item, .tf-qbuilder, .tf-hform--look).
 
 ## Wave B: CRM core
-- [ ] Automations: list with on/off, builder (When / Only if / Then: create task, set field, notify), runs history (R/automations)
-- [ ] Table: group rows by a status/select field; footer calculations per column (count, empty, sum, avg, min, max); multi-cell paste/clear with Undo; reorder columns; column widths saved to the view
-- [ ] Filters: nested and/or groups, filter through a relationship, between, date operators
-- [ ] Bulk edit: several fields, add/remove/replace for multi-select, select all matching, delete confirm
-- [ ] New record: "Add more fields", owner-made attributes, required enforced
-- [ ] Owner-made attribute types show/edit with their real field (date, checkbox, rating...) in the table
-- [ ] Saved views: who can see it after creation, lock, copy link, move up/down, private views list
-- [ ] Board: group by any status/select field, "Show total of" any currency field, card fields picker, show empty columns
-- [ ] Custom objects: record page + peek, in ⌘K, views/filters/sorts/board/bulk/import/duplicates, delete goes to Trash
-- [ ] Record page: Activity filter (All/Changes/Notes/Calls/Tasks/Comments/Meetings); duplicate banner (Merge / Not a duplicate); related sections add/remove/create linked; stat strip (Last activity, Last contacted, Next meeting, Entered stage); Add/Manage attribute from Details
-- [ ] Log call/meeting: date/time, duration, outcome, several records, edit/delete
-- [ ] Comments: edit (with history), delete with confirm, collapsed Resolved threads, deep link
-- [ ] Inbox: Form submissions kind, link to notification settings
-- [ ] Tasks: "Created by me" filter, Copy link
-- [ ] Notes: link several records, Copy link
-- [ ] Duplicates for Deals and custom objects
-- [ ] Import: Deals and custom objects; match key, when matched fill/overwrite/skip, when no match create/skip; row preview with errors and likely duplicates; download error rows; sample CSV; per-import detail page; Undo for 7 days
-- [ ] Computed attributes (Formula, Lookup, Rollup) via FormulaEditor
-- [ ] Relationship attributes wired to RelationshipSettings (target, cardinality, other side)
-- [ ] Archived attributes list with Restore + impact warning
-- [ ] Status stages: won/lost outcome per stage, target time in stage
-- [ ] "Required when" rules; reorder objects
-- [ ] Trash: filter by object, multi-select bulk restore/delete, top-level Trash page, open trashed record read-only, custom-object records
-- [ ] Reports: any object, sum/avg any number, group by any field incl. date by month/week, filter from a saved view, chart type bars/line/number, Forecast (pipeline, won, weighted, win chance per stage)
-- [ ] ⌘K: saved views, custom records, create any object, New note/Log call/Log meeting on the open record, theme switch, export view, create view, invite members, import companies, open trash
+- [x] Automations: list with on/off, builder (When / Only if / Then: create task, set field, notify), runs history (R/automations)
+- [x] Table: group rows by a status/select field; footer calculations per column (count, empty, sum, avg, min, max); multi-cell paste/clear with Undo; reorder columns; column widths saved to the view
+- [x] Filters: nested and/or groups, filter through a relationship, between, date operators
+- [x] Bulk edit: several fields, add/remove/replace for multi-select, select all matching, delete confirm
+- [x] New record: "Add more fields", owner-made attributes, required enforced
+- [x] Owner-made attribute types show/edit with their real field (date, checkbox, rating...) in the table
+- [x] Saved views: who can see it after creation, lock, copy link, move up/down, private views list
+- [x] Board: group by any status/select field, "Show total of" any currency field, card fields picker, show empty columns
+- [x] Custom objects: record page + peek, in ⌘K, views/filters/sorts/board/bulk/import/duplicates, delete goes to Trash
+- [x] Record page: Activity filter (All/Changes/Notes/Calls/Tasks/Comments/Meetings); duplicate banner (Merge / Not a duplicate); related sections add/remove/create linked; stat strip (Last activity, Last contacted, Next meeting, Entered stage); Add/Manage attribute from Details
+- [x] Log call/meeting: date/time, duration, outcome, several records, edit/delete
+- [x] Comments: edit (with history), delete with confirm, collapsed Resolved threads, deep link
+- [x] Inbox: Form submissions kind, link to notification settings
+- [x] Tasks: "Created by me" filter, Copy link
+- [x] Notes: link several records, Copy link
+- [x] Duplicates for Deals and custom objects
+- [x] Import: Deals and custom objects; match key, when matched fill/overwrite/skip, when no match create/skip; row preview with errors and likely duplicates; download error rows; sample CSV; per-import detail page; Undo for 7 days
+- [x] Computed attributes (Formula, Lookup, Rollup) via FormulaEditor (can't change kind after creation)
+- [x] Relationship attributes wired to RelationshipSettings (target, cardinality, other side)
+- [x] Archived attributes list with Restore + impact warning
+- [x] Status stages: won/lost outcome per stage, target time in stage (Home and the lost-reason flow still read the names Won/Lost)
+- [x] "Required when" rules; reorder objects (enforced in New record and flagged on the record page, not blocked on table cell edits)
+- [x] Trash: filter by object, multi-select bulk restore/delete, top-level Trash page, open trashed record read-only, custom-object records
+- [x] Reports: any object, sum/avg any number, group by any field incl. date by month/week, filter from a saved view, chart type bars/line/number, Forecast (pipeline, won, weighted, win chance per stage)
+- [x] ⌘K: saved views, custom records, create any object, New note/Log call/Log meeting on the open record, theme switch, export view, create view, invite members, import companies, open trash
+
+Wave B also fixed: every popup (menus, selects, popovers, tooltips) opened about 20% short of its trigger under the 80% zoom. The app and each overlay layer are now zoomed on their own, and a build-time patch to React Aria's placement divides by the popover's zoom (rt/popalign.mjs checks it).
 
 ## Wave C: scheduling
 - [ ] Meetings: Day view; go to a date (month calendar); filter by booking page; filter by calendar (side panel show/hide); calendar events in the list; sort + Show more; team day filters (people, only with bookings, order); issues menu (outside hours, clashes, host left)

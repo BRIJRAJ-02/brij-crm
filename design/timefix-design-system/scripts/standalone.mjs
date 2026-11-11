@@ -3,10 +3,39 @@ import { build } from '/Users/brijraj/Desktop/brijraj/crm/node_modules/.pnpm/esb
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 const [name, title, outFile] = process.argv.slice(2);
 const tmp = `../standalone-out-${name}`;
+
+// React Aria places popovers from on-screen rects, but the popover layer draws at 80%, so every placed length would
+// shrink again and land short of its trigger. Patch its maths at build time: measure the popover on screen too, divide
+// the result by the popover's effective zoom, and size --trigger-width from the trigger's own layout width.
+const zoomHelper = `
+function __tfZoom(opts, r) {
+  let z = 1;
+  for (let n = opts.overlayNode; n && n.nodeType === 1; n = n.parentElement) z *= parseFloat(getComputedStyle(n).zoom) || 1;
+  if (!r || z === 1) return r;
+  const d = (v) => (typeof v === 'number' ? v / z : v);
+  const position = {};
+  for (const k in r.position) position[k] = d(r.position[k]);
+  return { ...r, position, maxHeight: d(r.maxHeight), arrowOffsetLeft: d(r.arrowOffsetLeft), arrowOffsetTop: d(r.arrowOffsetTop) };
+}`;
+const zoomFix = { name: 'zoom-fix', setup(b) {
+  b.onLoad({ filter: /react-aria[\\/]dist[\\/]private[\\/]overlays[\\/]calculatePosition\.mjs$/ }, (a) => {
+    let src = readFileSync(a.path, 'utf8');
+    const head = 'function $954926fb6168ae2a$export$b3ceb0cbf1056d98(opts) {';
+    const size = 'let overlaySize = $954926fb6168ae2a$var$getOffset(overlayNode, true);';
+    if (!src.includes(head) || !src.includes(size)) throw new Error('zoom-fix: react-aria calculatePosition changed');
+    src = src.replace(head, head + '\n    return __tfZoom(opts, __tfCalc(opts));\n}\nfunction __tfCalc(opts) {').replace(size, 'let overlaySize = $954926fb6168ae2a$var$getOffset(overlayNode, false);') + zoomHelper;
+    return { contents: src, loader: 'js', resolveDir: a.path.replace(/[\\/][^\\/]*$/, '') };
+  });
+  b.onLoad({ filter: /react-aria-components[\\/]dist[\\/]private[\\/]Popover\.mjs$/ }, (a) => {
+    const src = readFileSync(a.path, 'utf8'); const w = 'props.triggerRef.current.getBoundingClientRect().width';
+    if (!src.includes(w)) throw new Error('zoom-fix: react-aria-components Popover changed');
+    return { contents: src.replace(w, 'props.triggerRef.current.offsetWidth'), loader: 'js', resolveDir: a.path.replace(/[\\/][^\\/]*$/, '') };
+  });
+} };
 await build({ entryPoints: { app: `standalone/${name}.tsx` }, bundle: true, format: 'iife', minify: process.env.NOMIN ? false : true, target: 'es2022', outdir: tmp, jsx: 'automatic',
   loader: { '.svg': 'text', '.png': 'dataurl' }, nodePaths: ['/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules', '/Users/brijraj/Desktop/brijraj/crm/node_modules'],
   alias: { react: '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react', 'react-dom': '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react-dom' },
-  define: { 'process.env.NODE_ENV': '"production"' }, legalComments: 'none', logLevel: 'warning' });
+  define: { 'process.env.NODE_ENV': '"production"' }, legalComments: 'none', logLevel: 'warning', plugins: [zoomFix] });
 const t = JSON.parse(readFileSync('../ds/project/tokens.json', 'utf8'));
 const v = (x, th) => (typeof x === 'string' ? x : x[th] ?? x.light);
 const themed = (th) => [...t.color.tokens, ...t.shadow.tokens].map((c) => `--${c.name}:${v(c.value, th)};`).join('');
@@ -32,9 +61,11 @@ ${fontLinks}
 ${tokens}
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${themed('dark')} color-scheme: dark; } }
 [data-theme="dark"] { color-scheme: dark; }
-/* The dashboard draws at 80% (owner, 11 Nov: smaller type and padding across); public pages and sign in step back to 100%. */
-html { zoom: 0.8; }
-html[data-guest] { zoom: 1; }
+/* The dashboard draws at 80% (owner, 11 Nov: smaller type and padding across); public pages step back to 100%.
+   The app and each overlay layer (popovers, menus, dialogs, toasts: React Aria portals them into body) are zoomed on
+   their own, never the root, so React Aria measures the page in one coordinate space; the zoom-fix build plugin
+   converts its placed lengths into each popover's own zoomed space. */
+html:not([data-guest]) #root, html:not([data-guest]) body > :not(#root) { zoom: 0.8; }
 html, body { height: 100%; overflow: hidden; }
 body { margin: 0; background: var(--canvas); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }

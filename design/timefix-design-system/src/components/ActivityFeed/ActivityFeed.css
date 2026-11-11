@@ -44,3 +44,6 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-feed__more-panel, .tf-feed__more-inner, .tf-feed__pill, .tf-feed__chev { transition: none; }
 }
+
+/* An event's own control (a ⋯ menu) sits after its time. */
+.tf-feed__acts { display: inline-flex; flex: none; align-self: center; margin-left: var(--space-4); }

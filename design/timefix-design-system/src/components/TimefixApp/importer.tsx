@@ -9,7 +9,8 @@ import { Button } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { useToast } from '../Toast/Toast.tsx';
-import { type ObjectSchema, newId, type AppAction, type AppState, type Person } from './data.ts';
+import { type ObjectSchema, newId, type AppAction, type AppState, type ImportJob, type ObjectId, type Person } from './data.ts';
+import { RecordImport, ImportPolicies, PreviewRows, downloadErrors, type RowLine } from './import2.tsx';
 
 const SAMPLE = `Full name,Email address,Company,Role,Owner,Tags
 Leah Ortega,leah@acme.com,Acme Corp,Plant manager,Priya Raman,Champion
@@ -18,8 +19,8 @@ Ken Adams,ken@newco.ai,NewCo,Founder,Jo M.,Decision maker
 Rita Das,,Initech,Analyst,,
 Omar Said,omar@zylo.in,Zylo,Ops lead,Ava Chen,`;
 
-const TARGETS = [{ id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'company', label: 'Company' }, { id: 'title', label: 'Job title' }, { id: 'owner', label: 'Owner' }, { id: 'tags', label: 'Tags' }, { id: 'lastContact', label: 'Last contact (a date)' }, { id: 'new', label: 'A new attribute' }, { id: 'skip', label: 'Don’t import' }];
-const GUESS: Readonly<Record<string, string>> = { 'full name': 'name', name: 'name', email: 'email', 'email address': 'email', company: 'company', organisation: 'company', role: 'title', title: 'title', 'job title': 'title', owner: 'owner', tags: 'tags', 'last contact': 'lastContact', 'last contacted': 'lastContact' };
+const TARGETS = [{ id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'phone', label: 'Phone' }, { id: 'company', label: 'Company' }, { id: 'title', label: 'Job title' }, { id: 'owner', label: 'Owner' }, { id: 'tags', label: 'Tags' }, { id: 'lastContact', label: 'Last contact (a date)' }, { id: 'new', label: 'A new attribute' }, { id: 'skip', label: 'Don’t import' }];
+const GUESS: Readonly<Record<string, string>> = { 'full name': 'name', name: 'name', email: 'email', 'email address': 'email', phone: 'phone', mobile: 'phone', company: 'company', organisation: 'company', role: 'title', title: 'title', 'job title': 'title', owner: 'owner', tags: 'tags', 'last contact': 'lastContact', 'last contacted': 'lastContact' };
 /** Reads a date cell: ISO, or day/month/year (or month/day/year when asked). */
 const readDate = (v: string, order: 'dmy' | 'mdy'): Date | undefined => {
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v); if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
@@ -29,7 +30,7 @@ const readDate = (v: string, order: 'dmy' | 'mdy'): Date | undefined => {
 };
 
 /** Splits a CSV into rows: quoted cells may hold commas, line breaks and doubled quotes (""). */
-function parse(text: string): ReadonlyArray<ReadonlyArray<string>> {
+export function parse(text: string): ReadonlyArray<ReadonlyArray<string>> {
   const rows: string[][] = []; let row: string[] = []; let cur = ''; let q = false;
   const src = text.replace(/^\uFEFF/, '');
   for (let i = 0; i < src.length; i++) {
@@ -45,26 +46,27 @@ function parse(text: string): ReadonlyArray<ReadonlyArray<string>> {
 }
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** What an import changed, so Undo takes back exactly that: new records go, updated fields get their old values. */
-interface ImportUndo { /** People's attributes before the import, when it added attributes or tag options. */ readonly schemaBefore?: ObjectSchema; readonly made: number; readonly updated: number; readonly skipped: ReadonlyArray<string>; readonly created: ReadonlyArray<string>; readonly newCompanies: ReadonlyArray<string>; readonly before: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> }
-const undoImport = (dispatch: (a: AppAction) => void, object: 'people' | 'companies', u: ImportUndo, me: string) => {
+export interface ImportUndo { /** People's attributes before the import, when it added attributes or tag options. */ readonly schemaBefore?: ObjectSchema; readonly made: number; readonly updated: number; readonly skipped: ReadonlyArray<string>; readonly created: ReadonlyArray<string>; readonly newCompanies: ReadonlyArray<string>; readonly before: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> }
+/** Takes an import back: new records go, updated fields get their old values, added attributes come off. */
+export const undoImport = (dispatch: (a: AppAction) => void, object: ObjectId, u: ImportUndo, me: string) => {
   dispatch({ type: 'records/drop', object, ids: u.created, note: `${me} undid an import` });
   if (u.newCompanies.length) dispatch({ type: 'records/drop', object: 'companies', ids: u.newCompanies });
   if (u.before.length) dispatch({ type: 'records/fields', object, changes: u.before });
   if (u.schemaBefore) dispatch({ type: 'object/set', object: u.schemaBefore });
 };
 /** Reads a dropped file: CSV only (any case), with a plain message when it can't. */
-const readCsv = (f: File | undefined, toast: (t: { readonly message: string; readonly tone?: 'danger' }) => void, then: (name: string, text: string) => void) => {
+export const readCsv = (f: File | undefined, toast: (t: { readonly message: string; readonly tone?: 'danger' }) => void, then: (name: string, text: string) => void) => {
   if (!f) return;
   if (!/\.csv$/i.test(f.name)) { toast({ message: 'Save it as CSV first: in Excel, File › Save As › CSV.' }); return; }
   f.text().then((t) => (t.trim() ? then(f.name, t) : toast({ message: `${f.name} is empty.`, tone: 'danger' })), () => toast({ message: `Couldn’t read ${f.name}. Try saving it again.`, tone: 'danger' }));
 };
 
 /** Props for ImportScreen. */
-export interface ImportScreenProps { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onDone: () => void; /** People (matched by email) or Companies (matched by domain). */ readonly object?: 'people' | 'companies' }
+export interface ImportScreenProps { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onDone: () => void; /** Any object; People has its own steps (owners, new companies, tags, dates). */ readonly object?: ObjectId; /** Opens this import's details in Settings › Imports and exports. */ readonly onJob?: (id: string) => void }
 
 /** The People import. */
-export function ImportScreen({ state, dispatch, onDone, object = 'people' }: ImportScreenProps) {
-  if (object === 'companies') return <CompanyImport state={state} dispatch={dispatch} onDone={onDone} />;
+export function ImportScreen({ state, dispatch, onDone, object = 'people', onJob }: ImportScreenProps) {
+  if (object !== 'people') return <RecordImport state={state} dispatch={dispatch} object={object} onDone={onDone} onJob={onJob} />;
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<{ readonly name: string; readonly rows: ReadonlyArray<ReadonlyArray<string>> }>();
@@ -73,6 +75,10 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   const [newCompanies, setNewCompanies] = useState(true);
   const [dateOrder, setDateOrder] = useState<'dmy' | 'mdy'>('dmy');
   const [done, setDone] = useState<ImportUndo>();
+  const [jobId, setJobId] = useState<string>();
+  const [matchBy, setMatchBy] = useState<'email' | 'phone' | 'name'>('email');
+  const [onMatch, setOnMatch] = useState<'fill' | 'overwrite' | 'skip'>('overwrite');
+  const [onNew, setOnNew] = useState<'create' | 'skip'>('create');
   const head = file?.rows[0] ?? [];
   const body = file?.rows.slice(1) ?? [];
   const take = (name: string, text: string) => { const rows = parse(text); setFile({ name, rows }); setMap((rows[0] ?? []).map((h) => GUESS[h.toLowerCase()] ?? 'skip')); setStep(1); };
@@ -88,7 +94,20 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   const tagOptions = (state.objects.find((o) => o.id === 'people')?.attributes.find((a) => a.id === 'tags')?.options ?? []).map((o) => o.label.toLowerCase());
   const newTags = [...new Set(body.flatMap((r) => (val(r, 'tags') ? val(r, 'tags').split(/;\s*/).filter(Boolean) : [])))].filter((t) => !tagOptions.includes(t.toLowerCase()));
   const newAttrs = head.map((h, i) => ({ h, i })).filter(({ i }) => map[i] === 'new');
-  const plan = body.filter((r) => val(r, 'name')).map((r) => ({ r, match: state.people.find((p) => p.email && p.email.toLowerCase() === val(r, 'email').toLowerCase()) }));
+  const keyOf = (r: ReadonlyArray<string>) => (matchBy === 'email' ? val(r, 'email') : matchBy === 'name' ? val(r, 'name') : val(r, 'phone' as string)).trim().toLowerCase();
+  const findMatch = (r: ReadonlyArray<string>) => { const k = keyOf(r); if (!k) return undefined; return state.people.find((p) => (matchBy === 'email' ? p.email : matchBy === 'name' ? p.name : p.phone ?? '').toLowerCase() === k); };
+  const badMail = (r: ReadonlyArray<string>) => val(r, 'email') !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val(r, 'email'));
+  const plan = body.filter((r) => val(r, 'name') && !badMail(r)).map((r) => ({ r, match: findMatch(r) })).filter((x) => (x.match ? onMatch !== 'skip' : onNew === 'create'));
+  // Each row as the Check step shows it: what happens, why not, and who it looks like.
+  const lines: ReadonlyArray<RowLine> = body.map((r, n) => {
+    const name = val(r, 'name'); const m = findMatch(r);
+    const twin = !m ? state.people.find((p) => p.name.toLowerCase() === name.toLowerCase() || (val(r, 'email') && p.email.toLowerCase() === val(r, 'email').toLowerCase())) : undefined;
+    if (!name) return { row: n + 2, name: '', result: 'error', reason: 'No name', cells: r };
+    if (badMail(r)) return { row: n + 2, name, result: 'error', reason: `“${val(r, 'email')}” isn’t an email address`, cells: r };
+    if (m) return { row: n + 2, name, result: onMatch === 'skip' ? 'skipped' : 'updated', reason: onMatch === 'skip' ? `Matches ${m.name}` : `Matches ${m.name}${onMatch === 'fill' ? ', fills empty fields' : ''}`, cells: r };
+    if (onNew === 'skip') return { row: n + 2, name, result: 'skipped', reason: 'No match', cells: r };
+    return { row: n + 2, name, result: 'added', reason: twin ? `Looks like ${twin.name}` : undefined, twin: Boolean(twin), cells: r };
+  });
   const nameMissing = col('name') < 0;
   const run = () => {
     // New attribute columns become text attributes on People; new tags join the Tags options.
@@ -112,13 +131,18 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
       const lastContact = val(r, 'lastContact') ? readDate(val(r, 'lastContact'), dateOrder) : undefined;
       const extraNew = Object.fromEntries(newAttrs.map(({ i }, n) => [attrIds[n] ?? '', r[i] ?? '']).filter(([, v]) => v !== ''));
       // Only what the file actually says: a blank cell never clears what's already there.
-      const fields: Readonly<Record<string, unknown>> = Object.fromEntries(Object.entries({ name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner, tags, lastContact, extra: Object.keys(extraNew).length ? { ...(match?.extra ?? {}), ...extraNew } : undefined }).filter(([, v]) => v !== '' && v !== undefined));
+      const fields: Record<string, unknown> = Object.fromEntries(Object.entries({ name: val(r, 'name'), email: val(r, 'email'), phone: val(r, 'phone') || undefined, title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner, tags, lastContact, extra: Object.keys(extraNew).length ? { ...(match?.extra ?? {}), ...extraNew } : undefined }).filter(([, v]) => v !== '' && v !== undefined));
       if (!match && match0) return; // the same new email twice in one file: one person
+      // "Fill empty fields" keeps what's there and only fills the gaps.
+      if (match && onMatch === 'fill') { const cur = match as unknown as Readonly<Record<string, unknown>>; const kept = Object.fromEntries(Object.entries(fields).filter(([k, v]) => k === 'tags' || k === 'extra' || cur[k] === undefined || cur[k] === '' || (Array.isArray(cur[k]) && (cur[k] as ReadonlyArray<unknown>).length === 0 && v !== undefined))); Object.keys(fields).forEach((k) => { if (!(k in kept)) delete (fields as Record<string, unknown>)[k]; }); }
       if (match) { updated++; before.push({ id: match.id, patch: Object.fromEntries(Object.keys(fields).map((k) => [k, (match as unknown as Readonly<Record<string, unknown>>)[k]])) }); dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: fields }] }); }
-      else { const id = newId('p'); created.push(id); if (val(r, 'email')) seen.set(val(r, 'email').toLowerCase(), id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
+      else { const id = newId('p'); created.push(id); if (val(r, 'email')) seen.set(val(r, 'email').toLowerCase(), id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), phone: val(r, 'phone') || undefined, title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
     });
     dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'person', 'people')} from ${file?.name ?? 'a CSV'}` });
-    dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'import' as const, what: `People from ${file?.name ?? 'a CSV'}`, rows: created.length + updated, by: state.me, at: new Date(), name: file?.name }, ...(q.jobs ?? [])] }) });
+    const jid = newId('jb'); setJobId(jid);
+    const job: ImportJob = { id: jid, kind: 'import', what: `People from ${file?.name ?? 'a CSV'}`, rows: created.length + updated, by: state.me, at: new Date(), name: file?.name, object: 'people', made: created.length, updated, skipped: lines.filter((l) => l.result !== 'added' && l.result !== 'updated').length,
+      lines: lines.map(({ row, name, result, reason }) => ({ row, name, result, reason })), undo: { created, before, newCompanies: newCos } };
+    dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [job, ...(q.jobs ?? [])] }) });
     setDone({ schemaBefore: people && (newAttrs.length || newTags.length) ? people : undefined, made: created.length, updated, created, newCompanies: newCos, before, skipped: body.filter((r) => !val(r, 'name')).map((r) => r.join(', ')) }); setStep(4);
   };
   return (
@@ -163,20 +187,23 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
         </>}
         {step === 3 && <>
           <h2 className="tf-imp__h">Check, then import</h2>
+          <ImportPolicies keys={[{ id: 'email', label: 'Email' }, ...(col('phone' as string) >= 0 ? [{ id: 'phone', label: 'Phone' }] : []), { id: 'name', label: 'Name' }]} matchBy={matchBy} onMatchBy={(v) => setMatchBy(v === 'name' ? 'name' : v === 'phone' ? 'phone' : 'email')} onMatch={onMatch} onMatchChange={setOnMatch} onNew={onNew} onNewChange={setOnNew} />
+          <PreviewRows lines={lines} onDownload={() => downloadErrors(file?.name ?? 'people.csv', head, lines, toast)} />
           <ul className="tf-imp__sum">
             <li><strong className="tf-num">{plan.filter((x) => !x.match).length}</strong> new {plan.filter((x) => !x.match).length === 1 ? 'person' : 'people'}</li>
-            <li><strong className="tf-num">{plan.filter((x) => x.match).length}</strong> {plan.filter((x) => x.match).length === 1 ? 'person' : 'people'} updated, matched by email</li>
+            <li><strong className="tf-num">{plan.filter((x) => x.match).length}</strong> {plan.filter((x) => x.match).length === 1 ? 'person' : 'people'} updated, matched by {matchBy}</li>
             {newCompanies && unknownCompanies.length > 0 && <li><strong className="tf-num">{unknownCompanies.length}</strong> new companies</li>}
-            {body.length - plan.length > 0 && <li><strong className="tf-num">{body.length - plan.length}</strong> rows skipped: no name</li>}
+            {body.length - plan.length > 0 && <li><strong className="tf-num">{body.length - plan.length}</strong> rows not imported</li>}
           </ul>
           <div className="tf-imp__go"><Button variant="ghost" onPress={() => setStep(2)}>Back</Button><Button variant="primary" isDisabled={plan.length === 0} onPress={run}>{plan.length === 0 ? 'Nothing to import' : `Import ${plural(plan.length, 'person', 'people')}`}</Button></div>
         </>}
         {step === 4 && done && <>
           <h2 className="tf-imp__h">Imported</h2>
           <ul className="tf-imp__sum"><li><strong className="tf-num">{done.made}</strong> added</li><li><strong className="tf-num">{done.updated}</strong> updated</li>{done.skipped.length > 0 && <li><strong className="tf-num">{done.skipped.length}</strong> not imported (no name)</li>}</ul>
-          <p className="tf-rec__muted">Undo takes it back now: new people go, and updated fields get their old values. Later it shows in Settings › History.</p>
+          <p className="tf-rec__muted">Undo takes it back: new people go, and updated fields get their old values. It stays open for 7 days in Settings › Imports and exports.</p>
           <div className="tf-imp__go">
-            <Button variant="ghost" icon={<Undo2 size={14} strokeWidth={1.75} />} onPress={() => { undoImport(dispatch, 'people', done, state.me); toast({ message: 'Import undone' }); onDone(); }}>Undo import</Button>
+            {jobId && onJob && <Button variant="ghost" onPress={() => onJob(jobId)}>See rows and errors</Button>}
+            <Button variant="ghost" icon={<Undo2 size={14} strokeWidth={1.75} />} onPress={() => { undoImport(dispatch, 'people', done, state.me); if (jobId) dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: (q.jobs ?? []).map((j) => (j.id === jobId ? { ...j, undone: true } : j)) }) }); toast({ message: 'Import undone' }); onDone(); }}>Undo import</Button>
             <Button variant="primary" onPress={onDone}>See people</Button>
           </div>
         </>}
@@ -185,50 +212,3 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   );
 }
 
-const CO_SAMPLE = `Company,Website,Industry,City,Owner
-Acme Corp,acme.com,Manufacturing,Pune,Priya Raman
-Zylo,zylo.in,Software,Bengaluru,Sam Kim
-Orbit Labs,orbit.dev,Software,Hyderabad,
-Brightpath,brightpath.org,Education,Delhi,Ava Chen`;
-const CO_GUESS: Readonly<Record<string, string>> = { company: 'name', name: 'name', website: 'domain', domain: 'domain', industry: 'industry', city: 'city', owner: 'owner' };
-const CO_TARGETS = [{ id: 'name', label: 'Name' }, { id: 'domain', label: 'Domain' }, { id: 'industry', label: 'Industry' }, { id: 'city', label: 'City' }, { id: 'owner', label: 'Owner' }, { id: 'skip', label: 'Don’t import' }];
-
-/** Companies import: the same steps, matched by domain. */
-function CompanyImport({ state, dispatch, onDone }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onDone: () => void }) {
-  const { toast } = useToast();
-  const [rows, setRows] = useState<ReadonlyArray<ReadonlyArray<string>>>();
-  const [map, setMap] = useState<ReadonlyArray<string>>([]);
-  const [done, setDone] = useState<ImportUndo>();
-  const head = rows?.[0] ?? []; const body = rows?.slice(1) ?? [];
-  const v = (r: ReadonlyArray<string>, id: string) => (map.indexOf(id) >= 0 ? r[map.indexOf(id)] ?? '' : '');
-  const plan = body.filter((r) => v(r, 'name')).map((r) => ({ r, match: state.companies.find((c) => (v(r, 'domain') && c.domain === v(r, 'domain')) || c.name.toLowerCase() === v(r, 'name').toLowerCase()) }));
-  const take = (_name: string, text: string) => { const p = parse(text); setRows(p); setMap((p[0] ?? []).map((h) => CO_GUESS[h.toLowerCase()] ?? 'skip')); };
-  const step = done ? 4 : rows ? 1 : 0;
-  return (
-    <div className="tf-imp">
-      <div className="tf-rec__bar"><Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={onDone}>Companies</Button><span className="tf-rec__spacer" /><Steps steps={['File', 'Match and check', 'Done'].map((label, n) => ({ id: String(n), label }))} current={step === 4 ? 2 : step} /></div>
-      <section className="tf-bkf-card tf-imp__card">
-        {step === 0 && <><h2 className="tf-imp__h">Import companies</h2><p className="tf-rec__muted">Matched by website domain, so companies already here are updated, not doubled.</p>
-          <FileDrop label="Drop a CSV here" allowsMultiple={false} acceptedFileTypes={['text/csv']} onFiles={(f) => readCsv(f[0], toast, take)} />
-          <Button variant="ghost" icon={<FileSpreadsheet size={14} strokeWidth={1.75} />} onPress={() => take('companies-sample.csv', CO_SAMPLE)}>Use a sample file</Button></>}
-        {step === 1 && <><h2 className="tf-imp__h">Match columns</h2>
-          <ul className="tf-imp__map">{head.map((h, i) => <li key={`${h}-${i}`}><span className="tf-imp__col"><strong>{h}</strong><span className="tf-rec__muted">{body.slice(0, 2).map((r) => r[i]).filter(Boolean).join(', ') || 'Empty'}</span></span><span className="tf-imp__arrow" aria-hidden>→</span>
-            <Select label={`${h} goes to`} isLabelHidden value={map[i] ?? 'skip'} onChange={(x) => setMap(map.map((m, j) => (j === i ? x ?? 'skip' : m)))} items={CO_TARGETS} /><span /></li>)}</ul>
-          <p className="tf-rec__muted tf-num">{plan.filter((x) => !x.match).length} new · {plan.filter((x) => x.match).length} updated · {body.length - plan.length} skipped (no name)</p>
-          <div className="tf-imp__go"><Button variant="ghost" onPress={() => setRows(undefined)}>Back</Button><Button variant="primary" isDisabled={map.indexOf('name') < 0 || plan.length === 0} onPress={() => {
-            const created: string[] = []; const before: Array<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> = []; let updated = 0;
-            plan.forEach(({ r, match }) => {
-              const owner = state.members.some((m) => m.name === v(r, 'owner')) ? v(r, 'owner') : state.me;
-              if (match) {
-                const fields: Readonly<Record<string, unknown>> = Object.fromEntries(Object.entries({ domain: v(r, 'domain'), industry: v(r, 'industry'), city: v(r, 'city') }).filter(([, x]) => x !== ''));
-                updated++; before.push({ id: match.id, patch: Object.fromEntries(Object.keys(fields).map((k) => [k, (match as unknown as Readonly<Record<string, unknown>>)[k]])) }); dispatch({ type: 'records/fields', object: 'companies', changes: [{ id: match.id, patch: fields }] });
-              } else { const id = newId('c'); created.push(id); dispatch({ type: 'company/set', company: { id, name: v(r, 'name'), domain: v(r, 'domain'), industry: v(r, 'industry'), size: '', city: v(r, 'city'), owner, created: new Date() } }); }
-            });
-            dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'company', 'companies')}` }); dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'import' as const, what: 'Companies from a CSV', rows: created.length + updated, by: state.me, at: new Date() }, ...(q.jobs ?? [])] }) }); setDone({ made: created.length, updated, created, newCompanies: [], before, skipped: [] });
-          }}>{plan.length === 0 ? 'Nothing to import' : `Import ${plural(plan.length, 'company', 'companies')}`}</Button></div></>}
-        {step === 4 && done && <><h2 className="tf-imp__h">Imported</h2><p className="tf-num">{done.made} added · {done.updated} updated</p><p className="tf-rec__muted">Undo takes it back now. Later it shows in Settings › History.</p>
-          <div className="tf-imp__go"><Button variant="ghost" icon={<Undo2 size={14} strokeWidth={1.75} />} onPress={() => { undoImport(dispatch, 'companies', done, state.me); toast({ message: 'Import undone' }); onDone(); }}>Undo import</Button><Button variant="primary" onPress={onDone}>See companies</Button></div></>}
-      </section>
-    </div>
-  );
-}

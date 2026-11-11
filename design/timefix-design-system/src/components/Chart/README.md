@@ -9,3 +9,5 @@ Stats and small charts for reports and dashboards: figures, bars, a sparkline, a
 **Interaction**: switching the period morphs every bar, line and donut segment from the old values to the new (35 donut morph, 400ms smooth-out) while the figures swap softly (34 text swap soft: the old value fades out as the new fades in and the width eases). Dot columns fade in left to right, 12ms apart, each time the numbers change (none with reduced motion). Bars and dot columns are focusable with Tab and show their tooltip (17 tooltip motion). A legend row dims the other segments.
 
 **Replaces**: Chart, BarStrip.
+
+**Line**: `BarChart` with `look="line"` draws a 2px line through each point's top with a dot on each point (the same hover, focus and tooltip), for values over time such as a report grouped by month.

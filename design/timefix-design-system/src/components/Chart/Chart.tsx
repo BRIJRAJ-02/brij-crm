@@ -124,7 +124,7 @@ function barPath(x: number, y: number, w: number, h: number): string {
 /** Bars per period or group (BarStrip). Points undefined draws Mercury's dotted placeholder; hover or focus a bar for its value.
  *  `look="dots"` stacks one dot per step instead of a bar (the marketing site's dot columns), for counts over time; each change
  *  fades the columns in left to right, 12ms apart. */
-export function BarChart({ label, points, height = 168, ghostCount = 7, emptyText, look = 'bars' }: { readonly label: string; readonly points?: ReadonlyArray<ChartPoint>; readonly height?: number; readonly ghostCount?: number; readonly emptyText?: string; readonly look?: 'bars' | 'dots' }) {
+export function BarChart({ label, points, height = 168, ghostCount = 7, emptyText, look = 'bars' }: { readonly label: string; readonly points?: ReadonlyArray<ChartPoint>; readonly height?: number; readonly ghostCount?: number; readonly emptyText?: string; readonly look?: 'bars' | 'dots' | 'line' }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | undefined>(undefined);
   const plotH = height - 24;
@@ -146,6 +146,7 @@ export function BarChart({ label, points, height = 168, ghostCount = 7, emptyTex
       {width > 0 && (
         <svg width={width} height={height} role="list" aria-label={label} className="tf-chart__svg">
           {!(look === 'dots' && real) && <line x1={0} x2={width} y1={plotH + 0.5} y2={plotH + 0.5} className="tf-chart__base" />}
+          {look === 'line' && real && heights && <polyline className="tf-chart__line" points={heights.map((hh, i) => `${i * slot + slot / 2},${plotH - hh}`).join(' ')} />}
           {Array.from({ length: n }, (_, i) => {
             const x = i * slot + (slot - bw) / 2;
             const p = real ? points[i] : undefined;
@@ -157,6 +158,7 @@ export function BarChart({ label, points, height = 168, ghostCount = 7, emptyTex
                     {dotsOf(p.value) === 0 ? <circle cx={i * slot + slot / 2} cy={plotH - pitch / 2} r={pitch * 0.3} className="tf-chart__dot-off" />
                       : Array.from({ length: dotsOf(p.value) }, (_, r) => <circle key={r} cx={i * slot + slot / 2} cy={plotH - pitch / 2 - r * pitch} r={pitch * 0.3} />)}
                   </g>
+                  : look === 'line' && p ? <circle cx={i * slot + slot / 2} cy={plotH - h} r={active === i ? 5 : 3.5} className={cx('tf-chart__point', active !== undefined && active !== i && 'is-dim')} />
                   : <path d={barPath(x, plotH - h, bw, h)} className={cx(real ? 'tf-chart__bar' : 'tf-chart__ghost', active !== undefined && active !== i && 'is-dim')} />}
                 {p && (
                   <rect x={i * slot} y={0} width={slot} height={plotH} className="tf-chart__hit" tabIndex={0} aria-label={`${p.label}: ${p.valueText ?? p.value}`}

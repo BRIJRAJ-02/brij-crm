@@ -10,7 +10,13 @@ import { CommandPalette, ShortcutHelp, useCommandK, type CommandItem } from '../
 import { ToastProvider, useToast } from '../Toast/Toast.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
 import { BookingsFlow, type BookingsAction, type BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { appReducer, liveEntries, newId, northwindCrm, type AppAction, type AppState, type ObjectId, LISTS_ON } from './data.ts';
+import { appReducer, isBuiltIn, liveEntries, newId, northwindCrm, type AppAction, type AppState, type ObjectId, LISTS_ON } from './data.ts';
+import { withAutomations } from './automations.tsx';
+import { visibleViews } from './records.tsx';
+import { Moon, Sun, MonitorSmartphone, Phone as PhoneIcon, Trash2 as TrashIcon, Workflow, Download as DownloadIcon, LayoutList, Upload as UploadIcon } from 'lucide-react';
+
+/** The app's reducer with automations running on the changes they watch. */
+const reducer = withAutomations(appReducer);
 import { HomeScreen } from './home.tsx';
 import { RecordsScreen } from './records.tsx';
 import { RecordPage } from './record.tsx';
@@ -23,7 +29,6 @@ import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import { useAssemble } from '../../lib/assemble.ts';
 import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
-import { CustomRecordsScreen } from './custom.tsx';
 import { LostReasonDialog } from './deals.tsx';
 import './TimefixApp.css';
 
@@ -55,12 +60,12 @@ export function TimefixApp(props: TimefixAppProps) {
   return <ToastProvider><App {...props} /></ToastProvider>;
 }
 
-type Rec = { readonly object: ObjectId; readonly id: string; readonly tab?: string };
+type Rec = { readonly object: ObjectId; readonly id: string; readonly tab?: string; readonly trashed?: boolean; readonly action?: { readonly kind: 'call' | 'meeting' | 'note'; readonly n: number } };
 
 function App({ initial, start = 'home' }: TimefixAppProps) {
   const { toast } = useToast();
   const toastRef = useRef(toast); toastRef.current = toast;
-  const [state, rawDispatch] = useReducer(appReducer, initial ?? northwindCrm());
+  const [state, rawDispatch] = useReducer(reducer, initial ?? northwindCrm());
   const previewing = useRef(state.previewRole); previewing.current = state.previewRole;
   /** While previewing as another role nothing changes: every change is refused with one plain line, except stopping the preview. */
   const stateRef = useRef(state); stateRef.current = state;
@@ -75,6 +80,10 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     rawDispatch(a);
   }, []);
   const [page, setPage] = useState<AppPage>(start);
+  // Time passing: tasks that fall due run "When a task is due" automations (checked now and each minute).
+  useEffect(() => { const tick = () => { if (!previewing.current) rawDispatch({ type: 'automations/tick', now: new Date() }); }; tick(); const t = window.setInterval(tick, 60_000); return () => window.clearInterval(t); }, []);
+  /** The open table's "Export this view", for ⌘K. */
+  const exportView = useRef<(() => void) | undefined>(undefined);
   const [bookings, setBookings] = useState<BookingsState>();
   /** Bookings changes made from Settings, applied inside Bookings in order. */
   const [bookingsCmds, setBookingsCmds] = useState<ReadonlyArray<{ readonly seq: number; readonly action: BookingsAction }>>([]);
@@ -100,7 +109,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   /** Records opened from other records: Back walks this, then shows the page underneath, untouched. */
   const [trail, setTrail] = useState<ReadonlyArray<Rec>>([]);
   /** A screen opened straight into an action from ⌘K: New person, New task, a note or a task. */
-  const [launch, setLaunch] = useState<{ readonly kind: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report'; readonly value?: string; readonly n: number }>();
+  const [launch, setLaunch] = useState<{ readonly kind: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report' | 'create' | 'view' | 'newview'; readonly value?: string; readonly n: number }>();
   const [recent, setRecent] = useState<ReadonlyArray<string>>([]);
   /** The record that was open when ⌘K "New task" ran, so the task starts on it. */
   const [taskFor, setTaskFor] = useState<{ readonly object: ObjectId; readonly id: string }>();
@@ -138,7 +147,11 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   };
   const openSettings = (at?: string) => { if (page !== 'settings') setBeforeSettings(page); setSettingsPage((at ?? '').split(':')[0] || 'profile'); setSettingsStart((s) => ({ page: at, n: s.n + 1 })); go('settings'); };
   const goStart = () => { const s = state.prefs.startPage; if (s === 'bookings') openBookings('meetings'); else go(s as AppPage); };
-  const launchAt = (kindOf: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report', target: AppPage, value?: string) => { go(target); setLaunch((l) => ({ kind: kindOf, value, n: (l?.n ?? 0) + 1 })); };
+  const launchAt = (kindOf: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report' | 'create' | 'view' | 'newview', target: AppPage, value?: string) => { go(target); setLaunch((l) => ({ kind: kindOf, value, n: (l?.n ?? 0) + 1 })); };
+  /** The page that lists an object's records. */
+  const listPage = (o: ObjectId): AppPage => (isBuiltIn(o) ? `records:${o}` : `object:${o}`);
+  /** The object the current page lists, if any. */
+  const pageObject: ObjectId | undefined = page.startsWith('records:') ? page.slice(8) : page.startsWith('object:') ? page.slice(7) : undefined;
   const unread = state.inbox.filter((x) => !x.read && !x.done).length;
   // The tab title says how many unread there are, the way mail apps do.
   useEffect(() => { document.title = unread ? `(${unread}) Timefix` : 'Timefix'; }, [unread]);
@@ -178,6 +191,16 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     { id: 'bk:pages', label: kind === 'team' ? 'Go to Booking pages' : 'Go to Your business page', group: 'Go to', kind: 'action' as const, icon: <CalendarDays {...i16} />, keywords: 'bookings links' },
     { id: 'bk:availability', label: kind === 'team' ? 'Go to Availability' : 'Go to Opening hours', group: 'Go to', kind: 'action' as const, icon: <CalendarDays {...i16} />, keywords: 'hours time off' },
     ...state.reports.map((r) => ({ id: `report:${r.id}`, label: r.name, group: 'Reports', kind: 'action' as const, icon: <BarChart3 {...i16} />, keywords: 'report chart insights' })),
+    // Owner-made objects' records, and every saved view you can see.
+    ...state.objects.filter((o) => o.custom && !o.archived).flatMap((o) => (state.customRecords[o.id] ?? []).map((r) => ({ id: `rec:${o.id}:${r.id}`, label: r.name, group: o.many, kind: 'record' as const, sub: o.one }))),
+    ...state.objects.filter((o) => !o.archived).flatMap((o) => visibleViews(state, o.id).map((v) => ({ id: `view:${o.id}:${v.id}`, label: v.name, group: 'Views', kind: 'action' as const, icon: <LayoutList {...i16} />, sub: o.many, keywords: `view ${o.many}` }))),
+    { id: 'set:automations', label: 'Settings › Automations', group: 'Go to', kind: 'action' as const, icon: <Workflow {...i16} />, keywords: 'workflow rules when then' },
+    { id: 'act:invite', label: 'Invite members', group: 'Actions', kind: 'action' as const, icon: <UserPlus {...i16} />, keywords: 'invite people team add member' },
+    { id: 'act:trash', label: 'Open trash', group: 'Actions', kind: 'action' as const, icon: <TrashIcon {...i16} />, keywords: 'deleted restore bin' },
+    { id: 'act:import', label: 'Import a CSV', group: 'Actions', kind: 'action' as const, icon: <UploadIcon {...i16} />, keywords: 'upload spreadsheet import' },
+    { id: 'act:theme:light', label: 'Switch to light theme', group: 'Theme', kind: 'action' as const, icon: <Sun {...i16} />, keywords: 'theme light mode appearance' },
+    { id: 'act:theme:dark', label: 'Switch to dark theme', group: 'Theme', kind: 'action' as const, icon: <Moon {...i16} />, keywords: 'theme dark mode appearance' },
+    { id: 'act:theme:system', label: 'Match my device theme', group: 'Theme', kind: 'action' as const, icon: <MonitorSmartphone {...i16} />, keywords: 'theme system auto appearance' },
     { id: 'set:members', label: 'Settings › Members and teams', group: 'Go to', kind: 'action' as const, icon: <Settings {...i16} />, keywords: 'invite people' },
     { id: 'set:objects', label: 'Settings › Objects', group: 'Go to', kind: 'action' as const, icon: <Settings {...i16} />, keywords: 'attributes fields' },
     { id: 'set:trash', label: 'Settings › Trash', group: 'Go to', kind: 'action' as const, icon: <Settings {...i16} />, keywords: 'deleted restore' },
@@ -187,11 +210,21 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     { id: 'new:booking', label: kind === 'team' ? 'New booking page' : 'Add a service', group: 'Actions', kind: 'action' as const, icon: <Plus {...i16} />, keywords: 'create link meeting' },
     { id: 'imp:people', label: 'Import people from a CSV', group: 'Actions', kind: 'action' as const, icon: <UserPlus {...i16} />, keywords: 'upload spreadsheet' },
     ...DOORS.map((d) => ({ id: `door:${d.id}`, label: d.label, group: 'Screens', kind: 'action' as const, icon: <IdCard {...i16} />, keywords: 'auth login onboarding public' })),
-  ], [state.people, state.companies, state.deals, state.notes, state.tasks, state.lists, state.objects, state.reports, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  ], [state.people, state.companies, state.deals, state.notes, state.tasks, state.lists, state.objects, state.reports, state.views, state.customRecords, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Commands that depend on where you are: the open record's log and note, the open table's export and new view.
+  const here: ReadonlyArray<CommandItem> = [
+    ...(record ? [{ id: 'rec-act:note', label: `New note on ${record.object === 'people' ? 'this person' : 'this record'}`, group: 'This record', kind: 'action' as const, icon: <NotebookPen {...i16} />, keywords: 'note write' },
+      { id: 'rec-act:call', label: 'Log a call', group: 'This record', kind: 'action' as const, icon: <PhoneIcon {...i16} />, keywords: 'log call phone' },
+      { id: 'rec-act:meeting', label: 'Log a meeting', group: 'This record', kind: 'action' as const, icon: <Users {...i16} />, keywords: 'log meeting met' }] : []),
+    ...(pageObject && !record ? [{ id: 'here:export', label: 'Export this view', group: 'This page', kind: 'action' as const, icon: <DownloadIcon {...i16} />, keywords: 'csv download export' },
+      { id: 'here:newview', label: 'Create a view', group: 'This page', kind: 'action' as const, icon: <Plus {...i16} />, keywords: 'new saved view' }] : []),
+  ];
   const recentItems = recent.map((id) => commands.find((c) => c.id === id)).filter((c): c is CommandItem => c !== undefined);
   const fromQuery = (q: string): ReadonlyArray<CommandItem> => [
     { id: `create:person:${q}`, label: `Create person “${q}”`, group: 'Create', kind: 'action', icon: <UserPlus {...i16} />, keywords: q },
     { id: `create:company:${q}`, label: `Create company “${q}”`, group: 'Create', kind: 'action', icon: <Building2 {...i16} />, keywords: q },
+    { id: `create:deals:${q}`, label: `Create deal “${q}”`, group: 'Create', kind: 'action', icon: <CircleDollarSign {...i16} />, keywords: q },
+    ...state.objects.filter((o) => o.custom && !o.archived).map((o) => ({ id: `create:${o.id}:${q}`, label: `Create ${o.one.toLowerCase()} “${q}”`, group: 'Create', kind: 'action' as const, icon: <Boxes {...i16} />, keywords: q })),
   ];
   const onCommand = (id: string) => {
     setSearch(false);
@@ -205,7 +238,16 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     if (k === 'note') { launchAt('note', 'notes', rest); return; }
     if (k === 'task') { launchAt('task', 'tasks', rest); return; }
     if (k === 'report') { launchAt('report', 'insights', rest); return; }
-    if (k === 'create') { const [what, ...name] = restParts; if (what === 'company') launchAt('company', 'records:companies', name.join(':')); else launchAt('person', 'records:people', name.join(':')); return; }
+    if (k === 'create') { const [what = 'person', ...name] = restParts; if (what === 'company') launchAt('company', 'records:companies', name.join(':')); else if (what === 'person') launchAt('person', 'records:people', name.join(':')); else launchAt('create', listPage(what), name.join(':')); return; }
+    if (k === 'rec') { const [o = '', rid = ''] = restParts; openRecord(o, rid); return; }
+    if (k === 'view') { const [o = '', vid = ''] = restParts; launchAt('view', listPage(o), vid); return; }
+    if (k === 'rec-act' && record) { setRecord({ ...record, action: { kind: rest as 'call' | 'meeting' | 'note', n: Date.now() } }); return; }
+    if (id === 'here:export') { exportView.current?.(); return; }
+    if (id === 'here:newview' && pageObject) { launchAt('newview', listPage(pageObject)); return; }
+    if (id === 'act:invite') { openSettings('members'); return; }
+    if (id === 'act:trash') { openSettings(pageObject ? `trash:${pageObject}` : 'trash'); return; }
+    if (id === 'act:import') { go(listPage(pageObject ?? 'people')); setSub('import'); return; }
+    if (id.startsWith('act:theme:')) { const t = id.slice(10) as 'light' | 'dark' | 'system'; const was = state.prefs.theme; dispatch({ type: 'prefs/set', prefs: { theme: t } }); toast({ message: t === 'system' ? 'Theme matches your device' : `${t === 'dark' ? 'Dark' : 'Light'} theme on`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { theme: was } }) } }); return; }
     if (id === 'new:booking') openBookings('pages');
     else if (id === 'new:person') launchAt('person', 'records:people', '');
     else if (id === 'new:task') { const r = record; launchAt('task', 'tasks'); if (r) setTaskFor(r); }
@@ -229,8 +271,9 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       {!hiddenNav.has('tasks') && <NavItem label="Tasks" icon={<CheckSquare {...i16} />} count={myOpen || undefined} isCurrent={page === 'tasks'} onPress={() => go('tasks')} />}
       {!hiddenNav.has('notes') && <NavItem label="Notes" icon={<NotebookPen {...i16} />} isCurrent={page === 'notes'} onPress={() => go('notes')} />}
       <NavSection title="Records" addLabel="New object" onAdd={() => setNewObject(true)}>
-        {OBJECTS.map((o) => <NavItem key={o.id} label={o.label} icon={o.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />)}
-        {state.objects.filter((o) => o.custom && !o.archived).map((o) => <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />)}
+        {state.objects.filter((o) => !o.custom || !o.archived).map((o) => (isBuiltIn(o.id)
+          ? <NavItem key={o.id} label={OBJECTS.find((x) => x.id === o.id)?.label ?? o.many} icon={OBJECTS.find((x) => x.id === o.id)?.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />
+          : <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />))}
       </NavSection>
       {LISTS_ON && !hiddenNav.has('lists') && <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
         {state.lists.filter((l) => !l.archived).map((l) => <NavItem key={l.id} label={l.name} icon={<ListChecks {...i16} />} count={liveEntries(state, l).length || undefined} isCurrent={page === `list:${l.id}`} onPress={() => go(`list:${l.id}`)} />)}
@@ -251,32 +294,34 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const lk = launch ? `${launch.kind}-${launch.n}` : 'plain';
   const main: ReactNode = page === 'home' ? <HomeScreen recent={recent} onOpenRecord={(o, id) => openRecord(o, id)} state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} onImport={() => { go('records:people'); setSub('import'); }} onSettings={(at) => openSettings(at)} onNewTask={() => launchAt('task', 'tasks')} onReports={(rid) => launchAt('report', 'insights', rid)} />
     : page === 'more' ? <MoreScreen state={state} bookings={bookings} kind={kind} unread={unread} onGo={go} onBookings={openBookings} onSettings={openSettings} onSignOut={() => setSigningOut(true)} onNewList={() => setNewList(true)} />
-    : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+    : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} onSettings={(at) => openSettings(at)} />
     : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} newFor={taskFor} />
     : page === 'notes' ? <NotesScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} openNote={launch?.kind === 'note' ? launch.value : undefined} />
-    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} page={settingsPage} onPage={setSettingsPage} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
+    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenTrashed={(o, rid) => { setRecord({ object: o, id: rid, trashed: true }); }} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} page={settingsPage} onPage={setSettingsPage} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
     : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onBack={() => go('links')} />
     : page === 'links' ? <LinksScreen state={state} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
     : page === 'insights' ? <InsightsScreen key={lk} state={state} dispatch={dispatch} bookings={bookings} startTab={launch?.kind === 'report' ? 'reports' : undefined} startReport={launch?.kind === 'report' ? launch.value : undefined} />
     : page === 'forms' ? <FormsScreen key={lk} start={launch && (launch.kind === 'form' || launch.kind === 'visit') && launch.value ? { id: launch.value, visit: launch.kind === 'visit' } : undefined} state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onOpenRecord={(object, id) => { if (object === 'people' || object === 'companies' || object === 'deals') openRecord(object, id); else go(`object:${object}`); }} onBookings={openBookings} onBookGuest={(w) => setBookGuest((g) => ({ prefill: w.name || w.email ? { name: w.name || w.email, email: w.email } : undefined, n: (g?.n ?? 0) + 1 }))} />
-    : custom ? <CustomRecordsScreen key={custom.id} state={state} dispatch={dispatch} schema={custom} onAttributes={() => openSettings(`objects:${custom.id}`)} />
+    : custom ? <RecordsScreen key={`${custom.id}-${lk}`} state={state} dispatch={dispatch} object={custom.id} onOpen={openRecord} startNew={launch?.kind === 'create' ? launch.value ?? '' : undefined} startView={launch?.kind === 'view' ? launch.value : undefined} startNaming={launch?.kind === 'newview'}
+      onImport={() => setSub('import')} onDuplicates={() => setSub('dupes')} onAttributes={() => openSettings(`objects:${custom.id}`)} onTrash={() => openSettings(`trash:${custom.id}`)} onExportReady={(f) => { exportView.current = f; }} />
     : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} onRestored={(lid) => go(`list:${lid}`)} />
     : page.startsWith('records:') ? <RecordsScreen key={`${page}-${lk}`} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord}
-      startNew={(launch?.kind === 'person' && page === 'records:people') || (launch?.kind === 'company' && page === 'records:companies') ? launch.value ?? '' : undefined}
-      onImport={page !== 'records:deals' ? () => setSub('import') : undefined} onDuplicates={page !== 'records:deals' ? () => setSub('dupes') : undefined} onAttributes={() => openSettings(`objects:${page.split(':')[1] ?? ''}`)} />
+      startNew={(launch?.kind === 'person' && page === 'records:people') || (launch?.kind === 'company' && page === 'records:companies') || launch?.kind === 'create' ? launch?.value ?? '' : undefined}
+      startView={launch?.kind === 'view' ? launch.value : undefined} startNaming={launch?.kind === 'newview'} onExportReady={(f) => { exportView.current = f; }}
+      onImport={() => setSub('import')} onDuplicates={() => setSub('dupes')} onAttributes={() => openSettings(`objects:${page.split(':')[1] ?? ''}`)} onTrash={() => openSettings(`trash:${page.split(':')[1] ?? ''}`)} />
     : <Rebuilding page={page} onHome={() => go('home')} />;
   const content: ReactNode = page === 'bookings' ? undefined : (
     <>
       <TopBar title={<span className="tf-app__title">{head?.icon}{head?.label}</span>}
         actions={searchButton} />
       <div className="tf-app__body">
-        {sub === 'import' ? <ImportScreen key={page} state={state} dispatch={dispatch} object={page === 'records:companies' ? 'companies' : 'people'} onDone={() => setSub(undefined)} />
-          : sub === 'dupes' ? <DuplicatesScreen state={state} dispatch={dispatch} object={page === 'records:companies' ? 'companies' : 'people'} onDone={() => setSub(undefined)} />
+        {sub === 'import' ? <ImportScreen key={page} state={state} dispatch={dispatch} object={pageObject ?? 'people'} onDone={() => setSub(undefined)} onJob={(jid) => openSettings(`jobs:${jid}`)} />
+          : sub === 'dupes' ? <DuplicatesScreen state={state} dispatch={dispatch} object={pageObject ?? 'people'} onDone={() => setSub(undefined)} />
           : <>
-            {record && <RecordPage key={`${record.object}-${record.id}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={back} onOpen={openRecord}
+            {record && <RecordPage key={`${record.object}-${record.id}-${record.action?.n ?? 0}-${record.trashed ? 't' : ''}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={back} onOpen={openRecord}
               meetings={bookings?.meetings} onMeeting={(mid) => { setOpenTab((o) => ({ tab: 'meetings', n: (o?.n ?? 0) + 1, meetingId: mid })); setPage('bookings'); setRecord(undefined); setTrail([]); setSub(undefined); }}
-              backLabel={trail.length ? undefined : head?.label} initialTab={record.tab} />}
+              backLabel={trail.length ? undefined : head?.label} initialTab={record.tab} trashed={record.trashed} startAction={record.action} onAttributes={() => openSettings(`objects:${record.object}`)} />}
             <div className="tf-app__keep" hidden={record !== undefined}>{main}</div>
           </>}
       </div>
@@ -320,8 +365,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); setAssembling((n) => n + 1); }} />}
-      <CommandPalette isOpen={search} onOpenChange={setSearch} items={commands} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
-        placeholder="Search people, companies, deals, notes, or type a command…" />
+      <CommandPalette isOpen={search} onOpenChange={setSearch} items={[...here, ...commands]} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
+        placeholder="Search records, views, notes, or type a command…" />
       <ShortcutHelp isOpen={help} onOpenChange={setHelp} />
     </>
   );

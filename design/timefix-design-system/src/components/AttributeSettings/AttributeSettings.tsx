@@ -1,9 +1,10 @@
 import { Button as AriaButton, DropIndicator, GridList, GridListItem, Radio, RadioGroup, useDragAndDrop, type DropTarget, type Key } from 'react-aria-components';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, GripVertical, Lock, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Lock, Plus } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { ATTRIBUTE_TYPES, AttributeIcon, AttributeField, type Attribute, type AttributeType, type AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { Dialog } from '../Dialog/Dialog.tsx';
+import { ConfirmDialog, Dialog } from '../Dialog/Dialog.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
 import { Button } from '../Button/Button.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -31,7 +32,21 @@ export interface SchemaAttribute extends Attribute {
   readonly defaultValue?: AttributeValue;
   /** Options of a select, multi-select or status, archived ones included. */
   readonly options?: ReadonlyArray<EditableOption>;
+  /** Archived: out of tables, forms and record pages, values kept; the Archived list brings it back. */
+  readonly archived?: boolean;
+  /** Worked out, never typed: a formula over this record's numbers, a value looked up through a relationship, or a rollup of related records. */
+  readonly computed?: ComputedRule;
+  /** Links to another object's records: which object, one or many, and what the other side calls this link. */
+  readonly relation?: { readonly target: string; readonly many: boolean; readonly otherName: string };
+  /** Required only while another field has one value ("Lost reason when Stage is Lost"). */
+  readonly requiredWhen?: { readonly field: string; readonly is: string };
 }
+
+/** How a computed attribute gets its value. `via` names a relationship; `field` is the field read on the other side. */
+export type ComputedRule =
+  | { readonly kind: 'formula'; readonly source: string }
+  | { readonly kind: 'lookup'; readonly via: string; readonly field: string }
+  | { readonly kind: 'rollup'; readonly via: string; readonly field: string; readonly fn: 'count' | 'sum' | 'avg' | 'min' | 'max' };
 
 /** One line under each type in the type picker: what the type holds. */
 export const ATTRIBUTE_TYPE_HINTS: Readonly<Record<AttributeType, string>> = {
@@ -86,10 +101,12 @@ export interface AttributeListProps {
   readonly onEdit: (id: string) => void;
   /** The id to mark as just changed: its row washes once. */
   readonly changedId?: string;
+  /** An object's plural by id, for a relationship's Type column. */
+  readonly pluralOf?: (id: string) => string;
 }
 
 /** An object's attributes in order: drag a row by its grip (or Enter on the grip, arrows, Enter) to move it; press a row to edit it. */
-export function AttributeList({ label, attributes, onReorder, onEdit, changedId }: AttributeListProps) {
+export function AttributeList({ label, attributes, onReorder, onEdit, changedId, pluralOf: objectName }: AttributeListProps) {
   const [settling, settle] = useSettle();
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) => [...keys].map((k) => ({ [ATTR_TYPE]: String(k), 'text/plain': attributes.find((a) => a.id === k)?.name ?? String(k) })),
@@ -101,7 +118,7 @@ export function AttributeList({ label, attributes, onReorder, onEdit, changedId 
     renderDropIndicator: (target) => <DropIndicator target={target} className="tf-attributesettings__slot" />,
     renderDragPreview: (items) => {
       const a = attributes.find((x) => x.id === items[0]?.[ATTR_TYPE]);
-      return <div className="tf-attributesettings__preview">{a ? <RowBody attribute={a} /> : null}</div>;
+      return <div className="tf-attributesettings__preview">{a ? <RowBody attribute={a} objectName={objectName} /> : null}</div>;
     },
   });
   return (
@@ -110,7 +127,7 @@ export function AttributeList({ label, attributes, onReorder, onEdit, changedId 
         <GridListItem id={a.id} textValue={a.name} className={cx('tf-attributesettings__row', settling === a.id && 'is-settling')}>
           {changedId === a.id && <span key={`${a.id}-${a.name}-${a.type}`} className="tf-attributesettings__wash" aria-hidden="true" />}
           <AriaButton slot="drag" className="tf-attributesettings__grip" aria-label={`Move ${a.name}`}><GripVertical size={14} strokeWidth={1.75} /></AriaButton>
-          <RowBody attribute={a} />
+          <RowBody attribute={a} objectName={objectName} />
           <ChevronRight className="tf-attributesettings__chev" size={16} strokeWidth={1.75} aria-hidden="true" />
         </GridListItem>
       )}
@@ -118,19 +135,27 @@ export function AttributeList({ label, attributes, onReorder, onEdit, changedId 
   );
 }
 
-function RowBody({ attribute: a }: { readonly attribute: SchemaAttribute }) {
+function RowBody({ attribute: a, objectName }: { readonly attribute: SchemaAttribute; readonly objectName?: (id: string) => string }) {
   return (
     <span className="tf-attributesettings__body">
       <span className="tf-attributesettings__icon"><AttributeIcon type={a.type} /></span>
       <span className="tf-attributesettings__name">{a.name}</span>
-      <span className="tf-attributesettings__type">{ATTRIBUTE_TYPES[a.type].label}</span>
+      <span className="tf-attributesettings__type">{typeLabel(a, objectName)}</span>
       <span className="tf-attributesettings__badges">
         {a.isRequired && <Tag size="sm">Required</Tag>}
+        {!a.isRequired && a.requiredWhen && <Tag size="sm">Required when</Tag>}
         {a.isUnique && <Tag size="sm">Unique</Tag>}
         {a.isSystem && <span className="tf-attributesettings__system"><Lock size={12} strokeWidth={1.75} aria-hidden="true" />System</span>}
       </span>
     </span>
   );
+}
+
+/** What the Type column says: the type, or how a computed or linking attribute works. */
+export function typeLabel(a: SchemaAttribute, objectName?: (id: string) => string): string {
+  if (a.computed) return a.computed.kind === 'formula' ? 'Formula' : a.computed.kind === 'lookup' ? 'Lookup' : 'Rollup';
+  if (a.relation) return `→ ${objectName?.(a.relation.target) ?? 'Records'} · ${a.relation.many ? 'many' : 'one'}`;
+  return ATTRIBUTE_TYPES[a.type].label;
 }
 
 /* ------------------------------------------------------------ type picker */
@@ -179,13 +204,15 @@ export interface AttributeDialogProps {
   readonly onSave: (attribute: SchemaAttribute) => void;
   /** Archives (edit only, never for a system attribute). */
   readonly onArchive?: (id: string) => void;
+  /** The object's other attributes: their selects and statuses can make this one "required when". */
+  readonly siblings?: ReadonlyArray<SchemaAttribute>;
 }
 
 const blank = (): SchemaAttribute => ({ id: `attr-${Date.now().toString(36)}`, name: '', type: 'text' });
 const same = (a: SchemaAttribute, b: SchemaAttribute) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Creates or edits one attribute in a dialog (the same surface as New object): name, type (cards with a line each), the type's own settings, its options, the default, Required and Unique. Changing an existing type warns first. */
-export function AttributeDialog({ isOpen, onOpenChange, objectName, attribute, valueCount, onSave, onArchive }: AttributeDialogProps) {
+export function AttributeDialog({ isOpen, onOpenChange, objectName, attribute, valueCount, onSave, onArchive, siblings = [] }: AttributeDialogProps) {
   const start = useRef(attribute ?? blank()).current;
   const [draft, setDraft] = useState<SchemaAttribute>(start);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -272,7 +299,19 @@ export function AttributeDialog({ isOpen, onOpenChange, objectName, attribute, v
       )}
 
       <div className="tf-attributesettings__rules">
-        <SettingsRow title="Required" description={`A ${objectName.toLowerCase()} can't be saved without it.`} control={<Switch aria-label="Required" isSelected={draft.isRequired === true} onChange={(v) => set({ isRequired: v })} isDisabled={start.isSystem} />} />
+        <SettingsRow title="Required" description={`A ${objectName.toLowerCase()} can't be saved without it.`} control={<Switch aria-label="Required" isSelected={draft.isRequired === true} onChange={(v) => set({ isRequired: v, requiredWhen: v ? undefined : draft.requiredWhen })} isDisabled={start.isSystem} />} />
+        {!draft.isRequired && !start.isSystem && (() => {
+          const gates = siblings.filter((x) => x.id !== draft.id && !x.archived && (x.type === 'select' || x.type === 'status') && (x.options ?? []).length > 0);
+          if (gates.length === 0) return null;
+          const gate = gates.find((x) => x.id === draft.requiredWhen?.field);
+          return (
+            <div className="tf-attributesettings__when">
+              <Select label="Required when" value={draft.requiredWhen?.field ?? 'never'} onChange={(v) => { const g = gates.find((x) => x.id === v); set({ requiredWhen: g ? { field: g.id, is: (g.options ?? []).find((o) => !o.archived)?.id ?? '' } : undefined }); }}
+                items={[{ id: 'never', label: 'Never' }, ...gates.map((x) => ({ id: x.id, label: x.name }))]} />
+              {gate && <Select label="is" value={draft.requiredWhen?.is ?? null} onChange={(v) => v && set({ requiredWhen: { field: gate.id, is: v } })} items={(gate.options ?? []).filter((o) => !o.archived).map((o) => ({ id: o.id, label: o.label, hue: o.hue }))} optionStyle="tag" />}
+            </div>
+          );
+        })()}
         {UNIQUE_TYPES.has(draft.type) && (
           <SettingsRow title="Unique" description={`No two ${objectName.toLowerCase()}s share a value. Imports match on it.`} control={<Switch aria-label="Unique" isSelected={draft.isUnique === true} onChange={(v) => set({ isUnique: v })} />} />
         )}
@@ -304,48 +343,88 @@ export interface AttributeSettingsProps {
   readonly onChange: (attributes: ReadonlyArray<SchemaAttribute>) => void;
   /** Values held per attribute id, for the type change warning. */
   readonly valueCounts?: Readonly<Record<string, number>>;
+  /** What uses an attribute (views, forms, automations), said before it's archived. */
+  readonly usageOf?: (id: string) => ReadonlyArray<string>;
+  /** Adds the kinds that need their own dialog: formula, lookup, rollup, relationship. Shows "More kinds" beside New attribute. */
+  readonly onNewSpecial?: (kind: 'formula' | 'lookup' | 'rollup' | 'relationship') => void;
+  /** Opens a computed or linking attribute in its own dialog instead of the plain one. */
+  readonly onEditSpecial?: (attribute: SchemaAttribute) => void;
+  /** An object's plural by id, for a relationship's Type column. */
+  readonly pluralOf?: (id: string) => string;
 }
 
 /** An object's attributes on its settings page: the ordered list, New attribute, and the drawer that creates and edits them. */
-export function AttributeSettings({ objectName, objectPlural, attributes, onChange, valueCounts }: AttributeSettingsProps) {
+export function AttributeSettings({ objectName, objectPlural, attributes, onChange, valueCounts, usageOf, onNewSpecial, onEditSpecial, pluralOf: nameOfObject }: AttributeSettingsProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string>();
   const [session, setSession] = useState(0);
   const [changed, setChanged] = useState<string>();
   const [archived, setArchived] = useState<{ readonly attribute: SchemaAttribute; readonly index: number }>();
-  const openFor = (id?: string) => { setEditing(id); setSession((s) => s + 1); setOpen(true); };
+  const [asking, setAsking] = useState<SchemaAttribute>();
+  const live = attributes.filter((a) => !a.archived);
+  const gone = attributes.filter((a) => a.archived);
+  const openFor = (id?: string) => { const a = attributes.find((x) => x.id === id); if (a && (a.computed || a.relation) && onEditSpecial) { onEditSpecial(a); return; } setEditing(id); setSession((s) => s + 1); setOpen(true); };
   const current = attributes.find((a) => a.id === editing);
+  const archive = (a: SchemaAttribute) => { const index = attributes.findIndex((x) => x.id === a.id); setArchived({ attribute: a, index }); onChange(attributes.map((x) => (x.id === a.id ? { ...x, archived: true } : x))); };
+  const uses = asking ? usageOf?.(asking.id) ?? [] : [];
   return (
     <section className="tf-attributesettings" aria-labelledby="tf-attributesettings-title">
       <header className="tf-attributesettings__head">
         <div className="tf-attributesettings__titles">
-          <h2 id="tf-attributesettings-title" className="tf-attributesettings__title">Attributes <Count>{attributes.length}</Count></h2>
+          <h2 id="tf-attributesettings-title" className="tf-attributesettings__title">Attributes <Count>{live.length}</Count></h2>
           <p className="tf-attributesettings__desc">What every {objectName.toLowerCase()} holds, in the order record pages show it.</p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => openFor(undefined)}>New attribute</Button>
+        <span className="tf-attributesettings__adds">
+          {onNewSpecial && (
+            <MenuTrigger>
+              <Button variant="secondary" size="sm" iconEnd={<ChevronDown size={14} strokeWidth={1.75} />}>More kinds</Button>
+              <Menu aria-label="More kinds of attribute" placement="bottom end" onAction={(k) => onNewSpecial(String(k) as 'formula' | 'lookup' | 'rollup' | 'relationship')}>
+                <MenuItem id="relationship" description="Links to another object's records">Relationship</MenuItem>
+                <MenuItem id="formula" description="Works out a number from this record">Formula</MenuItem>
+                <MenuItem id="lookup" description="Shows a linked record's value">Lookup</MenuItem>
+                <MenuItem id="rollup" description="Counts or adds up linked records">Rollup</MenuItem>
+              </Menu>
+            </MenuTrigger>
+          )}
+          <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => openFor(undefined)}>New attribute</Button>
+        </span>
       </header>
       {archived && (
         <Callout
           key={archived.attribute.id} tone="neutral" onDismiss={() => setArchived(undefined)}
-          action={{ label: 'Undo', onPress: () => { onChange([...attributes.slice(0, archived.index), archived.attribute, ...attributes.slice(archived.index)]); setChanged(archived.attribute.id); setArchived(undefined); } }}
+          action={{ label: 'Undo', onPress: () => { onChange(attributes.map((x) => (x.id === archived.attribute.id ? { ...x, archived: false } : x))); setChanged(archived.attribute.id); setArchived(undefined); } }}
         >
-          {archived.attribute.name} archived. Its values are kept for 30 days.
+          {archived.attribute.name} archived. Its values are kept; bring it back from Archived attributes.
         </Callout>
       )}
       <AttributeList
-        label={`${objectPlural} attributes`} attributes={attributes} changedId={changed} onEdit={openFor}
-        onReorder={(ids) => onChange(ids.map((id) => attributes.find((a) => a.id === id)).filter((a): a is SchemaAttribute => a !== undefined))}
+        label={`${objectPlural} attributes`} attributes={live} changedId={changed} onEdit={openFor} pluralOf={nameOfObject}
+        onReorder={(ids) => onChange([...ids.map((id) => attributes.find((a) => a.id === id)).filter((a): a is SchemaAttribute => a !== undefined), ...gone])}
       />
+      {gone.length > 0 && (
+        <section className="tf-attributesettings__archived" aria-label="Archived attributes">
+          <h3 className="tf-attributesettings__grouplabel">Archived attributes <Count>{gone.length}</Count></h3>
+          <ul className="tf-attributesettings__gone">
+            {gone.map((a) => (
+              <li key={a.id}>
+                <span className="tf-attributesettings__icon"><AttributeIcon type={a.type} /></span>
+                <span className="tf-attributesettings__name">{a.name}</span>
+                <span className="tf-attributesettings__type">{typeLabel(a, nameOfObject)}</span>
+                <Button size="sm" variant="secondary" onPress={() => { onChange(attributes.map((x) => (x.id === a.id ? { ...x, archived: false } : x))); setChanged(a.id); }}>Restore</Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <AttributeDialog
-        key={session} isOpen={open} onOpenChange={setOpen} objectName={objectName} attribute={current}
+        key={session} isOpen={open} onOpenChange={setOpen} objectName={objectName} attribute={current} siblings={attributes}
         valueCount={editing ? valueCounts?.[editing] : undefined}
-        onArchive={(id) => {
-          const index = attributes.findIndex((a) => a.id === id);
-          const a = attributes[index];
-          if (a) { setArchived({ attribute: a, index }); onChange(attributes.filter((x) => x.id !== id)); }
-        }}
+        onArchive={(id) => { const a = attributes.find((x) => x.id === id); if (a) setAsking(a); }}
         onSave={(a) => { onChange(current ? attributes.map((x) => (x.id === a.id ? a : x)) : [...attributes, a]); setChanged(a.id); }}
       />
+      <ConfirmDialog isOpen={asking !== undefined} onOpenChange={(o) => { if (!o) setAsking(undefined); }} title={`Archive ${asking?.name ?? 'it'}?`} tone="primary" confirmLabel={`Archive ${asking?.name ?? ''}`.trim()}
+        consequence={<>Hidden from tables and forms. Values are kept.{uses.length > 0 && <><br />Used by: {uses.join(', ')}</>}</>}
+        onConfirm={() => { if (asking) archive(asking); setAsking(undefined); }} />
     </section>
   );
 }

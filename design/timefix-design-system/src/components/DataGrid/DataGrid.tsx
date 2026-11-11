@@ -2,7 +2,7 @@ import {
   Button as AriaButton, Cell, Column, ColumnResizer, Input, ResizableTableContainer, Row, Table, TableBody, TableHeader, TextField,
   type Selection, type SortDescriptor,
 } from 'react-aria-components';
-import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, EyeOff, ListFilter, Plus, Settings2 } from 'lucide-react';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
 import { Avatar, PersonLine } from '../Avatar/Avatar.tsx';
@@ -15,6 +15,7 @@ import { formatDate } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { IconButton } from '../Button/Button.tsx';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
+import { AttributeDisplay, AttributeEditor, type Attribute, type AttributeValue } from '../AttributeField/AttributeField.tsx';
 import './DataGrid.css';
 
 /** What a column's header menu can do (Attio's column menu). */
@@ -42,6 +43,42 @@ export interface GridColumn {
   readonly options?: ReadonlyArray<GridOption>;
   readonly isSortable?: boolean;
   readonly isReadOnly?: boolean;
+  /** An attribute whose own field draws and edits the cell (a date picker, checkbox, rating, multi-select…). Its value is the cell's text, read by `toValue`. */
+  readonly attribute?: Attribute;
+}
+
+/** A cell's text as an attribute's value: "true" ticks a checkbox, "a, b" picks two options, "4" is four stars, "2026-11-13" a date. */
+export function cellToValue(a: Attribute, v: string | number | undefined): AttributeValue {
+  const s = v === undefined ? '' : String(v);
+  if (s === '') return a.type === 'checkbox' ? false : undefined;
+  switch (a.type) {
+    case 'number': case 'currency': case 'rating': return Number(s) || 0;
+    case 'percent': return (Number(s) || 0) / 100;
+    case 'checkbox': return s === 'true';
+    case 'multiSelect': return s.split(/,\s*/).filter(Boolean);
+    case 'location': { const [city = '', country = ''] = s.split(/,\s*/); return { city, country }; }
+    case 'personalName': { const [first = '', ...rest] = s.split(' '); return { first, last: rest.join(' ') }; }
+    default: return s;
+  }
+}
+/** An attribute's value back as the cell's text. */
+export function valueToCell(a: Attribute, v: AttributeValue): string {
+  if (v === undefined || v === null) return '';
+  if (a.type === 'checkbox') return v === true ? 'true' : '';
+  if (a.type === 'percent' && typeof v === 'number') return String(Math.round(v * 100));
+  if (Array.isArray(v)) return v.map(String).join(', ');
+  if (typeof v === 'object') { if ('city' in v) return [v.city, v.country].filter(Boolean).join(', '); if ('first' in v) return `${v.first} ${v.last}`.trim(); if ('name' in v) return String(v.name); return ''; }
+  return String(v);
+}
+
+/** The footer row: a calculation per column, picked from a menu under it. */
+export interface GridCalcs {
+  /** What each column shows now ("Sum ₹48,20,000"); empty shows "Calculate". */
+  readonly text: Readonly<Record<string, string>>;
+  /** The choices a column offers. */
+  readonly options: (columnId: string) => ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  readonly current: Readonly<Record<string, string>>;
+  readonly onChange: (columnId: string, kind: string) => void;
 }
 
 /** One record: its id, an optional grey sub-line for the name, and a value per column id. */
@@ -80,9 +117,20 @@ export interface DataGridProps {
   readonly onColumnAction?: (columnId: string, action: ColumnAction) => void;
   /** Which actions the menu offers; all of them by default. */
   readonly columnActions?: ReadonlyArray<ColumnAction>;
+  /** A footer row of calculations, one per column. */
+  readonly calcs?: GridCalcs;
+  /** Pasting from a spreadsheet into a focused cell: the cell where it starts and the pasted block, rows of cells. */
+  readonly onPaste?: (rowId: string, columnId: string, block: ReadonlyArray<ReadonlyArray<string>>) => void;
+  /** Delete or Backspace on a focused cell (not while editing): the consumer clears it, or that column on every selected row. */
+  readonly onClear?: (rowId: string, columnId: string) => void;
+  /** Column widths after a drag, by column id, so a view can keep them. */
+  readonly onColumnResize?: (widths: Readonly<Record<string, number>>) => void;
+  /** Hides the header row: for groups under the first, which line up with its columns. */
+  readonly hideHeader?: boolean;
 }
 
 const SKELETON_ROWS = ['sk1', 'sk2', 'sk3', 'sk4', 'sk5'];
+const CALC_ROW = '__calc';
 const EDITABLE: ReadonlySet<GridColumnType> = new Set(['name', 'text', 'number', 'select', 'status']);
 const REVEAL_MS = 400; // --duration-slow, transitions.dev 14 skeleton reveal
 const WASH_MS = 1000;
@@ -90,8 +138,9 @@ const WASH_MS = 1000;
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
+export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary, calcs, onPaste, onClear, onColumnResize, hideHeader = false }: DataGridProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
+  const [calcMenu, setCalcMenu] = useState<{ readonly colId: string; readonly anchor: HTMLElement }>();
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
   const revealing = useReveal(isLoading);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -119,10 +168,23 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
     return true;
   };
   // Enter on a focused editable cell opens its editor (before the row's own Enter handling).
+  const cellAt = (el: Element | null): readonly [string, string] | undefined => {
+    const td = el?.closest('td'); const key = td?.querySelector<HTMLElement>('[data-cell]')?.dataset.cell ?? '';
+    const [rowId, colId] = key.split('|'); return rowId && colId ? [rowId, colId] : undefined;
+  };
   const onKeyDownCapture = (e: KeyboardEvent) => {
-    if (e.key !== 'Enter' || editing) return;
+    if (editing) return;
     const active = document.activeElement;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && active?.tagName === 'TD' && onClear) { const at = cellAt(active); const col = columns.find((c) => c.id === at?.[1]); if (at && col && !col.isReadOnly) { e.preventDefault(); onClear(at[0], at[1]); } return; }
+    if (e.key !== 'Enter') return;
     if (active?.tagName === 'TD' && open(active)) { e.preventDefault(); e.stopPropagation(); }
+  };
+  const paste = (e: ClipboardEvent) => {
+    if (!onPaste || editing) return;
+    const at = cellAt(document.activeElement); if (!at) return;
+    const text = e.clipboardData.getData('text/plain'); if (!text) return;
+    e.preventDefault();
+    onPaste(at[0], at[1], text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map((line) => line.split('\t')));
   };
   const addRow = () => {
     const id = onAddRow?.();
@@ -137,18 +199,19 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
   const shown: ReadonlyArray<GridRecord> = isLoading ? SKELETON_ROWS.map((id) => ({ id, values: {} })) : rows;
 
   return (
-    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing')} onKeyDownCapture={onKeyDownCapture} aria-busy={isLoading || undefined}>
-      <ResizableTableContainer className="tf-grid__scroll">
+    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing', hideHeader && 'tf-grid--headless')} onKeyDownCapture={onKeyDownCapture} onPaste={paste} aria-busy={isLoading || undefined}>
+      <ResizableTableContainer className="tf-grid__scroll" onResizeEnd={onColumnResize ? (m) => onColumnResize(Object.fromEntries([...m].filter(([, w]) => typeof w === 'number').map(([k, w]) => [String(k), Number(w)]))) : undefined}>
         <Table
           aria-label={label}
           className="tf-grid__table"
           selectionMode="multiple"
           selectedKeys={selectedKeys}
           onSelectionChange={onSelectionChange}
-          onRowAction={(k) => onRowAction?.(String(k))}
+          onRowAction={(k) => { if (k !== CALC_ROW) onRowAction?.(String(k)); }}
           sortDescriptor={sortDescriptor}
           onSortChange={onSortChange}
-          disabledKeys={isLoading ? SKELETON_ROWS : undefined}
+          disabledKeys={isLoading ? SKELETON_ROWS : calcs ? [CALC_ROW] : undefined}
+          disabledBehavior="selection"
         >
           <TableHeader className="tf-grid__head">
             <Column width={44} minWidth={44} className="tf-grid__th tf-grid__th--check">
@@ -205,8 +268,9 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
                     ) : (
                       <div
                         className="tf-grid__value"
-                        data-edit={!c.isReadOnly && EDITABLE.has(c.type) ? `${r.id}|${c.id}` : undefined}
-                        onDoubleClick={(e) => { if (!c.isReadOnly && EDITABLE.has(c.type)) open(e.currentTarget); }}
+                        data-cell={`${r.id}|${c.id}`}
+                        data-edit={!c.isReadOnly && (EDITABLE.has(c.type) || c.attribute) ? `${r.id}|${c.id}` : undefined}
+                        onDoubleClick={(e) => { if (!c.isReadOnly && (EDITABLE.has(c.type) || c.attribute)) open(e.currentTarget); }}
                       >
                         <span className="tf-grid__content">{renderValue(c, r)}</span>
                         {revealing && <span className="tf-grid__ghost" aria-hidden="true"><Skeleton width="60%" height={12} /></span>}
@@ -217,12 +281,32 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
                 {onAddColumn ? <Cell className="tf-grid__td tf-grid__td--add">{''}</Cell> : null}
               </Row>
             ))}
+            {calcs && !isLoading && rows.length > 0 ? (
+              <Row key={CALC_ROW} id={CALC_ROW} className="tf-grid__row tf-grid__calcrow">
+                <Cell className="tf-grid__td tf-grid__td--check">{''}</Cell>
+                {columns.map((c, i) => (
+                  <Cell key={c.id} textValue={calcs.text[c.id] || 'Calculate'} className={cx('tf-grid__td', 'tf-grid__td--calc', i === 0 && 'tf-grid__td--pin', c.type === 'number' && 'tf-grid__td--num')}>
+                    <AriaButton className={cx('tf-grid__calc', calcs.text[c.id] && 'is-set')} aria-label={`${c.name}: ${calcs.text[c.id] || 'no calculation'}. Change`} aria-haspopup="menu" aria-expanded={calcMenu?.colId === c.id}
+                      onPress={(e) => setCalcMenu({ colId: c.id, anchor: e.target as HTMLElement })}>{calcs.text[c.id] || 'Calculate'}<ChevronDown size={12} strokeWidth={1.75} aria-hidden="true" /></AriaButton>
+                  </Cell>
+                ))}
+                {onAddColumn ? <Cell className="tf-grid__td tf-grid__td--add">{''}</Cell> : null}
+              </Row>
+            ) : null}
           </TableBody>
         </Table>
       </ResizableTableContainer>
       {summary !== undefined && !isLoading && rows.length > 0 && <div className="tf-grid__summary tf-num" aria-live="polite">{summary}</div>}
       {onAddRow && !isLoading && (
         <AriaButton className="tf-grid__add" onPress={addRow}><Plus size={14} strokeWidth={1.75} />{addLabel}</AriaButton>
+      )}
+      {calcs && calcMenu && (
+        <Popover triggerRef={{ current: calcMenu.anchor }} isOpen placement="top start" width="menu" onOpenChange={(o) => { if (!o) setCalcMenu(undefined); }}>
+          <MenuList aria-label={`Calculate ${columns.find((c) => c.id === calcMenu.colId)?.name ?? ''}`} autoFocus="first" selectionMode="single" selectedKeys={[calcs.current[calcMenu.colId] ?? 'none']} onClose={() => setCalcMenu(undefined)}
+            onSelectionChange={(keys) => { const k = keys === 'all' ? undefined : [...keys][0]; if (k !== undefined) { calcs.onChange(calcMenu.colId, String(k)); window.setTimeout(() => setCalcMenu(undefined), CLOSE_AFTER_PICK_MS); } }}>
+            {calcs.options(calcMenu.colId).map((o) => <MenuItem key={o.id} id={o.id}>{o.label}</MenuItem>)}
+          </MenuList>
+        </Popover>
       )}
       {editing && editRow && editCol && (
         <Popover
@@ -236,9 +320,14 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           placement="bottom start"
           offset={-44}
           className="tf-grid__editor"
-          {...(editCol.type === 'select' || editCol.type === 'status' ? {} : { label: `Edit ${editCol.name}` })}
+          {...((editCol.type === 'select' || editCol.type === 'status') && !editCol.attribute ? {} : { label: `Edit ${editCol.name}` })}
         >
-          <CellEditor column={editCol} value={String(editRow.values[editCol.id] ?? '')} draftRef={draftRef} onCommit={(v) => { draftRef.current = undefined; commit(editRow.id, editCol.id, v); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />
+          {editCol.attribute ? (
+            <div className="tf-grid__attr">
+              <AttributeEditor attribute={editCol.attribute} value={cellToValue(editCol.attribute, editRow.values[editCol.id])} autoFocus
+                onCommit={(v) => { draftRef.current = undefined; commit(editRow.id, editCol.id, valueToCell(editCol.attribute ?? { id: '', name: '', type: 'text' }, v)); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />
+            </div>
+          ) : <CellEditor column={editCol} value={String(editRow.values[editCol.id] ?? '')} draftRef={draftRef} onCommit={(v) => { draftRef.current = undefined; commit(editRow.id, editCol.id, v); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />}
         </Popover>
       )}
     </div>
@@ -286,6 +375,7 @@ function CellEditor({ column, value, draftRef, onCommit, onCancel }: { readonly 
 
 function renderValue(c: GridColumn, r: GridRecord): ReactNode {
   const v = r.values[c.id];
+  if (c.attribute && c.type !== 'name') { const value = cellToValue(c.attribute, v); return c.attribute.type === 'checkbox' || (v !== undefined && v !== '') ? <AttributeDisplay attribute={c.attribute} value={value} asLink={false} maxVisible={2} /> : null; }
   // An empty cell stays blank: "—" is kept for chart and stat placeholders.
   if (v === undefined || v === '') return null;
   switch (c.type) {

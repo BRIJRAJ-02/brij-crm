@@ -116,3 +116,19 @@
 /* Add a field: a narrow last column with one quiet +, the body cells under it empty. */
 .tf-grid__th--add { text-align: center; }
 .tf-grid__td--add { background: transparent; }
+
+/* The footer row of calculations: quiet until a column has one, sticky at the foot of the scroll. */
+.tf-grid__calcrow > .tf-grid__td { height: var(--size-control); padding-block: 0; background: var(--surface); border-bottom: 0; border-right-color: transparent; }
+
+.tf-grid__calcrow[data-hovered] > .tf-grid__td { background: var(--surface); }
+.tf-grid__calc { display: inline-flex; align-items: center; gap: var(--space-4); max-width: 100%; height: var(--size-control-sm); padding: 0 var(--space-6); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; outline: none; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out); }
+.tf-grid__calc.is-set { opacity: 1; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tf-grid__calc[data-hovered], .tf-grid__calc[aria-expanded='true'] { background: var(--surface-hover); color: var(--text); }
+.tf-grid__calc[data-focus-visible] { opacity: 1; outline: var(--border-width-focus) solid var(--focus-ring); }
+@media (hover: hover) and (pointer: fine) { .tf-grid__calcrow:hover .tf-grid__calc { opacity: 1; } }
+@media (hover: none) { .tf-grid__calc { opacity: 1; } }
+.tf-grid__td--num .tf-grid__calc { margin-left: auto; }
+.tf-grid__calcrow > .tf-grid__td--num { text-align: right; }
+/* A group under the first: its header row folds away so its columns line up under the first one's. */
+.tf-grid--headless .tf-grid__head { visibility: collapse; }
+.tf-grid__attr { padding: var(--space-4); min-width: calc(var(--size-menu) * 0.8); }

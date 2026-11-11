@@ -11,3 +11,5 @@ The record table: a spreadsheet-grade grid of one object's records, with a pinne
 **Production note**: the demo draws every row. Real views render through RAC's `Virtualizer` with a `TableLayout` (row height 44, header 36) and page rows from the data layer.
 
 **Replaces**: DataGrid, Table, SampleTable.
+
+**More**: a column can carry an `attribute`, and then that attribute's own field draws and edits its cells (a date picker, checkbox, rating, multi-select…); `cellToValue` and `valueToCell` turn the cell text into the value and back. `calcs` adds a footer row: each column's calculation as a quiet "Calculate ▾" button that opens a menu (Count all, Count empty, Count filled, and for numbers Sum, Average, Smallest, Largest). `onPaste` hands over a block pasted from a spreadsheet into the focused cell (rows of cells), `onClear` a Delete or Backspace on a focused cell, and `onColumnResize` the widths after a drag so a view keeps them. `hideHeader` folds the header for groups that line up under the first.

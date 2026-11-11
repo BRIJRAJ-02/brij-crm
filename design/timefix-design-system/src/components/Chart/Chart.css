@@ -96,3 +96,9 @@
   .tf-period__item, .tf-chart__bar, .tf-chart__dots, .tf-donut__seg, .tf-donut__row, .tf-barlist__fill { transition: none; }
   .tf-chart__tip { animation: none; }
 }
+
+/* look="line": a 2px line through each point's top, a dot on each point. */
+.tf-chart__line { fill: none; stroke: var(--dot-blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tf-chart__point { fill: var(--surface); stroke: var(--dot-blue); stroke-width: 2; transition: opacity var(--duration-quick) var(--ease-out), r var(--duration-quick) var(--ease-out); }
+.tf-chart__point.is-dim { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .tf-chart__point { transition: none; } }

@@ -9,3 +9,5 @@ A select's options or a status's stages, in order: each a colour, an editable na
 **Interaction**: Add option drops a row in (0fr to 1fr, 12px rise, 250ms) and focuses it; Enter in a name adds the next, Esc puts the name back, leaving a blank row drops it. The swatch opens the nine hues in a Popover (menu dropdown 05), stays pressed while open and closes 120ms after a pick. Drag by the grip, or Enter on the grip, arrows, Enter; a stage dragged to another group takes that group's shape, and the drop settles over 250ms. Archive collapses to Undo for 5 seconds, then the row folds away (accordion 21).
 
 **Replaces**: OptionsEditor.
+
+**Stage rules**: an option can also carry `outcome` (`won` or `lost`) and `targetDays` (its target time in stage). The editor keeps them as they are; Settings › Objects sets them beside the stages.
