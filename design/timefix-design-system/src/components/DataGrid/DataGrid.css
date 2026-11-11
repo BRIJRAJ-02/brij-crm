@@ -113,3 +113,6 @@
 .tf-grid__th--num .tf-grid__thmenu { right: auto; left: var(--space-8); }
 @media (hover: none) { .tf-grid__thmenu { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tf-grid__thmenu { transition: none; } }
+/* Add a field: a narrow last column with one quiet +, the body cells under it empty. */
+.tf-grid__th--add { text-align: center; }
+.tf-grid__td--add { background: transparent; }

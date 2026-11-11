@@ -15,4 +15,5 @@
 .tf-num { font-variant-numeric: tabular-nums; }
 .tf-muted { color: var(--text-secondary); }
 .tf-faint { color: var(--text-tertiary); }
-.tf-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Read but not seen. Pinned to the top corner of its containing block, so a hidden label far down a page can never stretch the page. */
+.tf-sr-only { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

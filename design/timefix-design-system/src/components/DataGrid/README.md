@@ -2,7 +2,7 @@ The record table: a spreadsheet-grade grid of one object's records, with a pinne
 
 **Use it for**: every object's table view, lists, and small read-only tables such as an import preview (mark the columns `isReadOnly`). **Don't use it for** settings with a few fixed rows (use a bordered section card) or for anything that is not records.
 
-**The consumer provides**: `label`, `columns` (id, name, type, Lucide `icon`, `width`, `options` for select and status), `rows` already sorted and filtered, `sortDescriptor`/`onSortChange`, `selectedKeys`/`onSelectionChange`, `onCellChange`, `onRowAction`, `onAddRow` (returns the new id), `isLoading`, `emptyState`, `summary`, and `onColumnAction` for the header menu (Sort ascending, Sort descending, Filter by this, Hide column, Edit field; narrow it with `columnActions`). The first column can't be hidden; an unsortable column's sorts are greyed out.
+**The consumer provides**: `label`, `columns` (id, name, type, Lucide `icon`, `width`, `options` for select and status), `rows` already sorted and filtered, `sortDescriptor`/`onSortChange`, `selectedKeys`/`onSelectionChange`, `onCellChange`, `onRowAction`, `onAddRow` (returns the new id), `isLoading`, `emptyState`, `summary`, and `onColumnAction` for the header menu (Sort ascending, Sort descending, Filter by this, Hide column, Edit field; narrow it with `columnActions`). The first column can't be hidden; an unsortable column's sorts are greyed out. `onAddColumn` puts a "+" at the end of the header (Add a field).
 
 **States**: rows, hover wash, selected (`accent-soft`), focused cell (accent focus box), editing, just changed (one `accent-soft` wash), loading (five skeleton rows), revealing, empty line, resizing.
 

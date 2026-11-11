@@ -88,10 +88,13 @@ export interface FilterBarProps {
   readonly noun?: string;
   /** Opens "+ Filter" straight at this field's operators (a column menu's "Filter by this"); bump `seq` to open it again. */
   readonly startFilter?: { readonly field: string; readonly seq: number };
+  /** With two or more filters: whether a record must match all of them (and) or any one (or). The word between chips switches it. */
+  readonly match?: 'all' | 'any';
+  readonly onMatchChange?: (m: 'all' | 'any') => void;
 }
 
 /** A view's toolbar: Linear-style filter chips with three clickable parts, + Filter, sort pills, view settings and the hidden-by-filters line. Replaces FilterChip, FilterBuilder, ConditionRow, SortBuilder and ViewSettings. */
-export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSortsChange, columns, onColumnsChange, density = 'comfortable', onDensityChange, hiddenCount = 0, totalCount, noun = 'records', startFilter }: FilterBarProps) {
+export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSortsChange, columns, onColumnsChange, density = 'comfortable', onDensityChange, hiddenCount = 0, totalCount, noun = 'records', startFilter, match = 'all', onMatchChange }: FilterBarProps) {
   const [clearing, setClearing] = useState<ReadonlySet<string>>(new Set());
   const [justCleared, setJustCleared] = useState(false);
   const latest = useRef(filters);
@@ -114,11 +117,20 @@ export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSort
     <div className="tf-fbar">
       <div className="tf-fbar__row">
         <AddFilter fields={fields} filters={filters} onFiltersChange={onFiltersChange} start={startFilter} />
-        {filters.map((rule) => {
+        {filters.map((rule, n) => {
           const field = fieldOf(rule.field);
           if (!field) return null;
           return (
             <span key={rule.id} className={cx('tf-fbar__chipwrap', clearing.has(rule.id) && 'is-clearing')} inert={clearing.has(rule.id) || undefined}>
+              {n > 0 && (onMatchChange
+                ? <MenuTrigger>
+                    <AriaButton className="tf-fbar__join" aria-label={match === 'any' ? 'Matching any filter. Change' : 'Matching every filter. Change'}>{match === 'any' ? 'or' : 'and'}</AriaButton>
+                    <Menu aria-label="Match" selectionMode="single" selectedKeys={[match]} onSelectionChange={(keys) => { const k = firstKey(keys); if (k === 'all' || k === 'any') onMatchChange(k); }}>
+                      <MenuItem id="all" description="Records that match every filter">and</MenuItem>
+                      <MenuItem id="any" description="Records that match at least one">or</MenuItem>
+                    </Menu>
+                  </MenuTrigger>
+                : <span className="tf-fbar__join" aria-hidden="true">and</span>)}
               <span className="tf-fbar__chip" role="group" aria-label={`${field.name} ${rule.operator} ${valueText(field, rule)}`}>
                 <MenuTrigger>
                   <AriaButton className="tf-fbar__seg" aria-label={`Change field, now ${field.name}`}>{field.icon && <field.icon {...i14} />}{field.name}</AriaButton>
@@ -253,7 +265,7 @@ function AddFilter({ fields, filters, onFiltersChange, start }: { readonly field
         <ResizeBox>
           {step.step === 'field' && (
             <div key="field" className="tf-fbar__step">
-              <MenuList aria-label="Filter by" autoFocus="first" onAction={pickField}>
+              <MenuList aria-label="Filter by" autoFocus="first" keepOpen onAction={pickField}>
                 <MenuSection title="Filter by">
                   {fields.map((f) => <MenuItem key={f.id} id={f.id} icon={f.icon && <f.icon {...i16} />}>{f.name}</MenuItem>)}
                 </MenuSection>
@@ -262,7 +274,7 @@ function AddFilter({ fields, filters, onFiltersChange, start }: { readonly field
           )}
           {step.step === 'op' && (
             <div key="op" className="tf-fbar__step">
-              <MenuList aria-label={`${step.field.name} operator`} autoFocus="first" onAction={(op) => pickOp(step.field, String(op))}>
+              <MenuList aria-label={`${step.field.name} operator`} autoFocus="first" keepOpen onAction={(op) => pickOp(step.field, String(op))}>
                 <MenuSection title={step.field.name}>
                   {FILTER_OPERATORS[step.field.type].map((o) => <MenuItem key={o} id={o}>{o}</MenuItem>)}
                 </MenuSection>

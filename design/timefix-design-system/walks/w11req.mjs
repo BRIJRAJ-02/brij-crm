@@ -1,0 +1,10 @@
+import { open, out } from './head.mjs';
+const theme = process.argv[2] ?? 'light';
+const { p, t, nav, workspace, done } = await open(theme);
+await t('guest asks', async () => { await workspace('Tables'); await nav('Menu'); await p.waitForTimeout(500); await p.getByRole('radio', { name: 'QR codes' }).click(); await p.waitForTimeout(400);
+  await p.getByRole('button', { name: 'More for T3' }).click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Scan it as a guest/ }).click(); await p.waitForTimeout(900);
+  await p.getByRole('button', { name: 'Ask for the bill' }).click(); await p.waitForTimeout(300); if (!(await p.getByRole('button', { name: 'Bill on its way' }).count())) throw new Error('no sent state');
+  await p.screenshot({ path: `${out}w11-${theme}-ask-guest.png` }); await p.getByRole('button', { name: 'Back to Bookings' }).click(); await p.waitForTimeout(600); });
+await t('host sees', async () => { await nav('Reservations'); await p.waitForTimeout(600); const l = p.getByRole('list', { name: 'Table requests' }); if (!(await l.getByText(/asks for the bill/).count())) throw new Error('no request row');
+  await p.screenshot({ path: `${out}w11-${theme}-ask-host.png` }); await l.getByRole('button', { name: 'Done' }).click(); await p.waitForTimeout(400); if (await p.getByRole('list', { name: 'Table requests' }).count()) throw new Error('not cleared'); });
+await done();

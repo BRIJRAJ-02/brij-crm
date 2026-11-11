@@ -2,7 +2,7 @@ Menu is the list of actions or choices that opens from a button, a row's "…", 
 
 **Use it for**: row and column actions, "Move to…" pickers with a filter, view options (Sort by, Show). **Don't use it for** picking a field's value (Select or ComboBox) or a whole command palette.
 
-**The consumer provides**: a `MenuTrigger` holding a Button or IconButton and a `Menu` (`aria-label`, `onAction`). `MenuItem` takes a label, `icon`, `description`, `kbd` (one keycap), `badge` (a Pro Tag), `isDanger`. `MenuSection` takes `title` and, for choices, `selectionMode` with `selectedKeys`. `SubmenuTrigger` pairs a MenuItem with a nested Menu; `filterPlaceholder` adds Linear's filter box. `ContextMenu` wraps a row with `items`, `label`, `onAction`.
+**The consumer provides**: a `MenuTrigger` holding a Button or IconButton and a `Menu` (`aria-label`, `onAction`). `MenuItem` takes a label, `icon`, `description`, `kbd` (one keycap), `badge` (a Pro Tag), `isDanger`. `MenuSection` takes `title` and, for choices, `selectionMode` with `selectedKeys`. `SubmenuTrigger` pairs a MenuItem with a nested Menu; `filterPlaceholder` adds Linear's filter box. `ContextMenu` wraps a row with `items`, `label`, `onAction`. `MenuList` takes `keepOpen` for a step inside a panel that goes on to another step (FilterBar's field, then operator), so picking doesn't close the panel.
 
 **States**: item rest, focused (grey wash), pressed (deeper wash), submenu open, picked (accent tick, medium label), disabled, danger (red; red wash on focus), empty filter ("No matches").
 

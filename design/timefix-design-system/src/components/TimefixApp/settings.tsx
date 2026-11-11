@@ -76,6 +76,8 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
   const [picked, setPicked] = useState(start !== undefined);
   /** "+ New object" opens its dialog once; coming back to Objects later doesn't reopen it. */
   const [freshObject, setFreshObject] = useState(start === 'objects:new');
+  /** "objects:people" opens People's attributes straight away (a table's "+ Add a field"). */
+  const openObject = start?.startsWith('objects:') && start !== 'objects:new' ? start.slice('objects:'.length) : undefined;
   useEffect(() => { if (page !== 'objects') setFreshObject(false); }, [page]);
   const q = find.trim().toLowerCase();
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => !q || `${x.label} ${x.words ?? ''}`.toLowerCase().includes(q)) })).filter((g) => g.items.length > 0);
@@ -85,7 +87,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
-        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} bookings={bookings} onBookingsAction={onBookingsAction} onImport={onImport} onLinkPage={onLinkPage} />
+        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} openObject={page === 'objects' ? openObject : undefined} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} bookings={bookings} onBookingsAction={onBookingsAction} onImport={onImport} onLinkPage={onLinkPage} />
       </SettingsLayout>
     </div>
   );
@@ -109,7 +111,7 @@ const APPS = [
   { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'] },
 ] as const;
 
-function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, onOpenList, onGoPage, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage }: { readonly bookings?: BookingsState; readonly onBookingsAction?: (a: BookingsAction) => void; readonly onImport?: () => void; readonly onLinkPage?: () => void; readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
+function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, openObject, onOpenList, onGoPage, calendars = [], onOpenRecord, bookings, onBookingsAction, onImport, onLinkPage }: { readonly bookings?: BookingsState; readonly onBookingsAction?: (a: BookingsAction) => void; readonly onImport?: () => void; readonly onLinkPage?: () => void; readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly openObject?: string; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
   const { toast } = useToast();
   const p = state.prefs;
   const ws = p.workspace;
@@ -362,7 +364,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         : <ul className="tf-set__list">{(p.jobs ?? []).map((j) => <li key={j.id}><span><strong>{j.what}</strong> <span className="tf-rec__muted tf-num">{j.kind === 'import' ? 'Import' : 'Export'} · {j.rows.toLocaleString('en-IN')} rows · {j.by} · {when(j.at)}</span></span>
           {j.file !== undefined && j.name ? <Button size="sm" variant="secondary" onPress={() => { void saveFile(j.name ?? 'export.csv', new Blob([j.file ?? ''], { type: 'text/csv' })).then((o) => { if (o === 'saved') toast({ message: `${j.name} downloaded`, tone: 'success' }); }); }}>Download</Button> : <Tag size="sm" hue="green">Done</Tag>}</li>)}</ul>}
     </SettingsSection>; break;
-    case 'objects': body = <ObjectsPage state={state} dispatch={dispatch} startMaking={newObject} />; break;
+    case 'objects': body = <ObjectsPage key={openObject ?? 'all'} state={state} dispatch={dispatch} startMaking={newObject} startOpen={openObject} />; break;
     case 'lists': body = <ListsPage state={state} dispatch={dispatch} onOpenList={onOpenList} />; break;
     case 'trash': body = <TrashPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} />; break;
     case 'availability': { const def = bookings?.savedHours.find((h) => h.id === bookings.defaultHoursId) ?? bookings?.savedHours[0]; const today = new Date().toISOString().slice(0, 10);
@@ -550,9 +552,9 @@ function CommitField({ label, value, onCommit, description, prefix, clean = (v) 
 
 
 /** Settings › Objects: the list, one object's attributes (add, edit, reorder, archive), and New object. */
-function ObjectsPage({ state, dispatch, startMaking = false }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly startMaking?: boolean }) {
+function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly startMaking?: boolean; readonly startOpen?: string }) {
   const { toast } = useToast();
-  const [openId, setOpenId] = useState<string>();
+  const [openId, setOpenId] = useState<string | undefined>(startOpen);
   const [making, setMaking] = useState(startMaking);
   const [one, setOne] = useState('');
   const [many, setMany] = useState('');

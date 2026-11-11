@@ -13,6 +13,8 @@ import { Popover } from '../Popover/Popover.tsx';
 import { Menu, MenuList, MenuItem, MenuSeparator, MenuTrigger, CLOSE_AFTER_PICK_MS } from '../Menu/Menu.tsx';
 import { formatDate } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
+import { IconButton } from '../Button/Button.tsx';
+import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import './DataGrid.css';
 
 /** What a column's header menu can do (Attio's column menu). */
@@ -66,6 +68,8 @@ export interface DataGridProps {
   readonly onRowAction?: (rowId: string) => void;
   /** Shows the "+ New record" row; return the new row's id to open its name for typing. */
   readonly onAddRow?: () => string | undefined;
+  /** A "+" at the end of the header that adds a field (Attio's add column); leave it out where fields are fixed. */
+  readonly onAddColumn?: () => void;
   readonly addLabel?: string;
   readonly isLoading?: boolean;
   /** The one line shown where rows would be. */
@@ -86,7 +90,7 @@ const WASH_MS = 1000;
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ onColumnAction, columnActions, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
+export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
   const revealing = useReveal(isLoading);
@@ -182,6 +186,7 @@ export function DataGrid({ onColumnAction, columnActions, label, columns, rows, 
                 )}
               </Column>
             ))}
+            {onAddColumn ? <Column width={52} minWidth={52} className="tf-grid__th tf-grid__th--add"><Tooltip label="Add a field"><IconButton size="sm" label="Add a field" onPress={onAddColumn}><Plus size={14} strokeWidth={1.75} /></IconButton></Tooltip></Column> : null}
           </TableHeader>
           <TableBody className="tf-grid__body" renderEmptyState={() => <div className="tf-grid__empty">{emptyState ?? 'No records'}</div>}>
             {shown.map((r, ri) => (
@@ -209,6 +214,7 @@ export function DataGrid({ onColumnAction, columnActions, label, columns, rows, 
                     )}
                   </Cell>
                 ))}
+                {onAddColumn ? <Cell className="tf-grid__td tf-grid__td--add">{''}</Cell> : null}
               </Row>
             ))}
           </TableBody>

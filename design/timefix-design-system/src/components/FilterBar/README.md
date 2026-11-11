@@ -2,7 +2,7 @@ The view toolbar: filter chips, sorts and view settings for a table or board, pl
 
 **Use it for**: the bar above every table and board view. **Don't use it for** a global search (that is the command palette) or for one-off forms.
 
-**The consumer provides**: `fields` (id, name, type, icon, options), controlled `filters`/`onFiltersChange`, `sorts`/`onSortsChange`, `columns`/`onColumnsChange`, `density`/`onDensityChange`, `hiddenCount`, `totalCount` and the plural `noun`. The screen counts; the bar only shows.
+**The consumer provides**: `fields` (id, name, type, icon, options), controlled `filters`/`onFiltersChange`, `sorts`/`onSortsChange`, `columns`/`onColumnsChange`, `density`/`onDensityChange`, `hiddenCount`, `totalCount` and the plural `noun`. The screen counts; the bar only shows. With `match` and `onMatchChange`, the word between chips becomes a switch: and (every filter) or or (any one); without them it reads "and".
 
 **States**: no filters, chips, a part's popover open (the part stays pressed), clearing, cleared ("Showing all 32 companies"), sorts, view settings open, a locked column ("Always shown").
 

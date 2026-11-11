@@ -57,10 +57,12 @@ export function SubmenuTrigger(props: SubmenuTriggerProps) {
 export interface MenuListProps<T> extends Omit<AriaMenuProps<T>, 'className' | 'shouldCloseOnSelect'> {
   /** Adds a filter box at the top (Linear's "Move to…"), filtering items by their text. */
   readonly filterPlaceholder?: string;
+  /** A step inside a panel that goes on to another step (FilterBar's field, then operator): picking doesn't close the panel. */
+  readonly keepOpen?: boolean;
 }
 
 /** The bare list of a menu, for use inside a surface you already have. Most code wants Menu. */
-export function MenuList<T extends object>({ filterPlaceholder, selectionMode, onSelectionChange, renderEmptyState, ...rest }: MenuListProps<T>) {
+export function MenuList<T extends object>({ filterPlaceholder, selectionMode, onSelectionChange, renderEmptyState, keepOpen = false, ...rest }: MenuListProps<T>) {
   const pick = usePickProps({ selectionMode, onSelectionChange });
   const { contains } = useFilter({ sensitivity: 'base' });
   const list = (
@@ -68,6 +70,7 @@ export function MenuList<T extends object>({ filterPlaceholder, selectionMode, o
       {...rest}
       {...pick}
       selectionMode={selectionMode}
+      shouldCloseOnSelect={keepOpen ? false : undefined}
       className="tf-menu"
       renderEmptyState={renderEmptyState ?? (() => <div className="tf-menu__empty">No matches</div>)}
     />

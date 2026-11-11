@@ -243,11 +243,11 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
     : page === 'insights' ? <InsightsScreen key={lk} state={state} dispatch={dispatch} bookings={bookings} startTab={launch?.kind === 'report' ? 'reports' : undefined} startReport={launch?.kind === 'report' ? launch.value : undefined} />
     : page === 'forms' ? <FormsScreen key={lk} start={launch && (launch.kind === 'form' || launch.kind === 'visit') && launch.value ? { id: launch.value, visit: launch.kind === 'visit' } : undefined} state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onOpenRecord={(object, id) => { if (object === 'people' || object === 'companies' || object === 'deals') openRecord(object, id); else go(`object:${object}`); }} onBookings={openBookings} onBookGuest={(w) => setBookGuest((g) => ({ prefill: w.name || w.email ? { name: w.name || w.email, email: w.email } : undefined, n: (g?.n ?? 0) + 1 }))} />
-    : custom ? <CustomRecordsScreen key={custom.id} state={state} dispatch={dispatch} schema={custom} onAttributes={() => openSettings('objects')} />
+    : custom ? <CustomRecordsScreen key={custom.id} state={state} dispatch={dispatch} schema={custom} onAttributes={() => openSettings(`objects:${custom.id}`)} />
     : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} onRestored={(lid) => go(`list:${lid}`)} />
     : page.startsWith('records:') ? <RecordsScreen key={`${page}-${lk}`} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord}
       startNew={(launch?.kind === 'person' && page === 'records:people') || (launch?.kind === 'company' && page === 'records:companies') ? launch.value ?? '' : undefined}
-      onImport={page !== 'records:deals' ? () => setSub('import') : undefined} onDuplicates={page !== 'records:deals' ? () => setSub('dupes') : undefined} onAttributes={() => openSettings('objects')} />
+      onImport={page !== 'records:deals' ? () => setSub('import') : undefined} onDuplicates={page !== 'records:deals' ? () => setSub('dupes') : undefined} onAttributes={() => openSettings(`objects:${page.split(':')[1] ?? ''}`)} />
     : <Rebuilding page={page} onHome={() => go('home')} />;
   const content: ReactNode = page === 'bookings' ? undefined : (
     <>

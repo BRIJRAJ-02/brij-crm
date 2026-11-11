@@ -1,0 +1,12 @@
+import { open, out } from './head.mjs';
+const theme = process.argv[2] ?? 'light';
+const { p, t, nav, done } = await open(theme);
+await t('note template', async () => { await nav('Notes'); await p.waitForTimeout(400); await p.getByRole('button', { name: 'New note' }).first().click(); await p.waitForTimeout(300);
+  const d = p.getByRole('dialog'); await d.getByText('Meeting notes', { exact: true }).click(); await d.getByText('Pick a person, company or deal').click(); await p.waitForTimeout(400); await p.getByRole('option', { name: /Acme Corp/ }).first().click(); await p.waitForTimeout(200);
+  await d.getByRole('button', { name: 'Start writing' }).click(); await p.waitForTimeout(800); if (!(await p.getByRole('heading', { name: 'Next steps' }).count())) throw new Error('no template headings'); await p.screenshot({ path: `${out}w11-${theme}-note.png` }); });
+await t('no-show rebook', async () => { await p.goto('http://127.0.0.1:5391/bp.html?r=' + Date.now()); await p.waitForTimeout(1200);
+  await p.getByRole('button', { name: /^Upcoming/ }).first().click(); await p.waitForTimeout(200); await p.getByRole('option', { name: /^Past/ }).click(); await p.waitForTimeout(500);
+  await p.locator('.tf-meetings__row, [data-meeting-row], li button, [role=row]').filter({ hasText: /Discovery call|Product demo|Onboarding|Site visit/ }).first().click(); await p.waitForTimeout(700);
+  const d = p.getByRole('dialog'); await d.getByRole('button', { name: 'More for this meeting' }).click(); await p.waitForTimeout(200); await p.getByRole('menuitem', { name: 'Mark as no-show' }).click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'Send a link to book again' }).click(); await p.waitForTimeout(300); if (!(await p.getByText(/Link to book again sent/).count())) throw new Error('not marked sent'); await p.screenshot({ path: `${out}w11-${theme}-rebook.png` }); });
+await done();

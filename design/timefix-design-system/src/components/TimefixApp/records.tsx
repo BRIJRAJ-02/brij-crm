@@ -163,7 +163,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     edit({ hidden: [...was, id] }); toast({ message: `${name} hidden. Show it again from View.`, action: { label: 'Undo', onAction: () => edit({ hidden: was }) } });
   };
   const q = query.trim().toLowerCase();
-  const rows = all.filter((r) => view.filters.every((f) => passes(r, f)) && (!q || Object.values(r.values).some((v) => String(v ?? '').toLowerCase().includes(q))));
+  const rows = all.filter((r) => (view.filters.length === 0 || (view.match === 'any' ? view.filters.some((f) => passes(r, f)) : view.filters.every((f) => passes(r, f)))) && (!q || Object.values(r.values).some((v) => String(v ?? '').toLowerCase().includes(q))));
   const sorted = [...rows].sort((a, b) => {
     for (const s of view.sorts) {
       const x = a.values[s.field] ?? ''; const y = b.values[s.field] ?? '';
@@ -278,7 +278,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       </div>
       {!canEdit && <Callout tone="info">You’re previewing as a {state.previewRole?.toLowerCase()}: you can look, but not change {def.many}.</Callout>}
       {pairs > 0 && onDuplicates && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{pairs === 1 ? `1 pair of ${def.many} looks like a duplicate.` : `${pairs} pairs of ${def.many} look like duplicates.`}</Callout>}
-      <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
+      <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} match={view.match ?? 'all'} onMatchChange={(match) => edit({ match })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
         columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} startFilter={startFilter} />
       <div className="tf-rec__split">
       {view.layout === 'board' ? (
@@ -292,7 +292,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
         </div>
       ) : (
         <div className="tf-rec__grid">
-          <DataGrid label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} summary={summary}
+          <DataGrid onAddColumn={canEdit && onAttributes ? onAttributes : undefined} label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} summary={summary}
             sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined}
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
             onColumnAction={columnAction} columnActions={onAttributes && canEdit ? undefined : ['ascending', 'descending', 'filter', 'hide']}

@@ -82,6 +82,8 @@ export interface SavedView {
   readonly filters: ReadonlyArray<{ readonly id: string; readonly field: string; readonly operator: string; readonly values: ReadonlyArray<string> }>;
   readonly sorts: ReadonlyArray<{ readonly field: string; readonly direction: 'ascending' | 'descending' }>;
   readonly hidden: ReadonlyArray<string>; readonly isPrivate?: boolean;
+  /** Filters joined by and (every one, the default) or or (any one). */
+  readonly match?: 'all' | 'any';
 }
 
 /** A list: records of one object gathered for a purpose, with the list's own fields (a stage, a priority, the next step). */

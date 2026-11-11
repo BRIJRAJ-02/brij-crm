@@ -1,0 +1,13 @@
+import { open, out } from './head.mjs';
+const theme = process.argv[2] ?? 'light';
+const { p, t, nav, done, res } = await open(theme);
+const rows = () => p.locator('[role=row]').count();
+const addFilter = async (field, value) => { await p.getByRole('button', { name: 'Filter', exact: true }).click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: field }).click(); await p.waitForTimeout(300);
+  await p.getByRole('menuitem', { name: 'is', exact: true }).click(); await p.waitForTimeout(300); await p.getByRole('menuitemcheckbox', { name: value }).click().catch(() => p.getByRole('menuitem', { name: value }).click()); await p.waitForTimeout(300); await p.keyboard.press('Escape'); await p.waitForTimeout(300); };
+await t('filter steps and and/or', async () => { await nav('Companies'); await p.waitForTimeout(500); const all = await rows();
+  await addFilter('Industry', 'Software'); const one = await rows(); await addFilter('Industry', 'Fintech'); const both = await rows();
+  await p.getByRole('button', { name: /Matching every filter/ }).click(); await p.waitForTimeout(250); await p.getByRole('menuitemradio', { name: /^or/ }).click().catch(() => p.getByRole('menuitem', { name: /^or/ }).click()); await p.waitForTimeout(400);
+  const any = await rows(); res.push(`  rows: all ${all}, Software ${one}, and ${both}, or ${any}`); if (!(one < all && any > both)) throw new Error('and/or counts wrong'); await p.screenshot({ path: `${out}w12-${theme}-or.png` }); });
+await t('add field opens People fields', async () => { await nav('People'); await p.waitForTimeout(500); await p.getByRole('button', { name: 'Add a field' }).click(); await p.waitForTimeout(800);
+  if (!(await p.getByRole('tab', { name: /Attributes/ }).count())) throw new Error('People attributes not open'); await p.screenshot({ path: `${out}w12-${theme}-addfield.png` }); });
+await done();

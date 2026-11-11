@@ -167,7 +167,7 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
     else if (b.kind === 'faq') out.push(<section key={b.id} className="tf-linkpage__faq" aria-label="Questions">{b.items.filter((x) => x.q.trim()).map((x, n) => <details key={n}><summary>{x.q}</summary><p>{x.a}</p></details>)}</section>);
     else if (b.kind === 'testimonial') out.push(<figure key={b.id} className="tf-linkpage__quote"><blockquote>“{b.quote}”</blockquote><figcaption>{b.name}{b.role ? `, ${b.role}` : ''}</figcaption></figure>);
     else if (b.kind === 'form') out.push(<LinkCard key={b.id} item={{ id: b.id, title: b.title, href: `https://timefix.com/f/${b.slug}`, icon: <FileText size={20} strokeWidth={1.75} /> }} isPreview={isPreview} />);
-    else if (b.kind === 'signup') out.push(<SignupBlock key={b.id} block={b} isPreview={isPreview} onSignup={onSignup} />);
+    else if (b.kind === 'signup') out.push(<SignupBlock key={b.id} block={b} isPreview={isPreview} onSignup={onSignup} owner={profile.name} />);
     else out.push(<BookingBlock key={b.id} block={b} host={profile.name} booking={booking} />);
   }
   flush();
@@ -195,7 +195,7 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
 }
 
 /** An email signup on the page: one field, one button, and a thank-you once it's sent. */
-function SignupBlock({ block, isPreview, onSignup }: { readonly block: Extract<LinkBlock, { kind: 'signup' }>; readonly isPreview: boolean; readonly onSignup?: (email: string, heading: string) => void }) {
+function SignupBlock({ block, isPreview, onSignup, owner }: { readonly block: Extract<LinkBlock, { kind: 'signup' }>; readonly isPreview: boolean; readonly onSignup?: (email: string, heading: string) => void; readonly owner: string }) {
   const [email, setEmail] = useState('');
   const [done, setDone] = useState(false);
   const [bad, setBad] = useState(false);
@@ -209,6 +209,8 @@ function SignupBlock({ block, isPreview, onSignup }: { readonly block: Extract<L
         <Button type="submit" variant="primary">{block.button}</Button>
       </span>
       {bad && <span className="tf-linkpage__signup-error" role="alert">That doesn’t look like an email address.</span>}
+      {/* What signing up means, said where the address is given: the consent the list rests on. */}
+      <span className="tf-linkpage__signup-note">You’ll get emails from {owner}. Unsubscribe any time.</span>
     </form>
   );
 }

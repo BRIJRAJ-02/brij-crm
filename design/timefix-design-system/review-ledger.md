@@ -408,3 +408,11 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - No-show rebook: a no-show's drawer offers Send a link to book again once, logged on the meeting.
 - Note templates: NOTE_TEMPLATES + noteFromTemplate (Meeting, Call, Discovery), Start from chips in New note.
 - A machine restart wiped the scratch folders mid-wave 12: wave 11's source was re-applied from the session record; its artifacts had already been published (Timefix v23, Bookings v51, Business v25, DS v46).
+
+## Wave 12 and cleanup (11 Nov)
+- FilterBar and/or (`match`, `onMatchChange`; the word between chips switches it), SavedView.match; records apply some/every.
+- DataGrid `onAddColumn` ("+ Add a field"), opening Settings straight on that object's attributes (`objects:<id>` start).
+- Bug: "+ Filter" closed after the first pick (a menu inside a panel closes it on action). MenuList `keepOpen` for the field and operator steps.
+- Bug: hidden screen-reader labels (`.tf-sr-only`) were placed against the page, so restaurant Availability made the window scroll 21px. Pinned to top/left of the containing block in base.css.
+- Home "Copy link" no longer invents a meet.google.com address (uses the meeting's Timefix link like the drawer). Link page sign-up says what signing up means.
+- Walks rewritten after the restart (walks/): smoke covers 58 pages per theme across team, salon and restaurant plus Bookings and Business; w11req, w11more, w12. All green both themes. Published Timefix v24, Bookings v52, Business v26, DS v47.
