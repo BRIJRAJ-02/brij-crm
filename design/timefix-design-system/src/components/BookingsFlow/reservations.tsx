@@ -3,7 +3,7 @@
 import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserRound, UserX, Users, X, Ban } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -23,7 +23,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey, shiftsOn, pacingAt, coversAt } from './state.ts';
+  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf, guestKey, shiftsOn, pacingAt, coversAt, type TableBlock } from './state.ts';
 
 /** Where a table booking is tonight. */
 type Stage = 'request' | 'booked' | 'late' | 'seated' | 'left' | 'no-show' | 'cancelled';
@@ -63,6 +63,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   const [view, setView] = useState<'list' | 'floor'>('list');
   const [editing, setEditing] = useState<BookedMeeting | 'new'>();
   const [seating, setSeating] = useState<SeatAsk>();
+  const [blocking, setBlocking] = useState<Table>();
   const [waiting, setWaiting] = useState(false);
   // A new booking or one opened from elsewhere: show its day, and open it when asked.
   const dayOf = (id: string | undefined) => { const m = id ? state.meetings.find((x) => x.id === id) : undefined; return m ? Math.round((dayFrom(m.start, 0).getTime() - dayFrom(now, 0).getTime()) / 86_400_000) : undefined; };
@@ -280,7 +281,10 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
       </p>
       <div className="tf-bkf-res-layout">
         {view === 'list' ? listView : <FloorView onNew={() => setEditing('new')} state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
-          onSeat={seat} onFinish={finish} onOpen={setEditing} onWalkIn={(t) => setSeating({ kind: 'walkin', table: t })} />}
+          onSeat={seat} onFinish={finish} onOpen={setEditing} onWalkIn={(t) => setSeating({ kind: 'walkin', table: t })} onBlock={setBlocking}
+          onUnblock={(b) => { dispatch({ type: 'tableblock/remove', id: b.id }); toast({ message: `${state.tables?.find((t) => t.id === b.tableId)?.name ?? 'Table'} is open again`, action: { label: 'Undo', onAction: () => dispatch({ type: 'tableblock/add', block: b }) } }); }} />}
+        {blocking && <BlockTableDialog state={state} table={blocking} day={day} now={isToday ? now : undefined} onClose={() => setBlocking(undefined)}
+          onBlock={(b) => { dispatch({ type: 'tableblock/add', block: b }); setBlocking(undefined); toast({ message: `${blocking.name} blocked ${formatClockRange(b.start, b.end)}`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'tableblock/remove', id: b.id }) } }); }} />}
         {waitRail}
       </div>
       {editing && <ReservationDialog key={editing === 'new' ? 'new' : editing.id} state={state} page={page} day={day} meeting={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)}
@@ -330,6 +334,29 @@ function PaceStrip({ state, page, day, shift, now }: { readonly state: BookingsS
   );
 }
 
+/** Block a table from one time to another today (or on the day shown), with a reason the floor sees. */
+function BlockTableDialog({ state, table, day, now, onClose, onBlock }: { readonly state: BookingsState; readonly table: Table; readonly day: Date; readonly now?: Date; readonly onClose: () => void; readonly onBlock: (b: TableBlock) => void }) {
+  const slots = shiftsOn(state, day).flatMap((s) => Array.from({ length: Math.max(0, Math.floor((s.end - s.start) / 15)) + 1 }, (_, n) => s.start + n * 15)).filter((m) => !now || m + 15 > minutesOf(now));
+  const from0 = now ? Math.ceil(minutesOf(now) / 15) * 15 : slots[0] ?? 12 * 60;
+  const [from, setFrom] = useState(slots.includes(from0) ? from0 : slots[0] ?? from0);
+  const [until, setUntil] = useState(Math.min(from + 120, slots[slots.length - 1] ?? from + 120));
+  const [note, setNote] = useState('');
+  const clash = state.meetings.filter((m) => (m.tables ?? []).includes(table.id) && m.status !== 'cancelled' && m.status !== 'no-show' && m.seating !== 'left' && m.start.toDateString() === day.toDateString() && minutesOf(m.start) < until && from < minutesOf(m.end));
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`Block ${table.name}`} description="No bookings or walk-ins on it then. Guests online won’t see it."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={until <= from} onPress={() => onBlock({ id: nextId('tb'), tableId: table.id, day: isoDay(day), start: from, end: until, note: note.trim() })}>Block</Button></>}>
+      <div className="tf-bkf__stack">
+        <div className="tf-bkf__pair">
+          <Select label="From" value={String(from)} onChange={(v) => { if (v) { const f = Number(v); setFrom(f); if (until <= f) setUntil(f + 60); } }} items={slots.slice(0, -1).map((m) => ({ id: String(m), label: formatClock(m) }))} />
+          <Select label="Until" value={String(until)} onChange={(v) => { if (v) setUntil(Number(v)); }} items={slots.filter((m) => m > from).map((m) => ({ id: String(m), label: formatClock(m) }))} />
+        </div>
+        <TextField label="Why" aside="Optional" value={note} onChange={setNote} placeholder="Private event, broken chair, staff meal" />
+        {clash.length > 0 && <Callout tone="warning">{clash.map((m) => `${first(m.invitee.name)} (${m.party}) at ${formatClock(minutesOf(m.start))}`).join(', ')} {clash.length === 1 ? 'is' : 'are'} booked on {table.name} then. Change {clash.length === 1 ? 'their table' : 'their tables'} first, or they keep it.</Callout>}
+      </div>
+    </Dialog>
+  );
+}
+
 function stageTag(m: BookedMeeting, stage: Stage, now: Date, holdLate: number): ReactNode {
   switch (stage) {
     case 'request': return null;
@@ -349,8 +376,9 @@ function stageTag(m: BookedMeeting, stage: Stage, now: Date, holdLate: number): 
 }
 
 /** Every table by area: who's at it and for how long, or when it's next booked. Tap one to act on it. */
-function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish, onOpen, onWalkIn, onNew }: {
+function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish, onOpen, onWalkIn, onNew, onBlock, onUnblock }: {
   /** A free table on a day ahead: book it by phone. */ readonly onNew?: () => void;
+  /** Take a table out for a while, or put it back. */ readonly onBlock: (t: Table) => void; readonly onUnblock: (b: TableBlock) => void;
   readonly state: BookingsState; readonly page: BookingPage; readonly day: Date; readonly isToday: boolean; readonly now: Date; readonly holdLate: number;
   readonly onSeat: (m: BookedMeeting) => void; readonly onFinish: (m: BookedMeeting) => void; readonly onOpen: (m: BookedMeeting) => void; readonly onWalkIn: (t: Table) => void;
 }) {
@@ -367,7 +395,10 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
               const mine = on.filter((m) => (m.tables ?? []).includes(t.id));
               const sat = isToday ? mine.find((m) => stageOf(m, now, holdLate) === 'seated') : undefined;
               const next = mine.find((m) => m.seating !== 'left' && m.status !== 'completed' && m !== sat && (!isToday || m.end > now));
-              const state_ = sat ? 'seated' : next && isToday && next.start.getTime() - now.getTime() < 30 * 60_000 ? 'soon' : 'free';
+              // A block that covers now (today) or anything on a day ahead shows on the tile; the next one today shows as a line.
+              const blocks = (state.tableBlocks ?? []).filter((b) => b.tableId === t.id && b.day === isoDay(day) && (!isToday || b.end > minutesOf(now)));
+              const blockedNow = isToday ? blocks.find((b) => b.start <= minutesOf(now)) : undefined;
+              const state_ = sat ? 'seated' : blockedNow ? 'blocked' : next && isToday && next.start.getTime() - now.getTime() < 30 * 60_000 ? 'soon' : 'free';
               const satFor = sat?.seatedAt ? mins(sat.seatedAt, now) : 0;
               const turn = sat ? mins(sat.start, sat.end) : 1;
               return (
@@ -383,7 +414,9 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                         </>
                       ) : next ? (
                         <span className="tf-bkf__muted tf-num">{isToday && next.start > now ? `Free until ${formatClock(minutesOf(next.start))} · ${first(next.invitee.name)} (${next.party})` : `${formatClock(minutesOf(next.start))} · ${first(next.invitee.name)} (${next.party})`}</span>
-                      ) : <span className="tf-bkf__muted">{t.online ? 'Free' : 'Free · staff only'}</span>}
+                      ) : blockedNow ? <span className="tf-bkf__muted tf-num">Blocked till {formatClock(blockedNow.end)}{blockedNow.note ? ` · ${blockedNow.note}` : ''}</span>
+                      : <span className="tf-bkf__muted">{t.online ? 'Free' : 'Free · staff only'}</span>}
+                      {!blockedNow && blocks[0] ? <span className="tf-bkf-floor__block tf-num">Blocked {formatClockRange(blocks[0].start, blocks[0].end)}</span> : null}
                     </AriaButton>
                     <Menu aria-label={`${t.name} actions`} placement="bottom start" onAction={(k) => {
                       if (k === 'finish' && sat) onFinish(sat);
@@ -392,13 +425,18 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                       else if (k === 'new') onNew?.();
                       else if (k === 'open-sat' && sat) onOpen(sat);
                       else if (k === 'open-next' && next) onOpen(next);
+                      else if (k === 'block') onBlock(t);
+                      else if (k === 'unblock' && (blockedNow ?? blocks[0])) onUnblock((blockedNow ?? blocks[0]) as TableBlock);
                     }}>
                       {sat ? <MenuItem id="finish" icon={<Users {...i16} />}>Finish: table is free</MenuItem> : null}
                       {sat ? <MenuItem id="open-sat" icon={<Pencil {...i16} />}>{sat.invitee.name}</MenuItem> : null}
                       {!sat && next && isToday ? <MenuItem id="seat" icon={<Users {...i16} />}>Seat {first(next.invitee.name)} ({next.party})</MenuItem> : null}
                       {next ? <MenuItem id="open-next" icon={<Pencil {...i16} />} description={formatClock(minutesOf(next.start))}>{next.invitee.name}</MenuItem> : null}
-                      {!sat && isToday ? <MenuItem id="walkin" icon={<UserPlus {...i16} />}>Seat a walk-in</MenuItem> : null}
+                      {!sat && !blockedNow && isToday ? <MenuItem id="walkin" icon={<UserPlus {...i16} />}>Seat a walk-in</MenuItem> : null}
                       {!isToday ? <MenuItem id="new" icon={<CalendarPlus {...i16} />}>New reservation</MenuItem> : null}
+                      <MenuSeparator />
+                      {blocks.length ? <MenuItem id="unblock" icon={<Ban {...i16} />} description={formatClockRange((blockedNow ?? blocks[0])?.start ?? 0, (blockedNow ?? blocks[0])?.end ?? 0)}>Unblock</MenuItem>
+                        : <MenuItem id="block" icon={<Ban {...i16} />}>Block for a while…</MenuItem>}
                     </Menu>
                   </MenuTrigger>
                 </li>

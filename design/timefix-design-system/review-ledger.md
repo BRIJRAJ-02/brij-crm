@@ -383,3 +383,10 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - Form looks: AppForm `look` (published with the form), Look button in the preview bar opens GuestLook (`isPreviewHidden`) in a Popover; HostedForm `look` via `guestLookProps` (data-theme + accent as primary/accent, face). Walk w7look (incl. publish + visitor view).
 - Reminders: REMINDERS (week, day, 2 h, hour), `remindByText` for service/table pages, sample text under the setting, drawer lists sent/next reminders (`remindersFor`). Walk w7remind.
 - Dot week dropped: no real empty/loading moment in the week view to put it on.
+
+## Wave 8 (11 Nov)
+- Lost reasons: TimefixApp watches records/fields for deals moving to Lost (any screen) and asks once (LostReasonDialog in deals.tsx, Skip allowed); deal page shows Lost reason/note; timeline logs them.
+- Meeting outcomes: past team meetings get How did it go? (Qualified, Follow up, Not a fit) in the drawer; record Meetings tag it.
+- Table blocks: tableBlocks + tableblock/add|remove, heldTables treats them as taken (bookings, walk-ins, online), Floor tile/menu, BlockTableDialog warns about bookings on the table.
+- Fix: board column names were squeezed to "L…"/"Qu…" by long amounts; title no longer shrinks.
+- All walks green both themes (regress passes after 10:00). Walk w8.

@@ -199,6 +199,8 @@ export interface BookedMeeting extends Meeting {
   readonly guestZone: string;
   readonly record?: RecordRef;
   readonly activity: ReadonlyArray<ActivityLine>;
+  /** After the meeting: how it went (a team's call or visit), shown with it on the person's record. */
+  readonly outcome?: string;
   /** Teammates who join as well (a round robin page's "Always joins"); their time is taken too. */
   readonly coHosts?: ReadonlyArray<string>;
   /** A table booking: how many guests and which tables. */
@@ -336,6 +338,8 @@ export interface BookingsState {
   /** A restaurant's menus: the draft you edit and the published one guests read. Sold out and Hide apply to both at once. */
   readonly menu?: MenuBook;
   readonly menuLive?: MenuBook;
+  /** Tables taken out for a while (a private event, a wobbly leg): no bookings or walk-ins on them then. */
+  readonly tableBlocks?: ReadonlyArray<TableBlock>;
   /** A restaurant's waitlist, every day. */
   readonly waitlist?: ReadonlyArray<WaitParty>;
   /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
@@ -345,6 +349,9 @@ export interface BookingsState {
   /** What the staff keep about a guest or client, by guestKey: tags, notes, birthday, diet, colour formulas, patch test. */
   readonly guests?: Readonly<Record<string, GuestProfile>>;
 }
+
+/** How a meeting went, in a sales team's words. */
+export const OUTCOMES = ['Qualified', 'Follow up', 'Not a fit'] as const;
 
 /** When reminders go, before the meeting. */
 export const REMINDERS: ReadonlyArray<{ readonly id: string; readonly label: string; readonly minutes: number }> = [
@@ -357,6 +364,12 @@ export function remindersFor(p: BookingPage, m: BookedMeeting, now: Date): Reado
   return REMINDERS.filter((r) => p.reminders.includes(r.id)).map((r) => ({ id: r.id, label: r.label, at: new Date(m.start.getTime() - r.minutes * 60_000), sent: false }))
     .filter((r) => !booked || r.at > booked).map((r) => ({ ...r, sent: r.at <= now }));
 }
+
+/** A table taken out from one time to another on one day, with why. */
+export interface TableBlock { readonly id: string; readonly tableId: string; readonly day: string; readonly start: number; readonly end: number; readonly note: string }
+/** The block on a table at a time on a day, if any. */
+export const blockOn = (state: BookingsState, tableId: string, date: Date, start: number, length = 1) =>
+  (state.tableBlocks ?? []).find((b) => b.tableId === tableId && b.day === isoDay(date) && start < b.end && b.start < start + length);
 
 /** One shift's own rules on a table page. */
 export interface ShiftRule { readonly pacing?: number; readonly lastSeating?: number }
@@ -472,6 +485,8 @@ export type BookingsAction =
   | { readonly type: 'calendar/set'; readonly calendars: ReadonlyArray<CalendarAccount>; readonly health?: CalendarHealth }
   | { readonly type: 'busy/add'; readonly block: BusyBlock }
   | { readonly type: 'block/add'; readonly block: TimeBlock }
+  | { readonly type: 'tableblock/add'; readonly block: TableBlock }
+  | { readonly type: 'tableblock/remove'; readonly id: string }
   | { readonly type: 'block/remove'; readonly id: string }
   | { readonly type: 'groups/set'; readonly groups: ReadonlyArray<RoundRobinGroup> }
   | { readonly type: 'routing/patch'; readonly ids: ReadonlyArray<string>; readonly pageId: string; readonly fallback: boolean }
@@ -534,6 +549,8 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
+    case 'tableblock/add': return { ...state, tableBlocks: [...(state.tableBlocks ?? []), action.block] };
+    case 'tableblock/remove': return { ...state, tableBlocks: (state.tableBlocks ?? []).filter((b) => b.id !== action.id) };
     case 'block/remove': return { ...state, blocks: state.blocks.filter((b) => b.id !== action.id) };
     case 'groups/set': return { ...state, groups: action.groups };
     case 'routing/set': return { ...state, routing: action.routing };
@@ -718,6 +735,8 @@ export function heldTables(state: BookingsState, date: Date, start: number, leng
     const a = minutesOf(m.start); const b = overrun ? Math.max(minutesOf(m.end), minutesOf(today) + 15) : minutesOf(m.end);
     if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
   });
+  // A blocked table is out for that time, for bookings and walk-ins alike.
+  (state.tableBlocks ?? []).forEach((x) => { if (x.day === isoDay(date) && start < x.end && x.start < start + length) held.add(x.tableId); });
   return held;
 }
 /** How long a table is held for a party: the page's turn time, longer for big parties. */

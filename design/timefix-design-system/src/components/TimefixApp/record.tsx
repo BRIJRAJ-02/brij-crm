@@ -21,10 +21,12 @@ import { Dialog } from '../Dialog/Dialog.tsx';
 import { TextArea, TextField } from '../Field/Field.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
+import { Tag } from '../Tag/Tag.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import type { Attribute } from '../AttributeField/AttributeField.tsx';
 import type { BookedMeeting } from '../BookingsFlow/state.ts';
 import { formatDay } from '../../lib/format.ts';
+import { LOST_REASONS } from './deals.tsx';
 import { STAGES, dayFrom, inr, isEmptyNote, newId, recordName, ymdOf, type AppAction, type AppState, type ObjectId, type Stage } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
@@ -112,6 +114,8 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
         {fieldRow({ id: 'amount', name: 'Amount', type: 'currency', currency: 'INR' }, 'amount', deal.amount, (v) => Number(v) || 0)}
         {fieldRow({ id: 'close', name: 'Close date', type: 'date' }, 'close', ymdOf(deal.close), (v) => (typeof v === 'string' ? dayFrom(v) ?? deal.close : deal.close))}
         {fieldRow({ id: 'company', name: 'Company', type: 'select', options: state.companies.map((c) => ({ id: c.id, label: c.name, hue: 'gray' as const })) }, 'companyId', deal.companyId, (v) => String(v || deal.companyId))}
+        {deal.stage === 'Lost' && fieldRow({ id: 'lostReason', name: 'Lost reason', type: 'select', options: LOST_REASONS.map((x) => ({ id: x, label: x, hue: 'red' as const })) }, 'lostReason', deal.lostReason, (v) => (v ? String(v) : undefined))}
+        {deal.stage === 'Lost' && fieldRow({ id: 'lostNote', name: 'Lost note', type: 'text' }, 'lostNote', deal.lostNote ?? '')}
       </>}
       {company && object === 'companies' && <>
         {fieldRow({ id: 'domain', name: 'Domain', type: 'domain' }, 'domain', company.domain)}
@@ -146,6 +150,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
         const line = (m: BookedMeeting) => (
           <button key={m.id} type="button" className="tf-rec__rel tf-rec__rel--meeting" onClick={() => onMeeting?.(m.id)} disabled={!onMeeting}>
             <CalendarDays size={14} strokeWidth={1.75} aria-hidden /><span className="tf-rec__relname">{m.title}{object !== 'people' ? <span className="tf-rec__muted"> · {m.invitee.name}</span> : null}</span>
+            {m.outcome && <Tag size="sm" hue={m.outcome === 'Qualified' ? 'green' : m.outcome === 'Not a fit' ? 'gray' : 'blue'}>{m.outcome}</Tag>}
             <span className="tf-rec__muted tf-num">{m.status === 'no-show' ? 'No-show' : m.status === 'pending' ? 'Asked' : formatDay(m.start)}</span>
           </button>
         );

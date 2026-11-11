@@ -22,7 +22,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
 import { ProfileButton } from './guests.tsx';
-import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, OUTCOMES, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
 export interface MeetingDrawerProps {
@@ -122,6 +122,13 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <dl className="tf-bkf__answers">{m.answers.map((a) => <div key={a.question}><dt>{a.question}</dt><dd>{a.answer || '—'}</dd></div>)}</dl>
         )}
       </section>
+      {past && page?.kind !== 'service' && page?.kind !== 'table' && (m.status === 'confirmed' || m.status === 'completed') && (
+        <section className="tf-bkf__block" aria-label="How it went">
+          <ChoiceChips label="How did it go?" selectionMode="single" size="sm" selectedKeys={m.outcome ? [m.outcome] : []}
+            onSelectionChange={(k) => { const v = [...k][0]; onUpdate({ ...m, outcome: v, activity: [...m.activity, { id: `a-${Date.now()}`, text: v ? `${HOST} marked it ${v.toLowerCase()}` : `${HOST} cleared the outcome`, at: new Date() }] }); }}
+            items={OUTCOMES.map((o) => ({ id: o, label: o }))} />
+        </section>
+      )}
       <section className="tf-bkf__block" aria-label="Notes">
         <TextArea label="Your notes" rows={3} value={notes} onChange={setNotes} onBlur={saveNotes} placeholder="Only your team sees these" />
       </section>

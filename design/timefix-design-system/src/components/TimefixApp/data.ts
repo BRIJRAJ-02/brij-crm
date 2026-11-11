@@ -22,7 +22,8 @@ export const daysInStage = (d: Deal, now = new Date()) => Math.max(0, Math.floor
 export interface Company { readonly id: string; readonly name: string; readonly domain: string; readonly industry: string; readonly size: string; readonly city: string; readonly owner: string; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 export interface Person { readonly id: string; readonly name: string; readonly email: string; readonly phone?: string; readonly title: string; readonly companyId?: string; readonly owner: string; readonly tags: ReadonlyArray<string>; readonly lastContact?: Date; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 export interface Deal { readonly id: string; readonly name: string; readonly companyId: string; readonly contactId?: string; readonly stage: Stage; readonly amount: number; readonly owner: string; readonly close: Date; readonly created: Date;
-  /** When it entered its stage, for days in stage and stale deals. */ readonly stageAt?: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
+  /** When it entered its stage, for days in stage and stale deals. */ readonly stageAt?: Date;
+  /** Lost: why (one of LOST_REASONS), and a note. */ readonly lostReason?: string; readonly lostNote?: string; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
@@ -286,7 +287,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'records/fields': {
       // A stage move stamps when it happened; every real change becomes a line on the record's timeline.
       const list = a.object === 'people' ? state.people : a.object === 'companies' ? state.companies : state.deals;
-      const LABEL: Readonly<Record<string, string>> = { name: 'Name', title: 'Job title', email: 'Email', phone: 'Phone', stage: 'Stage', amount: 'Amount', owner: 'Owner', companyId: 'Company', close: 'Close date', industry: 'Industry', city: 'City', domain: 'Domain', size: 'Size' };
+      const LABEL: Readonly<Record<string, string>> = { name: 'Name', title: 'Job title', email: 'Email', phone: 'Phone', stage: 'Stage', lostReason: 'Lost reason', lostNote: 'Lost note', amount: 'Amount', owner: 'Owner', companyId: 'Company', close: 'Close date', industry: 'Industry', city: 'City', domain: 'Domain', size: 'Size' };
       const show = (k: string, v: unknown) => (k === 'companyId' ? state.companies.find((c) => c.id === v)?.name ?? 'none' : k === 'amount' ? inr(Number(v) || 0) : v instanceof Date ? v.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : String(v ?? '') || 'empty');
       const lines: Activity[] = [];
       const changes = a.changes.map((c) => {
@@ -451,7 +452,7 @@ export function northwindCrm(now = new Date()): AppState {
     d('d-globex', 'Globex platform', 'c-globex', 'p-noor', 'Qualified', 960000, 'Sam Kim', 25, 45),
     d('d-initech', 'Initech pilot', 'c-initech', 'p-ben', 'Lead', 180000, 'Jo Mendes', 55, 15),
     d('d-umbrella', 'Umbrella clinics', 'c-umbrella', 'p-amara', 'Proposal', 1250000, 'Priya Raman', 8, 44),
-    d('d-hooli', 'Hooli enterprise', 'c-hooli', 'p-gavin', 'Lost', 2600000, 'Sam Kim', -5, 38),
+    { ...d('d-hooli', 'Hooli enterprise', 'c-hooli', 'p-gavin', 'Lost', 2600000, 'Sam Kim', -5, 38), lostReason: 'Went with a competitor', lostNote: 'Chose an in-house tool; budget went to their platform team.' },
     d('d-pied', 'Pied Piper starter', 'c-pied', 'p-dinesh', 'Won', 240000, 'Ava Chen', -10, 30),
     d('d-wayne', 'Wayne fleet', 'c-wayne', 'p-lucius', 'Lead', 640000, 'Jo Mendes', 70, 18),
     d('d-stark', 'Stark stores', 'c-stark', 'p-pepper', 'Qualified', 520000, 'Ava Chen', 30, 9),

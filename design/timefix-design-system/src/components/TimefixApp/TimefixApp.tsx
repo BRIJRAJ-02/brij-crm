@@ -23,6 +23,7 @@ import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
 import { CustomRecordsScreen } from './custom.tsx';
+import { LostReasonDialog } from './deals.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -61,7 +62,14 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [state, rawDispatch] = useReducer(appReducer, initial ?? northwindCrm());
   const previewing = useRef(state.previewRole); previewing.current = state.previewRole;
   /** While previewing as another role nothing changes: every change is refused with one plain line, except stopping the preview. */
+  const stateRef = useRef(state); stateRef.current = state;
+  /** Deals just moved to Lost without a reason: asked once, whichever screen moved them. */
+  const [lostAsk, setLostAsk] = useState<ReadonlyArray<string>>();
   const dispatch = useCallback((a: AppAction) => {
+    if (!previewing.current && a.type === 'records/fields' && a.object === 'deals') {
+      const fresh = a.changes.filter((c) => c.patch.stage === 'Lost' && (() => { const d = stateRef.current.deals.find((x) => x.id === c.id); return d !== undefined && d.stage !== 'Lost' && !d.lostReason; })()).map((c) => c.id);
+      if (fresh.length) window.setTimeout(() => setLostAsk(fresh), 0);
+    }
     if (previewing.current && a.type !== 'preview/set' && a.type !== 'inbox/set' && a.type !== 'inbox/all-read') { toastRef.current?.({ message: `You’re previewing as a ${previewing.current.toLowerCase()}. Nothing changes until you stop previewing.` }); return; }
     rawDispatch(a);
   }, []);
@@ -278,6 +286,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
             { id: 'bookings', label: kind === 'restaurant' ? 'Tables' : 'Bookings', icon: <CalendarDays {...i16} />, badge: (bookings?.meetings ?? []).filter((m) => m.status === 'pending' && m.end > new Date()).length }, { id: 'more', label: 'More', icon: <Menu {...i16} /> }]}
           onChange={(id) => (id === 'records' ? go('records:people') : id === 'bookings' ? openBookings('meetings') : go(id as AppPage))} />} />
       </div>
+      {lostAsk && <LostReasonDialog names={lostAsk.map((id) => state.deals.find((d) => d.id === id)?.name ?? 'A deal')} onSkip={() => setLostAsk(undefined)}
+        onSave={(reason, note) => { dispatch({ type: 'records/fields', object: 'deals', changes: lostAsk.map((id) => ({ id, patch: { lostReason: reason, lostNote: note || undefined } })) }); setLostAsk(undefined); toast({ message: `Saved: ${reason.toLowerCase()}`, tone: 'success' }); }} />}
       {newList && <NewListDialog onClose={() => setNewList(false)} onCreate={(l) => { dispatch({ type: 'list/set', list: l }); setNewList(false); go(`list:${l.id}`); }} />}
       {signingOut && <Dialog isOpen onOpenChange={(o) => { if (!o) setSigningOut(false); }} title="Sign out?" description={`You can sign back in to ${state.prefs.workspace.name} with your email.`}
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => { setSigningOut(false); setDoor('signin'); }}>Sign out</Button></>} />}

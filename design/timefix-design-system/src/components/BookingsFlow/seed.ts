@@ -119,6 +119,8 @@ export function northwind(now: Date = new Date()): BookingsState {
   // Booked before Jo took the Thursday off: it needs a host now.
   book(support, next(4), 11, 'Jo Mendes');
   meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
+  // How the earlier calls went, so a person's record shows outcomes beside their meetings.
+  meetings.forEach((m, n) => { if (m.end < now && m.status !== 'cancelled' && m.status !== 'no-show' && m.invitee.email === 'noor@globex.io') meetings[n] = { ...m, outcome: 'Qualified' }; });
 
   // Google holds lunch every weekday and one dentist visit that lands on a booked call.
   const busy = Array.from({ length: 12 }, (_, n) => wd(n)).flatMap((d) => [
