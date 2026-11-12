@@ -43,12 +43,15 @@ export const Default: Story = {
     </Stage>
   ),
   play: async ({ canvas, canvasElement, args, userEvent }) => {
-    // The chosen segment's thumb covers the segment, so focus turns the thumb's own edge accent.
-    const thumb = canvasElement.querySelector('[class*="thumb"]');
-    const resting = thumb === null ? '' : getComputedStyle(thumb).borderColor;
+    // The prototype's outline ring draws on the chosen segment, over its thumb (spec 0072).
     await userEvent.tab();
-    await expect(canvas.getByRole('radio', { name: 'Table' })).toHaveFocus();
-    await expect(thumb === null ? '' : getComputedStyle(thumb).borderColor).not.toBe(resting);
+    const table = canvas.getByRole('radio', { name: 'Table' });
+    await expect(table).toHaveFocus();
+    const segment = table.closest('label');
+    if (segment === null) throw new Error('a segment is missing');
+    await expect(segment).toHaveAttribute('data-focus-visible');
+    await expect(getComputedStyle(segment).outlineStyle).toBe('solid');
+    await expect(canvasElement.querySelector('[class*="thumb"]')).not.toBeNull();
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
     await expect(args.onChange).toHaveBeenCalledWith('board');

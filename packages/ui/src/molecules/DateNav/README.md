@@ -36,3 +36,11 @@ None of its own: the buttons' (hover, pressed, focus, disabled).
 ## Keyboard
 
 Tab moves through the buttons in order. The single keys (T, J, K) belong to the screen, which listens for them; DateNav only teaches them.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DateNav (folded into DatePicker, spec 0072): it renders Button and Tooltip (Today, the two steps, Go to date), so its look is theirs and it has no CSS of its own. The prototype's Day, Week and Month switch is the screen's own SegmentedControl beside it.
+
+**Repeats from its replacer**: nothing.
+
+**Differences from the prototype**: the range it moves through is the bar's title (SectionBar's `title`), so the prototype's crossfading `text-heading` label is not drawn here.

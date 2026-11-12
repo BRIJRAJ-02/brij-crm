@@ -34,3 +34,17 @@ Type or paste the code; Backspace deletes the last digit.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's CodeInput: boxes filled with `surface-subtle` and no edge, `size-control-lg` square at the default size (`space-48` wide by `space-48` plus `space-8` tall and `radius-lg` at `size="lg"`, split three and three by `space-12`), `space-8` apart, the digits in `text-title` (`text-title-lg` large) in tabular figures. Under the pointer every box deepens to `surface-hover`; focused, the next box turns white with a 1px `accent-text` edge and the `accent-border` ring, and a 2px rounded caret blinks in it. Invalid turns every edge danger (a `danger-soft` ring on the next box). The label is a Field's (`text-body-sm-strong`), the error `text-body-sm`.
+
+**Use it for** a one time code we send or an authenticator shows. **Don't use it for** a password, an ID or anything over eight characters (Field).
+
+**States**: empty, focused, filling, wrong (danger), disabled.
+
+**Differences from the prototype**
+- Digits don't pop in one by one, and there is no success fill or drawn check: both need a part per digit and a `isSuccess` prop the library doesn't have (owed to the sign in screens, phase 4).
+- No shake on a wrong code: the screen that checks it owns the refusal (owed with the shake in phase 4).
+- The 20px digit of the default size snaps to `text-title` (18/26), the nearest type token.
+- Kept beyond the prototype: the input running past the last box (a password manager's icon lands outside the digits), the password managers' opt outs, and a focusable error message.

@@ -270,19 +270,18 @@
     color: var(--tag-orange-text);
   }
 
-  /* A picker among Fields (a question's answer type): a Field's box exactly, its value at the start. It keeps the
-     Field molecule's look (raised, a quiet edge) until Field moves to the prototype's filled input in tier 2, so the
-     picker never stands apart from the Fields beside it. */
+  /* A picker among Fields (a question's answer type): a Field's box exactly, its value at the start: the prototype's
+     filled input (spec 0072, tier 2), surface-subtle with no edge at rest. */
   .root[data-variant='field'] {
     display: flex;
     inline-size: 100%;
     justify-content: flex-start;
-    gap: var(--space-6);
+    gap: var(--space-8);
     block-size: var(--size-control);
-    padding-inline: var(--space-8);
-    border-color: var(--border-subtle);
+    padding-inline: var(--space-12);
+    border-color: transparent;
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    background: var(--surface-subtle);
     box-shadow: none;
     font: var(--text-body);
   }
@@ -299,18 +298,18 @@
     overflow: hidden;
     inline-size: var(--size-column-min);
     padding-inline-end: var(--space-6);
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-end: var(--border-width-hairline) solid var(--border);
     color: var(--text-secondary);
     font: var(--text-label);
     text-align: start;
     text-overflow: ellipsis;
   }
 
-  /* Its menu open: the accent edge and ring a Field wears while typed in. */
+  /* Its menu open: white, the accent edge and the accent-border ring a Field wears while typed in. */
   .root[data-variant='field'][aria-expanded='true'] {
     border-color: var(--accent-text);
-    background: var(--surface-raised);
-    outline: var(--border-width-focus) solid var(--accent-border);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
   }
 
   /* Disabled (a question whose type can't change), it reads as a read only Field: filled, no edge, full strength. */
@@ -406,8 +405,7 @@
     }
 
     .root[data-variant='field']:not([aria-expanded='true'], [data-disabled])[data-hovered] {
-      border-color: var(--control-border);
-      background: var(--surface-raised);
+      background: var(--surface-hover);
     }
   }
 

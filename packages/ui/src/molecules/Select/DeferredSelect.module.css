@@ -14,7 +14,7 @@
   .trigger {
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-8);
     box-sizing: border-box;
     max-inline-size: 100%;
     padding: 0;
@@ -32,8 +32,8 @@
   }
 
   .trigger:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-thick);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   .root[data-disabled] .trigger {
@@ -61,7 +61,7 @@
 
   .description {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 }

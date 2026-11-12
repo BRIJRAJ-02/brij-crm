@@ -80,7 +80,9 @@ export function FileItem({
   const isUploading = progress !== undefined && progress < 100 && error === undefined;
   return (
     <div className={styles.root} data-state={error === undefined ? (isUploading ? 'uploading' : 'done') : 'failed'}>
-      <FileIcon contentType={contentType} />
+      <span className={styles.icon}>
+        <FileIcon contentType={contentType} />
+      </span>
       <span className={styles.text}>
         <span className={styles.name}>
           {href === undefined ? (

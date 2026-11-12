@@ -182,6 +182,7 @@ export function PhoneField({
       isLabelHidden={isLabelHidden}
       type="tel"
       inputMode="tel"
+      isTabular
       autoComplete={autoComplete}
       size={size}
       variant={variant}

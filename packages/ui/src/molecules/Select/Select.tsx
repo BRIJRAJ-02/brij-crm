@@ -667,7 +667,9 @@ export function SelectBase({
           }}
         </SelectValue>
         {/* The prefix is a compact code button: its chevron is the small one. */}
-        <Icon name="chevron-down" size={variant === 'prefix' ? 'xs' : 'sm'} tone="muted" />
+        <span className={styles.chevron}>
+          <Icon name="chevron-down" size={variant === 'prefix' ? 'xs' : 'sm'} tone="muted" />
+        </span>
       </AriaButton>
       {description !== undefined && (
         <Text slot="description" className={styles.hint}>

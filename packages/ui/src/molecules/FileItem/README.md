@@ -31,3 +31,16 @@ The name link and the remove button take focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's FileDrop file row (FileRow; spec 0072): the type icon on a grey `surface-subtle` tile a control tall (`radius-md`), the name in `text-body-strong` over its size in `text-body-sm` tabular figures, the upload's progress bar, or the error sentence in danger with the tile turning `danger-soft`, and Remove at the end; the row draws no box of its own, so a list of them reads as rows. The `chip` variant is a record chip's chip (24px, `radius-sm`, a hairline on the surface).
+
+**States**: uploading (the bar), done (the size, and `detail`), failed (the red tile and sentence).
+
+**Differences from the prototype**
+- The failed tile keeps FileIcon's muted mark rather than turning it red: FileIcon has no tone prop, and its other callers want the muted mark.
+- No Retry button and no drop in or collapse out: the caller owns the list and its retries (owed to the screen that uploads, phase 4's record Files).
+- Kept beyond the prototype: `href` (a new tab link), `detail`, the `chip` variant.
+
+**Repeats from its replacer** (spec 0072, AC-4): the row's grid and icon tile as FileDrop's prototype draws them; FileDrop itself draws no rows, so nothing is duplicated in the library today.

@@ -68,3 +68,11 @@ Enter in a single line field submits, in a Modal too (the footer's submit names 
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Form and FieldGroup (spec 0072): fields `space-16` apart, two to a row when there is room (`columns={2}`), the buttons last. It already drew this, so nothing moved.
+
+**Differences from the prototype**: the buttons stack under one another, each `isFullWidth="center"`, rather than the prototype's `FormActions` row at the end; a form level refusal sits above the fields; `FormRow` sets short fields side by side. Kept.
+
+**Repeats from its replacer**: nothing: it has no rules the prototype's Form duplicates beyond the gap.

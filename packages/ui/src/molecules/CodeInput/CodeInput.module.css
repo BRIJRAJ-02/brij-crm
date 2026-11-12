@@ -1,28 +1,26 @@
-/* CodeInput: one transparent input over a row of boxes outlined in
-   field-border, so a paste or the phone's suggestion fills them all. Large,
-   the boxes share the row and stand taller, in two halves. While
-   the field is focused, the next box to fill takes the 1px accent-line border
-   and the faint focus halo, with a blinking caret bar where the next
-   character goes (steady under reduced motion); once all are filled, the
-   last box keeps the ring. */
+/* CodeInput: the Timefix prototype's code boxes (spec 0072). One transparent input over a row of boxes filled with
+   surface-subtle and no edge, so a paste or the phone's suggestion fills them all. Under the pointer the fill deepens;
+   while the field is focused, the next box to fill turns white with the 1px accent edge and the accent-border ring, a
+   blinking caret bar where the next character goes (steady under reduced motion); once all are filled, the last box
+   keeps the ring. Large, the boxes share the row and stand taller, in two halves. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-6);
   }
 
   .label {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   /* Clipped, for the input's run past the end below; its padding keeps a box's focus halo inside the clip. */
   .boxes {
     position: relative;
     display: inline-flex;
-    gap: var(--space-6);
+    gap: var(--space-8);
     inline-size: max-content;
     margin: calc(-1 * var(--space-4));
     padding: var(--space-4);
@@ -49,20 +47,29 @@
   .box {
     display: inline-grid;
     place-items: center;
-    inline-size: var(--size-control);
-    block-size: calc(var(--size-control) + var(--space-8));
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    inline-size: var(--size-control-lg);
+    block-size: var(--size-control-lg);
+    border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-control);
+    background: var(--surface-subtle);
     color: var(--text);
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
     font-variant-numeric: tabular-nums;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
-  /* Large: the boxes share the row, size-input plus space-16 tall, with the
-     digits in heading type, split in two halves by one more space-8. */
+  @media (hover: hover) and (pointer: fine) {
+    .boxes:hover .box {
+      background: var(--surface-hover);
+    }
+  }
+
+  /* Large: the boxes share the row, space-48 plus space-8 tall and rounder, the digits in title-lg, split in two
+     halves by space-12. */
   .root[data-size='lg'] .boxes {
     display: flex;
     gap: var(--space-8);
@@ -72,22 +79,28 @@
   .root[data-size='lg'] .box {
     flex: 1;
     min-inline-size: 0;
-    block-size: calc(var(--size-control) + var(--space-16));
+    block-size: calc(var(--space-48) + var(--space-8));
+    border-radius: var(--radius-lg);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
   }
 
   .root[data-size='lg'] .box[data-half] {
-    margin-inline-start: var(--space-8);
+    margin-inline-start: var(--space-12);
   }
 
+  /* Refused, the next box keeps the danger edge and a danger-soft ring while focused (set below). */
   .boxes[data-focused] .box[data-next] {
-    border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    border-color: var(--code-edge, var(--accent-text));
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--code-ring, var(--accent-border));
   }
 
   /* Where the next character goes: a caret bar in the next empty box. */
   .boxes[data-focused] .box[data-next]:not([data-filled])::after {
-    inline-size: var(--border-width-thick);
-    block-size: var(--size-icon);
+    inline-size: var(--border-width-focus);
+    block-size: 1lh;
+    border-radius: var(--radius-full);
     background: var(--text);
     animation: caret-blink var(--duration-pulse) var(--ease-in-out) infinite;
     content: '';
@@ -110,23 +123,35 @@
     .boxes[data-focused] .box[data-next]:not([data-filled])::after {
       animation: none;
     }
+
+    .box {
+      transition: none;
+    }
+  }
+
+  .root[data-invalid] {
+    --code-edge: var(--danger);
+    --code-ring: var(--danger-soft);
   }
 
   .root[data-invalid] .box {
     border-color: var(--danger);
+    transition-duration: var(--duration-medium);
   }
 
+  /* Disabled, the boxes fade and keep their resting fill under the pointer. */
   .root[data-disabled] .box {
+    background: var(--surface-subtle);
     opacity: var(--opacity-disabled);
   }
 
   .error {
     display: flex;
-    align-items: center;
-    gap: var(--space-4);
+    align-items: flex-start;
+    gap: var(--space-6);
     color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* The error's sentence, when a screen moves focus to it: the focus ring. */
@@ -136,9 +161,8 @@
   }
 
   .message:focus-visible {
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (forced-colors: active) {

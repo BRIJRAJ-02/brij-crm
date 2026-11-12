@@ -1,5 +1,5 @@
-/* IconPicker: the library's search Field over a grid of 28px icon cells; the focused cell
-   takes surface-hover and the chosen one the accent's soft tint and edge. */
+/* IconPicker: the library's search Field over a grid of icon cells, in the Timefix prototype's look (spec 0072): a
+   hovered or focused cell takes surface-hover, the chosen one accent-soft with a 2px accent ring inside it. */
 @layer components {
   .root {
     display: flex;
@@ -15,10 +15,10 @@
     outline: none;
   }
 
+  /* The outline ring, inside the scroller's own edge so its overflow never clips it. */
   .scroller:focus-visible {
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .grid {
@@ -32,10 +32,13 @@
     display: grid;
     place-items: center;
     block-size: var(--size-nav-item);
-    border: var(--border-width-hairline) solid transparent;
-    border-radius: var(--radius-sm);
+    border: var(--border-width-focus) solid transparent;
+    border-radius: var(--radius-md);
     color: var(--text-secondary);
     outline: none;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
   }
 
   .item[data-focused] {
@@ -43,12 +46,22 @@
     color: var(--text);
   }
 
-  .item[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+  @media (hover: hover) and (pointer: fine) {
+    .item[data-hovered] {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
   }
 
+  /* The ring over the cell's edge: the scroller clips anything outside the grid's edge cells. */
+  .item[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
+  }
+
+  /* The chosen icon: the soft tint and its 2px edge (accent-text, which holds 3:1 in dark too). */
   .item[data-selected] {
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
     color: var(--text);
   }
@@ -56,9 +69,15 @@
   .empty {
     grid-column: 1 / -1;
     padding: var(--space-8);
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    color: var(--text-tertiary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item {
+      transition: none;
+    }
   }
 
   @media (forced-colors: active) {

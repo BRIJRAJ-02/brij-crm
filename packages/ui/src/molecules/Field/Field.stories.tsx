@@ -206,7 +206,9 @@ export const Filling: Story = {
       }}
     >
       <Field label="Note" isMultiline isFilling />
-      <button type="button">Send</button>
+      {/* The library's Button, never a bare <button>: the reset makes a bare one inherit the dark theme's light text
+          while WebKit paints its own light button face behind it (axe, 1.55:1 in CI's WebKit). */}
+      <Button>Send</Button>
     </div>
   ),
   play: async ({ canvas }) => {
@@ -452,8 +454,8 @@ export const UnderlineInvalidFocused: Story = {
     await expect(input).toHaveFocus();
     const box = input.parentElement;
     const style = box === null ? undefined : getComputedStyle(box);
-    // The line under the words and the focus line under it are one colour: the border's.
-    await expect(style?.boxShadow ?? '').toContain(style?.borderBottomColor ?? 'none');
+    // The line under the words and the focus line under it are one colour: the border's (once the edge's fade ends).
+    await waitFor(() => expect(style?.boxShadow ?? '').toContain(style?.borderBottomColor ?? 'none'));
   },
 };
 
@@ -544,6 +546,42 @@ export const Verbatim: Story = {
     await expect(input).toHaveAttribute('autocapitalize', 'off');
     await expect(input).toHaveAttribute('autocorrect', 'off');
     await expect(input).toHaveAttribute('spellcheck', 'false');
+  },
+};
+
+/** Phase 2's options: tabular figures for an amount (NumberField), and a shortcut the input states (SearchField). */
+export const TabularAndShortcut: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Field label="Amount" isTabular defaultValue="1,250.00" inputMode="decimal" />
+      <Field label="Search people" variant="search" aria-keyshortcuts="Meta+K" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const amount = canvas.getByRole('textbox', { name: 'Amount' });
+    await expect(getComputedStyle(amount).fontVariantNumeric).toBe('tabular-nums');
+    const search = canvas.getByRole('textbox', { name: 'Search people' });
+    await expect(search).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
+  },
+};
+
+/** The prototype's filled box: no edge at rest; typed in, white with the accent edge and its ring. */
+export const FilledThenFocused: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Field label="Company" placeholder="Acme Corp" />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const input = canvas.getByRole('textbox', { name: 'Company' });
+    const box = input.parentElement;
+    if (box === null) throw new Error('The input has no box.');
+    await expect(getComputedStyle(box).borderTopColor).toBe('rgba(0, 0, 0, 0)');
+    await userEvent.click(input);
+    await waitFor(() => expect(getComputedStyle(box).borderTopColor).not.toBe('rgba(0, 0, 0, 0)'));
+    await expect(getComputedStyle(box).boxShadow).not.toBe('none');
   },
 };
 

@@ -42,3 +42,9 @@ Enter, Space or the arrows open it, and the search takes focus. Typing narrows t
 ## Differences from the artifact
 
 The artifact has no country picker yet. It needs an artifact publish.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Select (spec 0072): it renders Select, so its trigger, list, search, rows and check are Select's and it keeps no rules of its own beyond the flag's box. As PhoneField's dialing list (`variant="prefix"`), its trigger is the prototype's code chip, drawn by Select's prefix variant.
+
+**Repeats from its replacer**: nothing; the flag's size is its only rule.

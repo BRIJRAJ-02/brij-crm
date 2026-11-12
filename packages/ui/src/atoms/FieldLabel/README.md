@@ -34,3 +34,11 @@ Not in the artifact (it is part of each control there).
 ## Colour on a public surface
 
 The label reads `--label-colour` before the secondary grey. Only the hosted form sets it (to the text colour, in its card), where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026). The app never sets it. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Field label (spec 0072): `text-body-sm-strong` in the text colour (was `text-label` in `text-secondary`), the aside in `text-tertiary` at the regular weight. `--label-colour` still lets a surface recolour it.
+
+**Differences from the prototype**: `tone="heading"` (a section's heading over labelled values) and the InfoTip beside the label are kept. `tone="strong"` now draws the same as the default, since the prototype's label is already the strong one.
+
+**Repeats from its replacer** (AC-4): the label's font and colour, as Field's own label draws them through this atom; nothing else.

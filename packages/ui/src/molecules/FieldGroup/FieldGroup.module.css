@@ -4,7 +4,7 @@
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-6);
     min-inline-size: 0;
   }
 
@@ -24,15 +24,15 @@
 
   /* The label's line keeps the label's own height, the meta after it on the same line. */
   .title {
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   /* The label's fact: the label's size, a step quieter. */
   .meta {
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .action {
@@ -61,17 +61,17 @@
   .hint {
     margin: var(--space-4) 0 0;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .error {
     display: flex;
-    align-items: center;
-    gap: var(--space-4);
+    align-items: flex-start;
+    gap: var(--space-6);
     margin: var(--space-4) 0 0;
     color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 }

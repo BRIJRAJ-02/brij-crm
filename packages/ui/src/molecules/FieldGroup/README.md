@@ -41,3 +41,11 @@ Tab reaches the action and anything in the content. The group itself takes no fo
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Field (spec 0072): the label row in `text-body-sm-strong`, `space-6` over its content, the meta, hint and error in `text-body-sm`, as a Field's label, hint and error read. The prototype's FieldGroup (a legend over fields laid two to a row) is the library's `Form` with `columns={2}`; this part is the library's read only group, which the prototype doesn't draw.
+
+**Differences from the prototype**: the whole part is library only (a label over read only content with an action); it keeps its `tone`, `action`, `meta`, `layout` and error.
+
+**Repeats from its replacer** (AC-4): the label, hint and error type of Field; they leave with this export.

@@ -37,3 +37,16 @@ Tab reaches the code button, then the number. The code button opens CountryPicke
 ## Differences from the artifact
 
 The artifact has no phone field yet. It needs an artifact publish.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's PhoneField: the number is a Field's filled box, typed in tabular figures (`isTabular`), and the country code is a chip inside the box, `space-4` from its edge: `radius-sm`, filled `surface-selected` under the pointer and while its list is open, the code in `text-body-strong`, then a `border-strong` rule half the box's height before the number. The keyboard's ring on the chip is the outline. The box's own focus, error and disabled looks are Field's; the list is Select's (CountryPicker).
+
+**Use it for** a person's phone on a record, a guest's number on a booking page or form. **Don't use it for** a country on an address (CountryPicker) or a number that isn't a phone (NumberField).
+
+**States**: rest, hover, focus (Field's edge and ring around the whole box), list open (the chip stays filled), invalid, disabled, read only.
+
+**Differences from the prototype**
+- The code chip keeps its flag (the prototype draws the code alone): CountryPicker's options and the chosen value carry the flag everywhere in the library.
+- The country list is CountryPicker's Select list (its search, rows and check), not a list of PhoneField's own.
+- Kept beyond the prototype: `guess`, `variant="cell"`, `onLeave`, `isErrorFloating`, `autoComplete`, `onBlur`, `onSubmit`, `onEscape`.

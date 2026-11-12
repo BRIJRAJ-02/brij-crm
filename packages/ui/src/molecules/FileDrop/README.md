@@ -53,3 +53,16 @@ Not in the artifact.
 ## Square thumb
 
 `thumb="square"` with `variant="row"` draws the picture in a square tile (`avatar-title`), for a picture you have to recognise, which the row's wide strip would cut to its middle (a menu item's photo, 6 November 2026). Left out, the wide strip, for a logo or a banner.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's FileDrop: a `radius-lg` zone on the surface with a dashed `border-strong` edge, the upload mark on a round `surface-subtle` tile a control tall, the label in `text-body-strong` and the hint, the browse link and the limits in `text-body-sm`. A file over the zone turns the edge `accent` on an `accent-soft` wash, and the tile white with the mark in `accent-text`, lifting by `distance-micro` on the bounce curve (movement dropped under reduced motion). The `photo` variant's empty box is the prototype's compact zone (the same dashed edge, a small round tile); `row` keeps its one line. Focus is the outline ring on the zone, the row, the photo box and the browse link.
+
+**Use it for** attachments, a form's file question, logos and imports. **Don't use it for** a link to a file elsewhere (a URL field).
+
+**States**: rest, files over it, focus visible, disabled (a solid `border-subtle` edge, the words at `text-tertiary`), sending, refused (the error under it).
+
+**Differences from the prototype**
+- "browse" stays a link inside the hint rather than the prototype's Choose files button.
+- The preview of what is there already takes the mark's place, at most two rows wide and a row tall.
+- Kept beyond the prototype: `preview`, `onAdjust`, the `row` and `photo` variants, `isReadOnly`, `isPending`, the limits line.

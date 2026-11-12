@@ -422,7 +422,9 @@ export function FileDrop({
             }}
           />
         ) : (
-          <Icon name="upload" size="md" tone="muted" />
+          <span className={styles.mark}>
+            <Icon name="upload" size="md" />
+          </span>
         )}
         <Text slot="label" className={styles.label}>
           {label}

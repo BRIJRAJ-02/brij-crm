@@ -30,3 +30,9 @@ Enter, Space or the arrows open it, and the search takes focus. Typing narrows t
 ## Differences from the artifact
 
 The artifact has no currency picker yet. It needs an artifact publish.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Select (spec 0072): it renders Select with a search, so every look is Select's and it has no CSS of its own.
+
+**Repeats from its replacer**: nothing.

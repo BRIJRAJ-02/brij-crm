@@ -26,6 +26,24 @@ export const Default: Story = {
   },
 };
 
+/** Focus visible: Tab reaches browse, which wears the outline ring (spec 0072). */
+export const FocusVisible: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The zone's own drop button comes first, then its browse link.
+    await userEvent.tab();
+    await userEvent.tab();
+    const browse = canvas.getByRole('button', { name: 'browse' });
+    await expect(browse).toHaveFocus();
+    await expect(browse).toHaveAttribute('data-focus-visible');
+  },
+};
+
 /** A one pixel PNG, standing in for a picture our own origin serves. `data:` is in every policy here. */
 const PIXEL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

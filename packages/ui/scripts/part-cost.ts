@@ -46,6 +46,57 @@ const TIERS: Readonly<Record<string, readonly string[]>> = {
     'Slider',
     'DragHandle',
   ],
+  '2a': [
+    'Field',
+    'FieldLabel',
+    'FieldError',
+    'FieldGroup',
+    'Form',
+    'Select',
+    'CurrencyPicker',
+    'CountryPicker',
+    'PhoneField',
+    'CodeInput',
+    'DatePicker',
+    'DateNav',
+    'ChoiceChips',
+    'SegmentedControl',
+    'IconPicker',
+    'FileDrop',
+    'FileItem',
+    'FileIcon',
+  ],
+  '2b': [
+    'Menu',
+    'Popover',
+    'InfoTip',
+    'Tabs',
+    'SectionTabs',
+    'Breadcrumbs',
+    'Pagination',
+    'Disclosure',
+    'Steps',
+    'Stepper',
+  ],
+  '2c': [
+    'Callout',
+    'Card',
+    'Stats',
+    'RecordStats',
+    'TileGrid',
+    'EmptyState',
+    'SpotIllustration',
+    'DescriptionList',
+    'AttributeList',
+    'FloatingBar',
+    'BulkActionBar',
+    'SaveBar',
+    'PublishBar',
+    'VisitorBar',
+    'Sentence',
+    'SocialLinks',
+    'SocialLinksEditor',
+  ],
 };
 
 interface LightningCss {
@@ -70,7 +121,10 @@ const tier = option('--tier');
 const ref = option('--ref');
 const against = option('--against');
 const named = args.filter((each, at) => !each.startsWith('--') && !args[at - 1]?.startsWith('--'));
-const folders = tier === undefined ? named : (TIERS[tier] ?? []);
+// `--tier 2` is its three batches together.
+const tierFolders = (name: string): readonly string[] =>
+  TIERS[name] ?? Object.entries(TIERS).flatMap(([key, list]) => (key.startsWith(name) ? list : []));
+const folders = tier === undefined ? named : tierFolders(tier);
 if (folders.length === 0) {
   throw new Error('Name a tier (--tier 1) or one or more folders.');
 }

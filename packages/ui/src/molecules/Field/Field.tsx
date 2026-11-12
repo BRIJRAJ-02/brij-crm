@@ -142,6 +142,10 @@ export interface FieldProps {
    * phone's keyboard otherwise applies to the first letter and so spoils a code that checks its case.
    */
   readonly isVerbatim?: boolean;
+  /** Figures of one width (`tabular-nums`), so a number or an amount lines up as it changes: NumberField passes it. */
+  readonly isTabular?: boolean;
+  /** The input's shortcut for screen readers (`aria-keyshortcuts`, such as "Meta+K"): SearchField passes the key it shows. */
+  readonly 'aria-keyshortcuts'?: string;
   readonly name?: string;
   readonly size?: FieldSize;
   /**
@@ -197,8 +201,8 @@ export interface FieldSuggestions {
 }
 
 /**
- * The one field design: an 11px label above a 30px input with a hairline
- * outline, a hint or an error below. Every text, number and link attribute is
+ * The one field design: a label above a filled input (the Timefix prototype's,
+ * spec 0072), a hint or an error below. Every text, number and link attribute is
  * typed through it, in a form, the record panel, a cell or a filter. Built on
  * React Aria's TextField, so the label, hint and error are wired for screen
  * readers.
@@ -240,6 +244,8 @@ export function Field({
   temporal,
   autoComplete,
   isVerbatim = false,
+  isTabular = false,
+  'aria-keyshortcuts': keyShortcuts,
   name,
   size = 'md',
   variant = 'default',
@@ -304,6 +310,8 @@ export function Field({
       ? { 'data-1p-ignore': true, 'data-lpignore': 'true', 'data-bwignore': true, 'data-form-type': 'other' }
       : {}),
     ...(isVerbatim ? { autoCapitalize: 'off', autoCorrect: 'off', spellCheck: false } : {}),
+    ...(isTabular ? { 'data-tabular': true } : {}),
+    ...(keyShortcuts === undefined ? {} : { 'aria-keyshortcuts': keyShortcuts }),
     ...(variant === 'composer' && isMultiline ? { 'data-composer': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
@@ -475,7 +483,7 @@ export function Field({
                   </Text>
                 )}
                 {countedMax !== undefined && (
-                  <span className={styles.counter} aria-hidden="true">
+                  <span className={styles.counter} data-full={length >= countedMax || undefined} aria-hidden="true">
                     {strings.counter(
                       new Intl.NumberFormat(locale).format(length),
                       new Intl.NumberFormat(locale).format(countedMax),

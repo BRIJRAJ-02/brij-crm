@@ -26,3 +26,7 @@ It takes no focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's FileDrop, which exports FileIcon as it is: the type's Lucide mark through the Icon atom, muted. It keeps no CSS of its own (it renders Icon), so there is nothing to repeat; FileItem puts it on the prototype's grey tile.

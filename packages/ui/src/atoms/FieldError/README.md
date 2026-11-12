@@ -39,3 +39,11 @@ None: it is text the field is described by.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Field error (spec 0072): the alert mark and the message in `danger` at `text-body-sm`, `space-6` apart, the mark on the first line when the message wraps.
+
+**Differences from the prototype**: `inset="check"` (a checkbox group's error under its boxes) is kept. It doesn't fade in by itself; Field's own error does.
+
+**Repeats from its replacer** (AC-4): the error line's type, gap and alignment, the same rules as Field's `.error`; they leave with this export.

@@ -44,3 +44,18 @@ Tab reaches the chosen segment; the arrow keys move and choose (left and right i
 ## Differences from the artifact
 
 - `segments` replace `options` (`title` becomes `label` with `isIconOnly`); `ThemeSwitch` takes the theme `controller` instead of writing `data-theme` itself, and `compact` is `isCompact`. `orientation`, `size`, `isLabelCollapsible`, `isLabelVisible` and `isFitted` are new.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's SegmentedControl: a `surface-subtle` pill track with a `border-subtle` hairline and `space-2` inside, round segments in `text-body-sm-strong` and `text-secondary`, turning `text` under the pointer and when chosen, and a white raised pill (`surface-raised`, the hairline, `shadow-xs`) that slides to the chosen segment over `duration-fast` on `ease-smooth-out` (transitions.dev 16), through React Aria's SelectionIndicator. `compact` is the prototype's `sm` (`space-8` in, `text-label`). Focus is the outline ring, flush with the segment, drawn over the pill.
+
+**Use it for** two to five ways to see or set one thing that take effect at once: Table, Board or Calendar; Day, Week or Month; a 12h or 24h clock. **Don't use it for** sections of a page (Tabs), more than five options (Select) or on and off (Switch).
+
+**States**: rest (secondary words), hover (text words), selected (the raised pill), focus visible (the outline ring), disabled (the whole control or one segment); the pill moves at once for the keyboard and under reduced motion.
+
+**Differences from the prototype**
+- Heights keep the library's: the default track is `size-control-sm` (the prototype's `sm`), with the prototype's `md` words and padding so a view name stays readable at the app scale; `compact` is a button's height, track included.
+- The prototype's `ink` variant (an ink pill for public pages) is not here: no library caller asks for it yet.
+- Vertical (the folded sidebar's theme switch) is a `radius-lg` column, since a pill can only be one line tall.
+- Kept beyond the prototype: `label` above the track, `orientation`, `isFitted`, `isLabelCollapsible`, a segment's `hue` with its cut long name, icons with tooltips.
+

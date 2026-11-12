@@ -480,8 +480,8 @@ export const WithInfoReadOnly: Story = {
 };
 
 /**
- * Locked in a row (`isReadOnly` with `isLabelHidden`): the same outlined box as the selects above and below it,
- * quieted, and the reason on the lock rather than a hint line, so every row keeps one height (the form's publish
+ * Locked in a row (`isReadOnly` with `isLabelHidden`): the same filled box as the selects above and below it,
+ * with no chevron, and the reason on the lock rather than a hint line, so every row keeps one height (the form's publish
  * dialog, owner, 1 November 2026).
  */
 export const ReadOnlyInARow: Story = {
@@ -510,6 +510,27 @@ export const ReadOnlyInARow: Story = {
     );
     await expect(heights).toHaveLength(3);
     await expect(new Set(heights).size).toBe(1);
+  },
+};
+
+/** The prototype's open state: the trigger reads as pressed while its list is open, and its chevron turns over. */
+export const OpenTurnsChevron: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Stage', items: STAGES, value: 'lead' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole('button', { name: /Stage/ });
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    trigger.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await expect(trigger).toHaveFocus();
   },
 };
 

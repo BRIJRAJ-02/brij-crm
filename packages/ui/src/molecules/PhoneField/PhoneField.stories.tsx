@@ -245,6 +245,8 @@ export const InAPopoverInvalid: Story = {
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     const code = page.getByRole('button', { name: /Country code/ });
     await waitFor(() => expect(code).toHaveFocus());
-    await expect(getComputedStyle(code).boxShadow).not.toBe('none');
+    // Its own mark: the outline ring around the code chip (spec 0072), drawn only for the keyboard.
+    await expect(code).toHaveAttribute('data-focus-visible');
+    await expect(getComputedStyle(code).outlineStyle).toBe('solid');
   },
 };
