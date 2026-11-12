@@ -54,7 +54,7 @@
   .root[data-range-edge]::after {
     position: absolute;
     inset: 0;
-    border: 0 solid var(--accent-line);
+    border: 0 solid var(--accent-text);
     pointer-events: none;
     content: '';
   }

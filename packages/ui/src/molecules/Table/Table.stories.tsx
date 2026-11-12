@@ -353,7 +353,9 @@ export const PageEdgeWithCount: Story = {
     // The checkbox sits on the content edge, a gutter in from the rows' own start.
     const row = canvas.getAllByRole('row')[1]?.getBoundingClientRect();
     const box = canvas.getByRole('checkbox', { name: 'Select Ada Lovelace' }).closest('label')?.getBoundingClientRect();
-    await expect(Math.round((box?.left ?? 0) - (row?.left ?? 0))).toBeGreaterThanOrEqual(16);
+    // space-16 as the document draws it (14px at the app's density, spec 0071).
+    const gutter = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-16'));
+    await expect(Math.round((box?.left ?? 0) - (row?.left ?? 0))).toBeGreaterThanOrEqual(gutter);
   },
 };
 

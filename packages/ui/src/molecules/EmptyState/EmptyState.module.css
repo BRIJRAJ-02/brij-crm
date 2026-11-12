@@ -38,7 +38,7 @@
   }
 
   .text {
-    max-inline-size: var(--size-measure);
+    max-inline-size: var(--size-measure-sm);
     color: var(--text-secondary);
     text-wrap: pretty;
     font: var(--text-body);
@@ -54,7 +54,7 @@
   /* Loading: skeleton lines where the title and text go, a line's measure wide. */
   .lines {
     display: flex;
-    inline-size: min(var(--size-measure), 100%);
+    inline-size: min(var(--size-measure-sm), 100%);
     padding-block: var(--space-4);
   }
 

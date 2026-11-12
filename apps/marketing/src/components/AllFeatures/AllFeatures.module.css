@@ -44,8 +44,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .sectionLabel {

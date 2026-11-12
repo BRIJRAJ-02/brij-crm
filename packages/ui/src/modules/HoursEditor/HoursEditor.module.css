@@ -35,7 +35,7 @@
     display: flex;
     align-items: center;
     inline-size: var(--size-column-narrow);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   .rows {
@@ -53,7 +53,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -62,7 +62,7 @@
   .day {
     display: flex;
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   .ranges {
@@ -91,7 +91,7 @@
   .copy {
     display: flex;
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   .copyList {
@@ -104,15 +104,15 @@
   .copyTitle {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .dayName,
   .rangeText {
     display: flex;
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -125,7 +125,7 @@
   .offLabel {
     display: flex;
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

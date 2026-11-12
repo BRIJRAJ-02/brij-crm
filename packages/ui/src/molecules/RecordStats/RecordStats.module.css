@@ -65,7 +65,7 @@
   }
 
   .stat[data-goes] {
-    transition: background var(--duration-hover) var(--ease-hover);
+    transition: background var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -85,8 +85,8 @@
     margin: 0;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

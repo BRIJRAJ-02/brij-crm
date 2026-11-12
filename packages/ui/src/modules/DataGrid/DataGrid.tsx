@@ -271,13 +271,17 @@ export interface DataGridProps<Row> {
   readonly onGroupToggle?: (groupId: string, isCollapsed: boolean) => void;
 }
 
-const ROW = sizeToken('size-row');
-const HEADER = sizeToken('size-table-header');
-const CHECK = sizeToken('size-column-check');
-const LIMITS = { min: sizeToken('size-column-min'), max: sizeToken('size-column-max') };
+// Read when the grid draws, never once at load, so they follow the document's scale (spec 0071, AC-16).
+const rowHeight = (): number => sizeToken('size-row');
+const headerHeight = (): number => sizeToken('size-table-header');
+const checkWidth = (): number => sizeToken('size-column-check');
+const columnLimits = (): { min: number; max: number } => ({
+  min: sizeToken('size-column-min'),
+  max: sizeToken('size-column-max'),
+});
 /** What a floating bar over the grid's foot covers (BulkActionBar floating: its height and space-16 either side). */
-const FLOATING_INSET = sizeToken('size-toolbar') + 2 * spaceToken('space-16');
-const RESIZE_STEP = spaceToken('space-8');
+const floatingInset = (): number => sizeToken('size-toolbar') + 2 * spaceToken('space-16');
+const resizeStep = (): number => spaceToken('space-8');
 const OVERSCAN = 8;
 /** Past this many drawn columns, the unpinned ones virtualise too. */
 const COLUMN_VIRTUALISE_AFTER = 12;
@@ -418,11 +422,11 @@ export function DataGrid<Row>({
   // Kept stable through a scroll, so the header redraws only when its columns or state change.
   const [preview, setPreview] = useState<ColumnLayout | undefined>(undefined);
   const layout = useMemo<ColumnLayout>(() => preview ?? { columns, pinnedCount }, [preview, columns, pinnedCount]);
-  const placed = useMemo(() => placeColumns(layout, CHECK), [layout]);
+  const placed = useMemo(() => placeColumns(layout, checkWidth()), [layout]);
   const unpinned = useMemo(() => placed.filter((each) => !each.isPinned), [placed]);
   const colCount = placed.length + 1;
-  const pinnedEnd = placed.filter((each) => each.isPinned).reduce((end, each) => end + each.column.width, CHECK);
-  const gridWidth = placed.reduce((end, each) => end + each.column.width, CHECK);
+  const pinnedEnd = placed.filter((each) => each.isPinned).reduce((end, each) => end + each.column.width, checkWidth());
+  const gridWidth = placed.reduce((end, each) => end + each.column.width, checkWidth());
   const lastPinnedId = placed.filter((each) => each.isPinned).at(-1)?.column.id;
   const commitLayout = (next: ColumnLayout) => {
     setPreview(undefined);
@@ -506,13 +510,13 @@ export function DataGrid<Row>({
   const virtualizer = useVirtualizer({
     count: lines.size,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW,
+    estimateSize: () => rowHeight(),
     overscan: OVERSCAN,
-    scrollMargin: HEADER,
-    scrollPaddingStart: HEADER,
-    scrollPaddingEnd: (hasFooter ? ROW : 0) + (hasFloatingBar ? FLOATING_INSET : 0),
+    scrollMargin: headerHeight(),
+    scrollPaddingStart: headerHeight(),
+    scrollPaddingEnd: (hasFooter ? rowHeight() : 0) + (hasFloatingBar ? floatingInset() : 0),
     // Below the last row, room for the floating bar (the body draws the virtualizer's total, `rowsHeight`).
-    paddingEnd: hasFloatingBar ? FLOATING_INSET : 0,
+    paddingEnd: hasFloatingBar ? floatingInset() : 0,
     rangeExtractor: (visible) => {
       const drawn = defaultRangeExtractor(visible);
       const extra = kept.filter((row) => !drawn.includes(row));
@@ -534,7 +538,7 @@ export function DataGrid<Row>({
   // footer after the body starts under the last row rather than over it.
   const rowsHeight = virtualizer.getTotalSize();
   const bodyHeight = Math.min(rowsHeight, MAX_BODY);
-  const outside = HEADER + (hasFooter ? ROW : 0) - (virtualizer.scrollRect?.height ?? 0);
+  const outside = headerHeight() + (hasFooter ? rowHeight() : 0) - (virtualizer.scrollRect?.height ?? 0);
   const scale = rowsHeight <= MAX_BODY ? 1 : Math.max(1, (rowsHeight + outside) / Math.max(1, bodyHeight + outside));
   useLayoutEffect(() => {
     scrollScale.current = scale;
@@ -545,7 +549,7 @@ export function DataGrid<Row>({
     horizontal: true,
     count: unpinned.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => unpinned[index]?.column.width ?? LIMITS.min,
+    estimateSize: (index) => unpinned[index]?.column.width ?? columnLimits().min,
     overscan: 2,
     scrollMargin: pinnedEnd,
     enabled: placed.length > COLUMN_VIRTUALISE_AFTER,
@@ -675,7 +679,7 @@ export function DataGrid<Row>({
   };
 
   const scroller = () => scrollRef.current;
-  const pageRows = () => Math.max(1, Math.floor(((scroller()?.clientHeight ?? 0) - HEADER) / ROW));
+  const pageRows = () => Math.max(1, Math.floor(((scroller()?.clientHeight ?? 0) - headerHeight()) / rowHeight()));
   const bounds = () => ({ rowCount, colCount, headerColCount, pageRows: pageRows() });
 
   /** Scrolls the cell into view past the sticky header and the pinned run. The footer is always in view. */
@@ -1052,8 +1056,9 @@ export function DataGrid<Row>({
     const element = scroller();
     if (element === null) return [];
     const scrolled = virtualizer.scrollOffset ?? element.scrollTop;
-    const top = scrolled + HEADER;
-    const bottom = scrolled + element.clientHeight - (hasFooter ? ROW : 0) - (hasFloatingBar ? FLOATING_INSET : 0);
+    const top = scrolled + headerHeight();
+    const bottom =
+      scrolled + element.clientHeight - (hasFooter ? rowHeight() : 0) - (hasFloatingBar ? floatingInset() : 0);
     return items
       .filter((item) => item.start >= top && item.end <= bottom)
       .flatMap((item) => {
@@ -1109,7 +1114,7 @@ export function DataGrid<Row>({
   const resizeBy = (id: string, delta: number) => {
     const column = layout.columns.find((each) => each.id === id);
     if (column === undefined) return;
-    commitLayout(resizeColumn(layout, id, column.width + delta, LIMITS));
+    commitLayout(resizeColumn(layout, id, column.width + delta, columnLimits()));
   };
 
   const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -1142,7 +1147,7 @@ export function DataGrid<Row>({
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
         const forward = (event.key === 'ArrowRight') === (getComputedStyle(event.currentTarget).direction !== 'rtl');
-        resizeBy(resizing, forward ? RESIZE_STEP : -RESIZE_STEP);
+        resizeBy(resizing, forward ? resizeStep() : -resizeStep());
         return;
       }
       setResizing(undefined);
@@ -1165,7 +1170,7 @@ export function DataGrid<Row>({
         event.preventDefault();
         const forward = (event.key === 'ArrowRight') === (getComputedStyle(event.currentTarget).direction !== 'rtl');
         setResizing(column.id);
-        resizeBy(column.id, forward ? RESIZE_STEP : -RESIZE_STEP);
+        resizeBy(column.id, forward ? resizeStep() : -resizeStep());
         return;
       }
     }
@@ -1460,7 +1465,7 @@ export function DataGrid<Row>({
       goTo({ row: -1, col: placed.findIndex((each) => each.column.id === column.id) + 1 });
     },
     onResize: (width: number, isDone: boolean) => {
-      const next = resizeColumn(layout, column.id, width, LIMITS);
+      const next = resizeColumn(layout, column.id, width, columnLimits());
       if (isDone) commitLayout(next);
       else setPreview(next);
     },
@@ -1630,7 +1635,7 @@ export function DataGrid<Row>({
           group={line.group}
           rowIndex={item.index + 2}
           colCount={headerColCount}
-          offset={item.start - HEADER - rowShift}
+          offset={item.start - headerHeight() - rowShift}
           onStep={(direction) => {
             stepFromGroup(item.index, direction);
           }}
@@ -1659,7 +1664,7 @@ export function DataGrid<Row>({
         data-selected={isSelected || undefined}
         data-open={isOpen || undefined}
         data-editing={editing?.row === row || undefined}
-        style={{ '--row-offset': `${String(item.start - HEADER - rowShift)}px` }}
+        style={{ '--row-offset': `${String(item.start - headerHeight() - rowShift)}px` }}
       >
         {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
         <div

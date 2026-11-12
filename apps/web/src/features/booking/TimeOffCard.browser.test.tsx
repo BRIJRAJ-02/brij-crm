@@ -3,7 +3,7 @@
 // Undo in the toast (the simplicity sweep's rule 2, 10 November 2026), See reading Away alone with nothing to change,
 // and no axe violations in either theme. With
 // TIME_OFF_SHOTS set it saves the section at 390 and 1280 wide, light and dark.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, TimeOffEntry, TimeOffHeld, TimeOffList, TimeOffSaved, TimeOffState } from '@crm/data';
 import { Card, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';

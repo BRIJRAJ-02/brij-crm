@@ -2,7 +2,7 @@
 // count ("4 of 20 this week"), a pick saves, No limit clears, See reads them with nothing to change, and no axe
 // violations in either theme. With LIMITS_SHOTS
 // set it saves the section at 390 and 1280 wide, light and dark.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, LimitsDraft, LimitsHeld, LimitsState, MeetingLimits } from '@crm/data';
 import { Card, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';

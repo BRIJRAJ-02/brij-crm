@@ -32,7 +32,7 @@
 
   .still {
     mask-composite: intersect;
-    animation: uncover var(--duration-pulse) var(--ease-out) both;
+    animation: uncover var(--duration-pulse) var(--ease-smooth-out) both;
   }
 
   .root[data-side='start'] .still {

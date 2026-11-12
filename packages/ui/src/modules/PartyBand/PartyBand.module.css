@@ -14,7 +14,7 @@
     gap: var(--space-12);
     padding: var(--space-12) var(--space-16);
     border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .words {
@@ -28,7 +28,7 @@
   .label {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-kbd);
     text-transform: uppercase;
   }
@@ -51,7 +51,7 @@
 
   .more:not(:empty) {
     margin-block-start: var(--space-6);
-    animation: more-in var(--duration-move) var(--ease-out) both;
+    animation: more-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -150,7 +150,8 @@ export const New: Story = {
     await expect(dialog).toHaveAccessibleName('New note');
     await waitFor(() => expect(titleField()).toHaveFocus());
     await expect(titleField()).toHaveAttribute('placeholder', 'Untitled');
-    await expect(getComputedStyle(titleField()).fontSize).toBe('28px');
+    // title-lg at the app's density (spec 0071): the note's title.
+    await expect(getComputedStyle(titleField()).fontSize).toBe('21px');
     await expect(text().querySelector('[data-placeholder]')).toHaveAttribute(
       'data-placeholder',
       'Write something, press / for commands, or @ to mention someone',

@@ -9,7 +9,7 @@
 // confirm on leaving, and a name still typed then is saved; a member finds the fields locked, with no note over
 // them; the delete confirm says what happens in the open; axe is clean at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { dataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import { createToasts, sharedStrings, type ToastContent, type Toasts } from '@crm/ui';
 import type { RouterHistory } from '@tanstack/react-router';

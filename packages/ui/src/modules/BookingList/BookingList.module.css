@@ -27,8 +27,8 @@
     border-block-end: var(--border-width-hairline) solid var(--border);
     background: var(--surface-subtle);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .rows {
@@ -49,7 +49,7 @@
      the row's hover, as Cal.com's and Linear's rows do. */
   @media (hover: hover) and (pointer: fine) {
     .row {
-      transition: background-color var(--duration-hover) var(--ease-hover);
+      transition: background-color var(--duration-quick) var(--ease-out);
     }
 
     .row:hover {
@@ -70,7 +70,7 @@
     display: flex;
     flex: none;
     flex-direction: column;
-    inline-size: calc(var(--size-measure) / 2);
+    inline-size: calc(var(--size-measure-sm) / 2);
   }
 
   .date {
@@ -261,13 +261,13 @@
     min-block-size: var(--size-row);
     padding: var(--space-8) var(--space-16);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   /* A booking that arrived while the list was open fades in on the accent's soft fill, then rests as every row does:
      colour and opacity only, so it plays under reduced motion too. */
   .row[data-new] {
-    animation: row-arrive var(--duration-pulse) var(--ease-out) backwards;
+    animation: row-arrive var(--duration-pulse) var(--ease-smooth-out) backwards;
   }
 
   @keyframes row-arrive {
@@ -406,9 +406,9 @@
     padding-inline-end: var(--space-6);
     background: var(--surface-raised);
     color: var(--danger);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label-strong);
+    letter-spacing: var(--tracking-label);
     translate: 0 -50%;
   }
 
@@ -426,7 +426,7 @@
   @media (hover: hover) and (pointer: fine) {
     .quick {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     /* Its menu open (focus has gone into the menu): the ⋯ stays, pressed. */

@@ -6,13 +6,13 @@
  * `import()`, and a screen that only offers the picks (a booking page's embed button) must not drag it in.
  */
 export const BRAND_QUICK_PICKS = [
-  { hue: 'gray', value: '#cad0d9' },
-  { hue: 'red', value: '#ff5b59' },
-  { hue: 'orange', value: '#fb8f3c' },
-  { hue: 'yellow', value: '#f5b900' },
-  { hue: 'lime', value: '#b3cf2f' },
-  { hue: 'green', value: '#0fc27b' },
-  { hue: 'sky', value: '#3fb3e8' },
-  { hue: 'blue', value: '#266df0' },
-  { hue: 'purple', value: '#9d6ef5' },
+  { hue: 'gray', value: '#a1a1aa' },
+  { hue: 'red', value: '#f0524f' },
+  { hue: 'orange', value: '#f5872f' },
+  { hue: 'yellow', value: '#eab308' },
+  { hue: 'lime', value: '#9cc22a' },
+  { hue: 'green', value: '#16b374' },
+  { hue: 'sky', value: '#32a9e0' },
+  { hue: 'blue', value: '#2f6af2' },
+  { hue: 'purple', value: '#9466f2' },
 ] as const;

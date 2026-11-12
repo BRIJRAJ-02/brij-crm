@@ -237,7 +237,7 @@ async function firstBento(root: HTMLElement): Promise<HTMLElement> {
 export const Grid: Story = {
   args: { blocks: gridBlocks(), pageLayout: 'grid' },
   render: (args) => (
-    <Stage width="phone">
+    <Stage width="phone-fill">
       <LinkPage {...args} />
     </Stage>
   ),
@@ -287,7 +287,7 @@ export const GridDark: Story = {
     theme: { ...PLAIN, ground: 'ink', mode: 'dark', fill: 'outline', shape: 'square' },
   },
   render: (args) => (
-    <Stage width="phone">
+    <Stage width="phone-fill">
       <LinkPage {...args} />
     </Stage>
   ),

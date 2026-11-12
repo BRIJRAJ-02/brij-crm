@@ -1,7 +1,7 @@
 // A page's flow rule cards, in Chromium (spec 0062, L1): one-time links (made once with their address to copy,
 // revoked behind a confirm) and requests (Confirm, Decline with a reason behind a confirm), with no axe violations in
 // either theme.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BookingPageView, BookingRequestView, DataLayer, OneOffLinkView } from '@crm/data';
 import { PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';

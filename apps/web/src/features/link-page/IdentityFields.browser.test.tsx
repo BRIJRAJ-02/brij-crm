@@ -3,7 +3,7 @@
 // show, each field saves when it is left and only when it changed, what the server kept (the checked address) lands
 // in the field, and a refusal stays on its own field with what was typed still there. On someone else's page a page
 // only person's name saves through Team pages, and anyone else's is read only. Checked by axe in both themes.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { dataError, type DataLayer, type MyProfile } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Card, PreviewLayout } from '@crm/ui';

@@ -1,7 +1,7 @@
 // A form's Share tab in Chromium (spec 0058, AC-11; T44): the link block the live dialog uses, then the three ways a
 // site shows the form as tiles beside a made up site that shows the pick, its words and look rewriting the snippet,
 // and the developer material in one quiet sheet. The tokens, so sizes measured below are the real ones.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, FormDocument, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

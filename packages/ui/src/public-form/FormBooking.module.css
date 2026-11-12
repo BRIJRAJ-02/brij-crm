@@ -22,7 +22,7 @@
   /* The number centred in its ring; "…" sits right after it. */
   .count {
     /* Only a fallback: the component sets the countdown's length from its seconds. */
-    --countdown: var(--duration-modal);
+    --countdown: var(--duration-fast);
 
     display: inline-grid;
     place-items: center;

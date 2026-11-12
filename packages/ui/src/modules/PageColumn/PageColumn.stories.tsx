@@ -162,8 +162,10 @@ export const EmptyFooter: Story = {
   play: async ({ canvas }) => {
     const card = canvas.getByText('Weekly hours').closest('section')?.getBoundingClientRect();
     const column = canvas.getByTestId('column').getBoundingClientRect();
-    // Only the column's own padding (space-16) under the card, no gap for an empty footer.
-    await expect(Math.round(column.bottom - (card?.bottom ?? 0))).toBe(16);
+    // Only the column's own padding (space-16, 14px at the app's density, spec 0071) under the card, no gap for an
+    // empty footer.
+    const padding = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-16'));
+    await expect(Math.round(column.bottom - (card?.bottom ?? 0))).toBe(padding);
   },
 };
 

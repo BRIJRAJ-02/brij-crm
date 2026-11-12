@@ -333,9 +333,9 @@ describe('the boot block (29 Oct 2026)', () => {
 
 describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
   const fonts = {
-    sans: '/assets/Inter-Variable-latin-AbC123.woff2',
+    sans: '/assets/Geist-Variable-latin-AbC123.woff2',
     display: '/assets/InstrumentSerif-Regular-latin-dEf456.woff2',
-    mono: '/assets/JetBrainsMono-Variable-latin-x9.woff2',
+    mono: '/assets/GeistMono-Variable-latin-x9.woff2',
     geometric: '/assets/Outfit-Variable-latin-gH789.woff2',
   };
   // Night draws in Geometric, whatever font the stored look names (spec 0068).
@@ -366,7 +366,7 @@ describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
     expect(head).not.toMatch(/<style|style="/);
   });
 
-  it('names a file once: Inter, which the build preloads already, is not preloaded again', () => {
+  it('names a file once: Geist, which the build preloads already, is not preloaded again', () => {
     const built = shell.replace('</head>', `<link rel="preload" href="${fonts.sans}" as="font" crossorigin></head>`);
     const html = withLook(built, { ...profile, theme: { font: 'sans' } }, fonts);
     expect(html.split(fonts.sans).length - 1).toBe(1);

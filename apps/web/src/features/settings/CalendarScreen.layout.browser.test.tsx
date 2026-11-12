@@ -3,7 +3,7 @@
 // page's words (the off and empty states, the connect popup, Add new bookings to, the limit, a stopped account) render
 // as written.
 // The library's stylesheet first, as main.tsx loads it, so the layout and colours measured are the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   CalendarConnectionView,
   CalendarItem,

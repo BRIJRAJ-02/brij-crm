@@ -1,0 +1,23 @@
+/* Metric matched stand ins for Geist and Geist Mono (spec 0071, AC-9): a local system font with its size, ascent and
+   descent overridden to the real face's, so text drawn before the woff2 arrives takes the same room and the swap
+   moves nothing. The type families in tokens.json list each one right after its face. Measured from Fontsource's
+   Geist 5.3.0 files against Arial and Courier New, weighting glyph widths by English letter frequency (the method
+   packs.css used). Hand written: re-measure if the Geist files change. */
+
+@font-face {
+  font-family: 'Geist Fallback';
+  src: local('Arial');
+  size-adjust: 105.54%;
+  ascent-override: 95.23%;
+  descent-override: 27.95%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Geist Mono Fallback';
+  src: local('Courier New');
+  size-adjust: 99.98%;
+  ascent-override: 100.52%;
+  descent-override: 29.5%;
+  line-gap-override: 0%;
+}

@@ -36,8 +36,8 @@
     box-shadow: var(--shadow-xs);
     color: var(--text);
     transition:
-      border-color var(--duration-hover) var(--ease-hover),
-      box-shadow var(--duration-hover) var(--ease-hover);
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
   /* The link's colour: a small dot before the title, on the title's first line. */
@@ -88,7 +88,7 @@
   }
 
   .root:has(.title[data-focus-visible]) {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -118,8 +118,8 @@
   .heading {
     min-inline-size: 0;
     margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .title {
@@ -220,12 +220,12 @@
     padding-block-start: var(--space-16);
     overflow: hidden;
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* A link with a colour tints its stage with it, faintly: the dot's colour, carried up to the picture. */
   .root[data-hue] .stage {
-    background: color-mix(in oklab, var(--edge) 14%, var(--surface-sunken));
+    background: color-mix(in oklab, var(--edge) 14%, var(--surface-subtle));
   }
 
   .sheet {
@@ -239,7 +239,7 @@
     border-start-end-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
-    transition: translate var(--duration-move) var(--ease-out);
+    transition: translate var(--duration-fast) var(--ease-smooth-out);
   }
 
   /* Off (a paused page or form), the picture loses its colour as the title goes quiet: it isn't taking anyone. */
@@ -304,7 +304,7 @@
     display: flex;
     align-items: center;
     inline-size: var(--size-column-narrow);
-    block-size: var(--size-input);
+    block-size: var(--size-control);
   }
 
   /* `page` (Bookings › Pages, the mock of 9 November 2026): a head of the kind's tile, the title and ⋯; an inset of
@@ -314,7 +314,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     padding: var(--space-12) var(--space-12) var(--space-8) var(--space-16);
   }
 
@@ -323,8 +323,8 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     border-radius: var(--radius-sm);
     border: var(--border-width-hairline) solid var(--border-subtle);
     box-sizing: border-box;
@@ -368,7 +368,7 @@
   .pageFacts {
     margin: 0;
     color: var(--text);
-    transition: color var(--duration-move) var(--ease-out);
+    transition: color var(--duration-fast) var(--ease-smooth-out);
     font: var(--text-body);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-body);

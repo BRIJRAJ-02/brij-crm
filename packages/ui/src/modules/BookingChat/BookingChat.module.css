@@ -41,7 +41,7 @@
   }
 
   .thread:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 
@@ -53,7 +53,7 @@
     /* A new line opens in the thread with its own height (stageshow's ai-chat and ai-cards: a drop reveal), so the
        thread moves up as one rather than jumping a line at a time. */
     interpolate-size: allow-keywords;
-    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+    animation: line-drop var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   .line[data-run-start]:not(:first-child) {
@@ -63,7 +63,7 @@
   /* A turn that failed: its notice drops in with its own height above the composer. */
   .error {
     interpolate-size: allow-keywords;
-    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+    animation: line-drop var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   /* What the visitor sends rises out of the composer it was typed in (stageshow's messages). */
@@ -106,7 +106,7 @@
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-xl);
     border-end-start-radius: var(--radius-xs);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -147,7 +147,7 @@
   /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), about 25
      words a second; past 40 words the rest arrive together, so a long reply never keeps the visitor waiting. */
   .word {
-    animation: word-in var(--duration-move) var(--ease-out) backwards;
+    animation: word-in var(--duration-fast) var(--ease-smooth-out) backwards;
     animation-delay: calc(var(--word, 0) * var(--stream-step));
   }
 
@@ -168,8 +168,8 @@
   .offers,
   .suggestions {
     interpolate-size: allow-keywords;
-    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
-    animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-popover));
+    animation: line-drop var(--duration-fast) var(--ease-smooth-out) backwards;
+    animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-fast));
   }
 
   /* Each day's times start a group of their own. */
@@ -222,14 +222,14 @@
   }
 
   .tileSmall {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
   }
 
   .tileDay {
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .facts {
@@ -240,8 +240,8 @@
   }
 
   .cardTitle {
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .cardWhen {
@@ -285,13 +285,13 @@
     background: light-dark(var(--surface-raised), var(--surface-hover));
     box-shadow: var(--shadow-md);
     transition:
-      border-color var(--duration-hover) var(--ease-hover),
-      box-shadow var(--duration-hover) var(--ease-hover);
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
   /* The ring is the message's: Send keeps its own. */
   .composer:has(.field:focus-within) {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-md), var(--shadow-focus);
   }
 
@@ -303,7 +303,7 @@
   }
 
   .composer[data-disabled] {
-    border-color: var(--field-border);
+    border-color: var(--border-subtle);
     box-shadow: none;
   }
 

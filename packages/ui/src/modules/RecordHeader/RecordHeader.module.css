@@ -25,8 +25,8 @@
     margin: 0;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -67,7 +67,7 @@
   }
 
   .lineSlot[data-line='name'] {
-    font: var(--text-heading);
+    font: var(--text-title);
   }
 
   .end {

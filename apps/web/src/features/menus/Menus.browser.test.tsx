@@ -2,7 +2,7 @@
 // Publish, a section's dishes with Sold out, Publish refused with the dish named, the phone preview drawing the
 // draft), and the guest menu (MenuList in the Warm look) with a dish's sheet open, a proper dialog closed by Escape.
 // axe is clean in light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each is photographed.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   DataError,
   HospitalityHeld,

@@ -82,7 +82,7 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
     if (box === null) return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const style = getComputedStyle(box);
-    const duration = Number.parseFloat(style.getPropertyValue('--duration-move'));
+    const duration = Number.parseFloat(style.getPropertyValue('--duration-fast'));
     const easing = style.getPropertyValue('--ease-in-out').trim();
     for (const row of box.querySelectorAll<HTMLElement>('[data-ranking-row]')) {
       const id = row.dataset.rankingRow ?? '';

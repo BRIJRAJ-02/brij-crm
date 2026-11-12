@@ -21,7 +21,8 @@ import styles from './GridCell.module.css';
 import { strings } from './strings.ts';
 
 /** The cell's padding on each side (`space-8`, as GridCell.module.css draws it). */
-const CELL_PADDING = spaceToken('space-8');
+/** Read when a cell draws, so it follows the document's scale (spec 0071, AC-16). */
+const cellPadding = (): number => spaceToken('space-8');
 
 /** What reference and file editors need from the screen: search, uploads and the signed in member. */
 export type GridEditorProps = Pick<
@@ -161,7 +162,7 @@ export function GridCell({
   );
   // Several values fold into "+N" at what fits: the column's width less the cell's padding.
   const shown = (
-    <ChipFitContext value={place.width - 2 * CELL_PADDING}>
+    <ChipFitContext value={place.width - 2 * cellPadding()}>
       <AttributeDisplay
         attribute={attribute}
         value={value ?? null}

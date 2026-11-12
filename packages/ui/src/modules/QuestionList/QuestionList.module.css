@@ -26,7 +26,7 @@
     display: flex;
     gap: var(--space-8);
     align-items: center;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-block: var(--space-6);
     margin-block: calc(-1 * var(--space-6));
     background: var(--surface);
@@ -35,8 +35,8 @@
   .heading {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .actions {
@@ -141,7 +141,7 @@
   }
 
   .row[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -203,7 +203,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .stepToggle {
-      transition: background-color var(--duration-hover) var(--ease-hover);
+      transition: background-color var(--duration-quick) var(--ease-out);
     }
 
     .stepToggle:hover {
@@ -269,14 +269,14 @@
     align-items: center;
     block-size: var(--space-16);
     opacity: 0;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   .gap::before {
     position: absolute;
     inset-inline: 0;
     inset-block-start: 50%;
-    border-block-start: var(--border-width-hairline) dashed var(--accent-line);
+    border-block-start: var(--border-width-hairline) dashed var(--accent-text);
     content: '';
   }
 
@@ -322,7 +322,7 @@
     align-items: center;
     min-block-size: calc(var(--size-row) + 2 * var(--space-12));
     padding-inline: var(--space-4) var(--space-8);
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   /* An open question: its head takes the selected fill, so it reads as the one being edited. */
@@ -341,7 +341,7 @@
   .tile {
     display: inline-flex;
     flex: none;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   /* For a pointer, the handle sits on the type tile's place and takes it on
@@ -362,7 +362,7 @@
       inset-block-start: 50%;
       inset-inline-start: var(--space-16);
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
       translate: 0 -50%;
     }
 
@@ -476,8 +476,8 @@
     display: inline-grid;
     flex: none;
     place-items: center;
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
     color: var(--text-secondary);
   }
 
@@ -598,7 +598,7 @@
 
   .list[data-gaps='shown'] .gap::before {
     opacity: 0;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   .list[data-gaps='shown'] .gap:focus-within::before {

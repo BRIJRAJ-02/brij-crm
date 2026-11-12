@@ -355,8 +355,8 @@ export function QuestionSlot({
         { transform: 'none' },
       ],
       {
-        duration: Number.parseFloat(tokens.getPropertyValue('--duration-modal')) || 0,
-        easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out',
+        duration: Number.parseFloat(tokens.getPropertyValue('--duration-fast')) || 0,
+        easing: tokens.getPropertyValue('--ease-smooth-out').trim() || 'ease-out',
       },
     );
   }, [error]);

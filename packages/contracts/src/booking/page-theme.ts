@@ -29,7 +29,7 @@ export const PAGE_SHAPES = ['soft', 'pill', 'square'] as const;
 export const PAGE_FILLS = ['plain', 'soft', 'outline', 'solid'] as const;
 /**
  * The font pack the page draws with (AC-5410; spec 0060, AC-12): a heading and a body font, all self hosted.
- * `sans` is Modern (Inter) and `mono` is Mono (JetBrains Mono), the two spec 0054 shipped.
+ * `sans` is Modern (Geist) and `mono` is Mono (Geist Mono), the two spec 0054 shipped.
  */
 export const PAGE_FONTS = [
   'sans',

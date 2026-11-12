@@ -28,7 +28,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
   }
 
   .status {
@@ -50,7 +50,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-8);
-    animation: publish-bar-said var(--duration-popover) var(--ease-out);
+    animation: publish-bar-said var(--duration-fast) var(--ease-smooth-out);
   }
 
   @keyframes publish-bar-said {

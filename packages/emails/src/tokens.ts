@@ -4,6 +4,7 @@
 // token name and written inline as a literal. A name tokens.json doesn't have
 // throws, so a renamed token fails the tests instead of drawing a default.
 import tokens from '@crm/tokens/tokens.json' with { type: 'json' };
+import { fullValues } from '@crm/tokens/values';
 
 /** The two themes every colour has a value for. */
 export type Scheme = 'light' | 'dark';
@@ -37,30 +38,30 @@ export function colorToken(name: string, scheme: Scheme): string {
 }
 
 /** A plain family's token value as written (`16px`, `1px`), by family and name. Throws for a name it doesn't have. */
-function plainToken(
-  family: { readonly tokens: readonly { readonly name: string; readonly value: string | number }[] },
-  label: string,
-  name: string,
-): string {
-  const token = family.tokens.find((candidate) => candidate.name === name);
-  if (token === undefined) throw new Error(`No ${label} token called ${name} in tokens.json.`);
-  return String(token.value);
+/**
+ * A plain token's value at full size, as tokens.css writes it outside the app (spec 0071): emails are never drawn at
+ * the app's scale. Legacy tokens (legacy.json) are read too, so a size the code still needs resolves here as in CSS.
+ */
+function plainToken(label: string, name: string): string {
+  const value = fullValues[name];
+  if (value === undefined) throw new Error(`No ${label} token called ${name} in tokens.json or legacy.json.`);
+  return value;
 }
 
 /** A spacing token, such as `space-16` (`16px`). */
-export const spaceToken = (name: string): string => plainToken(tokens.spacing, 'spacing', name);
+export const spaceToken = (name: string): string => plainToken('spacing', name);
 
 /** A radius token, such as `radius-xl` (`12px`). */
-export const radiusToken = (name: string): string => plainToken(tokens.radius, 'radius', name);
+export const radiusToken = (name: string): string => plainToken('radius', name);
 
 /** A size token, such as `size-column-min` (`80px`). */
-export const sizeToken = (name: string): string => plainToken(tokens.size, 'size', name);
+export const sizeToken = (name: string): string => plainToken('size', name);
 
 /** A border width token, such as `border-width-hairline` (`1px`). */
-export const borderWidthToken = (name: string): string => plainToken(tokens.borderWidth, 'border width', name);
+export const borderWidthToken = (name: string): string => plainToken('border width', name);
 
 /** A breakpoint token, such as `bp-container-md` (`480px`): the only lengths a media query may name. */
-export const breakpointToken = (name: string): string => plainToken(tokens.breakpoint, 'breakpoint', name);
+export const breakpointToken = (name: string): string => plainToken('breakpoint', name);
 
 /** A pixel length's number, for an HTML `width` or `height` attribute (`16px` is 16). */
 export function pixels(length: string): number {
@@ -97,8 +98,9 @@ export function typeToken(name: string): TypeStyle {
       fontFamily: fontStack(family),
       fontSize: style.fontSize,
       lineHeight: style.lineHeight,
-      fontWeight: Number(style.fontWeight),
-      letterSpacing: style.letterSpacing,
+      fontWeight: style.fontWeight,
+      // The source leaves letter spacing out where it is 0.
+      letterSpacing: ('letterSpacing' in style ? style.letterSpacing : undefined) ?? '0',
     };
   }
   throw new Error(`No type style called ${name} in tokens.json.`);

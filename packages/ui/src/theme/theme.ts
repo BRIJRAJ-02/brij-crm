@@ -16,7 +16,7 @@ export const THEME_STORAGE_KEY = 'crm.theme';
  * colour (a meta can't read a CSS variable). theme-boot.js and index.html
  * carry the same two values; tests check all three against tokens.json.
  */
-export const THEME_SURFACE = { light: '#fdfdff', dark: '#18191c' } as const;
+export const THEME_SURFACE = { light: '#ffffff', dark: '#18181b' } as const;
 
 /** Reads any stored value as a choice. Only `light` and `dark` are kept; anything else is `system`. */
 export function parseThemeChoice(value: unknown): ThemeChoice {
@@ -134,3 +134,13 @@ export function createThemeController({
     dispose: stopListening,
   };
 }
+
+export {
+  applyScaleForPath,
+  currentScale,
+  holdPublicScale,
+  PUBLIC_APP_PATHS,
+  type Scale,
+  type ScaleRoot,
+  scaleForPath,
+} from './scale.ts';

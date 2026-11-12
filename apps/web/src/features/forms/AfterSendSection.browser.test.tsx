@@ -8,7 +8,7 @@ import { createToasts, type Toasts } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { AfterSendSection } from './AfterSendSection.tsx';
 

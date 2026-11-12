@@ -34,7 +34,8 @@ export const Default: Story = {
     await expect(status).toHaveTextContent('No matches');
     await expect(status).toHaveAttribute('data-layout', 'row');
     // A row's height, starting where a row's words start, and no icon of any kind.
-    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+    // size-row at the app's density (spec 0071).
+    await expect(Math.round(status.getBoundingClientRect().height)).toBe(38);
     await expect(status.querySelector('svg:not(button svg)')).toBeNull();
   },
 };
@@ -46,7 +47,8 @@ export const Row: Story = {
   play: async ({ canvas }) => {
     const status = canvas.getByRole('status');
     await expect(status).toHaveTextContent('No open tasks.');
-    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+    // size-row at the app's density (spec 0071).
+    await expect(Math.round(status.getBoundingClientRect().height)).toBe(38);
     // A row never draws the glyph it was given.
     await expect(status.querySelector('svg')).toBeNull();
   },

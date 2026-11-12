@@ -763,3 +763,4 @@ export { FileLinksContext, useFileHref, useFormatSettings, useNow } from './prov
 export { SiteIconsContext } from './provider/site-icons.ts';
 export { formatDate, formatDay, formatRelative, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';
+export { usePublicScale } from './theme/use-public-scale.ts';

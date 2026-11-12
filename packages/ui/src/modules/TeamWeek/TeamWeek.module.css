@@ -21,8 +21,8 @@
 
   .weekday {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .heading[data-today] .weekday {
@@ -38,8 +38,8 @@
     padding-inline: var(--space-4);
     border-radius: var(--radius-full);
     color: var(--text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }
 
@@ -47,7 +47,7 @@
      accent ring (the bookings critique, A13; it was a filled accent circle here only). */
   .heading[data-today] .date {
     color: var(--link);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
@@ -141,7 +141,7 @@
     flex: 1;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     margin: 0;
     padding-block: var(--space-4);
     padding-inline: var(--space-8);
@@ -206,8 +206,8 @@
   .cell[data-editable] {
     border-color: var(--border-subtle);
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
   }
 
   .cell[data-editable][data-tone='off'] {
@@ -272,8 +272,8 @@
 
   /* An Away day's first line ("Away") leads; its reason follows quieter. */
   .cell[data-tone='away'] .line[data-first] {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* "This week only": a change to this date alone, not the usual week. */
@@ -288,8 +288,8 @@
   }
 
   .footerLabel {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     color: var(--text-secondary);
   }
 
@@ -302,8 +302,8 @@
   }
 
   .totalValue {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     color: var(--text);
   }
 

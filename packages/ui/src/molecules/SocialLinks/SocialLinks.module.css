@@ -22,7 +22,7 @@
     flex-wrap: wrap;
     gap: var(--space-4);
     margin-block: 0;
-    margin-inline: calc((var(--size-icon) - var(--size-input)) / 2) 0;
+    margin-inline: calc((var(--size-icon) - var(--size-control)) / 2) 0;
     padding: 0;
     list-style: none;
   }
@@ -31,15 +31,15 @@
      it leaves: the person's links read as something to reach for. */
   .item {
     display: flex;
-    transition: translate var(--duration-move) var(--ease-out);
-    animation: social-in var(--social-arrive) var(--ease-out) backwards;
+    transition: translate var(--duration-fast) var(--ease-smooth-out);
+    animation: social-in var(--social-arrive) var(--ease-smooth-out) backwards;
     animation-delay: calc(var(--social-index, 0) * var(--social-arrive) / 6);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .item:hover {
       translate: 0 calc(-1 * var(--social-lift));
-      transition-duration: var(--duration-hover);
+      transition-duration: var(--duration-quick);
     }
   }
 

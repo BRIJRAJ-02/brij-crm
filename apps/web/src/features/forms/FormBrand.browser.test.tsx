@@ -9,7 +9,7 @@ import { Card, PreviewLayout } from '@crm/ui';
 import { renderInApp } from '../../testing/renderInApp.tsx';
 import { BrandedFormPreview, LookControls, type FormLook } from './FormBrand.tsx';
 // The app's own stylesheet, as `main.tsx` loads it: without it the shots below would be unstyled markup.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 
 let app: { readonly unmount: () => void } | undefined;
 

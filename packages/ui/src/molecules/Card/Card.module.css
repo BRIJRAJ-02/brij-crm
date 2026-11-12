@@ -43,7 +43,7 @@
      card draws the ring and the hover, and its own buttons sit above the stretch. */
   .root[data-pressable] {
     position: relative;
-    transition: border-color var(--duration-hover) var(--ease-hover);
+    transition: border-color var(--duration-quick) var(--ease-out);
   }
 
   .press {
@@ -68,8 +68,8 @@
   }
 
   .root[data-pressable]:has(.press:focus-visible) {
-    border-color: var(--accent-line);
-    outline: var(--border-width-thick) solid var(--accent-line);
+    border-color: var(--accent-text);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
     box-shadow: var(--shadow-focus);
   }
@@ -109,14 +109,14 @@
     display: flex;
     gap: var(--space-4);
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     margin-block-end: var(--space-4);
   }
 
   .title {
     margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     outline: none;
   }
 
@@ -138,8 +138,8 @@
     align-items: center;
     gap: var(--space-4);
     block-size: 1lh;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .head:has(.description) .actions {
@@ -179,7 +179,7 @@
   /* The footer's quiet line: it takes the room the buttons leave and wraps rather than pushing them, and on its
      own line (a narrow card) it reads before them. */
   .footNote {
-    flex: 1 1 var(--size-measure);
+    flex: 1 1 var(--size-measure-sm);
     margin: 0;
     min-inline-size: 0;
     color: var(--text-tertiary);
@@ -216,8 +216,8 @@
   }
 
   .root[data-placement='page'][data-size='sm'] .title {
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .root[data-placement='page'][data-size='sm'] .body {

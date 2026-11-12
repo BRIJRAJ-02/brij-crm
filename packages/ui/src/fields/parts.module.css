@@ -61,7 +61,7 @@
   }
 
   .more[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -88,7 +88,7 @@
   @media (hover: hover) and (pointer: fine) {
     .actions {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .withActions:hover .actions,
@@ -116,7 +116,7 @@
     align-items: center;
     gap: var(--space-6);
     box-sizing: border-box;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-inline: var(--space-8);
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
@@ -124,7 +124,7 @@
   }
 
   .readOnly[data-surface='cell'] .readOnlyBox {
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   .readOnlyValue {

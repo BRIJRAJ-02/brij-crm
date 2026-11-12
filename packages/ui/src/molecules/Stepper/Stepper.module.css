@@ -27,7 +27,7 @@
 
   .pill[data-tone='filled'] {
     border-color: transparent;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .pill[data-fewer-hidden] {
@@ -40,7 +40,7 @@
 
   /* 48px tall: the 30px buttons sit 4px in from either end. */
   .pill[data-size='lg'] {
-    block-size: calc(var(--size-bar) + var(--space-2));
+    block-size: calc(var(--size-topbar) + var(--space-2));
     padding: 0 var(--space-4);
   }
 
@@ -54,13 +54,13 @@
 
   .pill[data-size='md'] .value {
     min-inline-size: var(--space-24);
-    font: var(--text-heading);
+    font: var(--text-title);
     letter-spacing: 0;
   }
 
   .pill[data-size='lg'] .value {
     padding-inline: var(--space-4);
-    font: var(--text-title);
+    font: var(--text-heading);
     letter-spacing: 0;
   }
 
@@ -78,7 +78,7 @@
 
   /* `row`: 30px, 2px in, 24px buttons (its md Buttons drawn at 24px) 2px apart, the count 13px semibold. */
   .pill[data-size='row'] {
-    --size-control: var(--space-24);
+    --size-control-sm: var(--space-24);
 
     padding: var(--space-2);
   }
@@ -89,16 +89,16 @@
   }
 
   .pill[data-size='row'] .value {
-    font: var(--text-title);
+    font: var(--text-heading);
     font-size: calc(var(--space-12) + var(--border-width-hairline));
     letter-spacing: 0;
   }
 
   /* `sheet`: 48px, 4px in at the ends, 32px buttons (its lg Buttons drawn at 32px), the count in the title style. */
   .pill[data-size='sheet'] {
-    --size-input: var(--space-32);
+    --size-control: var(--space-32);
 
-    block-size: calc(var(--size-bar) + var(--space-2));
+    block-size: calc(var(--size-topbar) + var(--space-2));
     padding: 0 var(--space-4);
   }
 
@@ -109,7 +109,7 @@
 
   .pill[data-size='sheet'] .value {
     padding-inline: var(--space-4);
-    font: var(--text-title);
+    font: var(--text-heading);
     letter-spacing: 0;
   }
 }

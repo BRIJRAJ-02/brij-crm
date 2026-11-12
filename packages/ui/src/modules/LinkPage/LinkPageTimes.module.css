@@ -16,10 +16,10 @@
   .title {
     margin: 0;
     color: var(--page-card-text, var(--text));
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--page-face, var(--font-sans));
     font-synthesis: none;
-    letter-spacing: var(--tracking-title);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 
@@ -74,7 +74,7 @@
   .dayNumber {
     display: grid;
     place-items: center;
-    inline-size: var(--size-input);
+    inline-size: var(--size-control);
     aspect-ratio: 1;
     border-radius: var(--radius-full);
     color: var(--page-card-text, var(--text));
@@ -105,7 +105,7 @@
     display: flex;
     inline-size: var(--size-column-narrow);
     /* A touch control's height, as Button's touch size writes it. */
-    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    block-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
     border-radius: var(--radius-md);
     overflow: hidden;
   }

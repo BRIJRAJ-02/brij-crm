@@ -45,7 +45,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   /* No chevron to fold by (a sub section, or everything open under a search): the title keeps the column it would
@@ -66,8 +66,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .item[data-variant='groups'] .title {
@@ -80,7 +80,7 @@
     align-items: center;
     inline-size: var(--size-column);
     max-inline-size: 100%;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   /* The title and its chevron are one disclosure: a press anywhere on them folds. */
@@ -88,7 +88,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     padding: 0;
     border: none;
     border-radius: var(--radius-xs);
@@ -119,8 +119,8 @@
     inline-size: calc(var(--size-icon-sm) + 2 * var(--space-2));
     color: var(--text-tertiary);
     transition:
-      color var(--duration-hover) var(--ease-hover),
-      rotate var(--duration-move) var(--ease-in-out);
+      color var(--duration-quick) var(--ease-out),
+      rotate var(--duration-fast) var(--ease-in-out);
   }
 
   .fold[aria-expanded='true'] > .chevron {
@@ -159,7 +159,7 @@
   @media (hover: hover) and (pointer: fine) {
     .quiet {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .quiet:has([data-lifted]) {
@@ -182,7 +182,7 @@
   .foldBody {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows var(--duration-move) var(--ease-in-out);
+    transition: grid-template-rows var(--duration-fast) var(--ease-in-out);
   }
 
   .foldBody[data-folded] {
@@ -198,8 +198,8 @@
     overflow: hidden;
     /* Opening, its contents are there from the start of the slide; shutting, until its end. */
     transition:
-      padding-block var(--duration-move) var(--ease-in-out),
-      visibility var(--duration-move) step-start;
+      padding-block var(--duration-fast) var(--ease-in-out),
+      visibility var(--duration-fast) step-start;
   }
 
   .foldBody[data-folded] > .foldInner {
@@ -207,8 +207,8 @@
     padding-block: 0;
     visibility: hidden;
     transition:
-      padding-block var(--duration-move) var(--ease-in-out),
-      visibility var(--duration-move) step-end;
+      padding-block var(--duration-fast) var(--ease-in-out),
+      visibility var(--duration-fast) step-end;
   }
 
   @media (prefers-reduced-motion: reduce) {

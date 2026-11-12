@@ -54,8 +54,8 @@
     scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   /* Today or the month under the date (`today`), small, in the tile's own colour, so it holds on the chosen day too. */
@@ -93,8 +93,8 @@
     background: var(--accent);
     color: var(--on-accent);
     transition:
-      background-color var(--duration-move) var(--ease-out),
-      color var(--duration-move) var(--ease-out);
+      background-color var(--duration-fast) var(--ease-smooth-out),
+      color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .day[data-best]::after {
@@ -113,19 +113,19 @@
   }
 
   .day:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 
   .weekday {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
   }
 
   .date {
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     font-variant-numeric: tabular-nums;
   }
 

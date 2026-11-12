@@ -4,7 +4,7 @@
   .root {
     container-type: inline-size;
     display: grid;
-    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control);
+    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control-sm);
     gap: var(--space-8);
     align-items: center;
   }

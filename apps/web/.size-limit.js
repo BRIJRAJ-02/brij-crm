@@ -124,7 +124,10 @@ export default [
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
   // visitor otherwise having no way to come back to a half filled form. The JavaScript line is untouched.
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '18 kB', gzip: true, running: false },
+  // 12 November 2026: 18 kB to 18.8 kB for spec 0071 (measured 18.57 kB). The new token set every page carries (the
+  // prototype's colours and type styles, the legacy tokens the port still needs, the Geist fallback faces) added about
+  // 575 bytes; the app's own sizes live in tokens-app.css, which no public page loads.
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '18.8 kB', gzip: true, running: false },
   // Spec 0063's own line: Steps and One at a time together at most 10 kB, loaded only by a form that uses them.
   {
     name: 'Form step layouts, lazy (gzipped)',
@@ -146,7 +149,8 @@ export default [
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).
-  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18.7 kB', gzip: true, running: false },
+  // 19.5 kB for spec 0071 (12 Nov 2026, measured 19.37 kB): the same token set as the hosted form's line above.
+  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '19.5 kB', gzip: true, running: false },
   // Spec 0061, AC-6126, measured on this build (2 November 2026, gzipped): media 1.15 kB, the picture and gallery
   // chunk 1.68 kB (one chunk: `LinkPageGallery.tsx` re-exports `LinkPageImage`, so a page with either draws from
   // the same code), next times 1.11 kB and the notice sheet 0.49 kB. Each limit is the measurement with a little

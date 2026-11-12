@@ -14,6 +14,9 @@
     inline-size: var(--size-panel);
     margin-inline: auto;
     min-block-size: calc(2 * 100%);
+    /* An inert picture of the form, never a place anything is placed or pointed at, so zoom's layout halving is
+       what it needs; the app's own scale never uses zoom (spec 0071, AC-7). */
+    /* stylelint-disable-next-line property-disallowed-list */
     zoom: 0.5;
     pointer-events: none;
   }
@@ -45,21 +48,21 @@
     background: transparent;
     outline: none;
     pointer-events: auto;
-    transition: border-color var(--duration-hover) var(--ease-hover);
+    transition: border-color var(--duration-quick) var(--ease-out);
   }
 
   .spot[data-open] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
   }
 
   .spot[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .spot:hover {
-      border-color: var(--accent-line);
+      border-color: var(--accent-text);
     }
   }
 

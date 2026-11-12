@@ -7,7 +7,7 @@
 // next row's remove, never the title bar's Close; without booking.manage the page isn't there (SS-R10); axe is clean
 // at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import {
   dataError,
   type DataLayer,

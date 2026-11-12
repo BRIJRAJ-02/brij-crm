@@ -7,7 +7,7 @@
 import type { DataLayer, FormTemplateSummary, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { TemplateGallery } from './TemplateGallery.tsx';
 

@@ -2,7 +2,7 @@
    with the initials in its darker text shade, and no drawn ring), circles for
    people and squares for companies, in six sizes from base.css's avatar scale.
    The initials sit at about 40% of the diameter, at medium weight, with a line
-   box as tall as the letters' em so Inter's capitals land on the optical
+   box as tall as the letters' em so Geist's capitals land on the optical
    centre. A stack overlaps them, each outlined in the surface colour. */
 @layer components {
   .root {
@@ -20,10 +20,10 @@
     border-radius: var(--radius-full);
     background: var(--tag-gray-bg);
     color: var(--tag-gray-text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-size: var(--avatar-initials);
     line-height: var(--avatar-initials);
-    letter-spacing: var(--tracking-label-strong);
+    letter-spacing: var(--tracking-label);
     user-select: none;
   }
 
@@ -181,7 +181,7 @@
 
   .image[data-fade='in'] {
     opacity: 1;
-    transition: opacity var(--duration-popover) var(--ease-out);
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
 
   .stack {
@@ -200,8 +200,8 @@
   .more {
     margin-inline-start: var(--space-4);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* Beside large faces (a team page's rail), "+N" reads at body size. */

@@ -1,7 +1,7 @@
 // Put it on your site, in Chromium (spec 0062, L3): the snippet follows the choices, the options that only make
 // sense for a dialog or a corner button appear with them, a page that isn't live hands out no snippet, and no axe
 // violations in either theme.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { BRAND_QUICK_PICKS } from '@crm/data';
 import { BookingPagePicture, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';

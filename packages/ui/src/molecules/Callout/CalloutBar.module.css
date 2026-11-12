@@ -7,7 +7,7 @@
     gap: var(--space-6);
     box-sizing: border-box;
     min-inline-size: 0;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     padding-block: 0;
     padding-inline: var(--space-4);
     overflow: hidden;
@@ -25,7 +25,7 @@
     .root[data-placement='bar'] {
       align-items: flex-start;
       block-size: auto;
-      min-block-size: var(--size-control);
+      min-block-size: var(--size-control-sm);
       padding-block: var(--space-4);
       white-space: normal;
     }

@@ -7,7 +7,8 @@ import styles from './AsideLayout.module.css';
  * The width (px) below which the aside leaves the page for a sheet: the aside's own width (`size-menu`) plus a
  * main column of `bp-container-md`, so the main never gets less than a medium container beside it.
  */
-const NARROW_BELOW = breakpointToken('bp-container-md') + sizeToken('size-menu');
+/** Read when the layout measures, so it follows the document's scale (spec 0071, AC-16). */
+const narrowBelow = (): number => breakpointToken('bp-container-md') + sizeToken('size-menu');
 
 /** Props for AsideLayout. */
 export interface AsideLayoutProps {
@@ -59,7 +60,7 @@ export function AsideLayout({
     const measure = (width: number) => {
       // Not laid out yet (a story before its frame): keep what it was.
       if (width <= 0) return;
-      const next = width < NARROW_BELOW;
+      const next = width < narrowBelow();
       if (next === last.current) return;
       last.current = next;
       setNarrow(next);

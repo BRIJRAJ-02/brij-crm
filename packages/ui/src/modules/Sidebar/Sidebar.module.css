@@ -14,7 +14,7 @@
     max-inline-size: 100%;
     block-size: 100%;
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-sidebar);
+    background: var(--canvas);
   }
 
   .head {
@@ -22,7 +22,7 @@
     flex: none;
     gap: var(--space-8);
     align-items: center;
-    block-size: var(--size-bar);
+    block-size: var(--size-topbar);
     padding-inline: var(--space-8) var(--space-12);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
@@ -40,8 +40,8 @@
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     text-align: start;
     outline: none;
   }
@@ -51,8 +51,8 @@
   .groupLabel {
     padding: var(--space-4) var(--space-8);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .kbd {
@@ -200,7 +200,7 @@
   @media (hover: hover) and (pointer: fine) {
     .rowActions {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .rowActions:has([aria-expanded='true'], [data-lifted]),

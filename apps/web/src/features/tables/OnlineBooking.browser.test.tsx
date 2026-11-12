@@ -3,7 +3,7 @@
 // and Booking window, Min and Max party, Max covers per slot), then ours; one form with one Save settings at its foot,
 // which sends the numbers as typed and, with Accept online bookings on, publishes; turning it off asks first. axe is
 // clean in light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each is photographed.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   BusinessView,
   HospitalityHeld,

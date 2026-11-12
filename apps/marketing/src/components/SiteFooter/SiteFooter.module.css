@@ -43,8 +43,8 @@
   .heading {
     padding-inline: var(--space-8);
     color: var(--text-tertiary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .links {

@@ -393,7 +393,8 @@ export const Title: Story = {
     // but still no border, so it reads as the page's title.
     await expect(getComputedStyle(box).borderStyle).toBe('none');
     await expect(getComputedStyle(box).boxShadow).not.toBe('none');
-    await expect(getComputedStyle(title).fontSize).toBe('28px');
+    // title-lg at the app's density (spec 0071).
+    await expect(getComputedStyle(title).fontSize).toBe('21px');
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
     const readOnly = canvas.getByRole('textbox', { name: 'Read only title' });
     await expect(readOnly).toHaveAttribute('readonly');

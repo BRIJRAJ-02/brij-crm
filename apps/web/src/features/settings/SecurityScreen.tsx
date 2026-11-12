@@ -32,7 +32,7 @@ import { useStepUp } from './StepUp.tsx';
 import { RecentActivitySection } from './RecentActivitySection.tsx';
 import { TwoFactorSection } from './TwoFactorSection.tsx';
 
-/** How long the confirm takes to leave (`duration-exit` and a frame), before focus is checked again. */
+/** How long the confirm takes to leave (`duration-quick` and a frame), before focus is checked again. */
 const CONFIRM_EXIT_MS = 200;
 
 /** A busy Card of rows: one section's content while its read is out. */

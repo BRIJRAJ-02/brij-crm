@@ -68,12 +68,13 @@ const DEFAULT_DESCRIPTION = 'Links, contact details and a time to meet.';
 let assets;
 async function loadAssets() {
   assets ??= (async () => {
-    const [inter, display, wordmark] = await Promise.all([
-      readFile(join(ASSETS, 'Inter-Variable-latin.ttf')),
+    const [regular, medium, display, wordmark] = await Promise.all([
+      readFile(join(ASSETS, 'Geist-Regular-latin.woff')),
+      readFile(join(ASSETS, 'Geist-Medium-latin.woff')),
       readFile(join(ASSETS, 'HostGrotesk-Variable-latin.ttf')),
       readFile(join(ASSETS, 'timefix-wordmark.png')),
     ]);
-    return { inter, display, wordmark: `data:image/png;base64,${wordmark.toString('base64')}` };
+    return { regular, medium, display, wordmark: `data:image/png;base64,${wordmark.toString('base64')}` };
   })();
   return await assets;
 }

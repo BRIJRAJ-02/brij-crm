@@ -3,7 +3,7 @@
 // the default schedule (AC-17) and goes straight on to its editor, where Publish puts it live. No workspace or team
 // link among the types, and nothing shown turned off. Axe clean in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BookingPageView, DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

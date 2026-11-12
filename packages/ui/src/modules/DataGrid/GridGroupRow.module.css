@@ -74,7 +74,7 @@
     display: inline-flex;
     gap: var(--space-8);
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     padding-inline: var(--space-6) var(--space-8);
     border: none;
     border-radius: var(--radius-sm);
@@ -83,7 +83,7 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     outline: none;
-    transition: outline-color var(--duration-hover) var(--ease-hover);
+    transition: outline-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -95,7 +95,7 @@
 
   .head:focus-visible {
     box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
   }
 
   .title {

@@ -29,7 +29,7 @@ describe('stylelint house rules', () => {
         padding: var(--space-2) calc(var(--space-4) * 2);
         margin: 0 auto;
         border-radius: var(--radius-md);
-        transition: opacity var(--duration-popover) var(--ease-out);
+        transition: opacity var(--duration-fast) var(--ease-smooth-out);
         z-index: var(--z-popover);
         opacity: var(--opacity-disabled);
         scale: var(--scale-press);
@@ -64,12 +64,13 @@ describe('stylelint house rules', () => {
       'scale-unlimited/declaration-strict-value',
     ],
     ['a raw opacity', '.root { opacity: 0.5; }', 'scale-unlimited/declaration-strict-value'],
+    ['CSS zoom (spec 0071, AC-7)', '.root { zoom: 0.88; }', 'property-disallowed-list'],
     ['a raw scale', '.root { scale: 0.97; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw line height of 1', '.root { line-height: 1; }', 'scale-unlimited/declaration-strict-value'],
     ['an unknown token', '.root { color: var(--colour-text); }', 'csstools/value-no-unknown-custom-properties'],
     [
-      'a renamed token',
-      '.root { transition-duration: var(--duration-fast); }',
+      'a token spec 0071 renamed',
+      '.root { transition-duration: var(--duration-hover); }',
       'csstools/value-no-unknown-custom-properties',
     ],
     [
@@ -139,7 +140,7 @@ describe('stylelint house rules', () => {
 
   it('gives the same answer from inside a workspace folder', async () => {
     const { results } = await stylelint.lint({
-      code: '.root { color: var(--text); } .bad { color: var(--duration-fast); }',
+      code: '.root { color: var(--text); } .bad { color: var(--duration-hover); }',
       codeFilename: path.join(REPO_ROOT, COMPONENT),
       config: stylelintConfig,
       cwd: path.join(REPO_ROOT, 'packages/ui'),

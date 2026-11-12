@@ -30,7 +30,7 @@
     block-size: auto;
     aspect-ratio: 4 / 3;
     object-fit: cover;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .sheetBody {
@@ -56,11 +56,11 @@
 
   .sheetName {
     margin: 0;
-    font: var(--text-heading);
+    font: var(--text-title);
     font-family: var(--menu-display-face, inherit);
     font-size: var(--sheet-type-22);
     line-height: calc(var(--sheet-type-22) * 1.2);
-    letter-spacing: calc(var(--tracking-heading) * 1.5);
+    letter-spacing: calc(var(--tracking-title) * 1.5);
   }
 
   .sheetMeta {
@@ -74,7 +74,7 @@
   .price {
     color: var(--menu-highlight, inherit);
     margin: 0;
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: inherit;
     font-size: var(--sheet-type-16);
     line-height: normal;
@@ -126,7 +126,7 @@
     margin: 0;
     padding: 0;
     color: var(--text-secondary);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: inherit;
     font-size: var(--sheet-type-12);
     line-height: normal;
@@ -179,7 +179,7 @@
 
   /* Add takes the rest of the row beside the quantity pill. */
   .addSlot {
-    --scale-press: var(--menu-press-card, var(--scale-enter));
+    --scale-press: var(--menu-press-card, var(--scale-medium));
 
     display: flex;
     flex: 1;
@@ -202,11 +202,11 @@
 
   .picksTitle {
     margin: 0;
-    font: var(--text-heading);
+    font: var(--text-title);
     font-family: inherit;
     font-size: var(--sheet-type-18);
     line-height: normal;
-    letter-spacing: var(--tracking-heading);
+    letter-spacing: var(--tracking-title);
   }
 
   .picksCount {
@@ -264,7 +264,7 @@
     block-size: var(--size-toolbar);
     border-radius: var(--squircle);
     object-fit: cover;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .itemText {
@@ -304,10 +304,10 @@
     margin: 0;
     padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12);
     border-radius: var(--squircle);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     font: var(--text-body);
     font-family: inherit;
-    animation: undo-in var(--duration-popover) var(--ease-out);
+    animation: undo-in var(--duration-fast) var(--ease-smooth-out);
   }
 
   /* The foot: the bill, the total, the note and Clear all, over a hairline. */
@@ -343,7 +343,7 @@
   }
 
   .billLine[data-total] {
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: inherit;
     font-size: var(--sheet-type-15);
   }
@@ -352,7 +352,7 @@
     margin: 0;
     padding: var(--space-12);
     border-radius: var(--squircle);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     color: var(--text-secondary);
     font: var(--text-label);
     font-family: inherit;

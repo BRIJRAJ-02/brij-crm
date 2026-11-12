@@ -5,7 +5,7 @@
 // with their switches and no Add or Remove. Each is axe clean at 390 and 1280, in light and dark. With
 // `VITE_WSLINK_SHOTS` set to a folder, each state is also saved there as a screenshot.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BookingPageView, DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

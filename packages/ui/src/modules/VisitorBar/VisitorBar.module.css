@@ -5,9 +5,9 @@
   .root {
     display: flex;
     justify-content: flex-end;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     border-radius: var(--radius-md);
-    animation: visitor-tag-in var(--duration-popover) var(--ease-out) both;
+    animation: visitor-tag-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   .root:focus {
@@ -15,7 +15,7 @@
   }
 
   .root:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 

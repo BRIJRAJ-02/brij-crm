@@ -2,7 +2,7 @@
 // empty line (AC-6118), the CSV's address (AC-6120), ready links per place and the builder (AC-6125), a tile's size
 // picked by sight (AC-6103), a full new kind off in the Add grid (AC-6115), and the code's style waiting for the
 // saved one before it offers Save (AC-6124).
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { InsightsState, LinkPageStore, ProfileCounts, QrStyleState } from '@crm/data';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';

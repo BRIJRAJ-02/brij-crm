@@ -1,7 +1,7 @@
 // Settings › Trash as a settings Table, in Chromium with the library's styles (5 November 2026): each row's Restore,
 // a refused one saying why on its name, Delete forever asking first and naming the record, a row's own action leaving
 // the ticks alone, the next block in the table's foot, the block empty state, and no axe violations in either theme.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { MemberSummary, ObjectSummary, RestoreSummary, TrashRow, TrashState, TrashView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';

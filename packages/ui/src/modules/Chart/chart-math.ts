@@ -63,7 +63,7 @@ export function labelStep(count: number, slot: number, widest: number): number {
 export const LABEL_GAP = 8;
 
 /**
- * A label's width when nothing can measure it (no canvas): a conservative 0.62em a character, which Inter's widest
+ * A label's width when nothing can measure it (no canvas): a conservative 0.62em a character, which Geist's widest
  * figures and capitals stay under, so an estimate errs towards fewer labels, never touching ones.
  */
 export function estimateLabelWidth(text: string, fontSize: number): number {

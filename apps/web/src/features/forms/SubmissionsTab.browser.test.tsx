@@ -1,4 +1,4 @@
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 // The Submissions tab in Chromium (forms fixes a4, a8, a10): a returning person's row is tagged and opens one way,
 // spam waits behind its own chip, and an open submission says why it is spam, names the answers filing kept off
 // the record with Use new, and steps to the next one with J.

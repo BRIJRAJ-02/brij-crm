@@ -17,7 +17,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-6);
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     padding-block: 0;
     padding-inline: var(--space-8);
     border: var(--border-width-hairline) solid var(--border);
@@ -33,10 +33,10 @@
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-press, var(--ease-out));
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
   /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
@@ -123,7 +123,7 @@
 
   .root[data-size='lg'] {
     position: relative;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
   }
 
   /* Drawn at 30px (size-input), pressed at 32: an invisible pixel past the border all round (the inset counts
@@ -138,17 +138,17 @@
      more room at the sides. Inside the app, nothing is this size: a screen's buttons stay md or lg. */
   .root[data-size='xl'] {
     gap: var(--space-8);
-    block-size: calc(var(--size-input) + var(--space-6));
+    block-size: calc(var(--size-control) + var(--space-6));
     padding-inline: var(--space-16);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* A public page's control under a thumb (a link page's Save contact, Share and social links): 44px, the target a
      finger needs (WCAG 2.5.5), with the icon at full size. Inside the app, nothing is this size. */
   .root[data-size='touch'] {
     gap: var(--space-8);
-    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    block-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
     padding-inline: var(--space-16);
   }
 
@@ -158,15 +158,15 @@
      this size. */
   .root[data-size='public'] {
     gap: var(--space-8);
-    block-size: var(--size-input);
-    min-inline-size: calc(2 * var(--size-input));
+    block-size: var(--size-control);
+    min-inline-size: calc(2 * var(--size-control));
     padding-inline: var(--space-20);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .root[data-icon-only][data-size='touch'] {
-    inline-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    inline-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
     padding-inline: 0;
   }
 
@@ -197,12 +197,12 @@
   }
 
   .root[data-icon-only] {
-    inline-size: var(--size-control);
+    inline-size: var(--size-control-sm);
     padding-inline: 0;
   }
 
   .root[data-icon-only][data-size='lg'] {
-    inline-size: var(--size-input);
+    inline-size: var(--size-control);
   }
 
   .root[data-icon-only][data-size='sm'] {
@@ -213,7 +213,7 @@
      alone, square like an icon only button; `label` keeps the name. */
   @container (inline-size < 480px) {
     .root[data-collapsible] {
-      inline-size: var(--size-control);
+      inline-size: var(--size-control-sm);
       padding-inline: 0;
     }
 
@@ -240,8 +240,8 @@
   /* The final destructive commit (Delete or Archive in a confirm) fills red,
      from its own fill token, which stays dark enough in dark for a white label. */
   .root[data-variant='danger-solid'] {
-    border-color: var(--danger-fill-hover);
-    background: var(--danger-fill);
+    border-color: var(--danger-hover);
+    background: var(--danger);
     color: var(--on-danger);
   }
 
@@ -253,8 +253,8 @@
     background: transparent;
     box-shadow: none;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* A value that opens something, in a list of values (a member's Scheduling access in their details): it reads as its
@@ -307,8 +307,8 @@
     display: flex;
     inline-size: 100%;
     justify-content: flex-start;
-    block-size: var(--size-input);
-    border-color: var(--field-border);
+    block-size: var(--size-control);
+    border-color: var(--border-subtle);
     box-shadow: none;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -328,15 +328,15 @@
     padding-inline-end: var(--space-6);
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-align: start;
     text-overflow: ellipsis;
   }
 
   /* Its menu open: the accent edge and halo a Field wears while typed in. */
   .root[data-variant='field'][aria-expanded='true'] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -352,7 +352,7 @@
      plain accent fell to 2.8:1 on its fill in dark). */
   .root[data-selected],
   .root[data-expanded]:not([data-variant='danger']) {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
     box-shadow: none;
     color: var(--text);
@@ -385,7 +385,7 @@
     }
 
     .root[data-variant='danger-solid'][data-hovered] {
-      background: var(--danger-fill-hover);
+      background: var(--danger-hover);
     }
 
     .root[data-variant='ghost-danger'][data-hovered] {
@@ -411,14 +411,14 @@
   }
 
   .root[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
   /* As Select's inline: an outline clear of its text, since it has no box to light up. */
   .root[data-variant='value'][data-focus-visible] {
     border-color: transparent;
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-thick);
     box-shadow: none;
   }
@@ -432,7 +432,7 @@
   }
 
   .root[data-variant='danger-solid'][data-focus-visible] {
-    border-color: var(--danger-fill-hover);
+    border-color: var(--danger-hover);
   }
 
   .root[data-variant='primary'][data-focus-visible] {
@@ -447,7 +447,7 @@
   .root[data-variant='danger'][data-focus-visible],
   .root[data-variant='danger-solid'][data-focus-visible],
   .root[data-variant='warning'][data-focus-visible] {
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 

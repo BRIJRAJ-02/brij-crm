@@ -3,7 +3,7 @@
 // without leaving the field, Publish sends it first and goes out behind it, and leaving the screen mid word keeps it;
 // removing a photo offers Undo, which puts it back where it was; each photo row shows its picture; Discard asks in the
 // danger tone.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BusinessPageContent, BusinessPageView } from '@crm/data';
 import { openBusinessPage, type BusinessPageProcedures } from '@crm/data/business-page/store';
 import { createToasts, type ToastContent, type Toasts } from '@crm/ui';

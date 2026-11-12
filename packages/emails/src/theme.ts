@@ -39,7 +39,7 @@ const ROLES = {
   /** The one action: the accent, as the app's primary button. */
   button: { backgroundColor: 'accent', color: 'on-accent', borderColor: 'accent' },
   /** A sign in code's box. */
-  code: { backgroundColor: 'surface-sunken', color: 'text' },
+  code: { backgroundColor: 'surface-subtle', color: 'text' },
   /** A quoted message or excerpt: a line beside it. */
   quote: { borderColor: 'border', color: 'text-secondary' },
   /** A hairline between parts. */
@@ -90,7 +90,7 @@ export const RADIUS = {
 } as const;
 
 /** A person's initials tile: a control's height, round. */
-export const AVATAR = sizeToken('size-control');
+export const AVATAR = sizeToken('size-control-sm');
 
 /** The one line width: the hairline every outline and divider uses. */
 export const HAIRLINE = borderWidthToken('border-width-hairline');
@@ -103,15 +103,15 @@ export const NARROW = breakpointToken('bp-container-md');
 
 /** The type styles an email uses. */
 export const TYPE = {
-  heading: typeToken('heading'),
+  heading: typeToken('title'),
   /** A booking's time, the line the eye goes to first. */
-  title: typeToken('title'),
+  title: typeToken('heading'),
   body: typeToken('body'),
   bodyStrong: typeToken('body-strong'),
   label: typeToken('label'),
-  labelStrong: typeToken('label-strong'),
+  labelStrong: typeToken('label'),
   /** A sign in code: the note title's size, in the mono family. */
-  code: { ...typeToken('note-title'), fontFamily: fontStack('mono') },
+  code: { ...typeToken('title-lg'), fontFamily: fontStack('mono') },
 } as const;
 
 /**
@@ -130,8 +130,10 @@ export const EMAIL_WIDTH = 600;
  */
 export function wordFontStack(family: 'sans' | 'mono'): string {
   const browserOnly = new Set([
-    'inter',
-    'jetbrains mono',
+    'geist',
+    'geist fallback',
+    'geist mono',
+    'geist mono fallback',
     'ui-sans-serif',
     'ui-monospace',
     'system-ui',

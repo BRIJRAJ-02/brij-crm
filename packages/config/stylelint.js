@@ -106,6 +106,12 @@ export const stylelintConfig = {
     'crm/breakpoint-tokens': true,
     'crm/system-colors': true,
     'declaration-no-important': true,
+    // The app draws at its density through token values, never by zooming a subtree: zoom breaks every placed
+    // overlay, drag and pointer coordinate (spec 0071, AC-7).
+    'property-disallowed-list': [
+      ['zoom'],
+      { message: 'zoom is not allowed: the app scale comes from the tokens (spec 0071).' },
+    ],
     'selector-max-id': 0,
     // One level of descendant at most, so no component styles another's insides.
     'selector-max-compound-selectors': 2,

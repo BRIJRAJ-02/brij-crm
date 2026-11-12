@@ -1,7 +1,7 @@
 // The invitation page signed in, in Chromium (QA N14): Your name sits over Join workspace, prefilled as first run
 // makes it (the account's name, else one made from the address), and what is there, edited or emptied, goes with
 // the join; Enter in it joins too. axe passes in light and dark.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, InvitePeek, SignedInUser } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

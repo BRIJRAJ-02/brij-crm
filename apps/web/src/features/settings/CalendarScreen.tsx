@@ -77,7 +77,7 @@ export interface CalendarScreenProps {
 
 const number = new Intl.NumberFormat();
 
-/** How long an arrived account stays marked new: its wash's beat and fade (`duration-modal` and `duration-pulse`), and a little more. */
+/** How long an arrived account stays marked new: its wash's beat and fade (`duration-fast` and `duration-pulse`), and a little more. */
 const ARRIVAL_SHOWN_MS = 2_000;
 
 /** A calendar's switches: Check for conflicts on its row, Show on my week and Log meetings to CRM in its menu. */

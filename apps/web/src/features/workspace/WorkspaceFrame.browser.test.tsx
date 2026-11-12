@@ -7,7 +7,7 @@
 // loads nothing guesses at their order, and one that couldn't be read draws the defaults. Tasks and the Inbox carry
 // their counts as badges. Sign out asks first (the owner, 21 October 2026).
 // The phone tests measure layout, so the library's styles load first, as main.tsx loads them.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, DueTasksSnapshot, ListView, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {

@@ -37,8 +37,8 @@
     border-radius: var(--radius-full);
     background: var(--surface-raised);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .step[data-state='done'] .marker {
@@ -75,7 +75,7 @@
 
   .press[data-focus-visible] {
     box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -165,8 +165,8 @@
     display: block;
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }
 

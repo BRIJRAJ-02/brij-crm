@@ -5,7 +5,7 @@
 // as a sheet with two guests picked and the name there at once; Online booking in the bar for those who set the apps
 // up. axe is clean in light and dark at a desktop's and a phone's width, the sheets too, with reduced motion and
 // without. With VITE_SHOT_DIR set, each is photographed.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   BusinessView,
   FreeTablesView,

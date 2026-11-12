@@ -48,7 +48,8 @@ export type MenuKey = Key;
  * row with a description (a member's email) is taller, and a fixed height
  * would draw it over the next row.
  */
-const ROW_SIZES = { estimatedRowHeight: sizeToken('size-nav-item') } as const;
+/** Read when a list draws, so it follows the document's scale (spec 0071, AC-16). */
+const rowSizes = (): { readonly estimatedRowHeight: number } => ({ estimatedRowHeight: sizeToken('size-nav-item') });
 
 /** Props for MenuTrigger. */
 export interface MenuTriggerProps {
@@ -252,7 +253,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
   if (props.source !== undefined) {
     const { source, renderItem } = props;
     menu = (
-      <Virtualizer layout={ListLayout} layoutOptions={ROW_SIZES}>
+      <Virtualizer layout={ListLayout} layoutOptions={rowSizes()}>
         {/* Rows are keyed by index, so the collection draws them again when the items behind them load. */}
         <AriaMenu {...menuProps} items={rows} dependencies={[source, renderItem]} data-virtualized="">
           {(row: Row) => {
@@ -296,7 +297,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     );
     menu =
       props.isVirtualized === true ? (
-        <Virtualizer layout={ListLayout} layoutOptions={ROW_SIZES}>
+        <Virtualizer layout={ListLayout} layoutOptions={rowSizes()}>
           {list}
         </Virtualizer>
       ) : (

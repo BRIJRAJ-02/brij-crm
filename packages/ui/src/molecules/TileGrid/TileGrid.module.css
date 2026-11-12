@@ -39,8 +39,8 @@
   /* Entering (first run's Done): each tile fades in and rises a step, the next a press later. Only translate and
      opacity move, so layout never shifts, and the tiles take input from the first frame. */
   .root[data-entering] > * {
-    animation: tile-rise var(--duration-modal) var(--ease-out) both;
-    animation-delay: calc(var(--duration-press) * 2);
+    animation: tile-rise var(--duration-fast) var(--ease-smooth-out) both;
+    animation-delay: calc(var(--duration-quick) * 2);
   }
 
   .root[data-entering] > :first-child {
@@ -48,7 +48,7 @@
   }
 
   .root[data-entering] > :nth-child(2) {
-    animation-delay: var(--duration-press);
+    animation-delay: var(--duration-quick);
   }
 
   @keyframes tile-rise {

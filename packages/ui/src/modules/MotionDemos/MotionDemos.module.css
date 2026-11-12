@@ -8,8 +8,8 @@
     inline-size: var(--size-page-card);
     max-inline-size: 100%;
     /* The public pages' press and label swap (spec 0068): a held control eases down, a changed label rises in. */
-    --scale-press: var(--scale-enter);
-    --label-swap: var(--duration-modal);
+    --scale-press: var(--scale-medium);
+    --label-swap: var(--duration-fast);
   }
 
   .surface {
@@ -48,7 +48,7 @@
 
   .title {
     color: var(--text);
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
   }
 
   .quiet {
@@ -66,7 +66,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    animation: scene-in var(--duration-modal) var(--ease-out);
+    animation: scene-in var(--duration-fast) var(--ease-smooth-out);
   }
 
   .done {
@@ -97,9 +97,9 @@
     color: var(--text);
     font: var(--text-body-strong);
     transition:
-      background-color var(--duration-move) var(--ease-out),
-      border-color var(--duration-move) var(--ease-out),
-      color var(--duration-move) var(--ease-out);
+      background-color var(--duration-fast) var(--ease-smooth-out),
+      border-color var(--duration-fast) var(--ease-smooth-out),
+      color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .time[data-chosen] {
@@ -140,8 +140,8 @@
 
   .dish {
     flex: none;
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
     border-radius: var(--radius-md);
     background: var(--tag-orange-bg, var(--accent-soft));
   }
@@ -165,7 +165,7 @@
     background: var(--surface-raised);
     box-shadow: var(--shadow-lg);
     translate: 0 100%;
-    transition: translate var(--duration-modal) var(--ease-drawer);
+    transition: translate var(--duration-fast) var(--ease-smooth-out);
   }
 
   .sheet[data-open] {
@@ -174,7 +174,7 @@
 
   .price {
     color: var(--text);
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
   }
 
   /* Publish: the editor's bar and field beside the guest's view of the same page. */
@@ -229,7 +229,7 @@
   /* The guest's view takes the new length as a text swap: up out of a soft blur, a beat after Publish lands. */
   .fact[data-changed] {
     color: var(--text);
-    animation: scene-in var(--duration-modal) var(--ease-out) var(--duration-press) both;
+    animation: scene-in var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both;
   }
 
   .pointer {
@@ -240,18 +240,18 @@
     color: var(--text);
     translate: var(--pointer-x, 0) var(--pointer-y, 0);
     transition:
-      translate var(--duration-modal) var(--ease-in-out),
-      scale var(--duration-press) var(--ease-out);
+      translate var(--duration-fast) var(--ease-in-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
     pointer-events: none;
   }
 
   .pointer[data-pressed] {
-    animation: press var(--duration-press) var(--ease-out) var(--duration-modal);
+    animation: press var(--duration-quick) var(--ease-smooth-out) var(--duration-fast);
   }
 
   @keyframes press {
     50% {
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
     }
   }
 

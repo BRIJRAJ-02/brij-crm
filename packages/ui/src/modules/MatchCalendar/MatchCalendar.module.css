@@ -10,14 +10,14 @@
     flex-direction: column;
     gap: var(--space-6);
     align-items: center;
-    animation: match-fade var(--duration-popover) var(--ease-out) both;
+    animation: match-fade var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   /* The held box, the call to action's own height, so filling it moves nothing under it. */
   .ctaHold {
     display: block;
     inline-size: 100%;
-    block-size: calc(var(--size-input) + var(--space-6));
+    block-size: calc(var(--size-control) + var(--space-6));
   }
 
   .hintHold {
@@ -67,8 +67,8 @@
   .name {
     max-inline-size: 100%;
     overflow: hidden;
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     color: var(--text-secondary);
     text-align: center;
     text-overflow: ellipsis;
@@ -88,7 +88,7 @@
   /* Matched: the tick opens out of a wide blur (transitions.dev's success check). */
   .pair[data-step='matched'] .middle {
     color: var(--success);
-    animation: match-check var(--duration-modal) var(--ease-out) both;
+    animation: match-check var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   .pair[data-step='failed'] .middle {
@@ -96,12 +96,12 @@
   }
 
   .pair:not([data-step='waiting']) .middle {
-    animation: match-middle-in var(--duration-popover) var(--ease-out) both;
+    animation: match-middle-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   /* Matched: the two of them lean in to meet the tick once, then settle back: the moment the calendars agree. */
   .pair[data-step='matched'] .face {
-    animation: match-meet var(--duration-modal) var(--ease-in-out);
+    animation: match-meet var(--duration-fast) var(--ease-in-out);
   }
 
   .pair[data-step='matched'] .face[data-side='visitor'] {
@@ -110,7 +110,7 @@
 
   /* The visitor's face arrives in place of the held circle once Google says who they are. */
   .face[data-side='visitor'] .portrait[data-known] {
-    animation: match-arrive var(--duration-modal) var(--ease-out) backwards;
+    animation: match-arrive var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   /* While the two calendars are matched: three dots crossing the gap, one after another. */
@@ -160,23 +160,23 @@
 
   /* Each step's words resolve in where the last ones stood (transitions.dev's text reveal), the note a beat after. */
   .lead {
-    animation: match-say var(--duration-modal) var(--ease-in-out) backwards;
+    animation: match-say var(--duration-fast) var(--ease-in-out) backwards;
     margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     color: var(--text);
     text-wrap: pretty;
   }
 
   .count {
     margin: 0;
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     color: var(--success);
   }
 
   .note {
-    animation: match-say var(--duration-modal) var(--ease-in-out) var(--duration-hover) backwards;
+    animation: match-say var(--duration-fast) var(--ease-in-out) var(--duration-quick) backwards;
     margin: 0;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -191,7 +191,7 @@
     gap: var(--space-12);
     padding-block-start: var(--space-12);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    animation: match-others-in var(--duration-popover) var(--ease-out) both;
+    animation: match-others-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -241,7 +241,7 @@
   @keyframes match-arrive {
     from {
       opacity: 0;
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
       filter: blur(var(--match-check-blur));
     }
   }
@@ -263,7 +263,7 @@
   @keyframes match-middle-in {
     from {
       opacity: 0;
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
     }
   }
 

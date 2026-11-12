@@ -121,19 +121,19 @@
   }
 
   ::view-transition-group(root) {
-    animation-duration: var(--duration-move);
+    animation-duration: var(--duration-fast);
   }
 
   ::view-transition-new(.toast):only-child {
-    animation: toast-rise var(--duration-modal) var(--ease-out);
+    animation: toast-rise var(--duration-fast) var(--ease-smooth-out);
   }
 
   ::view-transition-old(.toast):only-child {
-    animation: toast-drop var(--duration-exit) var(--ease-out) forwards;
+    animation: toast-drop var(--duration-quick) var(--ease-smooth-out) forwards;
   }
 
   ::view-transition-group(.toast) {
-    animation-duration: var(--duration-move);
+    animation-duration: var(--duration-fast);
     animation-timing-function: var(--ease-in-out);
   }
 

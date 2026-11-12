@@ -19,7 +19,7 @@
     aspect-ratio: 4 / 3;
     overflow: hidden;
     border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     outline: none;
     touch-action: none;
     user-select: none;
@@ -32,7 +32,7 @@
   /* The ring is drawn inside the stage, on its own dark ground: outside it, the dark theme's accent line would sit on
      the light modal at under 3.5:1. */
   .stage:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
@@ -101,7 +101,7 @@
     stroke: var(--on-accent);
     stroke-width: var(--border-width-hairline);
     opacity: 0;
-    transition: opacity var(--duration-hover) var(--ease-out);
+    transition: opacity var(--duration-quick) var(--ease-smooth-out);
   }
 
   .stage[data-moving] .thirds {
@@ -120,12 +120,12 @@
 
     position: relative;
     flex: none;
-    block-size: var(--size-bar);
+    block-size: var(--size-topbar);
     aspect-ratio: var(--photo-crop-ratio);
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .preview[data-round] {
@@ -135,8 +135,8 @@
   @media (prefers-reduced-motion: no-preference) {
     .stage[data-easing] .photo {
       transition-property: top, left, inline-size, block-size;
-      transition-duration: var(--duration-move);
-      transition-timing-function: var(--ease-out);
+      transition-duration: var(--duration-fast);
+      transition-timing-function: var(--ease-smooth-out);
     }
   }
 

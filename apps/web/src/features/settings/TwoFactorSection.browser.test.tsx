@@ -6,7 +6,7 @@
 // nothing (Q103); Turn off and Make new codes open
 // in the app code’s boxes (Q86), and a backup code there is taken as typed (Q84); each change tells the page (Recent activity reads again); Turn off is quiet in
 // its row. axe passes in light and dark.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { AccountSecurityState, DataLayer } from '@crm/data';
 import { isSessionFresh } from '@crm/data';
 import { createToasts } from '@crm/ui';

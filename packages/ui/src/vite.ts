@@ -128,10 +128,10 @@ export function layerOrder(): Plugin {
 }
 
 /**
- * The font files an app's first screen draws with: Inter, one variable face holding every weight the shell, the
- * pages' bars and the grid use. JetBrains Mono (code) is left to load when a code block needs it.
+ * The font files an app's first screen draws with: Geist, one variable face holding every weight the shell, the
+ * pages' bars and the grid use. Geist Mono (code) is left to load when a code block needs it.
  */
-export const FIRST_SCREEN_FONTS: readonly RegExp[] = [/(^|\/)Inter-Variable-latin[\w.-]*\.woff2$/];
+export const FIRST_SCREEN_FONTS: readonly RegExp[] = [/(^|\/)Geist-Variable-latin[\w.-]*\.woff2$/];
 
 /** `html` with a preload for each font file, just ahead of its first stylesheet, or at the end of its head. */
 export function linkFontPreloads(html: string, base: string, files: readonly string[]): string {
@@ -147,9 +147,9 @@ export function linkFontPreloads(html: string, base: string, files: readonly str
 
 /**
  * For an app's HTML entries: a preload for the faces their first screen draws with, by their built (hashed)
- * names. Inter is `font-display: swap`, and the browser only finds it once the stylesheet has arrived and text
- * needs it, so on a cold visit the first screen painted in the fallback face, then again in Inter, and a list
- * that measured its rows in between kept the fallback's heights. Preloaded, Inter starts with the page. Build
+ * names. Geist is `font-display: swap`, and the browser only finds it once the stylesheet has arrived and text
+ * needs it, so on a cold visit the first screen painted in the fallback face, then again in Geist, and a list
+ * that measured its rows in between kept the fallback's heights. Preloaded, Geist starts with the page. Build
  * only (a dev server reads the font from disk). Every page named draws with the same faces: the app shell and
  * the public pages (the booking page and the hosted form) all set their type from `--font-sans`.
  */

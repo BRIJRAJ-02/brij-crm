@@ -2,11 +2,11 @@
 // /layers.css, which layerOrder() (vite.config.ts) links ahead of every bundled
 // stylesheet, since Vite links a shared chunk's CSS before this entry's
 // (build.test.ts checks).
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { installPlainErrors } from '@crm/contracts/plain-errors';
 import { createDataLayer, createIdMinter } from '@crm/data';
 import { createToasts, LOADING_TIMING, UiProvider, type ToastContent } from '@crm/ui';
-import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
+import { applyScaleForPath, createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -261,6 +261,11 @@ const focusRecovery = createFocusRecovery(document);
 // Each workspace page reached outside Settings is where Settings' back link returns (spec 0026, AC-681).
 router.subscribe('onResolved', (event) => {
   rememberPlace(safeSessionStorage(window), event.toLocation.href);
+});
+// The app draws at its density, its public screens at full size (spec 0071, AC-5): theme-boot.js picked the scale for
+// the first path before the first paint; this keeps it right as the router moves between them.
+router.subscribe('onBeforeNavigate', (event) => {
+  applyScaleForPath(document.documentElement, event.toLocation.pathname);
 });
 router.subscribe('onRendered', (event) => {
   const { pathname } = event.toLocation;

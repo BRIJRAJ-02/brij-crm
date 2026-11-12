@@ -1,0 +1,5 @@
+/* The app's root stylesheet (spec 0071): the library's root stylesheet, then the app's sizes, which apply under
+   <html data-scale="app">. Only the app (apps/web index.html) and the library's stories load it; public pages load
+   @crm/ui/styles.css alone and so never carry the app's sizes. */
+@import './index.css';
+@import '@crm/tokens/tokens-app.css';

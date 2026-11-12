@@ -113,9 +113,19 @@ An independent pass found 17 gaps; all were resolved in index.md with the owner'
 
 ### Contrast moves (filled in by the builder, step 9)
 
-| Token | Theme | Prototype | Moved to | Pairs it clears |
-|---|---|---|---|---|
-| | | | | |
+Measured 12 Nov on the new pairs list: 25 misses, all cleared by these seven moves (OKLCH lightness only, smallest step of 0.002 that clears every pair the token is in; the worst remaining pair is shown).
+
+| Token | Theme | Prototype | Moved to | Lightness | Worst pair after |
+|---|---|---|---|---|---|
+| `text-tertiary` | light | `#6b6b74` | `#686871` | -0.010 | 4.55 on `surface-selected` |
+| `text-tertiary` | dark | `#8b8b94` | `#95959e` | +0.032 | 4.54 on `surface-selected` |
+| `danger` | light | `#d0312d` | `#c92927` | -0.020 | 4.53 on `surface-selected` |
+| `success` | light | `#12805c` | `#007855` | -0.026 | 4.54 on `surface-selected` |
+| `warning` | light | `#a15c00` | `#9d5800` | -0.012 | 4.53 on `surface-selected` |
+| `control-border` | light | `#8a8a93` | `#7a7a83` | -0.054 | 3.51 on `surface-selected` |
+| `control-border` | dark | `#6e6e78` | `#81818c` | +0.066 | 3.50 on `surface-selected` |
+
+`danger-hover` (legacy) follows the moved `danger`: light `#b40411` (on-danger 7.08), dark `#ff8d84` (on-danger 8.80). `success` light clips a channel at the move, so its hue shifts a hair toward green.
 
 ### Screenshot baselines
 

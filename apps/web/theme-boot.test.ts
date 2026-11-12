@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { THEME_STORAGE_KEY, THEME_SURFACE } from '@crm/ui/theme';
+import { PUBLIC_APP_PATHS, THEME_STORAGE_KEY, THEME_SURFACE } from '@crm/ui/theme';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = import.meta.dirname;
@@ -64,11 +64,44 @@ describe('theme-boot.js', () => {
   });
 });
 
+/** Runs the boot script as a page with `scale` on its script tag at `pathname`, returning the attributes it set. */
+function bootScale(scale: string | undefined, pathname: string): Map<string, string> {
+  const attributes = new Map<string, string>();
+  const currentScript = { getAttribute: (name: string) => (name === 'data-scale' ? (scale ?? null) : null) };
+  const documentElement = { setAttribute: (name: string, value: string) => attributes.set(name, value) };
+  runInNewContext(script, {
+    window: { localStorage: { getItem: () => null }, location: { pathname } },
+    document: { currentScript, documentElement, querySelectorAll: () => [] },
+  });
+  return attributes;
+}
+
+describe('theme-boot.js picks the size set (spec 0071, AC-5)', () => {
+  it.each(['/w/acme/home', '/sign-in', '/'])('draws the app at its density on %s', (pathname) => {
+    expect(bootScale('app', pathname).get('data-scale')).toBe('app');
+  });
+
+  it.each(['/embed/tfp_abcdefghijklmnopqrstuv/start', '/email-preferences', '/status', '/public/insights'])(
+    'keeps the public screen %s at full size',
+    (pathname) => {
+      expect(bootScale('app', pathname).has('data-scale')).toBe(false);
+    },
+  );
+
+  it('leaves a page whose script tag asks for nothing at full size (the public pages)', () => {
+    expect(bootScale(undefined, '/w/acme/home').has('data-scale')).toBe(false);
+  });
+
+  it("holds the same public path pattern as the router's (PUBLIC_APP_PATHS)", () => {
+    expect(script).toContain(`/${PUBLIC_APP_PATHS.source}/.test(window.location.pathname)`);
+  });
+});
+
 describe('index.html', () => {
-  it('loads theme-boot.js as the first script in <head>, plain and blocking', () => {
+  it('loads theme-boot.js as the first script in <head>, plain and blocking, asking for the app scale', () => {
     const head = indexHtml.slice(0, indexHtml.indexOf('</head>'));
     const scripts = [...head.matchAll(/<script\b[^>]*>/g)].map((match) => match[0]);
-    expect(scripts[0]).toBe('<script src="/theme-boot.js">');
+    expect(scripts[0]).toBe('<script src="/theme-boot.js" data-scale="app">');
   });
 
   it('colours the phone browser bar with the surface token, light and dark', () => {

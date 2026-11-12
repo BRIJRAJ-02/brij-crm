@@ -1345,7 +1345,9 @@ export const ResizeByKeyboard: Story = {
     await waitFor(() => expect(width()).toBeGreaterThan(0));
     const before = width();
     await press(['{ArrowRight}']);
-    await waitFor(() => expect(width()).toBe(before + 8));
+    // One step is space-8 as the document draws it (7px at the app's density, spec 0071).
+    const step = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-8'));
+    await waitFor(() => expect(width()).toBe(before + step));
     await press(['{ArrowDown}'], '0:2');
     await expect(canvas.getByRole('status')).not.toHaveTextContent(/pixels wide/);
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());

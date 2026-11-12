@@ -78,7 +78,7 @@
   }
 
   .title {
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 

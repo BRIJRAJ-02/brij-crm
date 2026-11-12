@@ -12,7 +12,7 @@ AC-6807 asks for each key interaction to be made first as a demo, kept as a stor
 
 ## What the films carried back
 
-- The public pages' press and label swap now come from tokens: `--scale-press: var(--scale-enter)` (0.97) and `--label-swap: var(--duration-modal)`, set by the link page's root as the booking page sets its own calmer pace, so a Book, Directions or Share pressed on a link page eases down and a changed label rises in.
+- The public pages' press and label swap now come from tokens: `--scale-press: var(--scale-medium)` (0.97) and `--label-swap: var(--duration-fast)`, set by the link page's root as the booking page sets its own calmer pace, so a Book, Directions or Share pressed on a link page eases down and a changed label rises in.
 - The confirmation lands a press after its cause (`duration-press`), never with it: in the film the guest's view changing at the same frame as the button read as one flash.
 
 ## States

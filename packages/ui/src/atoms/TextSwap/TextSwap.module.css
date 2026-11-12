@@ -15,11 +15,11 @@
   }
 
   .words[data-leaving] {
-    animation: words-out var(--duration-exit) var(--ease-in-out) forwards;
+    animation: words-out var(--duration-quick) var(--ease-in-out) forwards;
   }
 
   .words[data-arriving] {
-    animation: words-in var(--duration-popover) var(--ease-in-out) var(--duration-exit) backwards;
+    animation: words-in var(--duration-fast) var(--ease-in-out) var(--duration-quick) backwards;
   }
 
   @keyframes words-out {
@@ -54,7 +54,7 @@
     }
 
     .words[data-arriving] {
-      animation: words-fade-in var(--duration-popover) var(--ease-in-out) backwards;
+      animation: words-fade-in var(--duration-fast) var(--ease-in-out) backwards;
     }
   }
 }

@@ -99,10 +99,19 @@ export const Quiet: Story = {
     const edge = canvas.getByRole('heading', { name: '2 done' }).getBoundingClientRect();
     // Sized to its words, never a full width bar.
     await expect(toggle.getBoundingClientRect().width).toBeLessThan(edge.width / 2);
-    // The chevron's centre sits 8px in (a 16px icon's column), the words 28px in (after it, space-12).
+    // The chevron's centre sits half an icon in (its size-icon column, 14px at the app's density, spec 0071).
+    const icon = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--size-icon'));
     const chevron = toggle.querySelector('svg')?.getBoundingClientRect();
-    await expect(chevron === undefined ? undefined : chevron.left + chevron.width / 2 - edge.left).toBeCloseTo(8, 0);
-    await expect(within(toggle).getByText('2 done').getBoundingClientRect().left - edge.left).toBeCloseTo(28, 0);
+    await expect(chevron === undefined ? undefined : chevron.left + chevron.width / 2 - edge.left).toBeCloseTo(
+      icon / 2,
+      0,
+    );
+    // The words after the icon's column and space-12 (25px at the app's density, spec 0071).
+    const space12 = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-12'));
+    await expect(within(toggle).getByText('2 done').getBoundingClientRect().left - edge.left).toBeCloseTo(
+      icon + space12,
+      0,
+    );
     // The panel is flush: what it holds starts on the content edge.
     const content = canvas.getByText('Connect your calendar and create a booking page.');
     await expect(content.getBoundingClientRect().left).toBeCloseTo(edge.left, 0);

@@ -30,7 +30,7 @@ export const TokenFallbacks: Story = {
   ),
   play: async ({ canvas }) => {
     const button = canvas.getByRole('button', { name: 'Continue' });
-    await expect(getComputedStyle(button).backgroundColor).toBe('rgb(24, 25, 29)');
+    await expect(getComputedStyle(button).backgroundColor).toBe('rgb(24, 24, 27)');
   },
 };
 
@@ -65,6 +65,6 @@ export const Dialog: Story = {
     await settleAnimations();
     await expect(canvasElement.contains(dialog)).toBe(true);
     const save = within(dialog).getByRole('button', { name: 'Save change' });
-    await expect(getComputedStyle(save).backgroundColor).toBe('rgb(24, 25, 29)');
+    await expect(getComputedStyle(save).backgroundColor).toBe('rgb(24, 24, 27)');
   },
 };

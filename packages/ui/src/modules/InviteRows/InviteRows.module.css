@@ -17,11 +17,11 @@
 
   /* From two rows each row ends in its remove button; one row has none, so its fields reach the column's end. */
   .root[data-removable] {
-    grid-template-columns: minmax(0, 1fr) var(--size-control);
+    grid-template-columns: minmax(0, 1fr) var(--size-control-sm);
   }
 
   .root[data-roles][data-removable] {
-    grid-template-columns: minmax(0, 1fr) auto var(--size-control);
+    grid-template-columns: minmax(0, 1fr) auto var(--size-control-sm);
   }
 
   .head {
@@ -75,7 +75,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
   }
 
   /* The public pages' taller fields (Field's lg): the remove button stays level with them. */

@@ -60,7 +60,7 @@
     /* It opens as a card expansion (stageshow's ai-cards): the band grows to its own height, its content dropping in,
        so what is under it moves down as one rather than jumping. Where a height can't animate, it fades in. */
     interpolate-size: allow-keywords;
-    animation: panel-in var(--panel-duration) var(--ease-out) both;
+    animation: panel-in var(--panel-duration) var(--ease-smooth-out) both;
   }
 
   .panel:focus {
@@ -124,7 +124,7 @@
   /* A count or a status line that changes swaps in place (transitions.dev's text swap). */
   .swap {
     display: inline-block;
-    animation: swap-in var(--duration-move) var(--ease-in-out) backwards;
+    animation: swap-in var(--duration-fast) var(--ease-in-out) backwards;
   }
 
   @media (prefers-reduced-motion: reduce) {

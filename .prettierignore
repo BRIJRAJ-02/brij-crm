@@ -9,6 +9,10 @@ skills-lock.json
 # The artifact's token file, copied byte for byte, and the CSS generated from it
 packages/tokens/tokens.json
 packages/tokens/tokens.css
+# Generated from them (spec 0071), and the hand kept legacy tokens in the same one space layout as the source
+packages/tokens/values.ts
+packages/tokens/tokens-app.css
+packages/tokens/legacy.json
 
 # Prose and vendored skills keep their own formatting
 **/*.md

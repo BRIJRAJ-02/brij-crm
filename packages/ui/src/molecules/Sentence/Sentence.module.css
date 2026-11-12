@@ -3,14 +3,14 @@
   .root {
     container-type: inline-size;
     display: grid;
-    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control);
+    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control-sm);
     gap: var(--space-8);
     align-items: start;
   }
 
   /* No lead (`lead` left out): the words start at the line's own edge. */
   .root[data-bare] {
-    grid-template-columns: minmax(0, 1fr) var(--size-control);
+    grid-template-columns: minmax(0, 1fr) var(--size-control-sm);
   }
 
   .lead {
@@ -39,7 +39,7 @@
 
   @container (inline-size < 480px) {
     .root {
-      grid-template-columns: minmax(0, 1fr) var(--size-control);
+      grid-template-columns: minmax(0, 1fr) var(--size-control-sm);
     }
 
     .lead {

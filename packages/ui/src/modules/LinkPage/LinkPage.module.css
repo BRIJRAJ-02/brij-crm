@@ -245,13 +245,13 @@
     --page-card-shadow: var(--shadow-control);
   }
 
-  /* The typeface puts the name and each row's title in the mono face; sentences stay in Inter (AC-5410). Only the
+  /* The typeface puts the name and each row's title in the mono face; sentences stay in Geist (AC-5410). Only the
      family changes: the size, weight and line height stay the design system's, so a look can never resize the page. */
   .root[data-page-font='mono'] {
     --page-face: var(--font-mono);
   }
 
-  /* The packs of spec 0060 (AC-12), from `@crm/tokens/packs.css`: a heading face beside Inter, or one face for
+  /* The packs of spec 0060 (AC-12), from `@crm/tokens/packs.css`: a heading face beside Geist, or one face for
      the whole page. Display's face has one weight, so its name draws at the note title's size rather than bolder. */
   .root[data-page-font='grotesk'] {
     --page-face: var(--font-pack-grotesk);
@@ -277,7 +277,7 @@
 
   .root[data-page-font='display'] {
     --page-face: var(--font-pack-display);
-    --page-name-text: var(--text-note-title);
+    --page-name-text: var(--text-title-lg);
   }
 
   /* Follow the visitor (spec 0060, AC-15) sets no `data-theme`, so the tokens and `light-dark()` below take the
@@ -288,9 +288,9 @@
        page. */
     /* A held control eases down and a changed label rises in, as on a booking page (spec 0068, AC-6803; the timing the
        stageshow demos settled, MotionDemos), from tokens. */
-    --scale-press: var(--scale-enter);
-    --label-swap: var(--duration-modal);
-    --social-arrive: var(--duration-modal);
+    --scale-press: var(--scale-medium);
+    --label-swap: var(--duration-fast);
+    --social-arrive: var(--duration-fast);
     /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
     --social-lift: 2px;
     --page-surface: var(--surface);
@@ -308,7 +308,7 @@
     --page-radius-card: var(--page-radius);
     --page-face: var(--font-sans);
     --page-body-face: var(--font-sans);
-    --page-name-text: var(--text-heading);
+    --page-name-text: var(--text-title);
     --page-ground-paint: none;
     /* What a thumbnail draws for a photo it has no photo for: a page without one draws plain and never shows it. */
     --page-photo-stand-in: linear-gradient(to bottom right, var(--tag-sky-bg), var(--tag-purple-bg));
@@ -387,7 +387,7 @@
 
   /* The editor's preview remounts with each look picked, and the column fades in on the new ground (AC-18). */
   .root[data-preview] .column {
-    animation: look-in var(--duration-move) var(--ease-out) both;
+    animation: look-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   @keyframes look-in {
@@ -478,7 +478,7 @@
 
   .pill[data-loading] {
     inline-size: var(--size-column-narrow);
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     border-radius: var(--radius-full);
     overflow: hidden;
   }
@@ -503,7 +503,7 @@
     gap: var(--space-6);
     margin: 0;
     color: var(--page-text-quiet);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
@@ -552,7 +552,7 @@
     font: var(--page-name-text);
     font-family: var(--page-face);
     font-synthesis: none;
-    letter-spacing: var(--tracking-heading);
+    letter-spacing: var(--tracking-title);
     overflow-wrap: anywhere;
   }
 
@@ -591,11 +591,11 @@
     border-radius: var(--radius-full);
     background: var(--page-card);
     color: var(--page-card-text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-family: var(--page-body-face);
     letter-spacing: var(--tracking-label);
     text-decoration: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   /* With no address it links nowhere, so it drops the pill's edge and fill rather than look pressable. */
@@ -666,15 +666,15 @@
   .caption {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .blocks {
     display: flex;
     flex-direction: column;
     gap: var(--space-20);
-    animation: rise var(--duration-popover) var(--ease-out) both;
+    animation: rise var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   .group {
@@ -687,7 +687,7 @@
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--page-text-quiet);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-kbd);
     font-family: var(--page-body-face);
     text-transform: uppercase;
@@ -720,7 +720,7 @@
   /* The quiet mark every staying row ends in, turned a quarter when the section is open. */
   .chevron {
     display: inline-flex;
-    transition: rotate var(--duration-move) var(--ease-out);
+    transition: rotate var(--duration-fast) var(--ease-smooth-out);
   }
 
   .chevron[data-open] {
@@ -800,8 +800,8 @@
     flex-wrap: wrap;
     gap: var(--space-6);
     color: var(--page-text-quiet);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     font-family: var(--page-body-face);
     overflow-wrap: anywhere;
   }
@@ -868,8 +868,8 @@
     text-decoration: none;
     outline: none;
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
   }
 
   /* A place for a block that isn't there yet (a preview of a page still being made): the row's shape, quieter,
@@ -906,10 +906,10 @@
     inline-size: calc(var(--size-nav-item) + var(--space-4));
     block-size: calc(var(--size-nav-item) + var(--space-4));
     border-radius: var(--radius-sm);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .tile[data-tile='mark'] {
@@ -990,10 +990,10 @@
 
   .title {
     color: var(--page-card-text);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--page-face);
     font-synthesis: none;
-    letter-spacing: var(--tracking-title);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 
@@ -1008,7 +1008,7 @@
     align-items: center;
     gap: var(--space-2);
     color: var(--page-card-mark);
-    transition: color var(--duration-hover) var(--ease-hover);
+    transition: color var(--duration-quick) var(--ease-out);
   }
 
   /* A booking page's row eases down a touch while held (the v5 mock's 0.99, a public page's own press). */
@@ -1017,9 +1017,9 @@
     --row-press: 0.99;
 
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   /* A booking page's row (the v5 mock): its border a step stronger and its chevron nudged on, under the pointer. */
@@ -1039,8 +1039,8 @@
 
   .block[data-row='page'] .end {
     transition:
-      color var(--duration-hover) var(--ease-hover),
-      translate var(--duration-hover) var(--ease-hover);
+      color var(--duration-quick) var(--ease-out),
+      translate var(--duration-quick) var(--ease-out);
   }
 
   /* Its next open time, quietly at the row's end; a phone leaves it out, keeping the title whole. */
@@ -1151,7 +1151,7 @@
     background: var(--page-accent);
     /* The small slot's face is too small for letters: the accent alone. */
     color: transparent;
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .thumbPhoto {
@@ -1187,7 +1187,7 @@
 
   .thumbSample {
     color: var(--page-text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-family: var(--page-face);
     font-synthesis: none;
   }
@@ -1231,17 +1231,17 @@
   }
 
   .root[data-size='large'] .thumbFace {
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
   }
 
   .root[data-size='large'] .thumbSample {
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--page-face);
   }
 
   .root[data-size='large'] .thumbRow {
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   .root[data-size='large'] .thumbFace[data-initials] {
@@ -1278,7 +1278,7 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--page-card-text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-family: var(--page-face);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1293,7 +1293,7 @@
 
   .thumbFont {
     color: var(--page-text);
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--page-face);
     font-synthesis: none;
   }
@@ -1301,7 +1301,7 @@
   .thumbButton {
     box-sizing: border-box;
     inline-size: 100%;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     border: var(--page-card-border-width) solid var(--page-card-border);
     border-radius: var(--page-radius);
     background: var(--page-card);
@@ -1456,7 +1456,7 @@
   /* The times card's week strip (spec 0068): its padding, a label's line, the gap and a day's circle. */
   .holdWeek {
     display: flex;
-    block-size: calc(var(--space-8) * 2 + var(--space-16) + var(--space-4) + var(--size-input) + var(--space-6));
+    block-size: calc(var(--space-8) * 2 + var(--space-16) + var(--space-4) + var(--size-control) + var(--space-6));
     border-radius: var(--radius-lg);
     overflow: hidden;
   }
@@ -1498,7 +1498,7 @@
 
   .holdTitle {
     display: flex;
-    font: var(--text-title);
+    font: var(--text-heading);
   }
 
   .holdLine {
@@ -1543,7 +1543,7 @@
 
   .holdSteps {
     display: none;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -1579,7 +1579,7 @@
   .holdChip,
   .holdMore {
     display: flex;
-    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+    block-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
   }
 
   .holdChip {
@@ -1692,10 +1692,10 @@
   /* Every template: rows press in and lift a touch under the pointer (AC-6803). */
   .root[data-template] .block {
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      box-shadow var(--duration-hover) var(--ease-hover),
-      transform var(--duration-press) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out),
+      transform var(--duration-quick) var(--ease-smooth-out);
   }
 
   .root[data-template] .block:not([data-loading], [data-inert]):active {
@@ -1720,23 +1720,23 @@
     --page-card-border: color-mix(in oklab, var(--studio-warmth) 18%, var(--border));
     --page-card-shadow: var(--shadow-xs);
     --page-radius-card: var(--radius-xl);
-    --page-name-text: var(--text-note-title);
+    --page-name-text: var(--text-title-lg);
     --page-soft-base: var(--page-surface);
   }
 
   /* Night: a deep dark ground, bold large type, and the accent as a glow where the pointer or focus is. */
   .root[data-template='night'] {
-    --page-surface: var(--surface-sunken);
+    --page-surface: var(--surface-subtle);
     --page-card: var(--surface-subtle);
     --page-card-border: var(--border);
     --page-card-hover: var(--surface-raised);
-    --page-name-text: var(--text-note-title);
+    --page-name-text: var(--text-title-lg);
     --page-glow: 0 0 var(--space-16) color-mix(in oklab, var(--page-accent) 45%, transparent);
     --page-focus: 0 0 0 var(--border-width-thick) var(--page-accent), var(--page-glow);
   }
 
   .root[data-template='night'] .name {
-    letter-spacing: var(--tracking-heading);
+    letter-spacing: var(--tracking-title);
   }
 
   /* Night's words stay the card's own light text (a title in the accent read as a link and, for a dark brand, sank

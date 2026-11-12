@@ -62,7 +62,7 @@
   .frame {
     position: relative;
     min-inline-size: 0;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   .frame[data-kind='bar'],

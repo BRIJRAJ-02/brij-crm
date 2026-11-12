@@ -202,7 +202,7 @@ export const Bar: Story = {
   play: async ({ canvas }) => {
     const list = canvas.getByRole('tablist', { name: 'Record' });
     const bar = list.parentElement;
-    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-topbar').trim();
     await expect(bar?.getBoundingClientRect().height).toBe(Number.parseFloat(barHeight));
     // The chosen tab fills the bar down to its hairline, so its underline sits on it.
     const tab = canvas.getByRole('tab', { name: /Activity/ });
@@ -232,7 +232,7 @@ export const BarEmptyEndNarrow: Story = {
   play: async ({ canvas }) => {
     const list = canvas.getByRole('tablist', { name: 'Record' });
     const bar = list.parentElement;
-    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-topbar').trim();
     await expect(bar?.getBoundingClientRect().height).toBe(Number.parseFloat(barHeight));
   },
 };

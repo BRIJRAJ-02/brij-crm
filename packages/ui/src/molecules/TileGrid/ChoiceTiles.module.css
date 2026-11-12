@@ -57,9 +57,9 @@
     text-align: start;
     outline: none;
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   /* A select tile is the radio's label; the radio lies unseen over the tick's corner, where nothing else is, so a
@@ -175,8 +175,8 @@
 
   .tile[data-described] .picture {
     grid-row: 1;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
   }
 
   /* A described tile's name wraps rather than truncating: "Corner button" beside a mark, past the tick's corner,
@@ -296,13 +296,13 @@
     opacity: 0;
     scale: var(--scale-shrunk);
     transition:
-      opacity var(--duration-press) var(--ease-out),
-      scale var(--duration-press) var(--ease-out);
+      opacity var(--duration-quick) var(--ease-smooth-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
     pointer-events: none;
   }
 
   .tile[data-selected] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
   }
 
@@ -319,8 +319,8 @@
      with the soft halo. A chosen tile already has the accent line as its border, so the halo alone (under 3:1 and
      unseen in dark) left a focused chosen tile looking like any chosen tile. */
   .tile[data-focus-visible] {
-    border-color: var(--accent-line);
-    outline: var(--border-width-thick) solid var(--accent-line);
+    border-color: var(--accent-text);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
     box-shadow: var(--shadow-focus);
   }
@@ -349,8 +349,8 @@
 
     .tile {
       transition:
-        background-color var(--duration-hover) var(--ease-hover),
-        border-color var(--duration-hover) var(--ease-hover);
+        background-color var(--duration-quick) var(--ease-out),
+        border-color var(--duration-quick) var(--ease-out);
     }
   }
 

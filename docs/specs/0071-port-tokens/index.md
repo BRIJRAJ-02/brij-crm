@@ -1,7 +1,7 @@
 # 0071. Port phase 0: the Timefix type scale and tokens
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 **Amends**: [0002 Design tokens](../0002-design-tokens/index.md) (the generator, theme logic, Icon atom and lint rules stay; the source file, the values, the names and the fonts change)
 
 ## Summary
@@ -26,12 +26,12 @@ Reasoning, the options compared and the full token inventory: [rationale.md](rat
 - **AC-3**: `tokens.css` writes the scaled families (type sizes and line heights, `spacing`, `radius` except `radius-full`, `size`) twice inside `@layer tokens`: the source values under `:root`, and the app values under `:root[data-scale='app']`. App values follow the scale rules under *Feature design*, and the generator test pins every value in the scale tables there.
 - **AC-4**: Families that do not scale (colour, shadow, `borderWidth`, `breakpoint`, `distance`, `duration`, `easing`, `zIndex`, `opacity`, `scale`, `stroke`, letter spacing) are written once, exactly as the source gives them.
 - **AC-5**: `theme-boot.js` (already the first script in `index.html`) sets `data-scale="app"` on `<html>` before first paint, unless the path is on the public list under *Public and app scope*. Book, form, menu, reserve, link and landing pages (their own HTML files), partner embeds, the public screens inside `index.html` and the marketing site draw at full size. A computed style check proves it: `--text-body` is `400 12.5px/18px` on Home and `400 14px/20px` on a booking page and on `/embed/tfp_…`.
-- **AC-6**: A screen inside the app that shows a guest view full screen can switch the whole document to full size while it is open, through `usePublicScale(on)` from `@crm/ui/theme`. It counts nested users, and the app scale comes back when the last one closes.
-- **AC-7**: No stylesheet, story or app file uses CSS `zoom`, and nothing ports the prototype's zoom fix or its drag unzoom helpers (Stylelint refuses `zoom`).
+- **AC-6**: A screen inside the app that shows a guest view full screen can switch the whole document to full size while it is open, through `usePublicScale(on)` from `@crm/ui` (the hook; the plain functions `holdPublicScale`, `applyScaleForPath` and `scaleForPath` are on `@crm/ui/theme`, which stays free of React). It counts nested users, and the app scale comes back when the last one closes.
+- **AC-7**: No stylesheet, story or app file uses CSS `zoom` for the scale, and nothing ports the prototype's zoom fix or its drag unzoom helpers (Stylelint refuses `zoom`). One existing, reviewed exception: `HostedFormPreview`'s inert thumbnail tile, which nothing is placed on or pointed at, keeps its `zoom: 0.5` behind a disable comment.
 - **AC-8**: The type styles are the seventeen in the type table. Every old `--text-*` and `--tracking-*` name in `apps/`, `packages/` and `tools/` is renamed by the rename map, and no old name is left (the Stylelint unknown variable rule from 0002 AC-10 proves it).
 - **AC-9**: Geist and Geist Mono (variable, Latin) are served from `packages/tokens/fonts/` on the app's own origin, each with a metric matched local fallback. Geist is preloaded on every HTML entry where Inter was. Inter and JetBrains Mono are gone from the code, the fonts folder, the Storybook font wait, the OG card renderer and the tests. The CSP is unchanged.
 - **AC-10**: Motion uses the prototype's names: durations `stagger`, `micro`, `quick`, `fast`, `medium`, `slow`, `very-slow` plus the kept `spin` and `pulse`; easings `smooth-out`, `in-out`, `out`, `linear`, `bounce`, `bounce-strong`; the `distance` family; scales `large`, `medium`, `small`, `tiny`, `shrunk`. The old role names (`duration-hover`, `duration-public-*`, `ease-hover`, `ease-drawer` and the rest) are gone from code.
-- **AC-11**: The house rules hold. No `--scale-press`, `--scale-press-sm` or `--blur-*` token exists (the `blur` family is deleted from the source), nothing shrinks on press, and no `transition` or `animation` touches `filter` or `backdrop-filter`.
+- **AC-11**: The house rules hold. Nothing in the app shrinks on press: `scale-press` and `scale-press-sm` stay in the source at 1 (they move in from the old file, since public pages set their own value on their root, as the owner approved for the booking, link and menu pages on 1 and 5 Nov). No `--blur-*` token exists (the `blur` family is deleted from the source; the prototype never uses it). Blur in motion stays what it is today: never in the app, and only where a public page already uses it by the owner's 1 Nov exception. No new lint rule bans it. _(Corrected during the build, 12 Nov: the first draft deleted `scale-press` and banned transitions on `filter`, which would have broken 25 approved public page motions.)_
 - **AC-12**: Colours follow the colour section: shared names take the prototype's values, renamed names are renamed in code, new prototype colours exist, and the colours the prototype lacks live in `legacy.json`. Every pair in `src/contrast.ts`, with the updated surfaces list and the new pairs, meets 0002's minimums in both themes. Where a prototype value misses, only that token's OKLCH lightness moves, by the smallest step, in the source, and every move is listed in this spec's rationale for the owner.
 - **AC-13**: `packages/tokens/legacy.json` holds every token the code still needs that the prototype does not have, in the source's grammar (families optional) with a `retire` note per token naming the port phase that removes it. Values are today's shipped values except the ones this spec sets (`danger-hover`, `shadow-focus`, `shadow-focus-inset`). Legacy tokens are never scaled, go through the normal theme and plain blocks, and a name in both files is refused (`TOKENS_DUPLICATE`).
 - **AC-14**: Every library screenshot baseline is reshot once in the pinned Playwright image after the change, and `pnpm test:visual` passes against the new set. Public component stories are shot at full size and the rest at app size.
@@ -67,6 +67,7 @@ The prototype's `tokens.json` is the source, unchanged in meaning; the generator
 | `packages/tokens/source.json` | `{ "source": "design/timefix-design-system/tokens.json", "artifact": "https://claude.ai/artifact/KzpzW1c8binDdobPZ2HB11", "version": "<published version id, or unpublished>", "synced": "2026-11-xx" }`. `TokenSource` in `scripts/generate.ts` and the CSS header take the new field |
 | `packages/tokens/src/grammar.ts` | `TypeStyle.fontWeight` accepts a string or a number (the source writes numbers), transformed to a string. A legacy file schema: the same families, all optional, each token with a required `retire` string |
 | `packages/tokens/scripts/generate.ts` | Adds the copy, the app scale block, the legacy merge, `TOKENS_SOURCE_DRIFT` and the values module |
+| `packages/tokens/tokens-app.css` | New, generated and committed (`@crm/tokens/tokens-app.css`): the app scale block alone. `@crm/ui/app.css` (the root stylesheet plus this) is what the app and the stories load; public pages load `@crm/ui/styles.css` and never carry it |
 | `packages/tokens/values.ts` | New, generated and committed (`@crm/tokens/values`). For every plain, size and type token: `{ full, app }` numbers in px (or the string for non numeric families), plus `legacy` tokens with one value. Checked by `tokens:check` like `tokens.css` |
 | `packages/tokens/scripts/rename-0071.ts` | New, temporary. The rename map as data and a guarded rewrite (see *Rename map*). Deleted once no open branch needs it |
 | `packages/tokens/fonts/` | `Geist-Variable-latin.woff2`, `GeistMono-Variable-latin.woff2` added; Inter and JetBrains Mono files removed; `LICENSE.md` updated (both SIL OFL 1.1) |
@@ -155,9 +156,9 @@ Source and legacy are merged as data before anything is written: a legacy colour
 | Type (`--text-*`, `--tracking-*`, `typeToken`) | `heading`→`title`, `title`→`heading`, `title-regular`→`heading-regular`, `note-title`→`title-lg`, `label-strong`→`label` |
 | Size | `size-bar`→`size-topbar`, `size-input`→`size-control`, `size-control`→`size-control-sm`, `size-measure`→`size-measure-sm` (legacy, 280px) |
 | Colour | `surface-sidebar`→`canvas`, `surface-sunken`→`surface-subtle`, `surface-thumb`→`surface-raised`, `surface-column`→`surface-subtle`, `field-border`→`border-subtle`, `accent-line`→`accent-text`, `danger-fill`→`danger`, `danger-fill-hover`→`danger-hover` (legacy) |
-| Duration | `hover`, `press`, `exit`, `public-hover`, `public-press`, `public-exit` → `duration-quick`; `popover`, `move`, `modal`, `public-popover`, `public-move`, `public-modal`, `public-slide` → `duration-fast`; `public-reveal`→`duration-slow` |
+| Duration | `hover`, `press`, `exit` → `duration-quick`; `popover`, `move`, `modal` → `duration-fast`. The eight `duration-public-*` keep their names as legacy tokens (see below) |
 | Easing | `ease-out`→`ease-smooth-out`, `ease-hover`→`ease-out`, `ease-drawer`→`ease-smooth-out`; `ease-in-out` keeps its name (its value becomes the keyword) |
-| Scale | `scale-enter`→`scale-medium`; `scale-press` and `scale-press-sm`: the ten uses are deleted by hand, not renamed |
+| Scale | `scale-enter`→`scale-medium`; `scale-press` and `scale-press-sm` keep their names (1 in the app; public pages set their own) |
 
 How the script works:
 - **One pass through placeholders.** Every match becomes a placeholder first, then every placeholder its new name, so swaps (`heading` and `title`, `size-control` and `size-input`, `ease-out` and `ease-hover`) never chain.
@@ -172,7 +173,8 @@ At today's shipped values (`packages/tokens/tokens.json` at 34723b989), unscaled
 - **Colours:** the nine `tag-*-border` (phase 1: the prototype's tags have no outline), `inverse-hover`, `border-inverse`, `scrim-soft`, `on-accent-kbd`, `danger-hover` (all phase 1).
 - **`danger-hover`** (new value): `danger` with OKLCH lightness 0.06 lower in light and 0.06 higher in dark, so hover reads as a change in both themes and `on-danger` on it still meets 4.5:1 (the contrast suite checks it).
 - **Shadows:** `shadow-control`, `shadow-primary`, `shadow-pinned-edge` (phase 1) at shipped values. `shadow-focus` and `shadow-focus-inset` get new values, because `focus-ring` turns solid and a single 2px ring in the accent's own blue would vanish on blue buttons. Both become a two ring shadow that looks like the prototype's offset outline: `0 0 0 2px <surface>, 0 0 0 4px <focus-ring>` (light `#ffffff` then `#2457e6`, dark `#18181b` then `#8fb0ff`), and the inset one `inset 0 0 0 2px <focus-ring>, inset 0 0 0 4px <surface>`. Literal colours, as the shadow grammar requires. Retire in phase 1, when components move to the prototype's `outline` ring.
-- **Not legacy, moved into the source** (system wide, so the artifact shows them): `z-raised`, `opacity-pulse`, `border-width-thick`, `duration-spin`, `duration-pulse`, `scale-shrunk`, `icon-stroke` and the `breakpoint` family.
+- **Durations:** the eight `duration-public-*` at their shipped values. The public booking page and its receipt keep the calmer pace the owner asked for on 2 Nov ("a bit slower, too fast, smoother") by pointing `--duration-quick` at `duration-public-hover` and `--duration-fast` at `duration-public-move` on their root. Retire: phase 6, which restates that pace in the prototype scale. _(Changed during the build, 12 Nov: the first draft folded them into the scale, which would have sped those pages up.)_
+- **Not legacy, moved into the source** (system wide, so the artifact shows them): `z-raised`, `opacity-pulse`, `border-width-thick`, `duration-spin`, `duration-pulse`, `scale-press`, `scale-press-sm`, `scale-shrunk`, `icon-stroke` and the `breakpoint` family.
 
 ### Colours (AC-12)
 
@@ -221,7 +223,7 @@ At today's shipped values (`packages/tokens/tokens.json` at 34723b989), unscaled
 - One source: the copy and the source never differ (`TOKENS_SOURCE_DRIFT`).
 - No name in both `tokens.json` and `legacy.json`.
 - Every source `size` token is on the height list or the width list.
-- No `zoom`, no press scale, no blur family, no transition on `filter`.
+- No `zoom`, no press scale in the app, no blur family.
 - Hairlines stay 1px at every scale.
 - No TypeScript caches a token value at module level.
 
@@ -241,7 +243,7 @@ No data, no permissions. The CSP stays `font-src 'self'`; nothing loads from a f
 - `DataGrid` row element height equals `sizeToken('size-row')` in both scales → AC-16
 - Contrast suite in both themes with the new pairs and legacy colours → AC-12
 - Rename script on a fixture with both old and new names → refuses; on old names only → one pass gives the mapped names, and a bare `'title'` string is untouched → AC-8
-- Stylelint refuses `zoom: 0.9`, `var(--text-note-title)`, `var(--duration-hover)`, `transition: filter 150ms` → AC-7, AC-8, AC-10, AC-11
+- Stylelint refuses `zoom: 0.9`, `var(--text-note-title)`, `var(--duration-hover)` → AC-7, AC-8, AC-10
 - Build test: Geist preloaded, Inter absent from `dist` → AC-9
 - Focus ring visible on a primary blue button and on `surface` in both themes (story shot) → AC-12
 
@@ -254,9 +256,9 @@ Tracer Bullet: the thinnest end to end thread is "source → generator → one a
 3. `tokens:build`: copy, `legacy.json`, `source.json`, `tokens.css`, `values.ts`. Satisfies **AC-1**, **AC-13**
 4. Scope: `theme-boot.js` with the public path list and its test, `usePublicScale` and `currentScale`, the Storybook decorator. Tracer check: Home, a booking page and a partner embed show the right computed values. Satisfies **AC-5**, **AC-6**
 5. `token-values.ts` reads `@crm/tokens/values` per call; move every module level token constant (`DataGrid`, TaskList, ActivityFeed, Menu, AsideLayout, RecordLayout, NoteList, KanbanColumn, WeekCalendar, TeamDay and any other the search finds) into render. Emails read full plus legacy. Satisfies **AC-15**, **AC-16**
-6. Run `rename-0071.ts`; hand delete the press scale uses; fix whatever lookups the tests still flag. Satisfies **AC-8**, **AC-10**, **AC-11**, **AC-12**
+6. Run `rename-0071.ts`; fix whatever lookups the tests still flag. Satisfies **AC-8**, **AC-10**, **AC-11**, **AC-12**
 7. Fonts: files, fallbacks, preload, packs, OG cards, Storybook wait, tests, size note. Satisfies **AC-9**
-8. Lint: Stylelint refuses `zoom` and transitions on `filter` or `backdrop-filter`; 0002's renamed name fixtures updated (`duration-fast` is a real token again). Satisfies **AC-7**, **AC-11**
+8. Lint: Stylelint refuses `zoom`; 0002's renamed name fixtures updated (`duration-fast` is a real token again). Satisfies **AC-7**
 9. Contrast: the new surfaces list and pairs, legacy colours read, `danger-hover` and the focus shadows set; run the suite, make the smallest lightness moves in the source, list them in rationale.md. Satisfies **AC-12**, **AC-13**
 10. Reshoot the 2,694 baselines in the pinned image, diff the folder, review a before and after sheet of a sample from every component folder in both themes together with the contrast move list, then commit. Satisfies **AC-14**
 11. Full check, tests, size, build; `/check verify` against `verify.md`; `/sync` writes the porting rule. Satisfies **AC-15**, **AC-17**
@@ -281,9 +283,10 @@ Tracer Bullet: the thinnest end to end thread is "source → generator → one a
 - Until phase 1, live screens show new sizes, Geist and new colours on old component designs.
 - Some prototype colours move slightly to meet contrast, so the app and the artifact differ there until the artifact is republished.
 - Container queries switch at slightly different layouts until each phase retunes them.
-- Public page motion becomes the app's scale (slightly faster than the tuned `public-*` values) and published pages using "Modern" change from Inter to Geist.
+- The public booking page keeps its calmer pace through legacy `duration-public-*` tokens until phase 6; other public pages move to the prototype scale. Published pages using "Modern" change from Inter to Geist.
 - Every open branch that touches CSS needs the rename script before rebasing; `feat/marketing-redesign` is one.
 - `legacy.json` is a second hand edited file until it empties.
+- Every page's tokens grew (the prototype's colours and styles, the legacy set, the Geist fallback faces): the hosted form's CSS budget goes from 18 kB to 18.8 kB and the booking page's from 18.7 kB to 19.5 kB (measured 18.57 and 19.37 kB gzipped). The app's own sizes are kept out of public pages in `tokens-app.css`, which only the app and the stories load.
 
 **Neutral**:
 - 2,694 baselines change in one commit.

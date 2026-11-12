@@ -1,30 +1,31 @@
-// AC-4: every pair the components draw meets its minimum in both themes, on
-// the synced tokens.json. The fixtures put back the values of artifact
-// versions 8 and 12, proving the test catches the pairs that missed then.
+// AC-4 (spec 0002) and AC-12 (spec 0071): every pair the components draw meets
+// its minimum in both themes, on tokens.json plus legacy.json's colours. The
+// fixture puts back the prototype's published values before spec 0071's
+// lightness moves, proving the test catches the pairs that missed then.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { checkContrast, contrastRatio, resolveColor, type ContrastCheck } from './contrast.ts';
-import { type ColorFamily, ShadowFamily, TokensFile } from './grammar.ts';
+import { type ColorFamily, LegacyFile, TokensFile } from './grammar.ts';
 
 const PACKAGE = path.resolve(import.meta.dirname, '..');
-const tokens = TokensFile.parse(JSON.parse(readFileSync(path.join(PACKAGE, 'tokens.json'), 'utf8')));
-
-/** The values these five tokens had in artifact version 8, before the contrast fixes. */
-const VERSION_8: Record<string, Partial<Record<'light' | 'dark', string>>> = {
-  'text-tertiary': { light: '#6c7077', dark: '#888c94' },
-  danger: { light: '#cf3432' },
-  'control-border': { light: '#838892' },
-  'accent-hover': { dark: '#538bf3' },
+const source = TokensFile.parse(JSON.parse(readFileSync(path.join(PACKAGE, 'tokens.json'), 'utf8')));
+const legacy = LegacyFile.parse(JSON.parse(readFileSync(path.join(PACKAGE, 'legacy.json'), 'utf8')));
+/** The colours the app draws with: the source's, then legacy's. */
+const tokens = {
+  color: { ...source.color, tokens: [...source.color.tokens, ...(legacy.color?.tokens ?? [])] },
 };
 
-/** Version 12: the focus ring and checkbox edges on selected rows, before `accent-line` (spec 0003). */
-const VERSION_12: typeof VERSION_8 = {
-  'control-border': { light: '#7b808a', dark: '#7b808a' },
-  'accent-line': { dark: '#266df0' },
+/** The prototype's published values (Timefix design system v55) of the tokens spec 0071 moved for contrast. */
+const PROTOTYPE: Record<string, Partial<Record<'light' | 'dark', string>>> = {
+  'text-tertiary': { light: '#6b6b74', dark: '#8b8b94' },
+  danger: { light: '#d0312d' },
+  success: { light: '#12805c' },
+  warning: { light: '#a15c00' },
+  'control-border': { light: '#8a8a93', dark: '#6e6e78' },
 };
 
-function withValues(color: ColorFamily, values: typeof VERSION_8): ColorFamily {
+function withValues(color: ColorFamily, values: typeof PROTOTYPE): ColorFamily {
   return {
     ...color,
     tokens: color.tokens.map((token) =>
@@ -51,36 +52,16 @@ describe('contrast (AC-4)', () => {
   });
 
   it('measures every pair in the table, in both themes', () => {
-    expect(checkContrast(tokens.color)).toHaveLength(126);
+    expect(checkContrast(tokens.color)).toHaveLength(182);
   });
 
-  it('catches the pairs that missed in artifact version 8', () => {
-    const missed = failures(withValues(tokens.color, VERSION_8)).map((line) => line.replace(/ \d+\.\d+ </, ' <'));
-    expect(missed).toEqual([
-      'light: text-tertiary on surface-hover < 4.5',
-      'light: text-tertiary on surface-selected < 4.5',
-      'light: danger on surface-hover < 4.5',
-      'light: danger on surface-selected < 4.5',
-      'light: control-border on surface-sidebar < 3.5',
-      'light: control-border on surface-subtle < 3.5',
-      'light: control-border on surface-hover < 3.5',
-      'light: control-border on surface-selected < 3.5',
-      'light: control-border on surface-column < 3.5',
-      'light: control-border on accent-soft < 3.5',
-      'dark: text-tertiary on surface-hover < 4.5',
-      'dark: text-tertiary on surface-selected < 4.5',
-      'dark: on-accent on accent-hover < 4.5',
-    ]);
-  });
-
-  it('catches the selected row pairs that missed in artifact version 12', () => {
-    const missed = failures(withValues(tokens.color, VERSION_12)).map((line) => line.replace(/ \d+\.\d+ </, ' <'));
-    expect(missed).toEqual([
-      'light: control-border on surface-selected < 3.5',
-      'light: control-border on accent-soft < 3.5',
-      'dark: control-border on surface-selected < 3.5',
-      'dark: accent-line on surface-selected < 3',
-    ]);
+  it("catches the pairs the prototype's published colours missed (spec 0071)", () => {
+    const missed = failures(withValues(tokens.color, PROTOTYPE)).map((line) => line.replace(/ \d+\.\d+ </, ' <'));
+    expect(missed).toHaveLength(25);
+    expect(missed).toContain('light: control-border on surface < 3.5');
+    expect(missed).toContain('light: text-tertiary on surface-selected < 4.5');
+    expect(missed).toContain('dark: control-border on surface-selected < 3.5');
+    expect(missed).toContain('light: success on success-soft < 4.5');
   });
 
   it('fails a pair whose colour has alpha or is a function, naming it', () => {
@@ -103,16 +84,18 @@ describe('contrast (AC-4)', () => {
 });
 
 describe('focus shadows', () => {
-  it('draw the halo in the focus-ring colour of each theme', () => {
-    const shadow = ShadowFamily.parse(tokens.shadow);
-    const focus = shadow.tokens.find((token) => token.name === 'shadow-focus');
+  it('draw a surface gap, then the solid focus-ring colour, in each theme (spec 0071)', () => {
+    const shadows = legacy.shadow?.tokens ?? [];
     const ring = tokens.color.tokens.find((token) => token.name === 'focus-ring');
-    expect(focus, 'shadow-focus').toBeDefined();
-    for (const theme of ['light', 'dark'] as const) {
-      const ringValue = typeof ring?.value === 'string' ? ring.value : ring?.value[theme];
-      const focusValue = typeof focus?.value === 'string' ? focus.value : focus?.value[theme];
-      expect(ringValue).toBeDefined();
-      expect(focusValue).toContain(ringValue);
+    for (const name of ['shadow-focus', 'shadow-focus-inset']) {
+      const focus = shadows.find((token) => token.name === name);
+      expect(focus, name).toBeDefined();
+      for (const theme of ['light', 'dark'] as const) {
+        const ringValue = typeof ring?.value === 'string' ? ring.value : ring?.value[theme];
+        const focusValue = typeof focus?.value === 'string' ? focus.value : focus?.value[theme];
+        expect(ringValue).toBeDefined();
+        expect(focusValue).toContain(` ${ringValue ?? ''}`);
+      }
     }
   });
 });

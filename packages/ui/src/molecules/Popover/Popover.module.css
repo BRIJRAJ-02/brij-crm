@@ -79,11 +79,11 @@
   }
 
   .root[data-entering] {
-    animation: grow var(--duration-popover) var(--ease-out);
+    animation: grow var(--duration-fast) var(--ease-smooth-out);
   }
 
   .root[data-exiting] {
-    animation: shrink var(--duration-exit) var(--ease-out) forwards;
+    animation: shrink var(--duration-quick) var(--ease-smooth-out) forwards;
   }
 
   .root[data-opened-by='keyboard'][data-entering],
@@ -94,14 +94,14 @@
   @keyframes grow {
     from {
       opacity: 0;
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
     }
   }
 
   @keyframes shrink {
     to {
       opacity: 0;
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
     }
   }
 

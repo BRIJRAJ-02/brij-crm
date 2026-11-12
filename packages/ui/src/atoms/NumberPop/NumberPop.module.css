@@ -4,7 +4,7 @@
 @layer components {
   .root {
     /* Tokens only: the stagger is a quarter of the press, the blur the smallest space step. */
-    --digit-stagger: calc(var(--duration-press) / 4);
+    --digit-stagger: calc(var(--duration-quick) / 4);
     --digit-blur: var(--space-2);
 
     display: inline-flex;
@@ -19,7 +19,7 @@
   .digit {
     display: inline-block;
     white-space: pre;
-    animation: digit-in var(--duration-move) var(--ease-out) both;
+    animation: digit-in var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   .digit[data-same] {

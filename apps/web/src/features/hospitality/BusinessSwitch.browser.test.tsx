@@ -1,7 +1,7 @@
 // The sidebar's business switcher in Chromium (spec 0065 H7, AC-6516, AC-6517): nothing with one business; from two,
 // the business in use as the Business group's first row, opening a menu that switches. axe is clean in light and dark at
 // a desktop's and a phone's width. With VITE_SHOT_DIR set, the open menu and the Businesses list are photographed there.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   BusinessView,
   DataLayer,

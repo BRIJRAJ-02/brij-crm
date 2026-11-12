@@ -5,12 +5,12 @@
   .root {
     /* Tokens only: the stagger is a quarter of the press, the pace a dialog's (the longest UI motion token), and the
        blur the smallest space step. */
-    --reveal-stagger: calc(var(--duration-press) / 4);
-    --reveal-pace: var(--duration-modal);
+    --reveal-stagger: calc(var(--duration-quick) / 4);
+    --reveal-pace: var(--duration-fast);
     --reveal-blur: var(--space-2);
 
     display: block;
-    animation: reveal-in var(--reveal-pace) var(--ease-out) both;
+    animation: reveal-in var(--reveal-pace) var(--ease-smooth-out) both;
     animation-delay: calc(var(--reveal-stagger) * (var(--reveal-place, 1) - 1));
   }
 

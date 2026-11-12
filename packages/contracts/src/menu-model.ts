@@ -606,7 +606,7 @@ interface MenuPresetLook {
 
 /**
  * The six presets (AC-6570 as amended): Warm after checklabs' guest look, Clean in the app's own neutrals, Night for
- * bars, and Linen, Noir and Ronin after checklabs' retired palettes with their font pairs restated in our pack (Inter
+ * bars, and Linen, Noir and Ronin after checklabs' retired palettes with their font pairs restated in our pack (Geist
  * for the body; Fraunces and Cormorant, which we don't host, become Editorial and Classic). Linen's and Ronin's
  * highlights are moved until they read at 4.5:1 as prices. `menu-model.test.ts` proves each passes AA in its own colours.
  */

@@ -37,6 +37,8 @@ await build({ entryPoints: { app: `standalone/${name}.tsx` }, bundle: true, form
   alias: { react: '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react', 'react-dom': '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react-dom' },
   define: { 'process.env.NODE_ENV': '"production"' }, legalComments: 'none', logLevel: 'warning', plugins: [zoomFix] });
 const t = JSON.parse(readFileSync('../ds/project/tokens.json', 'utf8'));
+// The app scale lives in tokens.json (density-app), the same number packages/tokens generates the real app's values from.
+const density = t.density?.tokens.find((x) => x.name === 'density-app')?.value ?? '1';
 const v = (x, th) => (typeof x === 'string' ? x : x[th] ?? x.light);
 const themed = (th) => [...t.color.tokens, ...t.shadow.tokens].map((c) => `--${c.name}:${v(c.value, th)};`).join('');
 const other = ['spacing', 'radius', 'size', 'duration', 'easing', 'distance', 'scale', 'blur', 'zIndex', 'opacity', 'borderWidth'].filter((k) => t[k]).flatMap((k) => t[k].tokens).map((x) => `--${x.name}:${x.value};`).join('')
@@ -61,11 +63,11 @@ ${fontLinks}
 ${tokens}
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${themed('dark')} color-scheme: dark; } }
 [data-theme="dark"] { color-scheme: dark; }
-/* The dashboard draws at 88% (owner, 11 Nov: 80% for smaller type and padding, then type 10% larger); public pages step back to 100%.
+/* The dashboard draws at density-app, 88% (owner, 11 Nov: 80% for smaller type and padding, then type 10% larger); public pages step back to 100%.
    The app and each overlay layer (popovers, menus, dialogs, toasts: React Aria portals them into body) are zoomed on
    their own, never the root, so React Aria measures the page in one coordinate space; the zoom-fix build plugin
    converts its placed lengths into each popover's own zoomed space. */
-html:not([data-guest]) #root, html:not([data-guest]) body > :not(#root) { zoom: 0.88; }
+html:not([data-guest]) #root, html:not([data-guest]) body > :not(#root) { zoom: ${density}; }
 html, body { height: 100%; overflow: hidden; }
 body { margin: 0; background: var(--canvas); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }

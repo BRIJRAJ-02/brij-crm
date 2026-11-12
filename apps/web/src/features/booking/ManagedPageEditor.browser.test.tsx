@@ -5,7 +5,7 @@
 // is NOT covered here: it renders through `PageEditor`, and faking enough of that 1600 line screen to render it
 // cost more than the coverage was worth. Its lock is tested where it is enforced, on the server
 // (`packages/core/src/booking/managed.test.ts`).
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import { type CaptureListState, type CaptureListView, type DataLayer, type ManagedPageView } from '@crm/data';
 import { PageColumn, TopBar } from '@crm/ui';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';

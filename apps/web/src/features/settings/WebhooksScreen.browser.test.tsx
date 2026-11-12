@@ -17,7 +17,7 @@ import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { SettingsTopBarSlot } from './topBarSlot.ts';
 import { WebhooksScreen } from './WebhooksScreen.tsx';
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 
 const ENDPOINT: WebhookEndpoint = {
   id: '0193a000-0000-7000-8000-000000000001',

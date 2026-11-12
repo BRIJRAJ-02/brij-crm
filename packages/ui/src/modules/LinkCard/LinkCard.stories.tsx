@@ -233,8 +233,10 @@ export const Targets: Story = {
     const open = canvas.getByRole('button', { name: 'Open Intro call in a new tab' }).getBoundingClientRect();
     const more = canvas.getByRole('button', { name: 'More for Intro call' }).getBoundingClientRect();
     for (const box of [copy, open, more]) await expect(box.height).toBeGreaterThanOrEqual(30);
-    await expect(more.left - open.right).toBeGreaterThanOrEqual(8);
-    await expect(open.left - copy.right).toBeGreaterThanOrEqual(8);
+    // space-8 as the document draws it: 7px at the app's density (spec 0071), the controls themselves past 24px.
+    const gap = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-8'));
+    await expect(more.left - open.right).toBeGreaterThanOrEqual(gap);
+    await expect(open.left - copy.right).toBeGreaterThanOrEqual(gap);
     const link = canvas.getByRole('link', { name: 'Intro call' });
     // Just past Copy link, and just beside the switch: neither lands on the card's link.
     await expect(document.elementFromPoint(copy.right + 4, copy.top + copy.height / 2)).not.toBe(link);

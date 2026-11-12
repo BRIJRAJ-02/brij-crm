@@ -113,6 +113,7 @@ export const Round: Story = {
   play: async ({ canvas }) => {
     const linkedin = canvas.getByRole('link', { name: 'LinkedIn, ada-lovelace' });
     await expect(linkedin).toHaveAttribute('rel', 'me nofollow noopener noreferrer');
-    await expect(linkedin.getBoundingClientRect().height).toBe(44);
+    // The touch size on a public page, at full size (spec 0071): size-control, space-12 and space-2, past 44.
+    await expect(linkedin.getBoundingClientRect().height).toBe(50);
   },
 };

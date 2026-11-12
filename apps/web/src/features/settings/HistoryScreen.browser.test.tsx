@@ -3,7 +3,7 @@
 // member sent on there; rows under Today, Yesterday or their day; a run of the same change one row with its count;
 // Who on one line with an avatar; each state of the log in its words; a row read as its whole sentence; and axe in
 // light and dark at 1280 and 375 wide.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { AuditEntryView, AuditLog, AuditLogState, DataLayer } from '@crm/data';
 import { isRedirect } from '@tanstack/react-router';
 import axe from 'axe-core';
@@ -260,7 +260,10 @@ describe('Workspace changes', () => {
     const who = page.getByRole('gridcell').elements()[0];
     expect(who?.querySelector('[aria-hidden="true"], img')).not.toBeNull();
     const line = who === undefined ? 0 : Number.parseFloat(getComputedStyle(who).lineHeight);
-    expect(who === undefined ? 0 : who.getBoundingClientRect().height).toBeLessThan(line * 2);
+    // The words' own box, not the cell's: a row is taller than two lines of text (spec 0071's row height).
+    const words = document.createRange();
+    if (who !== undefined) words.selectNodeContents(who);
+    expect(words.getBoundingClientRect().height).toBeLessThan(line * 2);
     expect(who === undefined ? '' : getComputedStyle(who).whiteSpace).toBe('nowrap');
   });
 

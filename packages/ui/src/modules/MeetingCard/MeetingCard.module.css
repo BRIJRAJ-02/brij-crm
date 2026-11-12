@@ -32,8 +32,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 
@@ -160,8 +160,8 @@
   .sectionLabel {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* The panel: the side panel is the card, so it takes the panel's width; the title and notices start at its edge
@@ -204,7 +204,7 @@
   }
 
   .root[data-variant='popup'] .sectionLabel {
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .fold {

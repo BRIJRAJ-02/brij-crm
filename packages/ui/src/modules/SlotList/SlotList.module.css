@@ -24,7 +24,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   /* Without a heading the clock switch still sits at the row's end; a heading alone goes there too, but in groups. */
@@ -36,21 +36,21 @@
   .heading {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .headingWords {
     display: inline-block;
-    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
+    animation: slot-swap var(--duration-fast) var(--ease-in-out) both;
   }
 
   /* The offers variant's day: a label over its times (the booking chat). */
   .day {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .root[data-variant='offers'] {
@@ -99,7 +99,7 @@
   .badge {
     display: inline-flex;
     margin-inline-start: auto;
-    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
+    animation: slot-swap var(--duration-fast) var(--ease-in-out) both;
   }
 
   /* Under the page breakpoint the times run under the month, two across at least. */
@@ -126,8 +126,8 @@
   .item {
     display: flex;
     gap: var(--space-8);
-    animation: slot-in var(--duration-hover) var(--ease-out) both;
-    animation-delay: calc(var(--slot-index, 0) * var(--duration-hover) / 15);
+    animation: slot-in var(--duration-quick) var(--ease-smooth-out) both;
+    animation-delay: calc(var(--slot-index, 0) * var(--duration-quick) / 15);
   }
 
   /* A time's place while the times load: a time's own height, and no entrance,
@@ -158,9 +158,9 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition:
-      border-color var(--duration-hover) var(--ease-hover),
-      background-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   /* Under a finger every time is at least 44 tall, the size Apple and Material ask for (QA B-16). */
@@ -184,8 +184,8 @@
     background: var(--accent);
     color: var(--on-accent);
     transition:
-      border-color var(--duration-move) var(--ease-out),
-      background-color var(--duration-move) var(--ease-out);
+      border-color var(--duration-fast) var(--ease-smooth-out),
+      background-color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .slot[data-busy] {
@@ -194,7 +194,7 @@
   }
 
   .slot:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 
@@ -202,7 +202,7 @@
      new ones fade in, so the list never redraws or reorders under the visitor. */
   .time {
     white-space: nowrap;
-    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
+    animation: slot-swap var(--duration-fast) var(--ease-in-out) both;
   }
 
   /* Another clock's time under it (a host's Reschedule: the guest's), quieter, at the label size. */
@@ -225,7 +225,7 @@
 
   .best {
     color: var(--link);
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .slot[aria-pressed='true'] .best,
@@ -246,7 +246,7 @@
   .item[data-answer] .slot {
     flex-direction: row;
     gap: var(--space-6);
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
     color: var(--link);
   }

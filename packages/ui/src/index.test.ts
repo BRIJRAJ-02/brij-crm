@@ -312,6 +312,7 @@ describe('@crm/ui', () => {
       'useNow',
       'usePhoneWidth',
       'usePhotoCrop',
+      'usePublicScale',
       'useToasts',
       'weekRangeLabel',
     ]);

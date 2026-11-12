@@ -32,7 +32,7 @@ New. Nothing in the library draws a conversation: ActivityFeed and NoteList are 
 ## Looks like a chat (owner, 4 November 2026)
 
 - `host` (`name`, `image`, `label`) is who speaks: the host's first name, or a team page's name, over the first message of each run, and their face (the rail's picture or initials, `Avatar` `md`) at the run's foot, level with the bubble's last line. `visitorName` gives the visitor's initials beside their messages once the chat has heard it, and a plain person mark before that. Every line keeps the face's place, so a run's bubbles share one edge.
-- The host's bubbles are neutral (`--surface-sunken`); the visitor's are in the page's accent with on-accent text. The corner nearest the face is the small one. Lines in a run sit close, and a new speaker starts further down.
+- The host's bubbles are neutral (`--surface-subtle`); the visitor's are in the page's accent with on-accent text. The corner nearest the face is the small one. Lines in a run sit close, and a new speaker starts further down.
 - The visitor's possible answers wear the accent, outlined: the times as round chips and the quick replies at the visitor's side. These reuse SlotList's and Button's own colour names, set on the offers and suggestions.
 - While a reply is out, the host types: three dots in their bubble (still under reduced motion).
 - `answer` on a line (`email`, `tel`, `name`) sets the prompt box's keyboard and autofill. The box's accessible name is the current question.

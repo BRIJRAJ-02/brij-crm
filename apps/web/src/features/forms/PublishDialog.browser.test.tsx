@@ -2,7 +2,7 @@
 // nothing asked (the owner, 5 November 2026); the live dialog then says it in one line and shares the link, with one
 // quiet way to the Share tab's embeds.
 // The layout is measured, so the library's tokens come first, as main.tsx loads them.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, FormDocument, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';

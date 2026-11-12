@@ -826,8 +826,8 @@ export const Reservation: Story = {
     await expect(canvas.getByRole('button', { name: 'Pick a time' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: /^19:30/ }));
     const book = canvas.getByRole('button', { name: 'Continue · Fri 9 Oct, 19:30' });
-    // The ink, never the app's blue: with no look stylesheet the Book bar takes the inverse surface (#18191d in light).
-    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(24, 25, 29)');
+    // The ink, never the app's blue: with no look stylesheet the Book bar takes the inverse surface (#18181b in light).
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(24, 24, 27)');
     // The times and the month drew in while the play ran: settled, so the theme checks read their real colours.
     await settleAnimations();
   },

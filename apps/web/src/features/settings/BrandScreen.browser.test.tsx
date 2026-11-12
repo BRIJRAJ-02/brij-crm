@@ -2,7 +2,7 @@
 // wears it at once, with the same variables the page's stylesheet sets; a member reads the kit with no way to change
 // it; and axe is clean in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BrandHeldState, BrandKit, BrandStore } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

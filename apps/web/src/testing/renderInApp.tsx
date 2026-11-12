@@ -5,6 +5,7 @@
 // screen under test calls; tests reach the page through `vitest/browser`.
 import type { CaptureListView, DataLayer } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
+import { applyScaleForPath } from '@crm/ui/theme';
 import {
   createMemoryHistory,
   createRootRouteWithContext,
@@ -60,6 +61,8 @@ export async function renderInApp(
   screen: () => ReactNode,
   { data, pattern, at, toasts = createToasts(), permissions }: InAppOptions,
 ): Promise<InApp> {
+  // The app draws at its density and its public screens at full size, as theme-boot.js sets them (spec 0071).
+  applyScaleForPath(document.documentElement, at);
   const layer = {
     calendar: { view: () => calendarView },
     nav: { source: () => stillLoading, change: () => undefined },

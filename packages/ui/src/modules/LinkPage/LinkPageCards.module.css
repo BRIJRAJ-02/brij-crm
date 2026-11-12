@@ -60,9 +60,9 @@
 
   /* The cards enter once, one after another (spec 0068, AC-6803), on the live page only. */
   .cell[data-enter] {
-    --enter-stagger: calc(var(--duration-press) / 4);
+    --enter-stagger: calc(var(--duration-quick) / 4);
 
-    animation: card-in var(--duration-modal) var(--ease-out) both;
+    animation: card-in var(--duration-fast) var(--ease-smooth-out) both;
     animation-delay: calc(var(--enter-stagger) * (var(--enter-place, 1) - 1));
   }
 
@@ -106,8 +106,8 @@
     box-shadow: var(--page-card-shadow, var(--shadow-xs));
     color: var(--page-card-text, var(--text));
     transition:
-      box-shadow var(--duration-hover) var(--ease-hover),
-      transform var(--duration-press) var(--ease-out);
+      box-shadow var(--duration-quick) var(--ease-out),
+      transform var(--duration-quick) var(--ease-smooth-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -140,10 +140,10 @@
 
   .cardName {
     color: var(--page-card-text, var(--text));
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--page-face, var(--font-sans));
     font-synthesis: none;
-    letter-spacing: var(--tracking-title);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 
@@ -199,7 +199,7 @@
   .footTitle {
     margin-block-start: auto;
     color: var(--page-card-text, var(--text));
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--page-face, var(--font-sans));
     font-synthesis: none;
     overflow-wrap: anywhere;
@@ -220,7 +220,7 @@
 
   /* Open breathes: a soft ring grows from the dot and fades, at the pulse token's pace. */
   .dot[data-state='open'] {
-    animation: breathe var(--duration-pulse) var(--ease-out) infinite;
+    animation: breathe var(--duration-pulse) var(--ease-smooth-out) infinite;
   }
 
   @keyframes breathe {
@@ -246,7 +246,7 @@
     align-items: center;
     gap: calc(var(--space-2) / 2);
     min-inline-size: 0;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   .bar {
@@ -255,7 +255,7 @@
     block-size: calc(var(--bar, 1) / 31 * 100%);
     border-radius: var(--radius-full);
     background: var(--page-card-border, var(--border-strong));
-    transition: background-color var(--duration-move) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .bar[data-played] {
@@ -359,7 +359,7 @@
 
   .logoImage {
     inline-size: auto;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     max-inline-size: var(--size-column-narrow);
     object-fit: contain;
   }
@@ -389,7 +389,7 @@
     background: var(--page-surface, var(--surface-subtle));
     color: inherit;
     text-decoration: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .piece[data-pressable]:focus-visible {
@@ -453,7 +453,7 @@
 
   .dateDay {
     color: var(--page-card-text, var(--text));
-    font: var(--text-title);
+    font: var(--text-heading);
   }
 
   /* How I work: one step large, then the switcher. The step crossfades in as it changes. */
@@ -463,7 +463,7 @@
     flex-direction: column;
     justify-content: flex-end;
     gap: var(--space-4);
-    animation: step-in var(--duration-move) var(--ease-out);
+    animation: step-in var(--duration-fast) var(--ease-smooth-out);
   }
 
   @keyframes fade-in {
@@ -481,7 +481,7 @@
   .stepTitle {
     margin: 0;
     color: var(--page-card-text, var(--text));
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--page-face, var(--font-sans));
     font-synthesis: none;
   }

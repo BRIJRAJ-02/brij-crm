@@ -63,8 +63,8 @@
     padding-block: var(--space-12) var(--space-4);
     padding-inline: var(--space-4);
     color: var(--text-tertiary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* Inline, under its block's own heading (a Card's title and padding): the first period needs no air of its own. */
@@ -255,7 +255,7 @@
     letter-spacing: var(--tracking-body);
     text-decoration: none;
     outline: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {

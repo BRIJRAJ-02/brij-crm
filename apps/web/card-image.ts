@@ -154,7 +154,9 @@ export interface CardSource {
 
 /** What `api/card.mjs` reads off the disk once and hands in for every card. */
 export interface CardAssets {
-  readonly inter: ArrayBuffer | Buffer;
+  /** Geist at 400 and 500, as static WOFF files: satori reads no woff2 and no variable axes. */
+  readonly regular: ArrayBuffer | Buffer;
+  readonly medium: ArrayBuffer | Buffer;
   readonly display: ArrayBuffer | Buffer;
   /** The Timefix lockup as a data URI (the white one, made for a dark ground). */
   readonly wordmark: string;
@@ -221,7 +223,7 @@ export function cardTree(source: CardSource, assets: CardAssets): Element {
         height: `${String(CARD_HEIGHT)}px`,
         background: INK,
         position: 'relative',
-        fontFamily: 'Inter',
+        fontFamily: 'Geist',
       },
     },
     el('img', {
@@ -343,7 +345,7 @@ export function stripTree(source: CardSource, assets: CardAssets): Element {
         // (the owner, 26 October 2026). A seam across a pass reads as a mistake, not a design.
         background: 'transparent',
         position: 'relative',
-        fontFamily: 'Inter',
+        fontFamily: 'Geist',
       },
     },
     el('img', {
@@ -400,11 +402,11 @@ export function stripTree(source: CardSource, assets: CardAssets): Element {
   );
 }
 
-/** The fonts satori is given: Inter for everything but the name and the lockup, which are the display face. */
+/** The fonts satori is given: Geist for everything but the name and the lockup, which are the display face. */
 export function cardFonts(assets: CardAssets) {
   return [
-    { name: 'Inter', data: assets.inter, weight: 400 as const, style: 'normal' as const },
-    { name: 'Inter', data: assets.inter, weight: 500 as const, style: 'normal' as const },
+    { name: 'Geist', data: assets.regular, weight: 400 as const, style: 'normal' as const },
+    { name: 'Geist', data: assets.medium, weight: 500 as const, style: 'normal' as const },
     { name: 'Host Grotesk', data: assets.display, weight: 600 as const, style: 'normal' as const },
   ];
 }

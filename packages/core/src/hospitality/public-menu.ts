@@ -282,7 +282,7 @@ const pressBlock = (isStill: boolean) =>
  * default and dark under their dark scheme; a pinned one writes its one side. Every value is a constant or a checked
  * hex, whatever a row holds, since this is CSS on a public page. A guest page also takes the look's body face as its
  * `--font-sans` (so the booking parts, which draw through the text tokens, wear it), unless that is the device's or
- * Inter, which leaves them as they are; the editor's preview, linked inside the app, leaves that out (`inApp`).
+ * Geist, which leaves them as they are; the editor's preview, linked inside the app, leaves that out (`inApp`).
  */
 export function menuLookStylesheet(brand: PageBrand, options: { readonly inApp?: boolean } = {}): string {
   const look = lookOf(brand);

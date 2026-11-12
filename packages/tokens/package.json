@@ -7,7 +7,11 @@
     "./tokens.json": "./tokens.json",
     "./packs.css": "./packs.css",
     "./packs-templates.css": "./packs-templates.css",
-    "./packs": "./src/packs.ts"
+    "./packs": "./src/packs.ts",
+    "./values": "./values.ts",
+    "./legacy.json": "./legacy.json",
+    "./fallbacks.css": "./fallbacks.css",
+    "./tokens-app.css": "./tokens-app.css"
   },
   "scripts": {
     "build:tokens": "node scripts/generate.ts",

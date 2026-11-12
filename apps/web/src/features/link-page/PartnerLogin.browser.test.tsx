@@ -4,7 +4,7 @@
 // frame is one line of information with no action, and draws nothing once they have a login. axe is clean in light
 // and dark. With VITE_SHOT_DIR set, each state is photographed there at 1280 and 390, light and dark, the card in the
 // overview it sits under.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, LinkPageStore, MyTimefixLogin, TeamLinkPage } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

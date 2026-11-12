@@ -15,7 +15,7 @@
   }
 
   .countValue[data-roll] {
-    animation: count-roll var(--duration-popover) var(--ease-out);
+    animation: count-roll var(--duration-fast) var(--ease-smooth-out);
   }
 
   @keyframes count-roll {

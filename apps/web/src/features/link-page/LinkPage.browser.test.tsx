@@ -5,7 +5,7 @@
 // Private switch (AC-23): a page made for its owner goes live as they open it, said once with Undo, and the switch
 // sends their own choice.
 // The tokens, so the phone bar's widths below are the real ones.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import {
   dataError,
   DEFAULT_PAGE_THEME,

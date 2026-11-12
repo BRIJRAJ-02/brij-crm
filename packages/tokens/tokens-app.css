@@ -1,0 +1,57 @@
+/* Generated from tokens.json (artifact version unpublished) by packages/tokens/scripts/generate.ts. Do not edit. */
+
+/* The app's sizes (spec 0071): every scaled token at density-app, under <html data-scale="app">. */
+
+@layer tokens {
+  :root[data-scale='app'] {
+    --space-2: 2px;
+    --space-4: 4px;
+    --space-6: 5px;
+    --space-8: 7px;
+    --space-12: 11px;
+    --space-16: 14px;
+    --space-20: 18px;
+    --space-24: 21px;
+    --space-32: 28px;
+    --space-48: 42px;
+    --space-64: 56px;
+    --radius-xs: 4px;
+    --radius-sm: 5px;
+    --radius-md: 9px;
+    --radius-lg: 12px;
+    --radius-xl: 18px;
+    --size-control-sm: 24px;
+    --size-control: 32px;
+    --size-control-lg: 38px;
+    --size-row: 38px;
+    --size-nav-item: 30px;
+    --size-topbar: 50px;
+    --size-sidebar: 225px;
+    --size-icon: 14px;
+    --size-icon-lg: 18px;
+    --size-avatar: 24px;
+    --size-avatar-lg: 38px;
+    --size-menu: 211px;
+    --size-dialog: 422px;
+    --size-dialog-wide: 634px;
+    --size-panel: 387px;
+    --size-measure: 563px;
+    --text-display: 500 28px/36px var(--font-sans);
+    --text-title-lg: 500 21px/28px var(--font-sans);
+    --text-title: 500 16px/22px var(--font-sans);
+    --text-heading: 500 13px/20px var(--font-sans);
+    --text-heading-strong: 600 13px/20px var(--font-sans);
+    --text-heading-regular: 400 13px/20px var(--font-sans);
+    --text-body-lg: 400 14px/22px var(--font-sans);
+    --text-body-lg-strong: 500 14px/22px var(--font-sans);
+    --text-body-strong: 500 12.5px/18px var(--font-sans);
+    --text-body: 400 12.5px/18px var(--font-sans);
+    --text-body-sm: 400 11.5px/18px var(--font-sans);
+    --text-body-sm-strong: 500 11.5px/18px var(--font-sans);
+    --text-body-sm-tight: 400 11.5px/16px var(--font-sans);
+    --text-label: 500 10.5px/14px var(--font-sans);
+    --text-caption: 400 10.5px/14px var(--font-sans);
+    --text-kbd: 500 9.5px/14px var(--font-sans);
+    --text-code: 400 10.5px/16px var(--font-mono);
+  }
+}

@@ -15,14 +15,14 @@
     min-block-size: 0;
     padding: var(--space-8);
     border-radius: var(--radius-lg);
-    background: var(--surface-column);
+    background: var(--surface-subtle);
   }
 
   .head {
     display: flex;
     gap: var(--space-8);
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--text);
@@ -58,7 +58,7 @@
   @media (hover: hover) and (pointer: fine) {
     .collapse {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .collapse:focus-within,
@@ -105,7 +105,7 @@
 
   /* Collapsed: a slim strip two controls wide, the title and count running down it, top to bottom. */
   .root[data-collapsed] {
-    inline-size: calc(2 * var(--size-control));
+    inline-size: calc(2 * var(--size-control-sm));
   }
 
   .root[data-collapsed] .head,

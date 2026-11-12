@@ -32,11 +32,11 @@
   }
 
   .title {
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--site-font-display);
     font-size: var(--site-text-display);
     line-height: var(--site-leading-display);
-    letter-spacing: var(--tracking-note-title);
+    letter-spacing: var(--tracking-title-lg);
   }
 
   .line {

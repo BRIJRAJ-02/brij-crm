@@ -78,12 +78,12 @@ describe('the built stylesheet', () => {
     expect(css).toContain('prefers-color-scheme:dark');
   });
 
-  it('preloads Inter, the face the first screen draws with, by its built name, and no other font', () => {
+  it('preloads Geist, the face the first screen draws with, by its built name, and no other font', () => {
     const preloads = [
       ...html.matchAll(/<link rel="preload" href="\/([^"]+)" as="font" type="font\/woff2" crossorigin>/g),
     ].map((match) => match[1] ?? '');
     expect(preloads).toHaveLength(1);
-    expect(preloads[0]).toMatch(/^assets\/Inter-Variable-latin[\w.-]*\.woff2$/);
+    expect(preloads[0]).toMatch(/^assets\/Geist-Variable-latin[\w.-]*\.woff2$/);
     expect(assets).toContain(preloads[0]?.replace('assets/', ''));
     // Ahead of the stylesheets, so the font starts with the page.
     expect(html.indexOf('rel="preload"')).toBeLessThan(html.search(/<link[^>]+rel="stylesheet"/));
@@ -95,10 +95,8 @@ describe('the built stylesheet', () => {
     for (const url of fontUrls) expect(url).toMatch(/^\/assets\/[\w.-]+\.woff2$/);
     expect(css).not.toContain('data:font');
     expect(css).not.toContain('data:application/font');
-    expect(assets.some((file) => file.startsWith('Inter-Variable-latin') && file.endsWith('.woff2'))).toBe(true);
-    expect(assets.some((file) => file.startsWith('JetBrainsMono-Variable-latin') && file.endsWith('.woff2'))).toBe(
-      true,
-    );
+    expect(assets.some((file) => file.startsWith('Geist-Variable-latin') && file.endsWith('.woff2'))).toBe(true);
+    expect(assets.some((file) => file.startsWith('GeistMono-Variable-latin') && file.endsWith('.woff2'))).toBe(true);
   });
 });
 
@@ -106,7 +104,7 @@ describe('the built page', () => {
   // AC-7: the saved theme applies before the stylesheet and the app load, so
   // the other theme never paints first.
   it('runs theme-boot.js before the stylesheet and the app script', () => {
-    const boot = html.indexOf('<script src="/theme-boot.js"></script>');
+    const boot = html.indexOf('<script src="/theme-boot.js" data-scale="app"></script>');
     expect(boot).toBeGreaterThan(0);
     expect(boot).toBeLessThan(html.search(/<link[^>]+rel="stylesheet"/));
     expect(boot).toBeLessThan(html.search(/<script type="module"/));

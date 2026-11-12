@@ -148,7 +148,7 @@
     flex-direction: column;
     gap: var(--space-12);
     align-items: center;
-    block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-16)));
+    block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-topbar) - 3 * var(--space-16)));
   }
 
   /* On its own, with no heading row: the phone sits as one composed object in the room its container gives it
@@ -164,7 +164,7 @@
 
   /* In the sheet, the window less its bar and the sheet's own. */
   .preview[data-place='sheet'] {
-    block-size: max(var(--size-panel), calc(100dvh - 3 * var(--size-bar) - 4 * var(--space-24)));
+    block-size: max(var(--size-panel), calc(100dvh - 3 * var(--size-topbar) - 4 * var(--space-24)));
   }
 
   /* The heading row: the heading, then the controls at its end, as tall as an input so it lines up with the
@@ -179,15 +179,15 @@
     inline-size: max-content;
     min-inline-size: calc(var(--phone-width) * var(--phone-scale));
     max-inline-size: 100%;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
   }
 
   .heading {
     flex: 1;
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .controls {
@@ -219,7 +219,7 @@
     align-items: center;
     padding: var(--space-16);
     border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* What the frame shows keeps its own height on the canvas, so the frame can hug it. */
@@ -317,7 +317,7 @@
 
   /* A long preview's screen, or a long page's frame, takes focus to be scrolled: the phone's outline shows it. */
   .phone:has(.screen:focus-visible, .viewport:focus-visible) {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -485,8 +485,8 @@
   .columnsHeading {
     margin: 0;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .columnsMain {
@@ -540,7 +540,7 @@
       position: sticky;
       inset-block-start: 0;
       box-sizing: border-box;
-      block-size: calc(100dvh - var(--size-bar));
+      block-size: calc(100dvh - var(--size-topbar));
       padding: var(--space-24) var(--space-32);
     }
 

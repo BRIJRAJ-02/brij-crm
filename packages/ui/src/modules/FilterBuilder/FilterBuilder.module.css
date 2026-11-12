@@ -61,7 +61,7 @@
 
   /* A range's amount: room for three digits. */
   .amount {
-    inline-size: calc(3 * var(--size-control));
+    inline-size: calc(3 * var(--size-control-sm));
   }
 
   .operand {

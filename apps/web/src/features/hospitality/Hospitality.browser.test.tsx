@@ -3,7 +3,7 @@
 // hours; a place's page draws a late Friday as running into the next morning; a place's tables add "T7 to T16" in one go and take a table offline at once. axe is clean in
 // light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each screen is also photographed there.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   AppsView,
   BusinessView,

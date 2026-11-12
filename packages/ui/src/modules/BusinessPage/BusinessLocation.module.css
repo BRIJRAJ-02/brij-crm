@@ -25,10 +25,10 @@
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     border-radius: var(--radius-lg);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     color: var(--text);
   }
 

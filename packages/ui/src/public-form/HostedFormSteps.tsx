@@ -100,7 +100,7 @@ function leaveFrom(form: HTMLElement | null, way: 'forward' | 'back'): void {
   parent.insertBefore(ghost, form);
   const tokens = getComputedStyle(form);
   const distance = tokens.getPropertyValue('--space-8').trim() || '0px';
-  const duration = Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0;
+  const duration = Number.parseFloat(tokens.getPropertyValue('--duration-quick')) || 0;
   const remove = () => {
     ghost.remove();
   };
@@ -114,7 +114,7 @@ function leaveFrom(form: HTMLElement | null, way: 'forward' | 'back'): void {
             { opacity: 1, transform: 'none' },
             { opacity: 0, transform: `translateY(${way === 'back' ? distance : `calc(-1 * ${distance})`})` },
           ],
-      { duration, easing: tokens.getPropertyValue('--ease-out').trim() || 'ease-out', fill: 'forwards' },
+      { duration, easing: tokens.getPropertyValue('--ease-smooth-out').trim() || 'ease-out', fill: 'forwards' },
     )
     .finished.then(remove, remove);
 }

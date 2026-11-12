@@ -23,9 +23,9 @@
     align-items: center;
     gap: var(--space-6);
     box-sizing: border-box;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     padding-inline: var(--space-8) var(--space-2);
-    border: var(--border-width-hairline) solid var(--field-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
@@ -41,7 +41,7 @@
   }
 
   .box[data-focus-within] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
@@ -52,7 +52,7 @@
   }
 
   .root[data-size='sm'] .box {
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   .root[data-invalid] .box {
@@ -108,8 +108,8 @@
     display: inline-grid;
     flex: none;
     place-items: center;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     padding: 0;
     border: none;
     border-radius: var(--radius-sm);
@@ -144,7 +144,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     margin-block-end: var(--space-4);
   }
 
@@ -153,7 +153,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     margin: 0;
     margin-inline-end: auto;
     padding-inline: var(--space-6);
@@ -195,7 +195,7 @@
   }
 
   .monthCell {
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -234,8 +234,8 @@
   .weekday {
     block-size: var(--space-24);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* A round day, as WeekCalendar's date is: a square size-nav-item cell, fully rounded, in the middle of its column. */
@@ -268,7 +268,7 @@
     color: var(--link);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
@@ -354,8 +354,8 @@
   }
 
   .calendar[data-inline] .month {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .calendar[data-inline] .weekday {
@@ -365,18 +365,18 @@
   }
 
   .calendar[data-inline] .day {
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
   .calendar[data-inline] .weeks {
-    min-block-size: calc(var(--space-20) + 6 * var(--size-control));
+    min-block-size: calc(var(--space-20) + 6 * var(--size-control-sm));
   }
 
   .calendar[data-inline] .months {
-    min-block-size: calc(var(--space-20) + 6 * var(--size-control));
+    min-block-size: calc(var(--space-20) + 6 * var(--size-control-sm));
   }
 
   /* The days the view beside it shows: one band in the selected surface filling its columns, its ends round, the

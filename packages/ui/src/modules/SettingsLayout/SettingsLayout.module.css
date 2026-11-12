@@ -97,7 +97,7 @@
     flex-wrap: wrap;
     gap: var(--space-12);
     align-items: center;
-    min-block-size: var(--size-bar);
+    min-block-size: var(--size-topbar);
     padding-block-end: var(--space-16);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
@@ -148,8 +148,8 @@
     outline: none;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -159,7 +159,7 @@
     display: flex;
     align-items: center;
     block-size: 1lh;
-    font: var(--text-heading);
+    font: var(--text-title);
   }
 
   .description {
@@ -210,7 +210,7 @@
      reduced motion too. */
   .row[data-new] {
     border-radius: var(--radius-sm);
-    animation: rowArrive var(--duration-pulse) var(--ease-out) var(--duration-modal) backwards;
+    animation: rowArrive var(--duration-pulse) var(--ease-smooth-out) var(--duration-fast) backwards;
   }
 
   @keyframes rowArrive {
@@ -228,7 +228,7 @@
   /* Never wider than a column's most, so a description keeps a readable line on a wide page. */
   .rowMain {
     display: flex;
-    flex: 1 1 var(--size-measure);
+    flex: 1 1 var(--size-measure-sm);
     gap: var(--space-12);
     max-inline-size: var(--size-column-max);
     min-inline-size: 0;
@@ -332,7 +332,7 @@
   /* Stays in view while a long list scrolls, a breath under the entry's tab strip, which stays too. */
   .splitAside {
     position: sticky;
-    inset-block-start: calc(var(--size-bar) + var(--space-16));
+    inset-block-start: calc(var(--size-topbar) + var(--space-16));
     flex: 1 1 calc(var(--size-column-wide) + var(--space-32));
   }
 
@@ -353,8 +353,8 @@
 
   .rowGroupTitle {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* Never wider than its row: a row of several small fields (a question's points per choice) wraps onto a second
@@ -447,8 +447,8 @@
   .sectionTitle {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .sectionDescription {

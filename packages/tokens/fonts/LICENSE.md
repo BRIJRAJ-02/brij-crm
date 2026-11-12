@@ -1,9 +1,9 @@
 # Font licences
 
-Inter and JetBrains Mono come from the design system artifact (`project/fonts/`). The six link page packs (spec 0060) are the Latin subsets Fontsource publishes of each family's Google Fonts release. All eight are used under the SIL Open Font License, Version 1.1. The full licence text follows.
+Geist and Geist Mono (spec 0071) are the Latin variable subsets Fontsource publishes (`@fontsource-variable/geist` and `@fontsource-variable/geist-mono` 5.3.0). The six link page packs (spec 0060) are the Latin subsets Fontsource publishes of each family's Google Fonts release. All eight are used under the SIL Open Font License, Version 1.1. The full licence text follows.
 
-- `Inter-Variable-latin.woff2`: Inter. Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter).
-- `JetBrainsMono-Variable-latin.woff2`: JetBrains Mono. Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono).
+- `Geist-Variable-latin.woff2`: Geist. Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font).
+- `GeistMono-Variable-latin.woff2`: Geist Mono. Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font).
 - `HostGrotesk-Variable-latin.woff2`: Host Grotesk. Copyright 2024 The Host Grotesk Project Authors (https://github.com/Element-Type/HostGrotesk).
 - `Fraunces-Variable-latin.woff2`: Fraunces. Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces).
 - `Newsreader-Variable-latin.woff2`: Newsreader. Copyright 2020 The Newsreader Project Authors (https://github.com/productiontype/Newsreader).

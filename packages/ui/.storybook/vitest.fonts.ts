@@ -9,5 +9,5 @@
 import { beforeEach } from 'vitest';
 
 beforeEach(async () => {
-  await Promise.all([document.fonts.load('16px Inter'), document.fonts.load('16px "JetBrains Mono"')]);
+  await Promise.all([document.fonts.load('16px Geist'), document.fonts.load('16px "Geist Mono"')]);
 });

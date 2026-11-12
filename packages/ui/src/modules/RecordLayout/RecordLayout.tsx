@@ -41,7 +41,8 @@ export interface RecordLayoutProps {
  * sidebar's own width (`size-panel`) plus a main column of `bp-container-md`,
  * so the header and tabs never get less than a medium container beside it.
  */
-const NARROW_BELOW = breakpointToken('bp-container-md') + sizeToken('size-panel');
+/** Read when the layout measures, so it follows the document's scale (spec 0071, AC-16). */
+const narrowBelow = (): number => breakpointToken('bp-container-md') + sizeToken('size-panel');
 
 /** Whether the element is narrower than `bp-container-md`, kept current as it resizes. */
 function useIsNarrow(): [ref: RefObject<HTMLDivElement | null>, isNarrow: boolean] {
@@ -52,7 +53,7 @@ function useIsNarrow(): [ref: RefObject<HTMLDivElement | null>, isNarrow: boolea
     if (element === null) return;
     const measure = (width: number) => {
       // Not laid out yet (a hidden tab, a story before its frame): keep what it was.
-      if (width > 0) setNarrow(width < NARROW_BELOW);
+      if (width > 0) setNarrow(width < narrowBelow());
     };
     measure(element.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => {

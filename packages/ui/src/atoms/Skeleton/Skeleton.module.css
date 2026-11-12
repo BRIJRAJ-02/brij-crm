@@ -109,13 +109,13 @@
 
   /* A field's box at a settings row's end, which sizes to its content: a set width, never past its slot. */
   .root[data-shape='field'] {
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     border-radius: var(--radius-md);
   }
 
   /* A small Select's box (size sm, a compact settings row's control): the control's height, not a field's. */
   .root[data-shape='field'][data-size='sm'] {
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   .root[data-shape='field']:not([data-width]) {

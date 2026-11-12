@@ -21,18 +21,18 @@ describe('the token reader', () => {
   });
 
   it('refuses a translucent colour, which Outlook can’t draw, and a name tokens.json doesn’t have', () => {
-    expect(() => colorToken('focus-ring', 'light')).toThrow(/opaque hex/);
+    expect(() => colorToken('scrim', 'light')).toThrow(/opaque hex/);
     expect(() => colorToken('no-such-colour', 'light')).toThrow(/No colour token/);
     expect(() => spaceToken('space-7')).toThrow(/No spacing token/);
   });
 
   it('reads spaces, radii and type styles as tokens.json writes them', () => {
     expect(spaceToken('space-16')).toBe('16px');
-    expect(radiusToken('radius-xl')).toBe('12px');
+    expect(radiusToken('radius-xl')).toBe('20px');
     const body = typeToken('body');
     expect(body.fontFamily).toBe(fontStack('sans'));
     expect(pixels(body.fontSize)).toBeGreaterThanOrEqual(13);
-    expect(typeToken('heading').letterSpacing).toBe('-0.01em');
+    expect(typeToken('title').letterSpacing).toBe('-0.01em');
   });
 
   it('gives every role an opaque colour in both themes, light inline and dark in the stylesheet', () => {
@@ -48,7 +48,7 @@ describe('the token reader', () => {
 
   it('starts Outlook’s font stacks at a family Windows has, from the tokens’ own stacks', () => {
     expect(wordFontStack('sans')).toBe('"Segoe UI", sans-serif');
-    expect(wordFontStack('mono').split(', ')).not.toContain('"JetBrains Mono"');
+    expect(wordFontStack('mono').split(', ')).not.toContain('"Geist Mono"');
     expect(TYPE.code.fontFamily).toBe(fontStack('mono'));
   });
 });

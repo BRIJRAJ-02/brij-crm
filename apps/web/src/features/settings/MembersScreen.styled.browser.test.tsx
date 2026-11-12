@@ -3,7 +3,7 @@
 // its word, in the table and in the details, however wide the slot. The shape the owner asked for on 6 November 2026
 // too: a request's Approve and Decline on one line, Owner and Member on one edge, a switch near its label, the list
 // not leaving a role far from its name, and the phone's two lines.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   DataLayer,
   InvitationView,

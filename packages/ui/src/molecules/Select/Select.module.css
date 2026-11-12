@@ -17,11 +17,11 @@
     gap: var(--space-6);
     box-sizing: border-box;
     inline-size: 100%;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     /* Not the button's UA 1px: the height comes from block-size, the words centred in it. */
     padding-block: 0;
     padding-inline: var(--space-8);
-    border: var(--border-width-hairline) solid var(--field-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-control);
@@ -31,18 +31,18 @@
     text-align: start;
     outline: none;
     transition:
-      border-color var(--duration-hover) var(--ease-hover),
-      background-color var(--duration-hover) var(--ease-hover);
+      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out);
   }
 
   .trigger[data-focus-visible],
   .trigger[data-pressed] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 
   .root[data-size='sm'] .trigger {
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 
   .root[data-invalid] .trigger {
@@ -114,7 +114,7 @@
   }
 
   .root[data-variant='inline'] .trigger[data-focus-visible] {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-thick);
   }
 
@@ -207,7 +207,7 @@
   /* showsMarks: the closed field grows to name every choice in full, so what is chosen is never cut off. */
   .root[data-marks] .trigger {
     block-size: auto;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-block: var(--space-4);
   }
 
@@ -329,8 +329,8 @@
     padding-block: var(--space-4) var(--space-2);
     padding-inline: var(--space-8);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .section + .section {

@@ -35,7 +35,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     overflow: hidden;
     outline: none;
   }
@@ -49,8 +49,8 @@
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
-    animation: reveal var(--duration-modal) var(--ease-out) both;
-    transition: transform var(--duration-modal) var(--ease-out);
+    animation: reveal var(--duration-fast) var(--ease-smooth-out) both;
+    transition: transform var(--duration-fast) var(--ease-smooth-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -67,8 +67,8 @@
     border-radius: var(--radius-full);
     background: var(--surface-inverse);
     color: var(--on-inverse);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .all {
@@ -77,7 +77,7 @@
 
   .placeholder {
     display: none;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* Loading on a phone: the first photo's place, edge to edge. */
@@ -103,7 +103,7 @@
       grid-template-columns: 2fr 1fr 1fr;
       grid-template-rows: 1fr 1fr;
       gap: var(--space-8);
-      block-size: calc(var(--size-bar) * 9);
+      block-size: calc(var(--size-topbar) * 9);
       border-radius: var(--radius-xl);
       overflow: hidden;
     }
@@ -161,13 +161,13 @@
 
   .largePicture {
     max-inline-size: 100%;
-    max-block-size: calc(100dvb - var(--size-bar) * 5);
+    max-block-size: calc(100dvb - var(--size-topbar) * 5);
     inline-size: auto;
     block-size: auto;
     border-radius: var(--radius-md);
     object-fit: contain;
     user-select: none;
-    animation: reveal var(--duration-popover) var(--ease-out) both;
+    animation: reveal var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   @keyframes reveal {

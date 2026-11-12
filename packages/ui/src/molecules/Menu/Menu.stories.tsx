@@ -438,7 +438,7 @@ export const SearchLarge: Story = {
       if (!(input instanceof HTMLInputElement)) throw new Error('no search field');
       return input;
     });
-    const bar = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    const bar = getComputedStyle(document.documentElement).getPropertyValue('--size-topbar').trim();
     const height = field.parentElement?.getBoundingClientRect().height ?? 0;
     await expect(`${String(Math.round(height))}px`).toBe(bar);
   },

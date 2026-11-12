@@ -13,8 +13,8 @@
   /* Under a page's second bar, which stays at the top of the view, what sticks in a panel sticks below it: the
      bar's height reaches the panel's sticky parts (a form's Questions header) as --sticky-top. */
   .root:has(> .bar[data-variant='bar']) {
-    --sticky-top: calc(var(--size-bar) + var(--border-width-hairline));
-    --sticky-top-gap: calc(var(--size-bar) + var(--border-width-hairline) + var(--space-16));
+    --sticky-top: calc(var(--size-topbar) + var(--border-width-hairline));
+    --sticky-top-gap: calc(var(--size-topbar) + var(--border-width-hairline) + var(--space-16));
   }
 
   /* A page layout's panel (PreviewLayout: a form's or a booking page's editor) is as tall as what it holds, and the
@@ -40,7 +40,7 @@
     inset-block-start: 0;
     z-index: var(--z-sticky);
     flex: none;
-    min-block-size: var(--size-bar);
+    min-block-size: var(--size-topbar);
     /* The tools' own space-16 sets them apart from the tabs, so the row needs no gap of its own. */
     column-gap: 0;
     background: var(--surface);
@@ -121,14 +121,14 @@
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
     outline: none;
-    transition: color var(--duration-hover) var(--ease-hover);
+    transition: color var(--duration-quick) var(--ease-out);
   }
 
   /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. Tabs sit a little
      closer than elsewhere (space-6 each side, space-2 apart), so six of them and a tab's tools share one row on a
      1280 screen (Bookings, 31 October 2026: the Roster made six, and List's tools wrapped under them). */
   .bar[data-variant='bar'] .tab {
-    block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    block-size: calc(var(--size-topbar) - var(--border-width-hairline));
     padding-inline: var(--space-6);
   }
 
@@ -169,11 +169,11 @@
   }
 
   .bar[data-edge='page'] .tab {
-    block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
   .bar[data-variant='bar'] .end {
-    min-block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    min-block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
   /* An end a page fills through a portal, empty on this tab (a form's Settings): it takes no room, so on a phone it
@@ -210,7 +210,7 @@
   }
 
   .bar[data-variant='topbar'] .tab {
-    block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
   .tab[data-selected] {
@@ -237,7 +237,7 @@
     inset-inline: 0;
     block-size: var(--border-width-thick);
     background: var(--text);
-    transition-duration: var(--duration-move);
+    transition-duration: var(--duration-fast);
     transition-property: translate, width;
     transition-timing-function: var(--ease-in-out);
   }
@@ -301,8 +301,8 @@
   }
 
   .featureLabel {
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .featureDescription {
@@ -368,7 +368,7 @@
   }
 
   .bar[data-variant='pills'] .tab {
-    block-size: calc(var(--size-bar) - var(--space-8));
+    block-size: calc(var(--size-topbar) - var(--space-8));
     padding-inline: var(--space-16);
     border: var(--border-width-hairline) solid var(--text);
     border-radius: var(--radius-full);
@@ -377,8 +377,8 @@
        eases the pill down to --scale-press on --ease-press: 1 in the app, where nothing shrinks; the guest menu sets
        checklabs' 0.94 and its overshoot. */
     transition:
-      color var(--duration-move) var(--ease-in-out),
-      scale var(--duration-press) var(--ease-press, var(--ease-out));
+      color var(--duration-fast) var(--ease-in-out),
+      scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
   .bar[data-variant='pills'] .tab[data-pressed] {

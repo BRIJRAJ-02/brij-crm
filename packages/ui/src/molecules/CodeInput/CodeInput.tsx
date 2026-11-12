@@ -4,7 +4,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import styles from './CodeInput.module.css';
 
 /**
- * How big the boxes are: `md` (the default) `size-input` wide, in a dialog or
+ * How big the boxes are: `md` (the default) `size-control` wide, in a dialog or
  * a settings card; `lg` sharing the row and taller, split three and three, on
  * a page whose task is the code (sign in).
  */

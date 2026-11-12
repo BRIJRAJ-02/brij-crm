@@ -1,5 +1,5 @@
-// When the document's web fonts finish loading. Inter is font-display: swap, so on a cold visit text can paint in
-// the fallback face first and change size when Inter arrives. A virtualised list that measured each row once (React
+// When the document's web fonts finish loading. Geist is font-display: swap, so on a cold visit text can paint in
+// the fallback face first and change size when Geist arrives. A virtualised list that measured each row once (React
 // Aria's Virtualizer measures a row when it is built, never again) would keep the fallback's heights, and its rows
 // would overlap. The lists that measure their rows (NoteList, the board's columns) add this to their collection's
 // dependencies, so each row is built again, and measured again, once the fonts are in.

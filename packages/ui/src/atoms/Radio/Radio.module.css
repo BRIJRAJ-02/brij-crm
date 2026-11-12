@@ -21,7 +21,7 @@
   /* Cards: a grid two wide down to a phone, each choice a bordered box the whole of which picks it. */
   .choices[data-variant='cards'] {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--size-measure), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--size-measure-sm), 1fr));
     gap: var(--space-8);
   }
 
@@ -35,8 +35,8 @@
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
   }
 
   /* Letters (a public form's choice, Typeform's way): the cards' box one to a row, each choice's letter in a key
@@ -54,7 +54,7 @@
 
   .choices[data-variant='cards'] .field:has(.radio[data-selected]),
   .choices[data-variant='letters'] .field:has(.radio[data-selected]) {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
   }
 
@@ -113,18 +113,18 @@
     background: var(--radio-rest, var(--surface-raised));
     box-shadow: var(--shadow-xs);
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
   }
 
   .choices[data-variant='letters'] .circle {
     inline-size: var(--space-24);
     block-size: var(--space-24);
     margin: 0;
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     border-radius: var(--radius-xs);
     color: var(--letter-ink, var(--link));
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .choices[data-variant='letters'] .circle::before {
@@ -144,8 +144,8 @@
     opacity: 0;
     scale: var(--scale-shrunk);
     transition:
-      opacity var(--duration-press) var(--ease-out),
-      scale var(--duration-press) var(--ease-out);
+      opacity var(--duration-quick) var(--ease-smooth-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   .choices[data-variant='letters'] .dot {
@@ -154,7 +154,7 @@
 
   /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
   .radio[data-selected] .circle {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent);
   }
 
@@ -174,7 +174,7 @@
   }
 
   .radio[data-focus-visible] .circle {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--radio-focus, var(--shadow-focus));
   }
 
@@ -184,7 +184,7 @@
 
   /* An invalid circle keeps its red edge, so focus shows as the accent ring just outside (as Button's danger does). */
   .radio[data-invalid][data-focus-visible] .circle {
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 

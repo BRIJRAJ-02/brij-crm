@@ -1,0 +1,376 @@
+{
+ "note": "Tokens the code still needs that the source (design/timefix-design-system/tokens.json) does not have, at their shipped values, never scaled. Each names the phase that retires it; a phase deletes its entries as it lands (spec 0071, AC-13). Hand edited.",
+ "color": {
+  "tokens": [
+   {
+    "name": "tag-gray-border",
+    "value": {
+     "light": "#e4e7ec",
+     "dark": "#40454d"
+    },
+    "usage": "1px outline of a gray tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-red-border",
+    "value": {
+     "light": "#f5ccd7",
+     "dark": "#5a2a35"
+    },
+    "usage": "1px outline of a red tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-orange-border",
+    "value": {
+     "light": "#f4d2c3",
+     "dark": "#573524"
+    },
+    "usage": "1px outline of a orange tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-yellow-border",
+    "value": {
+     "light": "#efdca0",
+     "dark": "#52441a"
+    },
+    "usage": "1px outline of a yellow tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-lime-border",
+    "value": {
+     "light": "#e1eaba",
+     "dark": "#444b1c"
+    },
+    "usage": "1px outline of a lime tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-green-border",
+    "value": {
+     "light": "#bee7cf",
+     "dark": "#1b4a31"
+    },
+    "usage": "1px outline of a green tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-sky-border",
+    "value": {
+     "light": "#bbdcf4",
+     "dark": "#174560"
+    },
+    "usage": "1px outline of a sky tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-blue-border",
+    "value": {
+     "light": "#c6d6fa",
+     "dark": "#2c3a5e"
+    },
+    "usage": "1px outline of a blue tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "tag-purple-border",
+    "value": {
+     "light": "#dcd1fa",
+     "dark": "#3f2f6e"
+    },
+    "usage": "1px outline of a purple tag.",
+    "retire": "Phase 1 (Tag): the prototype draws tags with no outline."
+   },
+   {
+    "name": "inverse-hover",
+    "value": {
+     "light": "#ffffff26",
+     "dark": "#1c1d1f1f"
+    },
+    "usage": "Hover and pressed fill, and the divider, on `surface-inverse`.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "border-inverse",
+    "value": {
+     "light": "#77787c",
+     "dark": "#77787c"
+    },
+    "usage": "A keycap's edge on `surface-inverse` (a tooltip's shortcut). 3.9:1 light, 3.8:1 dark.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "scrim-soft",
+    "value": {
+     "light": "#1c1d1f14",
+     "dark": "#00000066"
+    },
+    "usage": "The lighter backdrop behind a dialog, a form dialog and a window, where the shadow lifts the dialog rather than the dim. A peek, a sheet, the palette and an alert keep `scrim`.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "on-accent-kbd",
+    "value": {
+     "light": "#ffffff33",
+     "dark": "#ffffff33"
+    },
+    "usage": "Keycap fill inside a primary button ('⌘↵').",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "danger-hover",
+    "value": {
+     "light": "#b40411",
+     "dark": "#ff8d84"
+    },
+    "usage": "Hover and pressed fill of a destructive button: danger with OKLCH lightness 0.06 lower in light and 0.06 higher in dark (spec 0071). on-danger on it stays above 4.5:1.",
+    "retire": "Phase 1 (Button): the prototype darkens with a filter; the ported Button decides."
+   }
+  ]
+ },
+ "shadow": {
+  "tokens": [
+   {
+    "name": "shadow-control",
+    "value": {
+     "light": "0 1px 1px #1c1d1f0a",
+     "dark": "0 0 #0000"
+    },
+    "usage": "Secondary buttons, keycaps and select triggers: a flat control with a faint 1px drop in light and none in dark. Dark is a transparent shadow rather than `none`, so it composes with `shadow-focus`.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "shadow-primary",
+    "value": {
+     "light": "0 1px 1px #1f5fd626",
+     "dark": "0 0 #0000"
+    },
+    "usage": "The primary button: flat, with a faint accent drop in light and none in dark. Dark is a transparent shadow rather than `none`, so it composes with `shadow-focus`.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "shadow-pinned-edge",
+    "value": {
+     "light": "4px 0 6px -4px #1c1d1f1f",
+     "dark": "4px 0 6px -4px #00000059"
+    },
+    "usage": "The edge the table's last pinned column casts over the columns scrolling under it, only while the table is scrolled sideways.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "shadow-focus",
+    "value": {
+     "light": "0 0 0 2px #ffffff, 0 0 0 4px #2457e6",
+     "dark": "0 0 0 2px #18181b, 0 0 0 4px #8fb0ff"
+    },
+    "usage": "The keyboard focus ring: 2px of surface, then 2px of focus-ring, so it reads on a blue button too (spec 0071).",
+    "retire": "Phase 1: components move to the prototype outline ring (border-width-focus, 2px offset)."
+   },
+   {
+    "name": "shadow-focus-inset",
+    "value": {
+     "light": "inset 0 0 0 2px #2457e6, inset 0 0 0 4px #ffffff",
+     "dark": "inset 0 0 0 2px #8fb0ff, inset 0 0 0 4px #18181b"
+    },
+    "usage": "The focus ring on rows, tabs and menu items, drawn inside the edge (spec 0071).",
+    "retire": "Phase 1: components move to the prototype outline ring."
+   }
+  ]
+ },
+ "size": {
+  "tokens": [
+   {
+    "name": "size-toolbar",
+    "value": "48px",
+    "usage": "Height of the sort and filter toolbar.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-table-header",
+    "value": "36px",
+    "usage": "Table header row.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-chip",
+    "value": "20px",
+    "usage": "Tags, record chips, link chips.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-check",
+    "value": "16px",
+    "usage": "Checkbox and radio box.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-switch",
+    "value": "28px",
+    "usage": "Switch track width; the track is 16px tall with a 12px knob.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-icon-sm",
+    "value": "14px",
+    "usage": "Icons inside buttons, chips, table headers, card rows.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-icon-xs",
+    "value": "12px",
+    "usage": "Icons in card footers, variables, path separators, the date picker's quick picks.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-tile",
+    "value": "20px",
+    "usage": "The hue tile an object icon sits on in the sidebar and top bar (`Icon` `tile`), holding a `size-icon-sm` icon.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-kbd",
+    "value": "16px",
+    "usage": "A keycap's height and minimum width.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-measure-sm",
+    "value": "280px",
+    "usage": "The widest a tooltip or an empty state's text runs.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-dialog-sm",
+    "value": "400px",
+    "usage": "A confirm: one question and its two buttons.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-dialog-form",
+    "value": "560px",
+    "usage": "A form dialog: New record, an attribute's settings.",
+    "retire": "Phase 1 (library parity): its component moves to the prototype design."
+   },
+   {
+    "name": "size-palette",
+    "value": "640px",
+    "usage": "The command palette.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-panel-wide",
+    "value": "520px",
+    "usage": "A wide side panel: notes and email.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-page-card",
+    "value": "520px",
+    "usage": "A page of its own outside the app shell: status, not found, sign in.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-board-column",
+    "value": "280px",
+    "usage": "A board column.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-sidebar-collapsed",
+    "value": "48px",
+    "usage": "The sidebar folded to its icons.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column-check",
+    "value": "36px",
+    "usage": "The table's checkbox column.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column-min",
+    "value": "80px",
+    "usage": "The narrowest a table column resizes to.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column-narrow",
+    "value": "120px",
+    "usage": "A new checkbox, rating, number, date or timestamp column.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column",
+    "value": "200px",
+    "usage": "A new table column of most types.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column-wide",
+    "value": "300px",
+    "usage": "A new long text, location or file column, or one that holds several values.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-column-max",
+    "value": "640px",
+    "usage": "The widest a table column resizes to.",
+    "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   }
+  ]
+ },
+ "duration": {
+  "tokens": [
+   {
+    "name": "duration-public-hover",
+    "value": "180ms",
+    "usage": "The public booking pages' calmer pace: hover and selection colour (stands in for `duration-hover` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-press",
+    "value": "220ms",
+    "usage": "The public booking pages' calmer pace: press feedback (stands in for `duration-press` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-popover",
+    "value": "280ms",
+    "usage": "The public booking pages' calmer pace: popovers and a time's entrance (stands in for `duration-popover` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-move",
+    "value": "300ms",
+    "usage": "The public booking pages' calmer pace: indicators, the picked fill, a label swap (stands in for `duration-move` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-modal",
+    "value": "340ms",
+    "usage": "The public booking pages' calmer pace: dialogs and arrivals (stands in for `duration-modal` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-exit",
+    "value": "180ms",
+    "usage": "The public booking pages' calmer pace: anything leaving (stands in for `duration-exit` there).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-slide",
+    "value": "320ms",
+    "usage": "The public booking pages' step slide: the details, the booked receipt and Back (300 to 340ms).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   },
+   {
+    "name": "duration-public-reveal",
+    "value": "440ms",
+    "usage": "The public booking pages' reveal: a new fact, a step's heading, a panel opening (at most 500ms).",
+    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
+   }
+  ]
+ }
+}

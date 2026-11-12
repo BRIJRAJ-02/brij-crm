@@ -55,7 +55,7 @@ export interface BookingDetailsDraft {
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
   /**
-   * Booked. `next` runs a beat later (one `--duration-move`, while Confirm shows Booked with a tick): where the page
+   * Booked. `next` runs a beat later (one `--duration-fast`, while Confirm shows Booked with a tick): where the page
    * moves on to the receipt (the owner, 1 November 2026). Without it, the page has already moved on.
    */
   | { readonly kind: 'done'; readonly next?: () => void }
@@ -160,9 +160,9 @@ export interface BookingDetailsProps {
   readonly arrangement?: 'stacked' | 'paired';
 }
 
-/** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
+/** One `--duration-fast`, read from the page so it follows the token, in milliseconds. */
 const beatOf = (element: Element | null): number => {
-  const value = element === null ? '' : getComputedStyle(element).getPropertyValue('--duration-move').trim();
+  const value = element === null ? '' : getComputedStyle(element).getPropertyValue('--duration-fast').trim();
   const amount = Number.parseFloat(value);
   if (Number.isNaN(amount)) return 0;
   return value.endsWith('ms') ? amount : amount * 1000;

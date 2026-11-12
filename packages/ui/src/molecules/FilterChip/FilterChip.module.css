@@ -6,7 +6,7 @@
     display: inline-flex;
     align-items: stretch;
     max-inline-size: 100%;
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-md);

@@ -201,17 +201,17 @@
   /* The command palette's search: a bar's height, the title's size, and roomier rows under it. */
   .searchable[data-size='lg'] .search {
     gap: var(--space-12);
-    block-size: var(--size-bar);
+    block-size: var(--size-topbar);
     padding-inline: var(--space-16);
   }
 
   .searchable[data-size='lg'] .input {
-    font: var(--text-title-regular);
-    letter-spacing: var(--tracking-title-regular);
+    font: var(--text-heading-regular);
+    letter-spacing: var(--tracking-heading-regular);
   }
 
   .searchable[data-size='lg'] .item {
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
   }
 
   @media (forced-colors: active) {

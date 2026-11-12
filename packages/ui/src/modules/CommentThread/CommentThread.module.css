@@ -16,7 +16,7 @@
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
-    transition: background-color var(--duration-move) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .root[data-highlighted] {
@@ -63,7 +63,7 @@
     flex-wrap: wrap;
     gap: var(--space-6);
     align-items: center;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
   }
 
   .author {
@@ -92,7 +92,7 @@
   @media (hover: hover) and (pointer: fine) {
     .tools {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     /* Its menu is open: the tools stay while the pointer is in the menu. */

@@ -15,7 +15,7 @@
   }
 
   .heading {
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
   }
 
@@ -38,9 +38,9 @@
   .price {
     padding-inline: var(--space-4);
     border-radius: var(--radius-sm);
-    background: var(--menu-chip, var(--surface-sunken));
+    background: var(--menu-chip, var(--surface-subtle));
     color: var(--menu-highlight, var(--text));
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-family: var(--menu-face, var(--font-sans));
   }
 

@@ -30,8 +30,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* A new month's name rolls in the way the arrows went: up from below going forward, down from above going back
@@ -41,11 +41,11 @@
   }
 
   .name[data-direction='forward'] {
-    animation: name-up var(--duration-modal) var(--ease-out) backwards;
+    animation: name-up var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   .name[data-direction='back'] {
-    animation: name-down var(--duration-modal) var(--ease-out) backwards;
+    animation: name-down var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   .year {
@@ -69,8 +69,8 @@
 
   .weekday {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-align: center;
     text-transform: uppercase;
   }
@@ -78,7 +78,7 @@
   /* The weeks the month needs (critic B-21), every row a tile's height. */
   .grid {
     grid-auto-rows: 1fr;
-    animation: month-fade var(--duration-modal) var(--ease-out) both;
+    animation: month-fade var(--duration-fast) var(--ease-smooth-out) both;
   }
 
   .grid[data-direction='forward'] {
@@ -146,9 +146,9 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
   }
 
   .day:disabled {
@@ -188,8 +188,8 @@
     background: var(--accent);
     color: var(--on-accent);
     transition:
-      background-color var(--duration-move) var(--ease-out),
-      color var(--duration-move) var(--ease-out);
+      background-color var(--duration-fast) var(--ease-smooth-out),
+      color var(--duration-fast) var(--ease-smooth-out);
   }
 
   /* A day holding a Best time: a small accent mark in its corner. */
@@ -209,15 +209,15 @@
   }
 
   .day:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 
   /* The times just arrived: each day settles from the loading shade into what it is, a week's row at a time from
      the top, so the month reads as filling in rather than switching. */
   .grid[data-settle] .day {
-    animation: day-settle var(--duration-move) var(--ease-out) backwards;
-    animation-delay: calc(var(--day-row, 0) * var(--duration-hover) / 3);
+    animation: day-settle var(--duration-fast) var(--ease-smooth-out) backwards;
+    animation-delay: calc(var(--day-row, 0) * var(--duration-quick) / 3);
   }
 
   /* A press eases the day down to --scale-press: 1 in the app, 0.97 where the public booking page sets it. */

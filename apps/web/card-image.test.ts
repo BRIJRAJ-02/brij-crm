@@ -25,7 +25,8 @@ import {
 const assetsAt = (file: string) => new URL(`./api/card-assets/${file}`, import.meta.url);
 
 const assets = {
-  inter: await readFile(assetsAt('Inter-Variable-latin.ttf')),
+  regular: await readFile(assetsAt('Geist-Regular-latin.woff')),
+  medium: await readFile(assetsAt('Geist-Medium-latin.woff')),
   display: await readFile(assetsAt('HostGrotesk-Variable-latin.ttf')),
   wordmark: `data:image/png;base64,${(await readFile(assetsAt('timefix-wordmark.png'))).toString('base64')}`,
 };

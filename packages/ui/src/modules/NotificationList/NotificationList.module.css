@@ -56,7 +56,7 @@
   }
 
   .dot[data-unread] {
-    background: var(--accent-line);
+    background: var(--accent-text);
   }
 
   .main {

@@ -7,17 +7,17 @@
 export interface FontPack {
   /** The file the page's name and row titles draw with: the one a shell preloads. */
   readonly heading: string;
-  /** The file sentences draw with, when it isn't Inter (the design system's own, which every page loads). */
+  /** The file sentences draw with, when it isn't Geist (the design system's own, which every page loads). */
   readonly body?: string;
 }
 
 /**
- * Every pack, by the `font` key a look stores. Modern and Mono are spec 0054's (Inter, JetBrains Mono); the other
- * six are spec 0060's, each one face beside Inter, or one face for both.
+ * Every pack, by the `font` key a look stores. Modern and Mono are the design system's own faces (Geist and Geist Mono
+ * since spec 0071); the other six are spec 0060's, each one face beside Geist, or one face for both.
  */
 export const FONT_PACKS = {
-  sans: { heading: 'Inter-Variable-latin.woff2' },
-  mono: { heading: 'JetBrainsMono-Variable-latin.woff2' },
+  sans: { heading: 'Geist-Variable-latin.woff2' },
+  mono: { heading: 'GeistMono-Variable-latin.woff2' },
   grotesk: { heading: 'HostGrotesk-Variable-latin.woff2' },
   editorial: { heading: 'Fraunces-Variable-latin.woff2' },
   classic: { heading: 'Newsreader-Variable-latin.woff2', body: 'Newsreader-Variable-latin.woff2' },

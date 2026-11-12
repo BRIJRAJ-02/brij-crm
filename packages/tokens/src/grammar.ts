@@ -52,7 +52,8 @@ export const TypeStyle = z.object({
   name: TokenName,
   fontSize: z.string(),
   lineHeight: z.string(),
-  fontWeight: z.string(),
+  // The prototype's source writes weights as numbers (500); older files wrote strings ("500").
+  fontWeight: z.union([z.string(), z.number()]).transform(String),
   letterSpacing: z.string().optional(),
   fontStyle: z.enum(['normal', 'italic']).optional(),
   opticalSize: z.number().nullable().optional(),
@@ -94,10 +95,38 @@ export const TokensFile = z
   .loose();
 export type TokensFile = z.infer<typeof TokensFile>;
 
-/** packages/tokens/source.json: which artifact version tokens.json was synced from. */
+/**
+ * packages/tokens/source.json: where tokens.json is copied from (`source`, a path relative to this package), the
+ * artifact that is published from that file, and its published version (`unpublished` until someone publishes).
+ */
 export const TokenSource = z.object({
+  source: z.string().min(1),
   artifact: z.url(),
   version: z.string().min(1),
   synced: z.iso.date(),
 });
 export type TokenSource = z.infer<typeof TokenSource>;
+
+/** Why a legacy token exists at all: the port phase that removes it (spec 0071, AC-13). */
+const Retire = z.string().min(1);
+
+/** A legacy colour or shadow: a value per theme, like the source's, plus when it goes. */
+export const LegacyThemedToken = ThemedToken.extend({ retire: Retire });
+export type LegacyThemedToken = z.infer<typeof LegacyThemedToken>;
+
+/** A legacy token of a plain family: the source's shape plus when it goes. */
+export const LegacyPlainToken = PlainToken.extend({ retire: Retire });
+export type LegacyPlainToken = z.infer<typeof LegacyPlainToken>;
+
+/**
+ * packages/tokens/legacy.json: tokens the code still needs that the source doesn't have, at their shipped values.
+ * Every family is optional and every token names the phase that retires it. Never scaled (spec 0071, AC-13).
+ */
+export const LegacyFile = z
+  .object({
+    note: z.string().optional(),
+    color: z.object({ tokens: z.array(LegacyThemedToken) }).optional(),
+    shadow: z.object({ tokens: z.array(LegacyThemedToken) }).optional(),
+  })
+  .catchall(z.object({ tokens: z.array(LegacyPlainToken) }));
+export type LegacyFile = z.infer<typeof LegacyFile>;

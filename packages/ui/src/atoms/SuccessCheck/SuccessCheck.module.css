@@ -5,7 +5,7 @@
 @layer components {
   .root {
     /* Tokens only: a dialog's pace (the longest UI motion token) and a small space step for the blur. */
-    --check-pace: var(--duration-modal);
+    --check-pace: var(--duration-public-move);
     --check-blur: var(--space-4);
     --check-turn: -12deg;
 
@@ -13,12 +13,12 @@
     flex: none;
     inline-size: var(--size-icon);
     block-size: var(--size-icon);
-    animation: check-in var(--check-pace) var(--ease-out) both;
+    animation: check-in var(--check-pace) var(--ease-smooth-out) both;
   }
 
   .root[data-size='lg'] {
-    inline-size: var(--size-input);
-    block-size: var(--size-input);
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
   }
 
   .mark {
@@ -40,7 +40,7 @@
     stroke-linejoin: round;
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation: check-draw var(--duration-move) var(--ease-out) calc(var(--check-pace) / 3) forwards;
+    animation: check-draw var(--duration-fast) var(--ease-smooth-out) calc(var(--check-pace) / 3) forwards;
   }
 
   @keyframes check-in {
@@ -55,7 +55,7 @@
   /* The booked moment (a public page's confirmation, the v5 mock): a soft green disc inside its ring, the tick in the
      green's own ink, landing out of half its size with a fade on the public pages' pace, the tick drawing after. */
   .root[data-size='xl'] {
-    --check-pace: var(--duration-public-move);
+    --check-pace: var(--duration-fast);
 
     inline-size: calc(2 * var(--space-24) + var(--space-8));
     block-size: calc(2 * var(--space-24) + var(--space-8));
@@ -98,7 +98,7 @@
 
     /* The booked moment keeps its fade (reduced motion keeps fades, drops movement). */
     .root[data-size='xl'] {
-      animation: check-fade var(--check-pace) var(--ease-out) both;
+      animation: check-fade var(--check-pace) var(--ease-smooth-out) both;
     }
   }
 

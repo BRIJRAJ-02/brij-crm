@@ -24,9 +24,9 @@
     border-radius: calc(var(--radius-xl) + var(--space-4));
     background: var(--surface-raised);
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-press, var(--ease-out));
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
   .field[data-variant='row']:has(.root[data-focus-visible]) {
@@ -34,7 +34,7 @@
   }
 
   .field[data-variant='row'][data-selected] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
   }
 
@@ -76,8 +76,8 @@
     align-items: center;
     gap: calc(var(--space-12) + var(--space-2));
     min-inline-size: 0;
-    font: var(--text-title-regular);
-    letter-spacing: var(--tracking-title-regular);
+    font: var(--text-heading-regular);
+    letter-spacing: var(--tracking-heading-regular);
   }
 
   .field[data-variant='row'] .root::after {
@@ -97,8 +97,8 @@
   .field[data-variant='row'] .description {
     flex: none;
     padding-inline-start: 0;
-    font: var(--text-title-regular);
-    letter-spacing: var(--tracking-title-regular);
+    font: var(--text-heading-regular);
+    letter-spacing: var(--tracking-heading-regular);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }

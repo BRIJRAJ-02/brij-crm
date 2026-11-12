@@ -108,8 +108,8 @@
      height, so the row is one height, the small field's. The row wraps by itself on a narrow slot, the hex going
      to the next line whole, so the phone's six and five split is not needed. */
   .root[data-hex='inline'] .swatch {
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
   }
 
   .root[data-hex='inline'] .row {

@@ -22,8 +22,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .form {
@@ -38,7 +38,7 @@
      the design system has an answer size. The lines under them (the error, Saved) take the label size the card
      worked out, so they stay small. */
   .form[data-layout='conversational'] {
-    --size-input: calc(2 * var(--space-24));
+    --size-control: calc(2 * var(--space-24));
     --text-body: 400 var(--space-20) / var(--space-32) var(--font-sans);
 
     margin-block-start: var(--space-32);
@@ -50,7 +50,7 @@
   /* The two never share a frame (critique c, 8): the leaving one goes in the exit's time, then this one comes in,
      a little blurred as it starts, over the dialog's time. */
   .form[data-enter] {
-    animation: step-in var(--duration-modal) var(--ease-out) var(--duration-exit) backwards;
+    animation: step-in var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) backwards;
   }
 
   /* Back comes down from above; under reduced motion it is a crossfade alone, with no travel and no blur. */
@@ -88,14 +88,14 @@
     gap: var(--space-8);
     margin: 0 0 var(--space-8);
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     text-wrap: balance;
   }
 
   .ask[data-mode='page'] {
-    font: var(--text-note-title);
-    letter-spacing: var(--tracking-note-title);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
   }
 
   /* One at a time's description under the heading: quiet, in the body size, before the answer. */
@@ -121,7 +121,7 @@
 
   @media (pointer: coarse) {
     .actions[data-layout='conversational'] {
-      --size-input: calc(var(--space-20) + var(--space-24));
+      --size-control: calc(var(--space-20) + var(--space-24));
     }
   }
 
@@ -202,7 +202,7 @@
      Its buttons take the form's public size back, the same as Continue and Send in Classic and Steps, rather than
      the question's larger field. */
   .actions[data-layout='conversational'] {
-    --size-input: calc(2 * var(--space-20));
+    --size-control: calc(2 * var(--space-20));
     --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
 
     align-items: flex-start;

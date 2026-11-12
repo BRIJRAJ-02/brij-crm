@@ -305,7 +305,7 @@ export function DragArea({
       new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }),
     );
   };
-  const settle = durationToken('duration-move');
+  const settle = durationToken('duration-fast');
   return (
     <DndContext
       sensors={sensors}
@@ -394,7 +394,7 @@ export function useSortableItem(id: string, options: SortableItemOptions = {}): 
     id,
     disabled: { draggable: isDisabled, droppable: refusesDrop },
     data: { group } satisfies DragData,
-    transition: isReduced ? null : { duration: durationToken('duration-move'), easing: easingToken('ease-in-out') },
+    transition: isReduced ? null : { duration: durationToken('duration-fast'), easing: easingToken('ease-in-out') },
   });
   const {
     setNodeRef: setNode,

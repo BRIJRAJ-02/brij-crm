@@ -13,7 +13,7 @@
     padding: var(--space-2);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* With a visible label: the label (as a Field's) over the track, which
@@ -55,7 +55,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-6);
-    block-size: calc(var(--size-control) - 2 * var(--space-2));
+    block-size: calc(var(--size-control-sm) - 2 * var(--space-2));
     padding-inline: var(--space-12);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
@@ -63,20 +63,20 @@
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
     outline: none;
-    transition: color var(--duration-hover) var(--ease-hover);
+    transition: color var(--duration-quick) var(--ease-out);
     -webkit-tap-highlight-color: transparent;
   }
 
   .root[data-orientation='vertical'] .segment {
-    block-size: var(--size-control);
-    min-inline-size: var(--size-control);
+    block-size: var(--size-control-sm);
+    min-inline-size: var(--size-control-sm);
     padding-inline: var(--space-4);
   }
 
   /* Compact: the whole control, track and hairline included, is a button's
      size-control tall, so it shares a bar's line with the buttons beside it. */
   .root[data-size='compact'] .segment {
-    block-size: calc(var(--size-control) - 2 * var(--space-2) - 2 * var(--border-width-hairline));
+    block-size: calc(var(--size-control-sm) - 2 * var(--space-2) - 2 * var(--border-width-hairline));
     padding-inline: var(--space-8);
   }
 
@@ -134,9 +134,9 @@
     inset: 0;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    background: var(--surface-thumb);
+    background: var(--surface-raised);
     box-shadow: var(--shadow-control);
-    transition-duration: var(--duration-move);
+    transition-duration: var(--duration-fast);
     transition-timing-function: var(--ease-in-out);
   }
 
@@ -146,7 +146,7 @@
 
   /* Focus on the chosen segment: the thumb covers the segment's inset ring. */
   .segment[data-focus-visible] .thumb {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
   }
 
   @media (prefers-reduced-motion: reduce) {

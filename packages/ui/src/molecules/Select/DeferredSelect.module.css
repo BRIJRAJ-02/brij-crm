@@ -32,7 +32,7 @@
   }
 
   .trigger:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-thick);
   }
 

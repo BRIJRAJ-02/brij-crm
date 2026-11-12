@@ -3,7 +3,7 @@
 // changes, as a danger confirm, and answers no when its screen goes; a settings page says whose it is from two
 // businesses. axe is clean in light and dark at a desktop's and a phone's width; with VITE_SHOT_DIR set, each is
 // photographed there.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   HospitalityHeld,
   HospitalityHeldState,

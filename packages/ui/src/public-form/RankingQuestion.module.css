@@ -15,9 +15,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-inline: var(--space-4) var(--space-12);
-    border: var(--border-width-hairline) solid var(--field-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
@@ -27,7 +27,7 @@
 
   /* The row picked up, by pointer or key. */
   .row[data-lifted] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     background: var(--surface-hover);
     box-shadow: var(--shadow-control);
   }
@@ -55,7 +55,7 @@
   .place {
     min-inline-size: var(--space-16);
     color: var(--text-tertiary);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }

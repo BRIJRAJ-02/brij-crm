@@ -18,8 +18,8 @@
 
   .heading {
     margin: 0;
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     color: var(--text);
   }
 
@@ -52,8 +52,8 @@
   }
 
   .name {
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     color: var(--text);
   }
 
@@ -81,7 +81,7 @@
     inline-size: var(--photo);
     block-size: var(--photo);
     border-radius: var(--radius-xl);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     object-fit: cover;
   }
 }

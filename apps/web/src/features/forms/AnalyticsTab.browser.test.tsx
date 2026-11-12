@@ -2,7 +2,7 @@
 // list named by the questions themselves with the worst stop in one sentence, bars only from five starts, sources as
 // a short table, and an empty form offering its Share tab. The question ids are a real form's ("name"), which once
 // collided with a column's key and looped.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, FormAnalytics, FormAnalyticsHeld, FormDocument, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';

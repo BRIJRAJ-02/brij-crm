@@ -2,7 +2,7 @@
 // Private and this month's views (AC-7001), a handle claimed for someone with none (AC-7002), each page's QR codes
 // (AC-7003), the refusal for someone who may not manage them, axe in both themes, and "Edited by" on the person's own
 // page (AC-7004); Add a page and Remove person for a page only person (9 Nov 2026). With `VITE_TEAM_SHOTS=1` it saves the screens at 1280 and 390, light and dark, for the lane's eyes.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, InsightsState, LinkPageStore, QrStyleState, TeamLinkPage } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

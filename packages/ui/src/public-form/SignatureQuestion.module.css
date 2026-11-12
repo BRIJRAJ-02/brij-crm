@@ -27,7 +27,7 @@
     display: block;
     inline-size: 100%;
     aspect-ratio: 3 / 1;
-    border: var(--border-width-hairline) solid var(--field-border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);

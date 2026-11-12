@@ -535,7 +535,7 @@ export function WeekCalendar({
   const [settling, setSettling] = useState<string | null>(null);
   useEffect(() => {
     if (settling === null) return;
-    const timer = setTimeout(() => setSettling(null), durationToken('duration-move'));
+    const timer = setTimeout(() => setSettling(null), durationToken('duration-fast'));
     return () => clearTimeout(timer);
   }, [settling]);
   // What a screen reader hears while a block is held by keys, and when it can't land.

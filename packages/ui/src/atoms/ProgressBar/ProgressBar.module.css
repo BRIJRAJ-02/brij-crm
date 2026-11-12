@@ -39,7 +39,7 @@
     block-size: 100%;
     border-radius: var(--radius-full);
     background: var(--accent);
-    transition: inline-size var(--duration-move) var(--ease-out);
+    transition: inline-size var(--duration-fast) var(--ease-smooth-out);
   }
 
   .fill[data-indeterminate] {

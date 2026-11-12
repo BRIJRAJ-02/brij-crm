@@ -14,7 +14,7 @@
   .root {
     --look-ground: var(--menu-ground, var(--surface-subtle));
     --look-card: var(--menu-card, var(--surface-raised));
-    --look-chip: var(--menu-chip, var(--surface-sunken));
+    --look-chip: var(--menu-chip, var(--surface-subtle));
     --look-line: var(--menu-line, var(--border));
     --look-glass: var(--menu-glass, var(--surface-raised));
     --look-text: var(--menu-text, var(--text));
@@ -48,9 +48,9 @@
     --look-type-17: calc(var(--space-16) + var(--border-width-hairline));
     --look-type-22: calc(var(--space-20) + var(--space-2));
     --look-type-26: calc(var(--space-24) + var(--space-2));
-    --track-snug: calc(var(--tracking-heading) / 2);
-    --track-tight: var(--tracking-heading);
-    --track-tighter: calc(var(--tracking-heading) * 1.5);
+    --track-snug: calc(var(--tracking-title) / 2);
+    --track-tight: var(--tracking-title);
+    --track-tighter: calc(var(--tracking-title) * 1.5);
     --track-open: calc(var(--tracking-kbd) / 2);
     --track-caps: calc(var(--tracking-kbd) * 2);
     --track-caps-wide: calc(var(--tracking-kbd) * 3);
@@ -61,17 +61,17 @@
        eases down while held. Without the look nothing shrinks but the buttons, which press as every public page's do
        (0.97); under reduced motion the look sets every scale to 1. The library's parts read the page's own names:
        Buttons --scale-press, the option rows --scale-press-sm, and --ease-press for the curve. */
-    --look-press-ease: var(--menu-press-ease, var(--ease-out));
+    --look-press-ease: var(--menu-press-ease, var(--ease-smooth-out));
     --look-press-row: var(--menu-press-row, 1);
     --look-press-bar: var(--menu-press-bar, 1);
-    --look-press-card: var(--menu-press-card, var(--scale-enter));
+    --look-press-card: var(--menu-press-card, var(--scale-medium));
     --look-press-pill: var(--menu-press-pill, 1);
     --look-press-add: var(--menu-press-add, 1);
     --ease-press: var(--look-press-ease);
     --scale-press: var(--look-press-card);
     --scale-press-sm: var(--look-press-row);
     /* A changed Button label resolves in (as BookingFrame's). */
-    --label-swap: var(--duration-popover);
+    --label-swap: var(--duration-fast);
 
     min-block-size: 100dvh;
     background: var(--look-ground);
@@ -86,13 +86,10 @@
     --radius-lg: var(--look-radius-lg);
     --radius-xl: var(--look-radius-xl);
     --surface: var(--look-ground);
-    --surface-subtle: var(--look-ground);
     --surface-raised: var(--look-card);
-    --surface-sunken: var(--look-chip);
+    --surface-subtle: var(--look-chip);
     --surface-hover: var(--look-chip);
     --surface-selected: var(--look-chip);
-    /* A segment's thumb rises off its track: the card in light, a step lighter than the chips in dark. */
-    --surface-thumb: light-dark(var(--look-card), color-mix(in oklab, var(--look-text) 14%, var(--look-chip)));
     --border: var(--look-line);
     --border-subtle: var(--look-line);
     --text: var(--look-text);
@@ -100,7 +97,7 @@
     --text-tertiary: var(--look-quiet);
     --accent: var(--look-accent);
     --accent-hover: var(--look-accent);
-    --accent-line: var(--look-accent);
+    --accent-text: var(--look-accent);
     --accent-border: var(--look-accent);
     /* A chosen card (a dish's size) takes the cream, as checklabs' chosen option row. */
     --accent-soft: var(--look-chip);
@@ -121,20 +118,19 @@
        a sheet's 15px semibold action and 22px semibold heading. */
     --text-body: 400 var(--look-type-13) / var(--space-20) var(--look-face);
     --text-body-strong: 500 var(--look-type-14) / var(--space-20) var(--look-face);
-    --text-label: 400 var(--look-type-12) / var(--space-16) var(--look-face);
-    --text-label-strong: 500 var(--look-type-12) / var(--space-16) var(--look-face);
-    --text-title: 600 var(--look-type-15) / var(--space-20) var(--look-face);
-    --text-title-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
-    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--menu-display-face, var(--look-face));
+    --text-label: 500 var(--look-type-12) / var(--space-16) var(--look-face);
+    --text-heading: 600 var(--look-type-15) / var(--space-20) var(--look-face);
+    --text-heading-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
+    --text-title: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--menu-display-face, var(--look-face));
     --tracking-body-strong: var(--track-tight);
-    --tracking-label-strong: var(--track-snug);
-    --tracking-title: var(--track-snug);
-    --tracking-heading: var(--track-tight);
+    --tracking-label: var(--track-snug);
+    --tracking-heading: var(--track-snug);
+    --tracking-title: var(--track-tight);
     /* A chip's height inside the menu (a dish's marks and allergens, checklabs' 24px tags): Badge, Tag and the chip
        Skeleton take it here; nothing else inside the menu draws at it. */
     --size-chip: var(--space-24);
 
-    padding-block-end: calc(var(--size-bar) * 2);
+    padding-block-end: calc(var(--size-topbar) * 2);
     font-feature-settings: 'ss01', 'ss03';
   }
 
@@ -183,7 +179,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    min-block-size: calc(var(--size-bar) + var(--space-4));
+    min-block-size: calc(var(--size-topbar) + var(--space-4));
     padding-block: var(--space-8);
   }
 
@@ -197,7 +193,7 @@
     border-radius: var(--look-squircle);
     background: var(--look-accent);
     color: var(--look-on-accent);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-size: var(--look-type-17);
     letter-spacing: var(--track-tight);
   }
@@ -228,8 +224,8 @@
   /* The place, then the table as a pill of the ink: the eyebrow sets the pill's words (a `fit` Badge), 11px semibold
      capitals on one line's height, so it stands 19px tall, 8px in at the sides (checklabs' table chip). */
   .eyebrow {
-    --text-label-strong: 600 var(--look-type-11) / 1 var(--look-face);
-    --tracking-label-strong: var(--track-caps);
+    --text-label: 600 var(--look-type-11) / 1 var(--look-face);
+    --tracking-label: var(--track-caps);
 
     display: flex;
     flex-wrap: wrap;
@@ -245,7 +241,7 @@
 
   .name {
     margin: 0;
-    font: var(--text-heading);
+    font: var(--text-title);
     font-family: var(--menu-display-face, var(--look-face));
     font-size: var(--look-type-26);
     line-height: calc(var(--look-type-26) * 1.15);
@@ -274,7 +270,7 @@
     align-items: center;
     gap: var(--space-6);
     color: var(--look-text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .dot {
@@ -316,7 +312,7 @@
   .section {
     display: flex;
     flex-direction: column;
-    scroll-margin-block-start: calc(var(--size-bar) * 2);
+    scroll-margin-block-start: calc(var(--size-topbar) * 2);
   }
 
   /* A block (a section's own dishes, or a sub section): 28px above, 24px below, a hairline between blocks. */
@@ -346,8 +342,8 @@
   /* A link's target (a sub section's heading) lands clear of the glass bar. */
   .heading {
     margin: 0;
-    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
-    font: var(--text-heading);
+    scroll-margin-block-start: calc(var(--size-topbar) + var(--space-8));
+    font: var(--text-title);
     font-family: var(--menu-display-face, var(--look-face));
     letter-spacing: var(--track-tighter);
   }
@@ -375,7 +371,7 @@
 
     margin-inline: calc(var(--look-gutter) * -1);
     padding-block-start: calc(var(--space-8) + var(--space-2));
-    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
+    scroll-margin-block-start: calc(var(--size-topbar) + var(--space-8));
   }
 
   /* A section's dishes press as the page's buttons do, not as its pills. */
@@ -401,7 +397,7 @@
     gap: var(--space-4);
     margin: 0;
     color: var(--look-quiet);
-    font: var(--text-label-strong);
+    font: var(--text-label);
   }
 
   .note {
@@ -444,8 +440,8 @@
     align-items: center;
     gap: var(--space-4);
     transition:
-      scale calc(var(--duration-press) * 1.5) var(--look-press-ease),
-      background-color var(--duration-press) var(--ease-out);
+      scale calc(var(--duration-quick) * 1.5) var(--look-press-ease),
+      background-color var(--duration-quick) var(--ease-smooth-out);
   }
 
   .item[data-layout='grid'] {
@@ -516,7 +512,7 @@
     block-size: auto;
     aspect-ratio: 1;
     border-radius: var(--look-card-radius);
-    transition: scale calc(var(--duration-press) * 1.5) var(--ease-out);
+    transition: scale calc(var(--duration-quick) * 1.5) var(--ease-smooth-out);
   }
 
   .item[data-sold-out] .thumb {
@@ -539,7 +535,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-size: var(--look-type-16);
     line-height: calc(var(--look-type-16) * 1.25);
     letter-spacing: var(--track-snug);
@@ -613,7 +609,7 @@
     flex: none;
     align-items: center;
     border-radius: var(--radius-full);
-    transition: scale var(--duration-press) var(--look-press-ease);
+    transition: scale var(--duration-quick) var(--look-press-ease);
   }
 
   .add:not([data-stepper]) {
@@ -634,7 +630,9 @@
 
   .add[data-placement='photo'] {
     position: absolute;
-    inset-block-start: calc(var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) - var(--size-control));
+    inset-block-start: calc(
+      var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) - var(--size-control-sm)
+    );
     inset-inline-end: calc(-1 * var(--space-4));
     box-shadow:
       0 0 0 var(--border-width-thick) var(--look-ground),
@@ -648,7 +646,7 @@
 
     inset-block-start: calc(
       var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) + var(--border-width-hairline) -
-        var(--size-input)
+        var(--size-control)
     );
     inset-inline-end: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
     box-shadow:
@@ -706,7 +704,7 @@
   .allergenLabel {
     margin-block-end: var(--space-6);
     color: var(--look-quiet);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-size: var(--look-type-12);
     line-height: normal;
     letter-spacing: var(--track-caps-wide);
@@ -735,8 +733,8 @@
   .unavailableMark {
     display: grid;
     place-items: center;
-    inline-size: var(--size-bar);
-    block-size: var(--size-bar);
+    inline-size: var(--size-topbar);
+    block-size: var(--size-topbar);
     margin-block-end: var(--space-4);
     border-radius: var(--radius-full);
     background: var(--look-chip);
@@ -746,7 +744,7 @@
   .unavailableTitle {
     margin: 0;
     color: var(--look-text);
-    font: var(--text-heading);
+    font: var(--text-title);
   }
 
   .unavailableActions {
@@ -785,13 +783,13 @@
     background: var(--look-accent);
     color: var(--look-on-accent);
     box-shadow: var(--shadow-lg);
-    font: var(--text-title);
+    font: var(--text-heading);
     line-height: normal;
     pointer-events: auto;
     transition:
-      scale var(--duration-press) var(--look-press-ease),
-      translate calc(var(--duration-press) * 2) var(--ease-out),
-      opacity calc(var(--duration-press) * 2) var(--ease-out);
+      scale var(--duration-quick) var(--look-press-ease),
+      translate calc(var(--duration-quick) * 2) var(--ease-smooth-out),
+      opacity calc(var(--duration-quick) * 2) var(--ease-smooth-out);
 
     @starting-style {
       opacity: 0;
@@ -822,11 +820,11 @@
 
   @media (prefers-reduced-motion: reduce) {
     .item {
-      transition: background-color var(--duration-press) var(--ease-out);
+      transition: background-color var(--duration-quick) var(--ease-smooth-out);
     }
 
     .picksBar {
-      transition: opacity calc(var(--duration-press) * 2) var(--ease-out);
+      transition: opacity calc(var(--duration-quick) * 2) var(--ease-smooth-out);
 
       @starting-style {
         translate: 0 0;

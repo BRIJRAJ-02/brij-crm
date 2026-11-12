@@ -2,7 +2,7 @@
 // a colour nobody can read says so and still draws readable words, Save goes through the store, a refusal keeps what's
 // on screen, and someone who can't edit sees it read only. axe is clean in light and dark at a desktop's and a phone's
 // width.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { HospitalityHeld, HospitalityHeldState, MenuDraft, MenuLook, MenuStore } from '@crm/data';
 import { contrastRatio } from '@crm/data/menu';
 import { afterEach, describe, expect, it } from 'vitest';

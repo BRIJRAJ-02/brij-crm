@@ -45,7 +45,7 @@
     flex: none;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-bar);
+    min-block-size: var(--size-topbar);
     padding-inline: var(--space-16) var(--space-8);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
@@ -55,8 +55,8 @@
     min-inline-size: 0;
     margin: 0;
     overflow: hidden;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -129,11 +129,11 @@
   }
 
   .root[data-entering] {
-    animation: slide-in var(--duration-modal) var(--ease-drawer);
+    animation: slide-in var(--duration-fast) var(--ease-smooth-out);
   }
 
   .root[data-exiting] {
-    animation: slide-out var(--duration-exit) var(--ease-out) forwards;
+    animation: slide-out var(--duration-quick) var(--ease-smooth-out) forwards;
   }
 
   .root[data-opened-by='keyboard'][data-entering] {

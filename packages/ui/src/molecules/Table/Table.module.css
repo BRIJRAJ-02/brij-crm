@@ -66,8 +66,8 @@
     padding-inline: var(--space-8);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-align: start;
     white-space: nowrap;
     outline: none;
@@ -122,7 +122,7 @@
   /* The reorder handle's column: as narrow as its grip. */
   .column[data-handle],
   .cell[data-handle] {
-    inline-size: var(--size-control);
+    inline-size: var(--size-control-sm);
     padding-inline: var(--space-4) 0;
   }
 
@@ -226,7 +226,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    inline-size: var(--space-16);
+    /* A step narrower than the gutter, so the grip (its icon and padding) ends on the content edge at either scale
+       (spec 0071: the gutter shrinks with the app's density, the legacy icon doesn't). */
+    inline-size: calc(var(--space-16) - var(--space-2));
   }
 
   /* A hidden header: collapsed, so its labels still size the columns and a table continuing one above lines up. */
@@ -295,7 +297,7 @@
     display: inline-flex;
     justify-content: center;
     inline-size: var(--size-column-check);
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   /* The keyboard's focus, not a press: a click in the table leaves no column of boxes behind once the pointer goes. */
@@ -435,14 +437,14 @@
   .column[data-tone='quiet'],
   .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'],
   .row[data-tone='total'] > .cell[data-tone='quiet'] {
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* The column for now (today): its header on the accent's soft surface too, after the quiet tint so today wins where
      it falls on a weekend (the owner, 31 October 2026: the line alone was lost in dark). Only the header: down the
      whole column the same blue swallowed a week's own blue blocks (a change for one date). */
   .column[data-current] {
-    border-block-end: var(--border-width-thick) solid var(--accent-line);
+    border-block-end: var(--border-width-thick) solid var(--accent-text);
     background: var(--accent-soft);
     color: var(--link);
   }
@@ -531,7 +533,7 @@
     }
 
     .root[data-phone='rows'] .row:has(.cell[data-handle]) {
-      padding-inline-start: var(--size-control);
+      padding-inline-start: var(--size-control-sm);
     }
 
     .root[data-phone='rows'] .cell {
@@ -558,7 +560,7 @@
       inset-inline-start: 0;
       display: flex;
       align-items: center;
-      inline-size: var(--size-control);
+      inline-size: var(--size-control-sm);
       padding-inline: var(--space-4) 0;
     }
 
@@ -608,7 +610,7 @@
     }
 
     .root[data-phone='rows'] .row[data-card]:has(.cell[data-handle]) {
-      padding-inline-start: calc(var(--space-8) + var(--size-control));
+      padding-inline-start: calc(var(--space-8) + var(--size-control-sm));
     }
 
     .root[data-phone='rows'] .row[data-last-row] {
@@ -651,7 +653,7 @@
     }
 
     .root[data-phone='rows'][data-edge='page'] .row:has(.cell[data-handle]) {
-      padding-inline: calc(var(--space-16) + var(--size-control)) var(--space-16);
+      padding-inline: calc(var(--space-16) + var(--size-control-sm)) var(--space-16);
     }
 
     .root[data-phone='rows'][data-edge='page'] .cell[data-handle],

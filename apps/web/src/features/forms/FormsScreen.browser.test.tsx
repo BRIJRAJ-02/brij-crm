@@ -1,4 +1,4 @@
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 // Captures › Forms in Chromium (5 November 2026, the owner, pointing at the booking page cards: "make something like
 // this for forms as well"): each card draws an abstract form in its colour across its top (its name and count, its
 // questions as shapes), says its state as a dot and a word with its submissions as a quiet link (New when one came

@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
+    "./app.css": "./src/styles/app.css",
     "./theme": "./src/theme/theme.ts",
     "./vite": "./src/vite.ts",
     "./grid": "./src/grid.ts",

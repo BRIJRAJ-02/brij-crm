@@ -545,7 +545,7 @@ export const Peek: Story = {
       isWide ? Math.min(globalThis.innerWidth - 2 * inset, wide) : globalThis.innerWidth,
     );
     await expect(Math.round(panel.height)).toBe(
-      isWide ? globalThis.innerHeight - 2 * token('size-bar') : globalThis.innerHeight,
+      isWide ? globalThis.innerHeight - 2 * token('size-topbar') : globalThis.innerHeight,
     );
     // The bar draws no title, no icon and no hairline.
     const heading = dialog.querySelector('h2');

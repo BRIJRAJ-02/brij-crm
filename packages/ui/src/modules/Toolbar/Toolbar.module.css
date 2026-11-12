@@ -18,7 +18,7 @@
   .top,
   .view {
     flex: none;
-    block-size: var(--size-bar);
+    block-size: var(--size-topbar);
   }
 
   /* The bar is the trail's container: on a narrow one, Breadcrumbs keeps only
@@ -48,8 +48,8 @@
     margin: 0;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
     text-overflow: ellipsis;
     white-space: nowrap;
     outline: none;
@@ -127,13 +127,13 @@
     .top[data-has-tabs] {
       flex-wrap: wrap;
       block-size: auto;
-      min-block-size: var(--size-bar);
+      min-block-size: var(--size-topbar);
       row-gap: 0;
     }
 
     .top[data-has-tabs] .title {
       flex: 0 1 auto;
-      min-block-size: var(--size-bar);
+      min-block-size: var(--size-topbar);
       align-content: center;
     }
 
@@ -144,7 +144,7 @@
     .top[data-has-tabs] .tabs {
       order: 1;
       flex-basis: calc(100% + 2 * var(--space-16));
-      block-size: var(--size-bar);
+      block-size: var(--size-topbar);
       margin-inline: calc(-1 * var(--space-16));
       padding-inline: var(--space-8);
     }
@@ -155,6 +155,6 @@
     display: inline-flex;
     align-items: center;
     inline-size: calc(6 * var(--size-chip));
-    block-size: var(--size-control);
+    block-size: var(--size-control-sm);
   }
 }

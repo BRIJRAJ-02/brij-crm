@@ -37,7 +37,7 @@
   }
 
   /* The slot's width decides the layout, not the window's: a dialog is narrower than the page. The code (size-column)
-     and a column of at least size-column fit side by side in a 480px dialog; in a narrower slot (a dialog on a
+     and a column of at least size-column-narrow plus space-32 fit side by side in a dialog; in a narrower slot (a dialog on a
      phone) the column wraps under the code, at the slot's full width. Wrapping needs no breakpoint, so any slot works. */
   .layout {
     display: flex;
@@ -57,7 +57,9 @@
 
   .aside {
     display: flex;
-    flex: 1 1 var(--size-column);
+    /* A narrow column and a little more: the app's dialogs are narrower at its density (spec 0071) while the code
+       keeps its column width, so this still fits beside the code in a dialog and still wraps under it on a phone. */
+    flex: 1 1 calc(var(--size-column-narrow) + var(--space-32));
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;

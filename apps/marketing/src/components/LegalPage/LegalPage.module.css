@@ -18,10 +18,10 @@
   }
 
   .title {
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     font-family: var(--site-font-display);
     font-size: var(--site-text-display-sm);
-    letter-spacing: var(--tracking-note-title);
+    letter-spacing: var(--tracking-title-lg);
   }
 
   .updated {
@@ -32,8 +32,8 @@
 
   .heading {
     margin-block-start: var(--space-32);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .paragraph,

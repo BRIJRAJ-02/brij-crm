@@ -10,14 +10,15 @@ export interface ContrastRule {
   readonly minimum: number;
 }
 
+/** Every ground text and controls sit on (spec 0071: the canvas and the tinted shell join, the sidebar and column tints left). */
 const SURFACES = [
+  'canvas',
+  'surface-shell',
   'surface',
-  'surface-sidebar',
   'surface-raised',
   'surface-subtle',
   'surface-hover',
   'surface-selected',
-  'surface-column',
 ];
 
 /**
@@ -28,21 +29,22 @@ export function tagHues(color: ColorFamily): string[] {
   return color.tokens.flatMap((token) => /^tag-(.+)-bg$/.exec(token.name)?.[1] ?? []);
 }
 
-/** Every pair spec 0002 holds to its minimum (AC-4). */
+/** Every pair spec 0002 (AC-4) and spec 0071 (AC-12) hold to its minimum. */
 export function contrastRules(color: ColorFamily): ContrastRule[] {
   return [
     { foregrounds: ['text', 'text-secondary', 'text-tertiary'], backgrounds: SURFACES, minimum: 4.5 },
     { foregrounds: ['link'], backgrounds: ['surface', 'surface-raised', 'accent-soft'], minimum: 4.5 },
     { foregrounds: ['on-accent'], backgrounds: ['accent', 'accent-hover'], minimum: 4.5 },
+    { foregrounds: ['on-primary'], backgrounds: ['primary', 'primary-hover'], minimum: 4.5 },
+    { foregrounds: ['on-danger'], backgrounds: ['danger', 'danger-hover'], minimum: 4.5 },
     { foregrounds: ['on-inverse'], backgrounds: ['surface-inverse'], minimum: 4.5 },
     // A keycap's edge in a tooltip.
     { foregrounds: ['border-inverse'], backgrounds: ['surface-inverse'], minimum: 3.5 },
-    {
-      foregrounds: ['danger'],
-      backgrounds: ['surface', 'surface-subtle', 'surface-raised', 'surface-hover', 'surface-selected'],
-      minimum: 4.5,
-    },
-    { foregrounds: ['success'], backgrounds: ['surface', 'surface-raised', 'surface-hover'], minimum: 4.5 },
+    // Blue text and icons on an accent fill, on a selected chip, and on any ground.
+    { foregrounds: ['accent-text'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 4.5 },
+    { foregrounds: ['danger'], backgrounds: [...SURFACES, 'danger-soft'], minimum: 4.5 },
+    { foregrounds: ['success'], backgrounds: [...SURFACES, 'success-soft'], minimum: 4.5 },
+    { foregrounds: ['warning'], backgrounds: [...SURFACES, 'warning-soft'], minimum: 4.5 },
     ...tagHues(color).map((hue) => ({
       foregrounds: [`tag-${hue}-text`],
       backgrounds: [`tag-${hue}-bg`],
@@ -51,8 +53,8 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
     // Selected rows and cell ranges hold controls too.
     { foregrounds: ['control-border'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3.5 },
     { foregrounds: ['accent'], backgrounds: ['surface', 'surface-raised'], minimum: 3 },
-    // The inset focus ring and a checked box's edge, wherever they sit.
-    { foregrounds: ['accent-line'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3 },
+    // The solid focus ring, wherever it lands.
+    { foregrounds: ['focus-ring'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3 },
   ];
 }
 

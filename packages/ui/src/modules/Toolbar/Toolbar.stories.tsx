@@ -241,7 +241,7 @@ export const TopBarLoading: Story = {
     // The skeleton shows after the loading delay; the bar is its full height before and after.
     await waitFor(() => expect(canvas.getByRole('banner').querySelector('[aria-hidden="true"]')).not.toBeNull());
     const banner = canvas.getByRole('banner');
-    const bar = Number.parseFloat(getComputedStyle(banner).getPropertyValue('--size-bar'));
+    const bar = Number.parseFloat(getComputedStyle(banner).getPropertyValue('--size-topbar'));
     await expect(bar).toBeGreaterThan(0);
     await expect(banner.getBoundingClientRect().height).toBe(bar);
   },

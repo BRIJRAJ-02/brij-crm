@@ -12,7 +12,7 @@
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    animation: enter var(--duration-modal) var(--ease-out) backwards;
+    animation: enter var(--duration-fast) var(--ease-smooth-out) backwards;
   }
 
   .head {
@@ -29,14 +29,14 @@
     flex: none;
     place-content: center;
     box-sizing: border-box;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     border: var(--border-width-hairline) solid var(--tag-green-border);
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    animation: pop var(--duration-modal) var(--ease-out) backwards;
-    animation-delay: var(--duration-hover);
+    animation: pop var(--duration-fast) var(--ease-smooth-out) backwards;
+    animation-delay: var(--duration-quick);
   }
 
   .titles {
@@ -49,8 +49,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .message {
@@ -86,14 +86,14 @@
     align-items: center;
     box-sizing: border-box;
     min-inline-size: 0;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     padding-inline: var(--space-8);
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
     color: var(--text);
-    /* An address reads letter for letter: Inter's contextual alternates would draw the x in "k3x9" as a times sign. */
+    /* An address reads letter for letter: Geist's contextual alternates would draw the x in "k3x9" as a times sign. */
     font-feature-settings: 'calt' 0;
     white-space: nowrap;
     user-select: all;
@@ -183,13 +183,13 @@
 
   :root[data-theme='dark'] .tile {
     border-color: transparent;
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) .tile {
       border-color: transparent;
-      background: var(--surface-sunken);
+      background: var(--surface-subtle);
     }
   }
 
@@ -239,7 +239,7 @@
     color: var(--text-secondary);
     text-decoration: none;
     outline: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .onwardLabel {
@@ -255,7 +255,7 @@
   }
 
   .onward[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 

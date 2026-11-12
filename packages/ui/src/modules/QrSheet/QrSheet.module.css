@@ -10,7 +10,7 @@
     align-items: center;
     gap: var(--space-24);
     padding: var(--space-24) var(--space-16);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
     color: var(--text);
     font: var(--text-body);
   }
@@ -127,7 +127,7 @@
     display: block;
     inline-size: auto;
     max-inline-size: 70%;
-    block-size: var(--size-bar);
+    block-size: var(--size-topbar);
     margin-block-end: var(--space-4);
     object-fit: contain;
     object-position: left center;
@@ -136,25 +136,25 @@
   .mark {
     display: grid;
     place-items: center;
-    inline-size: var(--size-bar);
-    block-size: var(--size-bar);
+    inline-size: var(--size-topbar);
+    block-size: var(--size-topbar);
     margin-block-end: var(--space-4);
     border-radius: var(--radius-full);
     background: var(--text);
     color: var(--surface);
-    font: var(--text-heading);
+    font: var(--text-title);
   }
 
   .venue {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-title-regular);
+    font: var(--text-heading-regular);
     overflow-wrap: anywhere;
   }
 
   .table {
     margin: 0;
-    font: var(--text-note-title);
+    font: var(--text-title-lg);
     overflow-wrap: anywhere;
   }
 
@@ -203,7 +203,7 @@
     }
 
     .table {
-      font: var(--text-heading);
+      font: var(--text-title);
     }
   }
 

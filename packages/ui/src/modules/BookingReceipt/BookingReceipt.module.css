@@ -8,12 +8,8 @@
     --scale-press: 0.97;
     /* The booking page's calmer pace, here too (the owner, 2 November 2026): the public pages' `duration-public-*`
        tokens stand in for the library's, and a changed Button label (Guests (2), Adding) resolves in. */
-    --duration-hover: var(--duration-public-hover);
-    --duration-press: var(--duration-public-press);
-    --duration-exit: var(--duration-public-exit);
-    --duration-popover: var(--duration-public-popover);
-    --duration-move: var(--duration-public-move);
-    --duration-modal: var(--duration-public-modal);
+    --duration-quick: var(--duration-public-hover);
+    --duration-fast: var(--duration-public-move);
     --label-swap: var(--duration-public-move);
     /* The blur the heading rises out of (transitions.dev's texts reveal, 3px), a literal because the token set has no
        blur yet: the artifact owes a motion blur token. */
@@ -65,7 +61,7 @@
   .sent {
     margin: 0;
     color: var(--text-secondary);
-    animation: text-rise var(--reveal-duration) var(--ease-in-out) var(--duration-hover) backwards;
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) var(--duration-quick) backwards;
   }
 
   /* A booking that is no longer ahead (cancelled, declined, passed) or still waiting: its state's quiet mark. */
@@ -75,7 +71,7 @@
     inline-size: var(--size-toolbar);
     block-size: var(--size-toolbar);
     border-radius: var(--radius-full);
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   /* The booked moment's card: the time as its first line, the zone and how soon under it. */
@@ -88,8 +84,8 @@
 
   .headline {
     margin: 0;
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .sentIcon {
@@ -163,7 +159,7 @@
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    animation: mark-pop var(--reveal-duration) var(--ease-out) var(--duration-hover) both;
+    animation: mark-pop var(--reveal-duration) var(--ease-smooth-out) var(--duration-quick) both;
   }
 
   /* Right after booking, the tick sends two soft rings out across the avatar as it lands, one after the other: the
@@ -182,13 +178,13 @@
     border: var(--border-width-thick) solid var(--tag-green-text);
     border-radius: var(--radius-full);
     opacity: 0;
-    animation: mark-ring calc(var(--reveal-duration) * 2) var(--ease-out)
-      calc(var(--reveal-duration) + var(--duration-hover));
+    animation: mark-ring calc(var(--reveal-duration) * 2) var(--ease-smooth-out)
+      calc(var(--reveal-duration) + var(--duration-quick));
     pointer-events: none;
   }
 
   .mark[data-welcome]::after {
-    animation-delay: calc(var(--reveal-duration) * 1.5 + var(--duration-hover));
+    animation-delay: calc(var(--reveal-duration) * 1.5 + var(--duration-quick));
   }
 
   .mark[data-state='requested'] {
@@ -211,8 +207,8 @@
      reveal), so the page reads top down once as it arrives. */
   .title {
     margin: 0;
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     animation: text-rise var(--reveal-duration) var(--ease-in-out) backwards;
   }
 
@@ -223,13 +219,13 @@
   .lead {
     margin: 0;
     color: var(--text-secondary);
-    animation: text-rise var(--reveal-duration) var(--ease-in-out) calc(var(--duration-hover) / 2) backwards;
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) calc(var(--duration-quick) / 2) backwards;
   }
 
   /* The moment's heading at the public pages' large title (the link page's name), its first line in ink. */
   .head[data-plain] > .title {
-    font: var(--text-note-title);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title);
   }
 
   .head[data-plain] > .lead {
@@ -245,7 +241,7 @@
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     container-type: inline-size;
-    animation: receipt-rise var(--panel-duration) var(--ease-out) var(--duration-hover) both;
+    animation: receipt-rise var(--panel-duration) var(--ease-smooth-out) var(--duration-quick) both;
   }
 
   .band {
@@ -315,34 +311,34 @@
      out, "You're booked" and its warm line rise, then the card, and last the date tile flips into place, so the eye
      ends on when. A page opened later (Your booking) simply shows. */
   .root[data-welcome] .avatar {
-    animation: avatar-land var(--reveal-duration) var(--ease-out) backwards;
+    animation: avatar-land var(--reveal-duration) var(--ease-smooth-out) backwards;
   }
 
   .root[data-welcome] .title {
-    animation-delay: calc(var(--duration-hover) * 2);
+    animation-delay: calc(var(--duration-quick) * 2);
   }
 
   .root[data-welcome] .lead {
-    animation-delay: calc(var(--duration-hover) * 2.5);
+    animation-delay: calc(var(--duration-quick) * 2.5);
   }
 
   .root[data-welcome] .card {
-    animation-delay: calc(var(--duration-hover) * 3);
+    animation-delay: calc(var(--duration-quick) * 3);
   }
 
   .root[data-welcome] .chip {
-    animation: chip-land var(--reveal-duration) var(--ease-out) calc(var(--duration-hover) * 4.5) backwards;
+    animation: chip-land var(--reveal-duration) var(--ease-smooth-out) calc(var(--duration-quick) * 4.5) backwards;
   }
 
   .chipMonth {
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
   }
 
   .chipDay {
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
     font-variant-numeric: tabular-nums;
   }
 
@@ -360,8 +356,8 @@
     align-items: baseline;
     gap: 0 var(--space-6);
     margin: 0 0 var(--space-4);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .who {
@@ -372,8 +368,8 @@
 
   .range {
     margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* With the summary over it, the time steps down to the body's strong weight: one title per card. */
@@ -427,8 +423,8 @@
 
   .label {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .links {
@@ -513,7 +509,7 @@
   @keyframes avatar-land {
     from {
       opacity: 0;
-      scale: var(--scale-enter);
+      scale: var(--scale-medium);
       filter: blur(var(--reveal-blur));
     }
   }

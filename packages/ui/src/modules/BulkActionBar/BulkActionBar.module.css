@@ -37,7 +37,7 @@
   }
 
   .progress {
-    flex: 1 1 var(--size-measure);
+    flex: 1 1 var(--size-measure-sm);
     min-inline-size: 0;
   }
 }

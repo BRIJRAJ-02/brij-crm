@@ -14,7 +14,7 @@
        hour holds its title over its time. */
     --hour-base: calc(var(--size-toolbar) + var(--space-16));
     --hour: var(--hour-base);
-    --axis: var(--size-control);
+    --axis: var(--size-control-sm);
     --start: 0;
     --length: 30;
     --left: 0;
@@ -73,14 +73,14 @@
   .dayNumber {
     display: grid;
     place-items: center;
-    min-inline-size: var(--size-control);
-    block-size: var(--size-control);
+    min-inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
     padding-inline: var(--space-2);
     border-radius: var(--radius-full);
     font: var(--text-body-strong);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-body-strong);
-    transition: background var(--duration-hover) var(--ease-hover);
+    transition: background var(--duration-quick) var(--ease-out);
   }
 
   .dayButton[aria-pressed='true'] .dayNumber {
@@ -90,7 +90,7 @@
   /* Today: the one today mark (DatePicker's and MonthTiles' too), the link colour inside a hairline accent ring. */
   .dayButton[data-today] .dayNumber {
     color: var(--link);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
@@ -101,7 +101,7 @@
   }
 
   .dayButton:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
@@ -113,8 +113,8 @@
 
   .dayButton[data-today] .weekday {
     color: var(--link);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* Outside the member's open hours: a light step off the grid (subtle, not sunken: the redesign of 9 November 2026
@@ -281,9 +281,9 @@
   .ghostStart,
   .ghostEnd {
     color: var(--text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label-strong);
+    letter-spacing: var(--tracking-label);
     white-space: nowrap;
   }
 
@@ -294,7 +294,7 @@
 
   /* The ring is a keyboard's on the grid; a day handed focus back after a pointer's span shows none. */
   .column:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
@@ -305,7 +305,7 @@
   .block {
     /* Without a hue: accent for a booking, grey for an event. */
     --hue-fill: var(--accent-soft);
-    --hue-bar: var(--accent-line);
+    --hue-bar: var(--accent-text);
     --hue-text: var(--text);
 
     position: absolute;
@@ -323,14 +323,14 @@
     block-size: max(calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline)), var(--size-chip));
     padding: var(--space-2) var(--space-6);
     border: none;
-    border-inline-start: var(--border-width-thick) solid var(--accent-line);
+    border-inline-start: var(--border-width-thick) solid var(--accent-text);
     border-radius: var(--radius-sm);
     background: var(--accent-soft);
     color: var(--text);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
     text-align: start;
-    transition: box-shadow var(--duration-hover) var(--ease-hover);
+    transition: box-shadow var(--duration-quick) var(--ease-out);
   }
 
   /* Seven days across: a block under half its day wide gives its brand mark's room to the title. */
@@ -480,7 +480,7 @@
   .block:focus-visible {
     z-index: var(--z-raised);
     box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline: var(--border-width-hairline) solid var(--accent-text);
     outline-offset: var(--border-width-hairline);
   }
 
@@ -509,8 +509,8 @@
   /* Let go where it can't land, or put back: it slides home instead of jumping. */
   .block[data-settling] {
     transition:
-      translate var(--duration-move) var(--ease-in-out),
-      box-shadow var(--duration-hover) var(--ease-hover);
+      translate var(--duration-fast) var(--ease-in-out),
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -541,7 +541,7 @@
     content: '';
     opacity: 0;
     translate: -50% 0;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -575,8 +575,8 @@
     overflow: hidden;
     min-inline-size: 0;
     max-inline-size: 100%;
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -584,8 +584,8 @@
   /* A state other than the usual (No show, Needs a host): a strong word before the time. */
   .blockStatus {
     margin-inline-end: var(--space-4);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .blockTime,
@@ -664,9 +664,9 @@
     text-align: end;
     background: var(--surface-raised);
     color: var(--danger);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label-strong);
+    letter-spacing: var(--tracking-label);
     white-space: nowrap;
     translate: 0 -50%;
   }
@@ -789,8 +789,8 @@
     border-radius: var(--radius-sm);
     background: var(--tag-yellow-bg);
     color: var(--tag-yellow-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   @container (inline-size < 480px) {

@@ -272,8 +272,8 @@ export default defineConfig({
     uiVite(),
     // The cascade layer order as /layers.css, linked ahead of every bundled stylesheet.
     layerOrder(),
-    // Inter preloaded by its built name on every entry, so a cold first visit paints in it from the start
-    // (never fallback, then Inter): the app, the hosted form and the public booking page all draw with it.
+    // Geist preloaded by its built name on every entry, so a cold first visit paints in it from the start
+    // (never fallback, then Geist): the app, the hosted form and the public booking page all draw with it.
     preloadFonts(FIRST_SCREEN_FONTS, ['/index.html', '/form.html', '/book.html', '/menu.html', '/reserve.html']),
     // Live updates' socket must be one vercel.json's CSP allows.
     realtimeCsp(),

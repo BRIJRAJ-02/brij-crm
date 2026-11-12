@@ -95,10 +95,10 @@
 
   .title {
     color: var(--page-card-text, var(--text));
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--page-face, var(--font-sans));
     font-synthesis: none;
-    letter-spacing: var(--tracking-title);
+    letter-spacing: var(--tracking-heading);
     overflow-wrap: anywhere;
   }
 

@@ -51,7 +51,7 @@
     flex-wrap: wrap;
     gap: var(--space-4) var(--space-8);
     align-items: center;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-inline: var(--space-4);
     border-radius: var(--radius-sm);
     outline: none;
@@ -98,20 +98,20 @@
   .outcome {
     display: grid;
     flex: none;
-    inline-size: calc(4 * var(--size-chip) + var(--size-control));
+    inline-size: calc(4 * var(--size-chip) + var(--size-control-sm));
   }
 
   .days {
     display: grid;
     flex: none;
-    inline-size: calc(3 * var(--size-chip) + var(--size-control));
+    inline-size: calc(3 * var(--size-chip) + var(--size-control-sm));
   }
 
   /* A choice's number (`scores`): two digits and its unit, at the row's end before remove. */
   .score {
     display: grid;
     flex: none;
-    inline-size: calc(2 * var(--size-chip) + var(--size-control));
+    inline-size: calc(2 * var(--size-chip) + var(--size-control-sm));
   }
 
   .meta {
@@ -153,7 +153,7 @@
     gap: var(--space-8);
     align-items: center;
     justify-content: space-between;
-    min-block-size: var(--size-input);
+    min-block-size: var(--size-control);
     padding-inline: var(--space-4);
   }
 

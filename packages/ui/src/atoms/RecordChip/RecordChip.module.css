@@ -20,7 +20,7 @@
     text-decoration: none;
     white-space: nowrap;
     outline: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .root[data-flat] {
@@ -67,7 +67,7 @@
   }
 
   .root[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 

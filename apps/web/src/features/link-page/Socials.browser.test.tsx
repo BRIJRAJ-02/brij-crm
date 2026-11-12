@@ -3,7 +3,7 @@
 // then the block. Your own set goes through your own links store; on Team pages (and inside a partner's frame) the set
 // of someone with no login goes through Team pages, shown at once on the phone and put back if refused; anyone who
 // keeps their own shows read only, with where they change it. Checked by axe in both themes.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { BlockDraft, DataLayer, LinkPageStore, SocialLink, SocialLinksState } from '@crm/data';
 import type { SocialLinkItem } from '@crm/ui';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';

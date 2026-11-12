@@ -92,7 +92,9 @@ export const Fill: Story = {
     const room = slot === null ? 0 : slot.clientWidth - parseFloat(getComputedStyle(slot).paddingInline || '0') * 2;
     // Its slot's whole width (inside the slot's padding), past the default size-menu.
     await expect(Math.abs(code.getBoundingClientRect().width - room)).toBeLessThan(1);
-    await expect(code.getBoundingClientRect().width).toBeGreaterThan(240);
+    await expect(code.getBoundingClientRect().width).toBeGreaterThan(
+      Number.parseFloat(getComputedStyle(code).getPropertyValue('--size-menu')),
+    );
     await expect(canvasElement.querySelector('svg[data-size="fill"]')).not.toBeNull();
   },
 };

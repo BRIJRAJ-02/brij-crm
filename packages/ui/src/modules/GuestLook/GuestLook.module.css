@@ -6,7 +6,7 @@
     --guest-surface: var(--menu-ground, var(--surface));
     --guest-ground: var(--menu-ground, var(--surface-subtle));
     --guest-card: var(--menu-card, var(--surface-raised));
-    --guest-chip: var(--menu-chip, var(--surface-sunken));
+    --guest-chip: var(--menu-chip, var(--surface-subtle));
     --guest-line: var(--menu-line, var(--border));
     --guest-hairline: var(--menu-line, var(--border-subtle));
     --guest-text: var(--menu-text, var(--text));
@@ -31,9 +31,8 @@
     /* The look's heading face, on the booking parts' own headings. */
     --frame-face: var(--menu-display-face, var(--font-sans));
     --surface: var(--guest-surface);
-    --surface-subtle: var(--guest-ground);
     --surface-raised: var(--guest-card);
-    --surface-sunken: var(--guest-chip);
+    --surface-subtle: var(--guest-chip);
     --surface-hover: var(--guest-chip);
     --surface-selected: var(--guest-chip);
     --border: var(--guest-line);
@@ -43,7 +42,7 @@
     --accent: var(--guest-ink);
     /* Unmixed under the pointer too: a brand's accent is checked at 4.5:1 only as it is. */
     --accent-hover: var(--guest-ink);
-    --accent-line: var(--guest-ink);
+    --accent-text: var(--guest-ink);
     /* A soft edge and hover fill, as the app's light accent border is: never the ink, or a day under the pointer is
        ink on ink. */
     --accent-border: color-mix(in oklab, var(--guest-ink) 16%, var(--guest-card));

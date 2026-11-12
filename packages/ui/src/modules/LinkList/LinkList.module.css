@@ -65,7 +65,7 @@
     border-block-end: var(--border-width-hairline) solid var(--border);
     color: var(--text);
     outline: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .row:first-child {
@@ -152,8 +152,8 @@
   .sectionTitle {
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
@@ -367,7 +367,7 @@
     border-block-end: none;
     border-radius: var(--radius-md);
     /* Moved to by the keyboard, a row stops clear of a Preview floating at the foot of the view. */
-    scroll-margin-block-end: calc(var(--size-control) + 2 * var(--space-16));
+    scroll-margin-block-end: calc(var(--size-control-sm) + 2 * var(--space-16));
   }
 
   /* No grips to hold the column (read only, or under a search): the tiles still start under an inset title. */
@@ -409,7 +409,7 @@
     letter-spacing: var(--tracking-body-strong);
     text-align: end;
     white-space: nowrap;
-    transition: color var(--duration-move) var(--ease-hover);
+    transition: color var(--duration-fast) var(--ease-out);
   }
 
   .amount[data-tone='quiet'] {
@@ -438,7 +438,7 @@
 
   /* Off (Sold out): the picture steps back with the words, and all of it eases as it flips. */
   .frame[data-density='media'] .leading {
-    transition: opacity var(--duration-move) var(--ease-hover);
+    transition: opacity var(--duration-fast) var(--ease-out);
   }
 
   .row[data-density='media'][data-off] .leading {
@@ -457,7 +457,7 @@
     .frame[data-density='media'] .quick,
     .frame[data-density='media'] .rowActions {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .row[data-density='media']:is(
@@ -483,9 +483,9 @@
   /* Rows that arrive after the first draw ease in, a fade with a small rise (a fade alone with reduced motion). */
   .frame[data-settled] .row {
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      opacity var(--duration-popover) var(--ease-out),
-      translate var(--duration-popover) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      translate var(--duration-fast) var(--ease-smooth-out);
 
     @starting-style {
       opacity: 0;
@@ -511,8 +511,8 @@
     overflow: hidden;
     pointer-events: none;
     animation:
-      row-fade var(--duration-exit) var(--ease-out) forwards,
-      row-close var(--duration-modal) var(--ease-out) forwards;
+      row-fade var(--duration-quick) var(--ease-smooth-out) forwards,
+      row-close var(--duration-fast) var(--ease-smooth-out) forwards;
   }
 
   @keyframes row-fade {
@@ -532,7 +532,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .frame[data-motion] .row[data-leaving] {
-      animation: row-close-quiet var(--duration-exit) var(--ease-out) forwards;
+      animation: row-close-quiet var(--duration-quick) var(--ease-smooth-out) forwards;
     }
 
     @keyframes row-close-quiet {

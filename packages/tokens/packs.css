@@ -1,4 +1,4 @@
-/* The link page's font packs (spec 0060, AC-12): six faces beside Inter and JetBrains Mono, all open licence and
+/* The link page's font packs (spec 0060, AC-12): six faces beside Geist and Geist Mono, all open licence and
    served from our own origin. A face is fetched only when text on the page is drawn in it, so a page downloads its
    own pack and nothing else. Each face has a fallback built from a local system font with its metrics overridden to
    the real face's (size, ascent, descent), so the swap moves nothing (AC-21: layout shift under 0.05). Hand written,

@@ -5,7 +5,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
-    max-inline-size: var(--size-measure);
+    max-inline-size: var(--size-measure-sm);
     padding: var(--space-4);
   }
 

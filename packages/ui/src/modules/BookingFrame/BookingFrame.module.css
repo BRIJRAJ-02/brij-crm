@@ -39,7 +39,7 @@
     --frame-link: var(--frame-brand-link, var(--link));
     --frame-accent-soft: var(--frame-brand-soft, var(--accent-soft));
     --frame-accent-border: var(--frame-brand-accent, var(--accent-border));
-    --frame-accent-line: var(--frame-brand-accent, var(--accent-line));
+    --frame-accent-line: var(--frame-brand-accent, var(--accent-text));
     --frame-focus: var(--frame-brand-focus, var(--shadow-focus));
     /* The public booking page answers a press and swaps labels in place (the owner, 1 November 2026, this page
        only): every Button, time and day in here eases to 0.97 while held, and a changed label (Book, Confirm)
@@ -49,12 +49,8 @@
        motion tokens stand in for the public pages' own pace (the `duration-public-*` tokens), so every part on the
        page (the view switch's thumb, the times, the days, the month, Book) eases rather than snaps, while the app
        keeps the tokens' own pace. A step slides at the public slide and a new fact reveals at the public reveal. */
-    --duration-hover: var(--duration-public-hover);
-    --duration-press: var(--duration-public-press);
-    --duration-exit: var(--duration-public-exit);
-    --duration-popover: var(--duration-public-popover);
-    --duration-move: var(--duration-public-move);
-    --duration-modal: var(--duration-public-modal);
+    --duration-quick: var(--duration-public-hover);
+    --duration-fast: var(--duration-public-move);
     --label-swap: var(--duration-public-move);
     --slide-duration: var(--duration-public-slide);
     --reveal-duration: var(--duration-public-reveal);
@@ -64,7 +60,7 @@
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --slide-blur: 3px;
     /* The host's social marks arrive one after another and lift a touch under the pointer (SocialLinks). */
-    --social-arrive: var(--duration-modal);
+    --social-arrive: var(--duration-fast);
     /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
     --social-lift: 2px;
 
@@ -96,14 +92,14 @@
     --link: var(--frame-link);
     --accent-soft: var(--frame-accent-soft);
     --accent-border: var(--frame-accent-border);
-    --accent-line: var(--frame-accent-line);
+    --accent-text: var(--frame-accent-line);
     --shadow-focus: var(--frame-focus);
 
     display: flex;
     flex-direction: column;
     gap: var(--space-24);
     inline-size: 100%;
-    max-inline-size: calc(var(--size-measure) + var(--size-panel-wide) + var(--size-column-wide) + var(--space-32));
+    max-inline-size: calc(var(--size-measure-sm) + var(--size-panel-wide) + var(--size-column-wide) + var(--space-32));
   }
 
   .narrow {
@@ -137,7 +133,7 @@
      column, never cropped or stretched. */
   .brandLogo {
     align-self: flex-start;
-    block-size: var(--size-input);
+    block-size: var(--size-control);
     inline-size: auto;
     max-inline-size: var(--size-column);
     object-fit: contain;
@@ -177,10 +173,10 @@
   .host {
     margin: 0;
     color: var(--text);
-    font: var(--text-heading);
+    font: var(--text-title);
     /* The template's own face (spec 0068): the root always carries one, Classic when the brand names none. */
     font-family: var(--frame-face, var(--font-sans));
-    letter-spacing: var(--tracking-heading);
+    letter-spacing: var(--tracking-title);
     overflow-wrap: anywhere;
   }
 
@@ -206,8 +202,8 @@
   .names[data-team] > .title,
   .names[data-alone] > .title {
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .description {
@@ -230,7 +226,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -303,16 +299,16 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8) var(--space-12);
-    min-block-size: calc(var(--size-control) + 2 * var(--space-2));
+    min-block-size: calc(var(--size-control-sm) + 2 * var(--space-2));
     padding: var(--space-20) var(--space-20) 0;
   }
 
   .heading {
     margin: 0;
     color: var(--text);
-    font: var(--text-title);
+    font: var(--text-heading);
     font-family: var(--frame-face, var(--font-sans));
-    letter-spacing: var(--tracking-title);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* The picker's corner (spec 0058, AC-24): the page's few controls (the clock, the view) as one compact group,
@@ -341,7 +337,7 @@
 
   .head,
   .under {
-    transition: opacity var(--duration-move) var(--ease-out);
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
 
   .head[inert],
@@ -353,8 +349,8 @@
   /* Switching views, the month goes in duration-exit as the view comes in. */
   .stage[data-moved] .under[inert] {
     transition:
-      opacity var(--duration-exit) var(--ease-out),
-      visibility var(--duration-exit);
+      opacity var(--duration-quick) var(--ease-smooth-out),
+      visibility var(--duration-quick);
   }
 
   .cover {
@@ -379,7 +375,7 @@
   }
 
   .stage[data-moved] .cover {
-    animation: cover-in var(--slide-duration) var(--ease-out);
+    animation: cover-in var(--slide-duration) var(--ease-smooth-out);
   }
 
   /* A heading that changes with the step resolves in with it. */
@@ -394,7 +390,7 @@
 
   .stage[data-moved][data-enter='back'] .cover,
   .stage[data-enter='back'] .under:not([inert]) {
-    animation: step-back var(--slide-duration) var(--ease-out);
+    animation: step-back var(--slide-duration) var(--ease-smooth-out);
   }
 
   /* Chosen from the keyboard (the view switch's arrows, Enter on Book or Back), a view or a step shows at once:
@@ -508,7 +504,7 @@
       border-end-start-radius: var(--radius-xl);
       border-end-end-radius: var(--radius-xl);
       background: var(--surface-raised);
-      animation: footer-rise var(--duration-move) var(--ease-out);
+      animation: footer-rise var(--duration-fast) var(--ease-smooth-out);
     }
 
     .footer[data-waiting] {
@@ -539,7 +535,7 @@
      only the foot moves down. */
   .narrow[data-width='profile'] {
     align-self: start;
-    max-inline-size: calc(var(--size-page-card) + var(--size-measure) / 2);
+    max-inline-size: calc(var(--size-page-card) + var(--size-measure-sm) / 2);
   }
 
   .section {
@@ -552,8 +548,8 @@
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* An address nobody holds (25 Oct 2026): the quiet fact and the headline stand
@@ -566,7 +562,7 @@
   }
 
   /* The accent marks what is on offer. `--link` is the accent tuned for text:
-     `--accent` is 3.6:1 on this ground in dark, and `--accent-line` is a line
+     `--accent` is 3.6:1 on this ground in dark, and `--accent-text` is a line
      token, held only to the 3:1 a ring needs. */
   .offerFree {
     color: var(--link);
@@ -590,15 +586,15 @@
     /* The same small inset a section heading takes, so the lead line and the headline share one left edge. */
     padding-inline: var(--space-4);
     color: var(--text);
-    font: var(--text-note-title);
-    letter-spacing: var(--tracking-note-title);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
     overflow-wrap: anywhere;
   }
 
   .messageTitle {
     margin: 0;
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   /* Try again and a way on (Find your reservation), side by side, wrapping on a phone. */
@@ -633,7 +629,7 @@
 
   .powered {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     letter-spacing: var(--tracking-kbd);
     text-transform: uppercase;
   }
@@ -694,12 +690,12 @@
     color: var(--text-secondary);
     text-decoration: none;
     font: var(--text-body);
-    transition: color var(--duration-hover) var(--ease-hover);
+    transition: color var(--duration-quick) var(--ease-out);
   }
 
   .brand:focus-visible,
   .claim:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-text);
     outline-offset: var(--border-width-thick);
   }
 
@@ -772,7 +768,7 @@
        the rail over it in the first column, the card spanning both rows of the second. */
     .root:not([data-compact]) .layout {
       display: grid;
-      grid-template-columns: var(--size-measure) minmax(0, 1fr);
+      grid-template-columns: var(--size-measure-sm) minmax(0, 1fr);
       grid-template-rows: auto 1fr;
       gap: var(--space-24) var(--space-32);
     }
@@ -884,13 +880,13 @@
     --frame-glow: 0 0 var(--space-16) color-mix(in oklab, var(--frame-accent) 45%, transparent);
     --frame-focus: 0 0 0 var(--border-width-thick) var(--frame-accent), var(--frame-glow);
 
-    background: var(--surface-sunken);
+    background: var(--surface-subtle);
   }
 
   .root[data-template='studio'] .host,
   .root[data-template='night'] .host {
     font-size: var(--size-chip);
-    line-height: var(--size-control);
+    line-height: var(--size-control-sm);
   }
 
   .root[data-template='studio'] .card {

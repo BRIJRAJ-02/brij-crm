@@ -103,7 +103,7 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     outline: none;
-    transition: background-color var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -114,7 +114,7 @@
   }
 
   .more[data-focus-visible] {
-    border-color: var(--accent-line);
+    border-color: var(--accent-text);
     box-shadow: var(--shadow-focus);
   }
 

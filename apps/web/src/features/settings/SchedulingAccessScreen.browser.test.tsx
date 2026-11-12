@@ -1,7 +1,7 @@
 // Settings › Account › Scheduling access in Chromium (spec 0037, AC-1266, AC-1271, AC-1445): owners and admins through
 // their role, a delegation over me with its source and level, Remove asking first with the consequence in plain
 // words, Add someone giving See or Manage, whose scheduling I reach, and no axe violations in either theme.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   DelegationGrant,
   DelegationsHeld,

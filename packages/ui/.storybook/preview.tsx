@@ -3,7 +3,7 @@
 // the language, so formats and the week start can be checked by eye.
 import type { Decorator, Preview } from '@storybook/react-vite';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
-import '../src/styles/index.css';
+import '../src/styles/app.css';
 import type { KeyboardPlatform } from '../src/atoms/Kbd/shortcuts.ts';
 import { createFixedClock } from '../src/provider/clock.ts';
 import { createToasts } from '../src/provider/toasts.tsx';
@@ -18,16 +18,60 @@ const NO_DELAY = { delayMs: 0, minimumMs: 0 } as const;
 
 type ThemeGlobal = 'light' | 'dark' | 'system';
 
+/**
+ * Stories of parts that only public pages draw (spec 0071): shot at full size, as a guest sees them. Everything else
+ * draws at the app's density, as the app does. A story may set `parameters.scale` to override.
+ */
+const PUBLIC_TITLES = [
+  'Public form/',
+  'Modules/BookingChat',
+  'Modules/BookingDetails',
+  'Modules/BookingFrame',
+  'Modules/BookingReceipt',
+  'Modules/DayStrip',
+  'Modules/GuestLook',
+  'Modules/ItemSheet',
+  'Modules/LinkPage',
+  'Modules/MenuList',
+  'Modules/MonthTiles',
+  'Modules/SlotList',
+  'Molecules/SocialLinks',
+  'Molecules/Stepper',
+];
+
+type ScaleGlobal = 'app' | 'full';
+
+function scaleOf(title: string, parameter: unknown): ScaleGlobal {
+  if (parameter === 'app' || parameter === 'full') return parameter;
+  const isPublic = PUBLIC_TITLES.some((prefix) =>
+    prefix.endsWith('/') ? title.startsWith(prefix) : title === prefix || title.startsWith(`${prefix}/`),
+  );
+  return isPublic ? 'full' : 'app';
+}
+
 interface StoryProvidersProps {
   readonly locale: string;
   readonly theme: ThemeGlobal;
+  readonly scale: ScaleGlobal;
   readonly platform: KeyboardPlatform;
   readonly children: ReactNode;
 }
 
-function StoryProviders({ locale, theme, platform, children }: StoryProvidersProps) {
+function StoryProviders({ locale, theme, scale, platform, children }: StoryProvidersProps) {
   const [toasts] = useState(createToasts);
   const [clock] = useState(() => createFixedClock(STORY_NOW));
+
+  // The page is shared across stories (and files), so the scale goes back to what it was when the story ends.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const before = root.dataset.scale;
+    if (scale === 'app') root.dataset.scale = 'app';
+    else delete root.dataset.scale;
+    return () => {
+      if (before === undefined) delete root.dataset.scale;
+      else root.dataset.scale = before;
+    };
+  }, [scale]);
 
   // System sets nothing, so the OS decides through CSS, as in the app.
   useLayoutEffect(() => {
@@ -60,6 +104,7 @@ const withProviders: Decorator = (Story, context) => {
     <StoryProviders
       locale={typeof locale === 'string' ? locale : 'en-US'}
       theme={themeOf(theme)}
+      scale={scaleOf(context.title, context.parameters.scale)}
       platform={platform === 'other' ? 'other' : 'mac'}
     >
       <Story />

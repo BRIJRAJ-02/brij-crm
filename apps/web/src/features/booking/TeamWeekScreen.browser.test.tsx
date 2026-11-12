@@ -2,7 +2,7 @@
 // move between labelled cells, Enter opens a cell's editor and Esc closes it back onto the cell, a change for one date
 // goes to the store, the editor opens whole (both times in view), a See only row has no buttons, Copy this week to
 // next week asks first, and no axe violations in either theme. With VITE_ROSTER_SHOTS set it saves the screen at 390 and 1280 wide, light and dark, grid and editor.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type { DataLayer, TeamWeek, TeamWeekHeld, TeamWeekRow, TeamWeekState, VisibleMember } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

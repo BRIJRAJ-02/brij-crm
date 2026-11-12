@@ -2,7 +2,7 @@
 // close the dialog and draw again (the design pass of 22 October 2026), For first and the one line note that no
 // calendar is connected before the guest (31 October 2026), and the guest's zone sits with who it is with.
 // Layout is measured (From and To on one row), so the library's styles load first, as main.tsx does.
-import '@crm/ui/styles.css';
+import '@crm/ui/app.css';
 import type {
   BookingPageView,
   CalendarListState,

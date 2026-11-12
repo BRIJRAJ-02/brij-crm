@@ -43,7 +43,7 @@
   @media (hover: hover) and (pointer: fine) {
     .action {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .row:hover .action,

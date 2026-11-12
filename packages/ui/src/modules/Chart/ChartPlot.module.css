@@ -32,7 +32,7 @@
 
   .value {
     fill: var(--text);
-    font: var(--text-label-strong);
+    font: var(--text-label);
     font-variant-numeric: tabular-nums;
   }
 

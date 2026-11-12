@@ -250,7 +250,7 @@ const FONT_FILE = /^\/assets\/[\w.-]+\.woff2$/;
 /**
  * The link page's own look in its head (spec 0060, AC-20, AC-21): its stylesheet on our own api (the accent pair and
  * any photo, `look.css?v=`), and a preload for its pack's heading face, by the built name the build handed over, so
- * the name draws in its own face from the start. Inter is preloaded by the build on every public page already, so a
+ * the name draws in its own face from the start. Geist is preloaded by the build on every public page already, so a
  * file the shell names once is never named twice. Anything malformed writes nothing: the page draws its look from
  * the shared stylesheet either way, in the product's accent.
  */

@@ -42,7 +42,7 @@
   @media (hover: hover) and (pointer: fine) {
     .actions[data-quiet] {
       opacity: 0;
-      transition: opacity var(--duration-hover) var(--ease-hover);
+      transition: opacity var(--duration-quick) var(--ease-out);
     }
 
     .actions[data-quiet]:has([aria-expanded='true'], [data-lifted]),
@@ -88,7 +88,7 @@
   .chevron {
     display: inline-flex;
     color: var(--text-secondary);
-    transition: rotate var(--duration-move) var(--ease-in-out);
+    transition: rotate var(--duration-fast) var(--ease-in-out);
   }
 
   .trigger[aria-expanded='true'] > .chevron {
@@ -106,7 +106,7 @@
 
     overflow: clip;
     block-size: var(--disclosure-panel-height);
-    transition: block-size var(--duration-move) var(--ease-in-out);
+    transition: block-size var(--duration-fast) var(--ease-in-out);
   }
 
   .root[data-expanded] > .panel {
@@ -151,11 +151,13 @@
   .trigger[data-variant='label'] {
     gap: var(--space-4);
     block-size: auto;
+    /* Never under WCAG's 24px target: at the app's density the label's line and padding alone come to 22px. */
+    min-block-size: var(--size-control-sm);
     padding-block: var(--space-4);
     padding-inline: var(--space-8);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .trigger[data-variant='label'] > .title {
@@ -187,14 +189,14 @@
     inline-size: fit-content;
     max-inline-size: calc(100% + var(--space-6));
     block-size: auto;
-    min-block-size: var(--size-control);
+    min-block-size: var(--size-control-sm);
     margin-inline-start: calc(-1 * var(--space-6));
     padding-inline: var(--space-6) var(--space-8);
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover);
+      background-color var(--duration-quick) var(--ease-out),
+      color var(--duration-quick) var(--ease-out);
   }
 
   .trigger[data-variant='quiet'] > .chevron {
@@ -219,6 +221,12 @@
   .trigger[data-variant='quiet'][data-inset='row'] {
     gap: var(--space-8);
     margin-inline-start: calc(var(--space-8) - var(--space-6));
+  }
+
+  /* The chevron takes a column as wide as the rows' 16px checkbox (an icon and space-2 in the app, where only the
+     TaskList footer draws it), so their centres meet (spec 0071). */
+  .trigger[data-variant='quiet'][data-inset='row'] > .chevron {
+    inline-size: calc(var(--size-icon) + var(--space-2));
   }
 
   @media (prefers-reduced-motion: reduce) {

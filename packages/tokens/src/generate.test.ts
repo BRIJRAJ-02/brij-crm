@@ -7,7 +7,7 @@ import { generateTokensCss, type GenerateResult } from './generate.ts';
 import { TokenSource } from './grammar.ts';
 
 const PACKAGE = path.resolve(import.meta.dirname, '..');
-const OPTIONS = { version: 'test-1', fontFiles: ['Inter.woff2', 'Mono.woff2'] };
+const OPTIONS = { version: 'test-1', fontFiles: ['Geist.woff2', 'Mono.woff2'] };
 
 /** The smallest valid tokens.json, with a few overrides. */
 function fixture(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -26,10 +26,10 @@ function fixture(overrides: Record<string, unknown> = {}): Record<string, unknow
     },
     type: {
       fonts: [
-        { family: 'Inter', file: 'fonts/Inter.woff2', weight: '100 900', style: 'normal' },
-        { family: 'JetBrains Mono', file: 'Mono.woff2', weight: '100 800' },
+        { family: 'Geist', file: 'fonts/Geist.woff2', weight: '100 900', style: 'normal' },
+        { family: 'Geist Mono', file: 'Mono.woff2', weight: '100 800' },
       ],
-      families: { sans: '"Inter", ui-sans-serif, sans-serif', mono: '"JetBrains Mono", monospace' },
+      families: { sans: '"Geist", ui-sans-serif, sans-serif', mono: '"Geist Mono", monospace' },
       groups: [
         {
           name: 'Text',
@@ -101,7 +101,7 @@ describe('generateTokensCss', () => {
   it('writes plain families, type families, and each style as a font shorthand plus its tracking', () => {
     const root = blockAfter(css(generateTokensCss(fixture(), OPTIONS)), '  :root {');
     expect(root).toContain('--space-8: 8px;');
-    expect(root).toContain('--font-sans: "Inter", ui-sans-serif, sans-serif;');
+    expect(root).toContain('--font-sans: "Geist", ui-sans-serif, sans-serif;');
     expect(root).toContain('--text-body: 400 13px/20px var(--font-sans);');
     expect(root).toContain('--tracking-heading: -0.01em;');
     expect(root).toContain('--text-code: 400 12px/16px var(--font-mono);');
@@ -129,7 +129,7 @@ describe('generateTokensCss', () => {
 
   it('writes an @font-face per font, served from the package', () => {
     const output = css(generateTokensCss(fixture(), OPTIONS));
-    expect(output).toContain('font-family: "Inter";\n  src: url("./fonts/Inter.woff2") format("woff2");');
+    expect(output).toContain('font-family: "Geist";\n  src: url("./fonts/Geist.woff2") format("woff2");');
     expect(output).toContain('src: url("./fonts/Mono.woff2") format("woff2");');
     expect(output).toContain('font-display: swap;');
   });
@@ -314,7 +314,172 @@ describe('the committed tokens.css (AC-3)', () => {
     const result = generateTokensCss(tokens, {
       version: source.version,
       fontFiles: readdirSync(path.join(PACKAGE, 'fonts')),
+      legacy: JSON.parse(readFileSync(path.join(PACKAGE, 'legacy.json'), 'utf8')),
     });
     expect(css(result)).toBe(readFileSync(path.join(PACKAGE, 'tokens.css'), 'utf8'));
+  });
+});
+
+/** The declarations of the app scale block, as a name to value map. */
+function appBlock(result: GenerateResult): Map<string, string> {
+  if (!result.ok) throw new Error(result.error.message);
+  const body = blockAfter(result.appCss, ":root[data-scale='app']");
+  return new Map([...body.matchAll(/--([\w-]+): ([^;]+);/g)].map((match) => [match[1] ?? '', match[2] ?? '']));
+}
+
+describe('the app scale (spec 0071, AC-3, AC-4)', () => {
+  const real = (): GenerateResult =>
+    generateTokensCss(JSON.parse(readFileSync(path.join(PACKAGE, 'tokens.json'), 'utf8')), {
+      version: 'test',
+      fontFiles: readdirSync(path.join(PACKAGE, 'fonts')),
+      legacy: JSON.parse(readFileSync(path.join(PACKAGE, 'legacy.json'), 'utf8')),
+    });
+
+  it('draws the type styles at the scale table values, sizes to 0.5px and line heights to even px', () => {
+    const app = appBlock(real());
+    const table: Record<string, string> = {
+      display: '500 28px/36px',
+      'title-lg': '500 21px/28px',
+      title: '500 16px/22px',
+      heading: '500 13px/20px',
+      'heading-strong': '600 13px/20px',
+      'heading-regular': '400 13px/20px',
+      'body-lg': '400 14px/22px',
+      'body-lg-strong': '500 14px/22px',
+      body: '400 12.5px/18px',
+      'body-strong': '500 12.5px/18px',
+      'body-sm': '400 11.5px/18px',
+      'body-sm-strong': '500 11.5px/18px',
+      'body-sm-tight': '400 11.5px/16px',
+      label: '500 10.5px/14px',
+      caption: '400 10.5px/14px',
+      kbd: '500 9.5px/14px',
+      code: '400 10.5px/16px',
+    };
+    for (const [style, value] of Object.entries(table)) expect(app.get(`text-${style}`), style).toMatch(value);
+  });
+
+  it('draws spacing, radius and size at the scale table values', () => {
+    const app = appBlock(real());
+    const table: Record<string, string> = {
+      'space-2': '2px',
+      'space-4': '4px',
+      'space-6': '5px',
+      'space-8': '7px',
+      'space-12': '11px',
+      'space-16': '14px',
+      'space-20': '18px',
+      'space-24': '21px',
+      'space-32': '28px',
+      'space-48': '42px',
+      'space-64': '56px',
+      'radius-xs': '4px',
+      'radius-sm': '5px',
+      'radius-md': '9px',
+      'radius-lg': '12px',
+      'radius-xl': '18px',
+      'size-control-sm': '24px',
+      'size-control': '32px',
+      'size-control-lg': '38px',
+      'size-row': '38px',
+      'size-nav-item': '30px',
+      'size-topbar': '50px',
+      'size-avatar': '24px',
+      'size-avatar-lg': '38px',
+      'size-icon': '14px',
+      'size-icon-lg': '18px',
+      'size-sidebar': '225px',
+      'size-menu': '211px',
+      'size-dialog': '422px',
+      'size-dialog-wide': '634px',
+      'size-panel': '387px',
+      'size-measure': '563px',
+    };
+    for (const [name, value] of Object.entries(table)) expect(app.get(name), name).toBe(value);
+  });
+
+  it('leaves everything that does not scale out of the app block', () => {
+    const app = appBlock(real());
+    for (const name of app.keys()) expect(name).toMatch(/^(?:space|radius|size|text)-/);
+    expect(app.has('radius-full')).toBe(false);
+    expect(app.has('size-chip')).toBe(false);
+    expect(app.has('border-width-hairline')).toBe(false);
+  });
+
+  it('writes the source values under :root, so public pages draw at full size', () => {
+    const root = blockAfter(css(real()), '  :root {');
+    expect(root).toContain('--space-16: 16px;');
+    expect(root).toContain('--text-body: 400 14px/20px var(--font-sans);');
+  });
+
+  it('puts legacy colours in the theme blocks and legacy sizes under :root, unscaled', () => {
+    const output = css(real());
+    expect(blockAfter(output, "[data-theme='dark']")).toContain('--danger-hover: #ff8d84;');
+    expect(blockAfter(output, '  :root {')).toContain('--size-chip: 20px;');
+  });
+
+  it('writes the same numbers into values.ts', () => {
+    const result = real();
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.values).toContain("'space-16': '16px',");
+    expect(result.values).toMatch(/appValues[\s\S]*'space-16': '14px',/);
+    expect(result.values).toContain("'size-chip': '20px',");
+    const committed = readFileSync(path.join(PACKAGE, 'values.ts'), 'utf8');
+    expect(result.values).toBe(committed.replace('(artifact version unpublished)', '(artifact version test)'));
+  });
+
+  it('reads a numeric font weight', () => {
+    const output = css(
+      generateTokensCss(
+        fixture({
+          type: {
+            fonts: [],
+            families: { sans: 'sans-serif' },
+            groups: [
+              {
+                name: 'Text',
+                family: 'sans',
+                styles: [{ name: 'body', fontSize: '14px', lineHeight: '20px', fontWeight: 500 }],
+              },
+            ],
+          },
+        }),
+        OPTIONS,
+      ),
+    );
+    expect(output).toContain('--text-body: 500 14px/20px var(--font-sans);');
+  });
+
+  it('refuses a size token that is neither a height nor a width', () => {
+    const result = generateTokensCss(
+      fixture({
+        density: { tokens: [{ name: 'density-app', value: '0.88' }] },
+        size: { tokens: [{ name: 'size-new', value: '40px' }] },
+      }),
+      OPTIONS,
+    );
+    expect(errorCode(result)).toBe('TOKENS_INVALID');
+  });
+
+  it('writes no app block without a density, as before spec 0071', () => {
+    const result = generateTokensCss(fixture(), OPTIONS);
+    expect(result.ok && result.appCss).toBe('');
+  });
+
+  it('keeps the app block out of tokens.css, so public pages never carry it', () => {
+    expect(css(real())).not.toContain("data-scale='app'");
+  });
+
+  it('refuses a density outside (0, 1]', () => {
+    const result = generateTokensCss(
+      fixture({ density: { tokens: [{ name: 'density-app', value: '1.2' }] } }),
+      OPTIONS,
+    );
+    expect(errorCode(result)).toBe('TOKENS_INVALID');
+  });
+
+  it('has no blur family in the source (spec 0071, AC-11)', () => {
+    const source = JSON.parse(readFileSync(path.join(PACKAGE, 'tokens.json'), 'utf8')) as Record<string, unknown>;
+    expect(source).not.toHaveProperty('blur');
   });
 });
