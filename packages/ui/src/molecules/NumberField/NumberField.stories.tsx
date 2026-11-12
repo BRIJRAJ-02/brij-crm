@@ -55,6 +55,67 @@ export const Currency: Story = {
     await userEvent.tab();
     await expect(field).toHaveValue('1,234.50');
     await expect(args.onChange).toHaveBeenLastCalledWith(1234.5);
+    // What is saved is what is shown: three decimals typed as money are saved rounded to its two.
+    await userEvent.clear(field);
+    await userEvent.type(field, '12.345');
+    await userEvent.tab();
+    await expect(field).toHaveValue('12.35');
+    await expect(args.onChange).toHaveBeenLastCalledWith(12.35);
+  },
+};
+
+/**
+ * In German, which groups with a point: a stored 1234 shows as 1.234 and reads back as 1234 after an edit that
+ * changes nothing, and 1.500 typed is fifteen hundred; 2,5 and a typed 2.5 are both two and a half.
+ */
+export const German: Story = {
+  globals: { locale: 'de-DE' },
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Capacity', defaultValue: 1234 },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <NumberField {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const field = canvas.getByRole('textbox', { name: 'Capacity' });
+    await expect(field).toHaveValue('1.234');
+    await userEvent.click(field);
+    await userEvent.keyboard('5{Backspace}');
+    await userEvent.tab();
+    await expect(field).toHaveValue('1.234');
+    await expect(args.onChange).not.toHaveBeenCalled();
+    await userEvent.clear(field);
+    await userEvent.type(field, '1.500');
+    await userEvent.tab();
+    await expect(args.onChange).toHaveBeenLastCalledWith(1500);
+    await expect(field).toHaveValue('1.500');
+    await userEvent.clear(field);
+    await userEvent.type(field, '2.5');
+    await userEvent.tab();
+    await expect(args.onChange).toHaveBeenLastCalledWith(2.5);
+    await expect(field).toHaveValue('2,5');
+  },
+};
+
+/** In Bengali, which writes its own digits: an edit to the shown value reads in those digits. */
+export const Bengali: Story = {
+  globals: { locale: 'bn-IN' },
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Capacity', defaultValue: 1234 },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <NumberField {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const field = canvas.getByRole('textbox', { name: 'Capacity' });
+    await expect(field).toHaveValue('১,২৩৪');
+    await userEvent.click(field);
+    await userEvent.keyboard('{End}{Backspace}');
+    await userEvent.tab();
+    await expect(args.onChange).toHaveBeenLastCalledWith(123);
+    await expect(field).toHaveValue('১২৩');
   },
 };
 

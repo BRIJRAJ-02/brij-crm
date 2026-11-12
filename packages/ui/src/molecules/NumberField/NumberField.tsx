@@ -7,7 +7,15 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Field } from '../Field/Field.tsx';
-import { clampNumber, currencySymbol, formatNumber, parseNumber, stepNumber, type NumberFieldMode } from './number.ts';
+import {
+  clampNumber,
+  currencySymbol,
+  formatNumber,
+  parseNumber,
+  roundToShown,
+  stepNumber,
+  type NumberFieldMode,
+} from './number.ts';
 import { strings } from './strings.ts';
 
 /** Props for NumberField. */
@@ -102,18 +110,21 @@ export function NumberField(props: NumberFieldProps) {
     onChange?.(next);
   };
 
+  // A typed number as the field will show it: rounded to the decimals it shows, so what is saved is what is seen.
+  const shown = (typed: number) => roundToShown(typed, mode, step, maximumFractionDigits);
+
   // Reads the draft: a number is held inside the limits, an empty box is no value, and anything else goes back.
   const settle = () => {
     if (draft === undefined) return;
     const parsed = parseNumber(draft, locale);
     if (parsed.kind === 'invalid') setDraft(undefined);
-    else commit(parsed.kind === 'empty' ? undefined : clampNumber(parsed.value, min, max));
+    else commit(parsed.kind === 'empty' ? undefined : clampNumber(shown(parsed.value), min, max));
   };
 
   // Where a step starts: what is typed if it reads, else the value, else the lower limit or nothing.
   const base = (): number => {
     const parsed = draft === undefined ? undefined : parseNumber(draft, locale);
-    if (parsed?.kind === 'number') return parsed.value;
+    if (parsed?.kind === 'number') return shown(parsed.value);
     if (current !== undefined) return current;
     return Number.isFinite(min) ? min : 0;
   };

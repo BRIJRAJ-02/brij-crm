@@ -18,6 +18,16 @@ A thin wrapper over Field, not a new design. About fifty numeric Fields in the a
 - `onChange` gets a committed value: on leaving the field, on Enter, on a step key or a step button. Never on each key, so a screen saves once.
 - `mode`: `number`, `currency` (the currency's narrow symbol in front, two decimals; the workspace's currency when `currency` is left out) or `percent` (held to 0 to 100, "%" after). `unit` puts a word after the value.
 - A text that isn't a number goes back to the last good value when the field is left; a number past a limit is held at the limit.
+- What is saved is what is shown: a typed value is rounded to the decimals the mode shows before it is committed (`12.345` typed as money is saved as 12.35), the same rounding the display uses.
+
+## Reading what is typed
+
+`parseNumber(text, locale)` reads the person's language, and `parseNumber(formatNumber(x))` gives `x` back (as shown) in every language the field writes, which the unit tests check over German, Spanish, Brazilian Portuguese, French, Indian English, US English, Bengali, Marathi, Arabic, Persian and Nepali.
+
+- **Its own digits.** Bengali, Marathi, Nepali, Arabic and Persian write their own digits (`১,২৩৪`); those read as digits, and so do Latin ones. The marks that only set the text's direction (before an Arabic or Persian minus) are ignored.
+- **Group marks** are dropped wherever they sit, so deleting a digit from `1,234` reads as 123. One after the decimal mark, or two decimal marks, is not a number.
+- **A typed point where the decimal mark is a comma.** People type `2.5` on any keyboard, so in a language whose decimal mark isn't a point, a text with one point and no decimal mark reads the point as a decimal point, unless it could be the language's group mark. Where the language groups with a point (German, Spanish, Portuguese, Indonesian, Turkish, Dutch, Italian), a point is a group mark when one to three digits come before it and exactly three after it: `1.234` is 1234 and `1.500` is 1500, as the language writes them. A point that can't be a group is a decimal point: one, two, or four or more digits after it (`2.5`, `12.25`, `1.2345`), or nothing, `0` or more than three digits before it (`.125`, `0.125`, `1234.567`). Where the language groups with something else (French's space, Arabic's `٬`), any lone point is a decimal point. So in German, deleting the last digit of `1.234` leaves `1.23`, which reads as 1.23 and shows as `1,23` when the field is left, so the change is in plain sight rather than silent.
+- Anything else (letters, units typed in) is not a number, never a guess.
 - `showSteppers` is off by default: the app's numbers are mostly settings typed once, and the prototype's always on buttons added two tab stops to every one. Turn them on for a small count changed one at a time. For a guest's count with no box at all, use Stepper.
 - Controlled when `value` is passed at all (`undefined` is an empty box); leave the prop out and give `defaultValue` for a field that keeps its own.
 - A step from the keyboard or a step button is said politely (a hidden live region), since a screen reader says nothing when ↑ changes a plain text box. Typed values are not said: the person typed them.
