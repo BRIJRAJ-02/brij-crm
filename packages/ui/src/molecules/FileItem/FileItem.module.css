@@ -25,7 +25,6 @@
 
   .root[data-state='failed'] .icon {
     background: var(--danger-soft);
-    color: var(--danger);
   }
 
   .root[data-variant='chip'] {

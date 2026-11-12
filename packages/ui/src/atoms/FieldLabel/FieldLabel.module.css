@@ -9,7 +9,7 @@
     letter-spacing: var(--tracking-body-sm-strong);
   }
 
-  /* A section's heading over labelled values: a step above the terms under it in size, weight and colour. */
+  /* A section's heading over labelled values: a step above the terms under it in size. */
   .label[data-tone='heading'] {
     color: var(--text);
     font: var(--text-body-strong);

@@ -145,8 +145,8 @@
     align-self: stretch;
     align-items: center;
     gap: var(--space-4);
-    /* The prototype's chip sits space-4 from the box's edge, not the box's own space-12. */
-    margin-inline-start: calc(var(--space-4) - var(--space-12));
+    /* The prototype's chip sits space-4 from the box's edge, whatever Field's padding at its size and variant. */
+    margin-inline-start: calc(var(--space-4) - var(--field-pad-inline, var(--space-12)));
   }
 
   /* The rule between the code and the number: half the box's height, border-strong. */

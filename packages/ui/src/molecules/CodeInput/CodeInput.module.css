@@ -123,10 +123,6 @@
     .boxes[data-focused] .box[data-next]:not([data-filled])::after {
       animation: none;
     }
-
-    .box {
-      transition: none;
-    }
   }
 
   .root[data-invalid] {

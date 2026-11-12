@@ -76,3 +76,5 @@ Takes its look from the prototype's Form and FieldGroup (spec 0072): fields `spa
 **Differences from the prototype**: the buttons stack under one another, each `isFullWidth="center"`, rather than the prototype's `FormActions` row at the end; a form level refusal sits above the fields; `FormRow` sets short fields side by side. Kept.
 
 **Repeats from its replacer**: nothing: it has no rules the prototype's Form duplicates beyond the gap.
+
+**Use it for** any set of fields submitted together. **Don't use it for** a single inline edit (a cell, a title): the field submits itself. **States**: rest, refused (the form level message above the fields), pending (its submit Button's `isPending`).

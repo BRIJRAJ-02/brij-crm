@@ -33,7 +33,7 @@ Not in the artifact (it is part of each control there).
 
 ## Colour on a public surface
 
-The label reads `--label-colour` before the secondary grey. Only the hosted form sets it (to the text colour, in its card), where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026). The app never sets it. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each.
+The label reads `--label-colour` before the text colour (the default since spec 0072; it was the secondary grey). The hosted form sets it to the text colour in its card, where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026); a branded surface may set another. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each.
 
 ## Timefix prototype (spec 0072)
 
@@ -42,3 +42,5 @@ Takes its look from the prototype's Field label (spec 0072): `text-body-sm-stron
 **Differences from the prototype**: `tone="heading"` (a section's heading over labelled values) and the InfoTip beside the label are kept. `tone="strong"` now draws the same as the default, since the prototype's label is already the strong one.
 
 **Repeats from its replacer** (AC-4): the label's font and colour, as Field's own label draws them through this atom; nothing else.
+
+**Use it for** a control's visible name above it (every Field, Select and DatePicker draws one). **Don't use it for** a section's title: that is a heading. **States**: rest, disabled (`opacity-disabled`).

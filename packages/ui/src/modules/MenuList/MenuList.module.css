@@ -119,6 +119,9 @@
     --text-body: 400 var(--look-type-13) / var(--space-20) var(--look-face);
     --text-body-strong: 500 var(--look-type-14) / var(--space-20) var(--look-face);
     --text-label: 500 var(--look-type-12) / var(--space-16) var(--look-face);
+    /* A Field's label, hint and error (text-body-sm since spec 0072's tier 2) in the menu's face too. */
+    --text-body-sm: 400 var(--look-type-13) / var(--space-20) var(--look-face);
+    --text-body-sm-strong: 500 var(--look-type-13) / var(--space-20) var(--look-face);
     --text-heading: 600 var(--look-type-15) / var(--space-20) var(--look-face);
     --text-heading-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
     --text-title: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--menu-display-face, var(--look-face));

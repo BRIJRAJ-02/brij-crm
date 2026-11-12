@@ -85,5 +85,7 @@ Takes its look from the prototype's Field (TextField, TextArea): a `text-body-sm
 **Differences from the prototype**
 - The focus edge is `accent-text`, not `accent`: the same blue in light, the lighter blue in dark, where `accent` reads under 3:1 on the white surface it turns.
 - No shake on an invalid submit yet: React Aria shows the refusal, and a shake needs a submit event Field doesn't own (owed to the form screens in phase 5).
+- A public page's own focus glow (the night form template's `--form-focus`, a booking or link page's frame and page focus) no longer reaches a field: those set the legacy `shadow-focus`, which fields no longer read. The brand colour still arrives through `accent-border` and `accent-text`; a glow is owed to the public page phases if they want one.
+- A read only value reached with Tab takes the outline ring (it shows no caret); a value to copy keeps the typed in look.
 - The count shows from 90% of the limit, as before, so the prototype's amber step is not drawn; it turns danger at the limit.
 - Kept beyond the prototype: `prefix`, `prefixWidth`, `suffix`, `after`, `info`, `suggestions`, `isWrapping`, `isFilling`, the `cell`, `copy`, `title`, `underline` and `composer` variants, `sm`, `temporal`, the floating error in a cell and the 16px text under a finger.

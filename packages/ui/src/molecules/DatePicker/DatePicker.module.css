@@ -247,9 +247,10 @@
     color: var(--on-accent);
   }
 
+  /* Outside the cell, as a day's ring is, so the current month's accent fill never hides it. */
   .monthCell[data-focus-visible] {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: calc(-1 * var(--border-width-focus));
+    outline-offset: var(--border-width-focus);
   }
 
   .grid {
@@ -481,14 +482,6 @@
     .segment[data-focused] {
       background: Highlight;
       color: HighlightText;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .box,
-    .open,
-    .day {
-      transition: none;
     }
   }
 }

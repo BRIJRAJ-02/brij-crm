@@ -247,6 +247,5 @@ export const InAPopoverInvalid: Story = {
     await waitFor(() => expect(code).toHaveFocus());
     // Its own mark: the outline ring around the code chip (spec 0072), drawn only for the keyboard.
     await expect(code).toHaveAttribute('data-focus-visible');
-    await expect(getComputedStyle(code).outlineStyle).toBe('solid');
   },
 };

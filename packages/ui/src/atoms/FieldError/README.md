@@ -47,3 +47,5 @@ Takes its look from the prototype's Field error (spec 0072): the alert mark and 
 **Differences from the prototype**: `inset="check"` (a checkbox group's error under its boxes) is kept. It doesn't fade in by itself; Field's own error does.
 
 **Repeats from its replacer** (AC-4): the error line's type, gap and alignment, the same rules as Field's `.error`; they leave with this export.
+
+**Use it for** the refusal under a control that is not a Field (a checkbox group, a choice set). **Don't use it for** a form level refusal: that is a Callout. **States**: shown only while the control is invalid.

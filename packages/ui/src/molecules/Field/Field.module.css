@@ -6,7 +6,11 @@
    starts one line tall and grows as its text wraps; a counter shows only near the limit. The title variant has no box
    at all, in the note title type. */
 @layer components {
+  /* `--field-pad-inline`: the box's inline padding per size and variant, which a part inside the box can read (the
+     phone code chip sits space-4 from the box's edge whatever the padding). */
   .root {
+    --field-pad-inline: var(--space-12);
+
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
@@ -19,7 +23,7 @@
     gap: var(--space-8);
     box-sizing: border-box;
     block-size: var(--size-control);
-    padding-inline: var(--space-12);
+    padding-inline: var(--field-pad-inline);
     border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
@@ -67,17 +71,24 @@
     box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
   }
 
+  .root[data-size='sm'],
+  .root[data-variant='cell'] {
+    --field-pad-inline: var(--space-8);
+  }
+
   .root[data-size='sm'] .box {
     block-size: var(--size-control-sm);
-    padding-inline: var(--space-8);
     gap: var(--space-6);
   }
 
   /* The large field (a form question's words) and `guest` (a guest page's field, sized for a thumb): the prototype's
      large field, size-control-lg tall, roomier and rounder, its words in body-lg. */
+  .root:is([data-size='lg'], [data-size='guest']) {
+    --field-pad-inline: var(--space-16);
+  }
+
   .root:is([data-size='lg'], [data-size='guest']) .box {
     block-size: var(--size-control-lg);
-    padding-inline: var(--space-16);
     border-radius: var(--radius-lg);
   }
 
@@ -295,7 +306,10 @@
 
   /* In a grid cell: on a raised surface under the cell, over the rows below,
      as wide as it needs, drawn like a popover so it never sits on nothing. */
+  /* The widest a floating error runs: a menu's width and space-48, as InfoTip's bubble. */
   .root[data-error-floats] {
+    --field-error-measure: calc(var(--size-menu) + var(--space-48));
+
     position: relative;
   }
 
@@ -310,7 +324,7 @@
        keepInside), which also slides it in from an edge (--float-shift). */
     inline-size: max-content;
     min-inline-size: min(100%, var(--float-room, 100%));
-    max-inline-size: min(var(--size-measure-sm), var(--float-room, var(--size-measure-sm)));
+    max-inline-size: min(var(--field-error-measure), var(--float-room, var(--field-error-measure)));
     margin-block-start: var(--space-4);
     translate: var(--float-shift, 0);
     padding: var(--space-6) var(--space-8);
@@ -365,7 +379,7 @@
 
   .root[data-variant='cell'] .box {
     block-size: 100%;
-    padding-inline: var(--space-8);
+    padding-inline: var(--field-pad-inline);
     border-color: transparent;
     border-radius: 0;
     background: transparent;
@@ -467,6 +481,11 @@
     }
   }
 
+  /* Typed in, the pill wears the accent edge with its ring, as every field does. */
+  .root[data-variant='search'] .box:focus-within {
+    border-color: var(--accent-text);
+  }
+
   /* A refused field, typed in: the danger edge keeps, its ring danger-soft. */
   .root[data-invalid]:not([data-variant='cell']) .box:focus-within {
     border-color: var(--danger);
@@ -529,10 +548,16 @@
     }
   }
 
-  /* Asked for less motion, the error is simply there with its red edge. */
+  /* Asked for less motion, the error fades in where it stands: no opening height. */
   @media (prefers-reduced-motion: reduce) {
     .error {
-      animation: none;
+      animation-name: field-error-fade;
+    }
+  }
+
+  @keyframes field-error-fade {
+    from {
+      opacity: 0;
     }
   }
 
@@ -552,9 +577,11 @@
 
   /* Editable, it says so under the pointer and while typed in: a soft fill, as Notion's and Linear's titles do
      (the owner, 5 November 2026: "this doesn't look editable"). */
-  .root[data-variant='title']:not([data-readonly]) .box:hover {
-    outline-color: var(--border-subtle);
-    background: var(--surface-hover);
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-variant='title']:not([data-readonly]) .box:hover {
+      outline-color: var(--border-subtle);
+      background: var(--surface-hover);
+    }
   }
 
   /* Typed in, it is a field: the raised fill and the accent ring every field wears. */
@@ -568,5 +595,12 @@
   .root:is([data-size='lg'], [data-size='guest']) .box[data-multiline] {
     block-size: auto;
     padding-block: var(--space-12);
+  }
+
+  /* Reached with Tab, a read only value shows no caret, so it takes the outline ring (a value to copy keeps its
+     typed in look). */
+  .root[data-readonly]:not([data-variant='copy'], [data-variant='title']) .box:has([data-focus-visible]) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 }

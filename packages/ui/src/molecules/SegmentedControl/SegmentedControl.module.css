@@ -148,8 +148,8 @@
     transition: none;
   }
 
+  /* Asked for less motion, the thumb jumps; the labels' colour still fades. */
   @media (prefers-reduced-motion: reduce) {
-    .segment,
     .thumb {
       transition: none;
     }

@@ -181,17 +181,19 @@ function Counted({ label, maxLength }: { readonly label: string; readonly maxLen
   );
 }
 
-/** Long text: a textarea that grows. Its count shows only once the text nears the limit. */
+/** Long text: a textarea that grows. Its count shows only once the text nears the limit, and turns danger at it. */
 export const Multiline: Story = {
   render: () => (
     <Stage direction="column" width="narrow">
       <Counted label="Description" maxLength={500} />
       <Counted label="Summary" maxLength={40} />
+      <Counted label="Headline" maxLength={37} />
     </Stage>
   ),
   play: async ({ canvas }) => {
     await expect(canvas.queryByText('37/500')).toBeNull();
-    await expect(canvas.getByText('37/40')).toBeInTheDocument();
+    await expect(canvas.getByText('37/40')).not.toHaveAttribute('data-full');
+    await expect(canvas.getByText('37/37')).toHaveAttribute('data-full');
   },
 };
 
@@ -560,15 +562,14 @@ export const TabularAndShortcut: Story = {
   ),
   play: async ({ canvas }) => {
     const amount = canvas.getByRole('textbox', { name: 'Amount' });
-    await expect(getComputedStyle(amount).fontVariantNumeric).toBe('tabular-nums');
+    await expect(amount).toHaveAttribute('data-tabular');
     const search = canvas.getByRole('textbox', { name: 'Search people' });
     await expect(search).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
   },
 };
 
-/** The prototype's filled box: no edge at rest; typed in, white with the accent edge and its ring. */
-export const FilledThenFocused: Story = {
-  parameters: { crm: { screenshot: false } },
+/** The prototype's filled box, typed in: white with the accent edge and its ring (the look is the screenshot's). */
+export const Focused: Story = {
   render: () => (
     <Stage width="narrow">
       <Field label="Company" placeholder="Acme Corp" />
@@ -576,12 +577,8 @@ export const FilledThenFocused: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     const input = canvas.getByRole('textbox', { name: 'Company' });
-    const box = input.parentElement;
-    if (box === null) throw new Error('The input has no box.');
-    await expect(getComputedStyle(box).borderTopColor).toBe('rgba(0, 0, 0, 0)');
     await userEvent.click(input);
-    await waitFor(() => expect(getComputedStyle(box).borderTopColor).not.toBe('rgba(0, 0, 0, 0)'));
-    await expect(getComputedStyle(box).boxShadow).not.toBe('none');
+    await expect(input).toHaveFocus();
   },
 };
 

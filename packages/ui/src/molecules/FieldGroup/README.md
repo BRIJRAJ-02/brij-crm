@@ -49,3 +49,5 @@ Takes its look from the prototype's Field (spec 0072): the label row in `text-bo
 **Differences from the prototype**: the whole part is library only (a label over read only content with an action); it keeps its `tone`, `action`, `meta`, `layout` and error.
 
 **Repeats from its replacer** (AC-4): the label, hint and error type of Field; they leave with this export.
+
+**Use it for** a labelled read only value with an action (a record's owner with Change). **Don't use it for** editable fields: use Field. **States**: rest, with a hint, with an error.

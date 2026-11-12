@@ -44,3 +44,5 @@ Takes its look from the prototype's FileDrop file row (FileRow; spec 0072): the 
 - Kept beyond the prototype: `href` (a new tab link), `detail`, the `chip` variant.
 
 **Repeats from its replacer** (spec 0072, AC-4): the row's grid and icon tile as FileDrop's prototype draws them; FileDrop itself draws no rows, so nothing is duplicated in the library today.
+
+**Use it for** one uploaded or uploading file under a FileDrop or in a record's files. **Don't use it for** a link to a document: that is a LinkChip. **States**: uploading, done, failed (the `danger-soft` tile and the error line).
