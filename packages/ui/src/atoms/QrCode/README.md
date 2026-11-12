@@ -41,6 +41,10 @@ All of it is inside the one SVG, so a saved copy carries it (the caller writes t
 
 Why options, not a new component: the code, its quiet zone and its ground are the same; only the modules' colour and what sits in the middle and around it change.
 
+## Saving a code
+
+`qr-file.ts` beside it saves a drawn code as a file (spec 0073, batch 2; it moved here from the web app's link page): `downloadQr(svg, name, 'png' | 'svg')` saves `<name>-qr.png` or `.svg`, 1024 pixels a side, its colours read off the page and the ground written in as the light `surface`, so it prints white; `qrPng`, `qrSvg` and `saveFile` are its steps, for a screen that zips several codes. A centre picture travels inside the file as a `data:` address. Nothing is sent anywhere: the file goes through a `blob:` address. ShareSheet's Download uses it.
+
 ## States
 
 One state: drawn, alone (at `size-menu` or filling its slot) or with its column (side by side, or under it when narrow). It has no hover, focus or disabled state (it is not interactive); the column's controls have their own.

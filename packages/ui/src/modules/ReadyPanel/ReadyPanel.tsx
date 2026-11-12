@@ -65,6 +65,11 @@ export interface ReadyPanelProps {
   readonly onDownloadQr?: (kind: ReadyPanelQrKind, code: SVGSVGElement) => Promise<void>;
   /** `share`: one more place to go, a row with a chevron under the buttons ("Put it on your site"). */
   readonly onward?: ReadyPanelOnward;
+  /**
+   * `share`: words written before the link in Email and WhatsApp ("Pick a time that suits you:"), so the message
+   * says what the link is for (ShareSheet's `invite`, spec 0073).
+   */
+  readonly invite?: string;
 }
 
 /** The two images the QR code saves as. */
@@ -103,6 +108,7 @@ export function ReadyPanel({
   variant = 'panel',
   onDownloadQr,
   onward,
+  invite,
 }: ReadyPanelProps) {
   const isShare = variant === 'share';
   const titleId = useId();
@@ -121,6 +127,7 @@ export function ReadyPanel({
       });
   };
   const onwardHref = onward === undefined ? undefined : safeHref(onward.href);
+  const sendText = invite === undefined || invite.trim() === '' ? link : `${invite.trim()} ${link}`;
   const canShare = onShare !== undefined || (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
   const share = () => {
     if (onShare !== undefined) {
@@ -202,7 +209,7 @@ export function ReadyPanel({
               <ButtonLink
                 icon="mail"
                 size="lg"
-                href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(link)}`}
+                href={`mailto:?subject=${encodeURIComponent(shareTitle ?? title ?? link)}&body=${encodeURIComponent(sendText)}`}
                 isExternal
               >
                 {strings.email}
@@ -210,7 +217,7 @@ export function ReadyPanel({
               <ButtonLink
                 icon="message-square"
                 size="lg"
-                href={`https://wa.me/?text=${encodeURIComponent(link)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(sendText)}`}
                 isExternal
               >
                 {strings.whatsapp}

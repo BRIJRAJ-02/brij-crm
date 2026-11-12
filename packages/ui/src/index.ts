@@ -773,3 +773,6 @@ export { PresenceGroup, type PresenceGroupProps, type PresencePerson } from './a
 export { SEARCH_DEBOUNCE_MS, SearchField, type SearchFieldProps } from './molecules/SearchField/SearchField.tsx';
 export { TimeSelect, type TimeSelectProps } from './molecules/TimeSelect/TimeSelect.tsx';
 export { formatTime, timeOptions, type HourCycle, type TimeOption } from './molecules/TimeSelect/time-options.ts';
+// Batch 2: ShareSheet, the one share dialog, and saving a drawn QR code as a file beside QrCode.
+export { downloadQr, qrPng, qrSvg, saveFile, type QrFileKind } from './atoms/QrCode/qr-file.ts';
+export { ShareSheet, type ShareSheetProps } from './modules/ShareSheet/ShareSheet.tsx';

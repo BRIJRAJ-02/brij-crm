@@ -321,15 +321,20 @@ describe('@crm/ui', () => {
   });
 });
 
-/** Spec 0073 (port phase 2) batch 1's exports, in one block so parallel port lanes merge cleanly. */
+/** Spec 0073 (port phase 2) batches 1 and 2's exports, in one block so parallel port lanes merge cleanly. */
 const PORT_PHASE_2 = [
   'NumberField',
   'PresenceGroup',
   'SEARCH_DEBOUNCE_MS',
   'SearchField',
+  'ShareSheet',
   'TimeSelect',
+  'downloadQr',
   'formatTime',
   'parseNumber',
+  'qrPng',
+  'qrSvg',
+  'saveFile',
   'timeOptions',
 ];
 
