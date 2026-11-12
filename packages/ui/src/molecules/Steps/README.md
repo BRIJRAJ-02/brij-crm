@@ -37,3 +37,18 @@ It takes no focus, unless `onStepPress` is given: then each done step is a butto
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Steps: `space-24` rings a hairline and a half wide (the prototype's 1.5px, as a ratio of the hairline token) with the number in `text-label`; upcoming is a `control-border` ring with a grey number; current an `accent` ring with an `accent-text` number and a 2px `accent-soft` halo; done an `accent` disc with the tick in `on-accent`. Labels are `text-body-sm-strong`, `text-secondary` while upcoming and `text` once current or done; descriptions and the count are `text-body-sm`. The line between steps is a hairline and a half of `border` and turns `accent` after a done step over `duration-slow`. A done step that goes back is a pill that washes `surface-hover` under the pointer, with the outline ring on focus.
+
+**Use it for** a short sequence someone moves through (an import, setup, a hosted form's pages). **Don't use it for** navigation between unrelated pages (Tabs or the sidebar), or for progress with no named steps (a progress bar).
+
+**States**: upcoming, current (`aria-current="step"`), done, done and pressable (hover wash, focus ring), failed (the library's own: a danger ring and cross).
+
+**Differences from the prototype**
+- The line turns accent as a whole, with a colour fade, rather than filling from its start: the line is the step's own `::after`, so a moving fill would need a second element in every step.
+- The tick appears with the disc; the prototype's drawn tick (transitions.dev 10) is owed to the phase that brings the shared success check (phase 2's SuccessCheck).
+- A pressed done step washes instead of underlining its label (the prototype's).
+- Kept beyond the prototype: `failed`, the `count` variant, and the horizontal row that turns into the column under 480px.
+- Stepper is folded into this part: it takes the prototype's step look for its own control and lists what it repeats.

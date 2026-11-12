@@ -37,4 +37,17 @@ Esc closes it and returns focus to the trigger. Focus stays inside while it is o
 
 ## Insets
 
-Every popover shares one padding scale from `styles/base.css`: a list (Menu, Select's options) sits `--popover-inset` (`space-4`) inside the edge, each row pads `--popover-item-block` and `--popover-item-inline` (`space-4`, `space-8`), so text starts at `--popover-text-inset` (12px). A Popover dialog (pickers, tips, view settings, filters, sorts) pads `--popover-panel-inset` (`space-8`), and a row inside one pads up to `--popover-text-inset`, so its text lines up with a menu's. Never pad a popover's content again from a screen.
+Every popover shares one padding scale from `styles/base.css`: a list (Menu, Select's options) sits `--popover-inset` (`space-6`, the prototype's, since spec 0072's tier 2) inside the edge, each row pads `--popover-item-block` and `--popover-item-inline` (`space-4`, `space-8`), so text starts at `--popover-text-inset` (14px). A Popover dialog (pickers, tips, view settings, filters, sorts) pads `--popover-panel-inset` (`space-8`), and a row inside one pads up to `--popover-text-inset`, so its text lines up with a menu's. Never pad a popover's content again from a screen.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Popover: `surface-raised`, a `border-subtle` hairline, `radius-xl` and `shadow-md`, in body type. Motion is transitions.dev 05 menu dropdown as the prototype's CSS has it: it grows from the trigger's anchor point, `scale-medium` to 1 over `duration-fast` on `ease-smooth-out`, and leaves to `scale-tiny` with a fade over `duration-quick`, ignoring the pointer while it goes. Reduced motion keeps the fade and drops the scale.
+
+**Use it for** a short panel tied to a button (share, notify, a filter), inside a `DialogTrigger` with `label`. Menu, Select, DatePicker and IconPicker already render it; never wrap them again. **Don't use it for** a form of several steps (a Modal) or an icon's hover label (Tooltip).
+
+**States**: closed, opening, open, closing; opened from the keyboard it appears and leaves at once (house rule, the prototype animates either way).
+
+**Differences from the prototype**
+- `width` keeps the library's `content`, `menu`, `list`, `trigger`, `panel` and `builder`; the prototype's `panel` (`size-panel`) is the library's `panel` at `size-dialog`.
+- The prototype's `pickfield` trigger lives in Field, Select and Button's `field` variant here; its `PopoverSearch` is Menu's and Select's search row.
+- Kept beyond the prototype: `isNonModal`, `triggerRef`, the `InPopover` context (a field inside draws its focus with its edge alone), the dialogs' z layer and keyboard instant opening.

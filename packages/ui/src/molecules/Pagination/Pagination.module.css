@@ -1,12 +1,12 @@
-/* Pagination: rows per page at the start, the range and the two buttons at
-   the end, one row that wraps on a narrow container. */
+/* Pagination: the Timefix prototype's pager (spec 0072). Rows per page at the start, the range and the two
+   buttons at the end, in text-body-sm and tabular figures, one row that wraps on a narrow container. */
 @layer components {
   .root {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-8);
+    gap: var(--space-8) var(--space-16);
     padding-block: var(--space-6);
   }
 
@@ -17,10 +17,19 @@
     gap: var(--space-6);
   }
 
+  /* The two buttons sit close, as the prototype's controls do. */
+  .pages {
+    gap: var(--space-2);
+  }
+
   .caption {
     color: var(--text-secondary);
-    font: var(--text-label);
+    font: var(--text-body-sm);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .pages > .caption {
+    margin-inline-end: var(--space-6);
   }
 }

@@ -49,7 +49,7 @@ export type MenuKey = Key;
  * would draw it over the next row.
  */
 /** Read when a list draws, so it follows the document's scale (spec 0071, AC-16). */
-const rowSizes = (): { readonly estimatedRowHeight: number } => ({ estimatedRowHeight: sizeToken('size-nav-item') });
+const rowSizes = (): { readonly estimatedRowHeight: number } => ({ estimatedRowHeight: sizeToken('size-control') });
 
 /** Props for MenuTrigger. */
 export interface MenuTriggerProps {

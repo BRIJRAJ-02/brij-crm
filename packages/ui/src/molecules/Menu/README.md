@@ -35,7 +35,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 - A `description` wraps within the menu's width and never sets it: the labels and the menu's minimum width size the menu, so a long reason on a disabled item can't stretch it across the page and pull it away from its trigger (the owner, 21 October 2026: the view menu opened 825px wide, far left of its button, and grew in from the right).
 - **Choices**: `selectionMode="single"` or `"multiple"` shows checks; `selectedKeys` and `onSelectionChange` hold the choice.
 - **Search**: `search={{ label: 'Search attributes' }}` puts a field above the items and filters them here. With `onSearch`, the caller searches (async) and sends back new items. `size: 'lg'` is the command palette's search: a bar's height (`size-bar`), the title's 15px at regular weight, a 16px search icon, and rows `size-input` tall (30 October 2026; at the picker's 28px the palette read as one more dropdown). `isFirstUnfocused` leaves the first item unfocused while typing: a lone "Create" item (spec 0012), which one Enter shouldn't choose. Why a variant: the select editor's Create is the one item an Enter must not reach by accident.
-- **Long lists**: `items` with `isVirtualized` draws only the rows on screen; `source` (a `ListSource`) does the same for lists loaded from outside, with skeleton rows until each loads (AC-9). Rows are `size-nav-item` tall, read from tokens.json.
+- **Long lists**: `items` with `isVirtualized` draws only the rows on screen; `source` (a `ListSource`) does the same for lists loaded from outside, with skeleton rows until each loads (AC-9). Rows are `size-control` tall (spec 0072), read from the document's tokens.
 - `header` is a row above the search and the items, apart from them, so typing never filters it: a record search's object, "Search in People" (spec 0019). Why a slot: a task's record picker searches one object at a time, and the choice belongs inside the picker, not as a second control beside its field (the owner's call, 20 October 2026).
 - `anchorRef` lines the popover up with another element than its trigger, and takes that element's width with `width="trigger"`: a picker's whole field box, whose button fills only the room its chips leave.
 - `width`: `menu` (240px, or the trigger's width) or `trigger` (exactly the trigger's width).
@@ -46,7 +46,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 
 ## States
 
-Focused (keyboard or pointer, `surface-hover`; keyboard adds the inset ring), selected (a check), disabled, pending (`isPending`: a status row such as "Searching…", in the secondary text colour at full contrast with the arrow cursor, never highlighted or chosen), danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
+Focused (keyboard or pointer, `surface-hover`; keyboard adds the outline ring inside the row), pressed (`surface-selected`), selected (a check), disabled, pending (`isPending`: a status row such as "Searching…", in the secondary text colour at full contrast with the arrow cursor, never highlighted or chosen), danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
 
 ## Keyboard
 
@@ -57,3 +57,17 @@ Enter, Space or the arrow keys open it from the trigger. Up and Down move; Home 
 - `width` takes `menu` or `trigger`, not a number; the 240px comes from tokens (`size-sidebar` less `space-20`) until a `size-menu` token exists.
 - `searchPlaceholder` and `searchId` become `search`; `checked` becomes the menu's selection; `active` is React Aria's focus; `submenu` comes from `SubmenuTrigger`; `danger` is `isDanger`.
 - Exit animations and keyboard instant opening are new.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Menu: rows `size-control` tall at `radius-md`, a regular `text-body` label and a quiet icon, `space-8` apart. A focused row washes `surface-hover` and a pressed one `surface-selected` (rows wash, never scale), over `duration-quick`; the keyboard's row adds the outline ring just inside it, since the list clips. A destructive row and its icon are `danger`, washing `danger-soft` when focused. A picked choice's label turns medium (`text-body-strong`) beside an `accent-text` check. Headings are `text-label` in `text-tertiary`, separators reach the popover's edges, and "No matches" is `text-body-sm` in `text-tertiary`. The surface is Popover's: it grows from the trigger (transitions.dev 05).
+
+**Use it for** row and column actions, "Move to…" pickers with a search, and view options. **Don't use it for** a field's value (Select) or the whole command palette.
+
+**States**: rest, focused, pressed, keyboard focused, submenu open, picked, disabled, pending, danger, empty, loading rows.
+
+**Differences from the prototype**
+- The check is the library's Icon, shown at once; the prototype's self drawing tick, with the menu closing 120ms after it, is owed (it needs the tick drawn as its own path and a delayed close, a behaviour change for every single choice menu).
+- The search row is the library's (an icon and a bare input under a hairline), a `size-control` tall like the prototype's.
+- The command palette's rows (`search.size="lg"`) are menu rows; the palette's own look is tier 3's.
+- Kept beyond the prototype: `isPending`, `meta`, `leading`, `isLabelInLeading`, `isChecked`, `isCheckAtEnd`, `onMove`, pinned and joined sections, `header`, `anchorRef`, `isInline`, `autoFocus`, `href` and `isExternal`, async `source` with skeleton rows.

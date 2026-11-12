@@ -33,3 +33,17 @@ Tab reaches the button; Enter or Space opens the help and moves focus into it; E
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Popover, which folds InfoTip in (spec 0072): it renders `Popover` and a ghost icon `Button`, so the surface, its motion and the button's wash and ring are theirs, with no copy here. Its own module is the bubble's content: at most a menu and `space-48` wide, the text in `text-body-sm` and the body colour, the example in `text-secondary` under its `text-body-sm-strong` label.
+
+**Use it for** a label whose meaning isn't obvious (Minimum notice). **Don't use it for** an icon's hover label (Tooltip) or obvious fields (Name, Email).
+
+**States**: closed, hovered (the ghost wash), focused (the outline ring), open (the trigger stays washed while it is open).
+
+**Repeats from its replacer**: nothing; it renders Popover.
+
+**Differences from the prototype**
+- The prototype's `href` and `linkLabel` (a "Learn more" link under the text) aren't props yet; `example` is the library's own and is kept.
+- The trigger is the library's ghost icon Button (`sm` or `md`), not a bespoke 20px circle.

@@ -40,3 +40,11 @@ Tab moves through the links; Enter follows one.
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from Tabs' `pills` (spec 0072): the fill slides over `duration-fast` on `ease-smooth-out`, the words change colour with it, and once it has slid the current pill takes the fill as its own background, so its words are always read on their own ground (the same fix as Tabs' pills in WebKit). Focus is the outline ring, 2px outside the pill.
+
+**Differences from the prototype**: the prototype folds SectionTabs into Tabs. It stays its own part because it is a `nav` of anchor links with `aria-current`, not a tablist with panels, so it cannot render Tabs without changing what a screen reader hears.
+
+**Repeats from its replacer** (spec 0072, AC-4): the sliding fill and the delayed own fill of Tabs' `pills`, written for links; they leave with this export.

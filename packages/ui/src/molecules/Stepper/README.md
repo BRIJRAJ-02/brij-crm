@@ -68,3 +68,11 @@ Tab reaches one fewer, then one more; Enter or Space presses. A button that is o
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+The prototype's Steps lists Stepper in its `replaces` by name only: Steps is a step indicator (numbered rings joined by a line), and this part is a quantity control (one fewer, the count, one more), so it has nothing of Steps' look to take and cannot render it. It keeps checklabs' guest look, which the owner asked for on the guest pages (5 November 2026). Its − and + are Button's ghost buttons, so they already wear the prototype's pills, hover and outline focus ring (tier 1); its pill and count use only current tokens.
+
+**Differences from the prototype**: no prototype part draws a quantity stepper; the nearest is NumberField's steppers, which phase 2 ports. Folding Stepper there (or into a phase 2 counter) is left to the guest menu's screen phase.
+
+**Repeats from its replacer** (spec 0072, AC-4): nothing; it shares no rules with Steps.

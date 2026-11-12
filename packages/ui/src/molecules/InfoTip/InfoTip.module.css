@@ -1,19 +1,20 @@
-/* InfoTip: the popover's help, a readable measure wide: the text in body
-   colour, then an example in secondary text under its quiet label. */
+/* InfoTip: the popover's help, the Timefix prototype's InfoTip bubble (spec 0072): a menu and a little wide, the
+   text in text-body-sm and the body colour, then an example in secondary text under its quiet label. The surface is
+   Popover's, rendered, so nothing of it repeats here. */
 @layer components {
   .body {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
-    max-inline-size: var(--size-measure-sm);
+    max-inline-size: calc(var(--size-menu) + var(--space-48));
     padding: var(--space-4);
   }
 
   .text,
   .example {
     margin: 0;
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .text {
@@ -26,7 +27,7 @@
 
   .exampleLabel {
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 }

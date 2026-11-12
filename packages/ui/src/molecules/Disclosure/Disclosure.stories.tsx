@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Disclosure, DisclosureGroup } from './Disclosure.tsx';
@@ -169,9 +170,34 @@ export const Nested: Story = {
     const inner = canvas.getByRole('button', { name: 'Records' });
     await expect(outer).toHaveAttribute('aria-expanded', 'true');
     await expect(inner).toHaveAttribute('aria-expanded', 'false');
-    // The inner chevron hasn't turned with the outer one, and the inner title is a full width row, not a quiet pill.
+    // The inner chevron hasn't flipped with the outer one, and the inner title is a full width row, not a quiet pill.
     const chevron = inner.querySelector('span');
-    await expect(chevron === null ? '' : getComputedStyle(chevron).rotate).not.toBe('90deg');
+    await expect(chevron === null ? '' : getComputedStyle(chevron).transform).toBe('none');
     await expect(inner.getBoundingClientRect().width).toBeGreaterThan(outer.getBoundingClientRect().width);
+  },
+};
+
+/** Opening flips the chevron and shows the content; closing makes the content inert again (transitions.dev 21). */
+export const OpensAndCloses: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Disclosure title="Advanced">Buffer before and after each meeting.</Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'Advanced' });
+    // The words sit straight in the panel's content element, which is what turns inert while closed.
+    const content = canvas.getByText('Buffer before and after each meeting.');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(content).toHaveAttribute('inert');
+    await userEvent.click(trigger);
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(content).not.toHaveAttribute('inert'));
+    await settleAnimations();
+    await expect(content).toBeVisible();
+    await userEvent.keyboard('{Enter}');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(content).toHaveAttribute('inert'));
   },
 };

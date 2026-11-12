@@ -75,7 +75,7 @@
     --icon-stroke-medium: calc(var(--icon-stroke) * 7 / 6);
     --icon-stroke-bold: calc(var(--icon-stroke) * 1.5);
     --overlay-inset: var(--space-16);
-    --popover-inset: var(--space-4);
+    --popover-inset: var(--space-6);
     --popover-item-block: var(--space-4);
     --popover-item-inline: var(--space-8);
     --popover-text-inset: calc(var(--popover-inset) + var(--popover-item-inline));

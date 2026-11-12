@@ -3,6 +3,7 @@ import { StrictMode, useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Field } from '../Field/Field.tsx';
 import { Tabs, TabPanel } from './Tabs.tsx';
 
@@ -495,5 +496,41 @@ export const Pills: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('tab', { name: 'Mains' })).toHaveAttribute('aria-selected', 'true');
     await expect(canvas.getByRole('tabpanel')).toHaveTextContent('Katsu curry, ramen.');
+  },
+};
+
+/**
+ * `pills`: once the fill has slid under the chosen pill, the pill wears the fill as its own background, so its words
+ * are read on their own ground in every engine (WebKit's axe read them on the page while the fill was only the
+ * sliding indicator); the pill that lost the choice is bare again.
+ */
+export const PillsOwnFill: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Tabs
+        label="Sections"
+        variant="pills"
+        defaultSelectedKey="starters"
+        tabs={[
+          { id: 'starters', label: 'Starters' },
+          { id: 'mains', label: 'Mains' },
+          { id: 'desserts', label: 'Desserts' },
+        ]}
+      >
+        <TabPanel id="starters">Edamame, miso soup.</TabPanel>
+        <TabPanel id="mains">Katsu curry, ramen.</TabPanel>
+        <TabPanel id="desserts">Matcha ice cream.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const bare = 'rgba(0, 0, 0, 0)';
+    const mains = canvas.getByRole('tab', { name: 'Mains' });
+    await userEvent.click(mains);
+    await expect(mains).toHaveAttribute('aria-selected', 'true');
+    await settleAnimations();
+    await waitFor(() => expect(getComputedStyle(mains).backgroundColor).not.toBe(bare));
+    await expect(getComputedStyle(canvas.getByRole('tab', { name: 'Starters' })).backgroundColor).toBe(bare);
   },
 };

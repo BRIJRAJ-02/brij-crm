@@ -112,8 +112,27 @@ export const PressableDone: Story = {
     await expect(canvas.getAllByRole('button')).toHaveLength(2);
     await userEvent.click(canvas.getByRole('button', { name: /Map columns/ }));
     await expect(args.onStepPress).toHaveBeenCalledWith('map');
-    // The pointer leaves the step, so the screenshot shows its focus ring alone, never the hover's underline
+    // The pointer leaves the step, so the screenshot shows its focus ring alone, never the hover's wash
     // (it came and went with how fast the shot was taken).
     await userEvent.hover(canvasElement);
+  },
+};
+
+/** A done step reached with the keyboard: the steps ahead never take focus, the done one shows the outline ring. */
+export const DoneStepFocus: Story = {
+  args: { current: 'review', onStepPress: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <Steps {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const first = canvas.getAllByRole('button')[0];
+    await expect(first).toHaveFocus();
+    await expect(first).toHaveAttribute('data-focus-visible');
+    await expect(first === undefined ? '' : getComputedStyle(first).outlineStyle).toBe('solid');
+    await expect(canvas.getByRole('listitem', { current: 'step' })).toBeInTheDocument();
   },
 };

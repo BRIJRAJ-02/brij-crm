@@ -1,5 +1,6 @@
-/* Breadcrumbs: links in text-secondary joined by 12px chevrons; the current
-   page in text. One line always: when the row is short (a phone, a bar full of
+/* Breadcrumbs: the Timefix prototype's trail (spec 0072). Links in text-secondary, each a small pill a
+   control-sm tall that washes surface-hover under the pointer, joined by quiet chevrons; the current page in text at
+   medium weight. One line always: when the row is short (a phone, a bar full of
    actions) each label ends in an ellipsis, the places above the current one
    giving way first. */
 @layer components {
@@ -35,34 +36,40 @@
   .link {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-6);
+    box-sizing: border-box;
     min-inline-size: 0;
-    border-radius: var(--radius-xs);
+    block-size: var(--size-control-sm);
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
     text-decoration: none;
     outline: none;
+    transition:
+      background-color var(--duration-quick) var(--ease-smooth-out),
+      color var(--duration-quick) var(--ease-smooth-out);
   }
 
   .link[data-current] {
     color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     cursor: default;
   }
 
   @media (hover: hover) and (pointer: fine) {
     .link[data-hovered]:not([data-current]) {
+      background: var(--surface-hover);
       color: var(--text);
-      text-decoration: underline;
     }
   }
 
-  /* As Link: the 1px accent ring just outside, with the faint halo, which
-     alone is under 3:1 (WCAG 1.4.11). */
+  /* The outline ring on the pill's own edge, so a trail in a bar is never clipped. */
   .link[data-focus-visible] {
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: 0;
   }
 
   .label {
@@ -87,6 +94,12 @@
   @container (width < 480px) {
     .crumb:not(:last-child) {
       display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .link {
+      transition: none;
     }
   }
 }

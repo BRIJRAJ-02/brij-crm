@@ -92,7 +92,7 @@ export function Disclosure({
         data-inset={atRowInset ? 'row' : undefined}
       >
         <span className={styles.chevron}>
-          <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
+          <Icon name="chevron-down" size={variant === 'label' ? 'xs' : 'sm'} />
         </span>
         {leading}
         <span className={styles.title}>{title}</span>

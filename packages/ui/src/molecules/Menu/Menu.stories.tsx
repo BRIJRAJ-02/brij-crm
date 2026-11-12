@@ -107,6 +107,37 @@ export const Open: Story = {
   },
 };
 
+/** The prototype's row states: the keyboard's row washes and wears the ring inside it; a destructive row stays danger. */
+export const RowStates: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <MenuTrigger>
+        <Button icon="ellipsis" label="Column options" />
+        <ColumnOptions />
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter}');
+    const menu = await openMenu();
+    const first = await waitFor(() => {
+      const focused = menu.querySelector('[data-focused]');
+      if (focused === null) throw new Error('no row has focus');
+      return focused;
+    });
+    await expect(first).toHaveAttribute('data-focus-visible');
+    await expect(getComputedStyle(first).outlineStyle).toBe('solid');
+    await userEvent.keyboard('{End}');
+    const danger = menu.querySelector('[data-danger]');
+    await waitFor(() => expect(danger).toHaveAttribute('data-focused'));
+    await expect(danger).toHaveTextContent('Delete attribute');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
 /** A pending row says where something stands: full contrast in the secondary colour, never highlighted or chosen. */
 export const PendingRow: Story = {
   parameters: { crm: { screenshot: false } },

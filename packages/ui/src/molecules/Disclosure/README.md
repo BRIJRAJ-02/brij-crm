@@ -29,7 +29,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 
 ## States
 
-Closed, open (the chevron turns and the panel's height animates over `duration-move`), hover (pointer only; the quiet variant's pill and text colour fade over `duration-hover`), focus, disabled. Reduced motion opens it at once.
+Closed, open (the chevron flips and the panel's height tweens over `duration-fast` while its content fades in), hover (pointer only; the quiet variant's pill and text colour fade over `duration-hover`), focus, disabled. Reduced motion opens it at once.
 
 ## Keyboard
 
@@ -38,3 +38,16 @@ Tab reaches the title; Enter or Space opens and closes it.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Disclosure (accordion, `plain`): a `size-row` title row in `text-body-strong` with `radius-md` that washes `surface-hover` under the pointer over `duration-quick`; a `text-tertiary` chevron pointing down that flips through a flat line to point up as the section opens; the panel's height tweens over `duration-fast` on `ease-smooth-out` while its content fades in, and fades out as it closes (transitions.dev 21, accordion). Focus is the outline ring just inside the row, so the panel's clip never cuts it.
+
+**Use it for** a block of settings or details someone opens when they need it ("Advanced", a role's powers, an archived list). **Don't use it for** the main content of a page, or a choice between views (Tabs).
+
+**States**: closed, hover (the row washes), open (chevron up, content shown), focus visible, disabled. Reduced motion opens it at once and keeps the content's fade.
+
+**Differences from the prototype**
+- The chevron stays before the title (the prototype puts it at the row's end): a settings page's row keeps its count at the far end, and the quiet and label variants line their chevron up with the rows around them.
+- The prototype's `card` look (a bordered card of rows) and `ShowMore` are not variants here; `quiet` stands in for ShowMore.
+- Kept beyond the prototype: `variant` `label`, `quiet` and `fields`, `leading`, `count`, `actions`, the page edge run out and the row inset, `DisclosureGroup` with `allowsMultipleExpanded`.

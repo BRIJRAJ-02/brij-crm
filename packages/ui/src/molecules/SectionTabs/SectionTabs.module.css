@@ -1,7 +1,8 @@
 /* SectionTabs (spec 0065, AC-6529; spec 0068, AC-6806): a row of pills that scrolls sideways, the current one
-   filled in the text colour with the surface's colour on it. The fill is one element under the pills that slides to
-   the chosen pill and takes its width, in duration-move on the ease in out curve (transitions.dev's tabs sliding);
-   its first place is drawn without moving. Reduced motion moves it at once. */
+   filled in the text colour with the surface's colour on it. Takes its look from Tabs' `pills` (spec 0072): the fill
+   is one element under the pills that slides to the chosen pill and takes its width, over duration-fast on
+   ease-smooth-out (transitions.dev 16, tabs sliding); its first place is drawn without moving. Once it has slid, the
+   current pill takes the fill itself, so its words are read on their own ground. Reduced motion moves it at once. */
 @layer components {
   .root {
     min-inline-size: 0;
@@ -31,7 +32,7 @@
     translate: var(--fill-x, 0) 0;
     transition-duration: var(--duration-fast);
     transition-property: translate, inline-size;
-    transition-timing-function: var(--ease-in-out);
+    transition-timing-function: var(--ease-smooth-out);
   }
 
   .fill[data-instant] {
@@ -53,16 +54,26 @@
     text-decoration: none;
     white-space: nowrap;
     scroll-snap-align: center;
-    transition: color var(--duration-fast) var(--ease-in-out);
+    transition: color var(--duration-fast) var(--ease-smooth-out);
   }
 
+  /* The fill's own colour under the words once the slide ends (a contrast check reads a link's own ground, never the
+     sliding element behind it); a pill that loses it drops it at once, so the slide is what leaves. */
   .tab[aria-current='location'] {
+    background: var(--text);
     color: var(--surface-raised);
+    transition:
+      color var(--duration-fast) var(--ease-smooth-out),
+      background-color var(--duration-fast) step-end;
+  }
+
+  .fill[data-instant] ~ .tab[aria-current='location'] {
+    transition: none;
   }
 
   .tab:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -73,7 +84,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .fill,
-    .tab {
+    .tab,
+    .tab[aria-current='location'] {
       transition: none;
     }
   }
@@ -84,6 +96,7 @@
     }
 
     .tab[aria-current='location'] {
+      background: Highlight;
       color: HighlightText;
     }
   }

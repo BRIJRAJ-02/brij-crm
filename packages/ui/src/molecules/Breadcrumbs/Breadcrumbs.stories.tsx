@@ -51,3 +51,24 @@ export const Group: Story = {
     await expect(canvas.getByRole('link', { name: 'Preferences' })).toHaveAttribute('aria-current', 'page');
   },
 };
+
+/** Tab reaches each link and the outline ring shows on its pill; the current page takes no focus. */
+export const Keyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <Breadcrumbs {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const settings = canvas.getByRole('link', { name: 'Settings' });
+    await expect(settings).toHaveFocus();
+    await expect(settings).toHaveAttribute('data-focus-visible');
+    await expect(getComputedStyle(settings).outlineStyle).toBe('solid');
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: 'Objects' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByText('Companies').closest('[aria-current]')).not.toHaveFocus();
+  },
+};
