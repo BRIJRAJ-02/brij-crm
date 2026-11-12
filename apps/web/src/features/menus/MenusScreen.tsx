@@ -60,7 +60,7 @@ import {
   type PreviewAt,
 } from './preview-at.ts';
 import { lookStamp, previewMenu, publishBlocker, unpricedDishes } from './preview.ts';
-import { PublishDialog } from './PublishDialog.tsx';
+import { PublishDialog, usePreloadShareSheet } from './PublishDialog.tsx';
 import { SectionDrawer } from './SectionDrawer.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { StructureTab } from './StructureTab.tsx';
@@ -120,6 +120,8 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   // Add another stays on from one opening of the item sheet to the next, as Create more does.
   const [isAddingMore, setAddingMore] = useState(false);
   const [isPublishing, setPublishing] = useState(false);
+  // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
+  usePreloadShareSheet();
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
   // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
@@ -754,6 +756,7 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
             {open?.kind === 'publish' || open?.kind === 'share' ? (
               <PublishDialog
                 startsOn={open.kind === 'share' ? 'live' : 'review'}
+                toasts={toasts}
                 store={store}
                 slug={slug}
                 draft={draft}

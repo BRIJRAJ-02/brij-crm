@@ -21,7 +21,7 @@ Use it for sharing any public page: a form, a booking page, the link page and te
   name="Discovery call"
   invite="Pick a time that suits you:"
   embedHref="/w/acme/bookings/discovery-call/embed"
-  extra={<Button icon="calendar-clock">Offer specific times</Button>}
+  extra={<Button variant="ghost" icon="calendar-clock">Offer specific times</Button>}
   footer="Bookings go to your calendar"
 />
 ```
@@ -31,7 +31,7 @@ Use it for sharing any public page: a form, a booking page, the link page and te
 - `name` is what is shared: the email's subject, the device share sheet's title, the QR code's name ("QR code for Discovery call") and its file ("discovery-call-qr.png").
 - `invite` puts words before the link in Email and WhatsApp. The link stays last.
 - `embedHref` draws "Put it on your site" (ReadyPanel's onward row) for a thing that embeds; following it closes the sheet.
-- `extra` is the thing's own ways, as Buttons, in one row named "More ways to share".
+- `extra` is the thing's own ways, in one row named "More ways to share": ghost Buttons for an action (Offer specific times, Style the code) and ghost ButtonLinks for a place (Open page), as the prototype draws them, so the row stays quieter than Copy link. Only ways to share go here; anything else (Turn on Live) goes in `footer`.
 - `footer` is one quiet line at the footer's start, beside Done ("Answers go to People · Change"), the Modal's `hint`.
 - `qrStyle` draws the code in a saved style (the link page's colour, centre picture and frame label, spec 0061, AC-6124), on screen and in the saved PNG or SVG (spec 0074, AC-7403). Left out, the plain code.
 - Copy link is the sheet's one primary; Done is secondary and takes focus as the sheet opens, so Enter and Esc both close it. Download saves the code as a PNG or an SVG through `downloadQr` (beside QrCode, `atoms/QrCode/qr-file.ts`); if the browser refuses, a toast says so.
@@ -39,7 +39,7 @@ Use it for sharing any public page: a form, a booking page, the link page and te
 
 ## ShareColumn
 
-`ShareColumn` is the sheet's body on a page of its own: a Share tab (a form's, a booking page's) draws the same ways to share in its card, so the tab and the sheet can never drift (spec 0074, AC-7402). It takes `url`, `name`, `invite`, `embedHref` (with `onEmbed`, called as the row is followed), `extra` and `qrStyle`, passes the same address gate, and saves the code the same way. ShareSheet draws it inside its Modal.
+`ShareColumn` is the sheet's body on a page of its own: a Share tab (a form's, a booking page's) draws the same ways to share in its card, so the tab and the sheet can never drift (spec 0074, AC-7402). It takes `url`, `name`, `invite`, `embedHref` (with `onEmbed`, called as the row is followed), `extra` and `qrStyle`, passes the same address gate, and saves the code the same way. ShareSheet draws it inside its Modal. A caller composing ReadyPanel's `share` column itself would have to repeat the address gate (`shareableUrl` is not exported), the download and its failure toast, and the words, which is what the forms' hand made `ShareBlock` was, so the column is exported once here instead.
 
 ## Load
 

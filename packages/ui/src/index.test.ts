@@ -12,7 +12,7 @@ describe('@crm/ui', () => {
 
   it('exports exactly the components, the provider, the toast factory and the shared helpers', () => {
     expect(Object.keys(ui).sort()).toEqual(
-      withPortPhase2([
+      withPortPhases([
         'AccentPicker',
         'ActivityFeed',
         'AppShell',
@@ -346,6 +346,6 @@ const PORT_PHASE_2 = [
 const PORT_PHASE_3 = ['ShareColumn'];
 
 /** The pinned list with spec 0073's and 0074's additions, sorted as `Object.keys(ui).sort()` is. */
-function withPortPhase2(names: readonly string[]): string[] {
+function withPortPhases(names: readonly string[]): string[] {
   return [...names, ...PORT_PHASE_2, ...PORT_PHASE_3].sort();
 }

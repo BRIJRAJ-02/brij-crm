@@ -1,6 +1,7 @@
 // The one share sheet (spec 0074) loaded apart from a screen that opens it on a press, as Bookings' lazy parts are:
 // no code until it first opens or the screen goes idle (`usePreload`), then mounted for good, so its exit plays.
-// The screen passes its own `import()`, which then lives in its route chunk, with no chunk of its own (AC-7419).
+// The screen passes its own `import()`, which then sits in its route chunk beside the route's other lazy imports,
+// rather than in a small chunk of its own with its own list of files to preload (AC-7419).
 import type { ShareSheetProps } from '@crm/ui';
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 

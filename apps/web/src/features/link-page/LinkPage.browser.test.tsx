@@ -257,13 +257,14 @@ describe('Share, on the one share sheet (spec 0074, AC-7404)', () => {
     await expect
       .element(sheet.getByRole('link', { name: 'Add to Wallet' }))
       .toHaveAttribute('href', 'https://wallet.example.com/pass');
-    // Turned Private while open: the sheet says so, offers Turn on Live, and the other ways go.
+    // Turned Private while open: the sheet's foot says so with Turn on Live beside it, and the other ways go.
     turn(false);
-    await expect.element(sheet.getByText('Private. Only you can open it.')).toBeVisible();
+    await expect.element(sheet.getByText(/^Private\. Only you can open it\. · Turn on Live$/)).toBeVisible();
     await expect.element(sheet.getByRole('button', { name: 'Turn on Live' })).toBeVisible();
     expect(sheet.getByRole('button', { name: 'Share links' }).query()).toBeNull();
     await userEvent.click(sheet.getByRole('button', { name: 'Turn on Live' }));
-    await expect.element(sheet.getByText('Your link page in Acme.')).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: 'Share links' })).toBeVisible();
+    expect(sheet.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
     // One dialog at a time: Share links closes the sheet before its own opens.
     await userEvent.click(sheet.getByRole('button', { name: 'Share links' }));
     await expect.poll(() => page.getByRole('dialog', { name: 'Share your link page' }).query()).toBeNull();

@@ -383,7 +383,8 @@ export function HeaderActions({
   const { isEmbedded } = useLinkPagePlace(slug);
   const [hasShared, setShared] = useState(false);
   const wallet = useWalletLink(data, slug, live.isLive && (hasShared || isEmbedded) && !isTeam);
-  const hasWalletInBar = isEmbedded && wallet !== undefined;
+  // Only a web address is offered, in the bar or in Share (spec 0074, AC-7420).
+  const hasWalletInBar = isEmbedded && wallet !== undefined && /^https:\/\//i.test(wallet);
   return (
     <>
       <LiveSwitch live={live} />
@@ -441,20 +442,25 @@ export function HeaderActions({
         // The handle names the page everywhere it is passed on: the email's subject, the code's name and its file.
         name={shareStrings.name(handle)}
         qrStyle={qrStyle}
-        // Whose page the code opens (spec 0056, AC-5617); a page gone private says so instead (spec 0058, AC-23).
-        {...(!live.isLive
-          ? { description: shareStrings.privateLine }
-          : workspaceName === undefined
-            ? {}
-            : { description: shareStrings.inWorkspace(workspaceName) })}
+        // Whose page the code opens (spec 0056, AC-5617).
+        {...(workspaceName === undefined ? {} : { description: shareStrings.inWorkspace(workspaceName) })}
+        // A page gone private while Share is open says so at the foot, with the switch's on beside it, since the
+        // switch itself is behind the sheet's scrim (spec 0058, AC-23): "Private. Only you can open it. · Turn on Live".
+        {...(live.isLive
+          ? {}
+          : {
+              footer: (
+                <>
+                  {shareStrings.privateLine}
+                  {' · '}
+                  <Button variant="link" onPress={() => live.setLive(true)}>
+                    {shareStrings.goLive}
+                  </Button>
+                </>
+              ),
+            })}
         extra={
           <>
-            {!live.isLive && (
-              // The Live switch itself is behind the sheet's scrim, so its on is offered here.
-              <Button variant="ghost" icon="globe" onPress={() => live.setLive(true)}>
-                {shareStrings.goLive}
-              </Button>
-            )}
             <ButtonLink variant="ghost" href={address} isExternal icon="external-link">
               {shareStrings.open}
             </ButtonLink>
@@ -481,8 +487,9 @@ export function HeaderActions({
                 >
                   {reachStrings.qrStyle}
                 </Button>
-                {/* Offered once: in the bar inside a partner's frame, in Share everywhere else. */}
-                {wallet !== undefined && !hasWalletInBar && (
+                {/* Offered once: in the bar inside a partner's frame, in Share everywhere else. The pass's address comes
+                    from the server; only a web address is offered (spec 0074, AC-7420). */}
+                {wallet !== undefined && !hasWalletInBar && /^https:\/\//i.test(wallet) && (
                   <ButtonLink variant="ghost" href={wallet} isExternal icon="wallet">
                     {homeStrings.addToWallet}
                   </ButtonLink>

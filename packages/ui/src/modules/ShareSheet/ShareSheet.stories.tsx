@@ -134,8 +134,12 @@ export const Everything: Story = {
     embedHref: '/w/acme/bookings/discovery-call/embed',
     extra: (
       <>
-        <Button icon="calendar-clock">Offer specific times</Button>
-        <Button icon="link">One-time link</Button>
+        <Button variant="ghost" icon="calendar-clock">
+          Offer specific times
+        </Button>
+        <Button variant="ghost" icon="link">
+          One-time link
+        </Button>
       </>
     ),
     footer: 'Bookings go to your calendar',
