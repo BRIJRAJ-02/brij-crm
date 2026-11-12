@@ -285,6 +285,7 @@ Tracer Bullet: the thinnest end to end thread is "source → generator → one a
 - Some prototype colours move slightly to meet contrast, so the app and the artifact differ there until the artifact is republished.
 - Container queries switch at slightly different layouts until each phase retunes them.
 - The public booking page keeps its calmer pace through legacy `duration-public-*` tokens until phase 6; other public pages move to the prototype scale. Published pages using "Modern" change from Inter to Geist.
+- The guest pages keep their own 46px bars through a legacy `size-bar` (the guest menu's header and pills, the business page's bar and gallery, the link page gallery, the hosted form's steps): the rename's `size-topbar` is the app's top bar, 56px in the prototype, and would have grown each of them by 10px. Popups a guest page opens (sheets, dialogs) still read `size-topbar` until phase 3 gives them the page's look.
 - Every open branch that touches CSS needs the rename script before rebasing; `feat/marketing-redesign` is one.
 - `legacy.json` is a second hand edited file until it empties.
 - Every page's tokens grew (the prototype's colours and styles, the legacy set, the Geist fallback faces): the hosted form's CSS budget goes from 18 kB to 18.8 kB and the booking page's from 18.7 kB to 19.5 kB (measured 18.57 and 19.37 kB gzipped). The app's own sizes are kept out of public pages in `tokens-app.css`, which only the app and the stories load.

@@ -14,7 +14,7 @@
     flex-direction: column;
     gap: var(--space-16);
     margin-inline: auto;
-    padding-block-end: calc(var(--size-topbar) * 2);
+    padding-block-end: calc(var(--size-bar) * 2);
     max-inline-size: calc(var(--size-panel) + var(--size-column-max) + var(--space-32) * 3);
   }
 
@@ -131,7 +131,7 @@
   .tab {
     display: flex;
     align-items: center;
-    block-size: var(--size-topbar);
+    block-size: var(--size-bar);
     color: var(--text-secondary);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -193,7 +193,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    scroll-margin-block-start: calc(var(--size-topbar) + var(--space-16));
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-16));
   }
 
   .heading {
@@ -349,7 +349,7 @@
 
     .panelCard {
       position: sticky;
-      inset-block-start: calc(var(--size-topbar) + var(--space-24));
+      inset-block-start: calc(var(--size-bar) + var(--space-24));
     }
 
     .bar {

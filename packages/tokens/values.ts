@@ -104,6 +104,7 @@ export const fullValues: Readonly<Record<string, string>> = {
   'size-column': '200px',
   'size-column-wide': '300px',
   'size-column-max': '640px',
+  'size-bar': '46px',
   'duration-public-hover': '180ms',
   'duration-public-press': '220ms',
   'duration-public-popover': '280ms',

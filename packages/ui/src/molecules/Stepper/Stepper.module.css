@@ -40,7 +40,7 @@
 
   /* 48px tall: the 30px buttons sit 4px in from either end. */
   .pill[data-size='lg'] {
-    block-size: calc(var(--size-topbar) + var(--space-2));
+    block-size: calc(var(--size-bar) + var(--space-2));
     padding: 0 var(--space-4);
   }
 
@@ -98,7 +98,7 @@
   .pill[data-size='sheet'] {
     --size-control: var(--space-32);
 
-    block-size: calc(var(--size-topbar) + var(--space-2));
+    block-size: calc(var(--size-bar) + var(--space-2));
     padding: 0 var(--space-4);
   }
 
