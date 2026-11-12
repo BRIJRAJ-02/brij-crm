@@ -1,0 +1,60 @@
+/* Weekly hours: a row per day. Ranges drop in and collapse out (21 accordion / 01 resize), a bad range shakes (12). */
+.tf-hours { container-type: inline-size; display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-hours__row { display: grid; grid-template-columns: calc(var(--size-menu) * 0.6) minmax(0, 1fr); gap: var(--space-16); align-items: start; padding: var(--space-12) var(--space-8); }
+/* Plain full-width hairlines between days, no cards. */
+.tf-hours__row + .tf-hours__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+/* The one-line summary under a "Working hours" title. */
+.tf-hours__summary { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-hours__summary-problem { color: var(--danger); }
+.tf-hours__row.is-washed { animation: tf-hours-wash calc(var(--duration-very-slow) * 2) var(--ease-in-out); }
+@keyframes tf-hours-wash { from, 30% { background: var(--accent-soft); } }
+.tf-hours__day { display: flex; align-items: center; min-height: var(--size-control); font-weight: 500; }
+.tf-hours__ranges { display: flex; flex-direction: column; min-width: 0; }
+.tf-hours__off { display: flex; align-items: center; min-height: var(--size-control); color: var(--text-tertiary); }
+/* The on/off swap: the box clips while its height glides; the incoming side rises 4px out of. */
+.tf-hours__swap { overflow: clip; overflow-clip-margin: var(--space-4); }
+.tf-hours__layer { display: flex; flex-direction: column; }
+.tf-hours__layer.is-entering { animation: tf-hours-enter var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-hours-enter { from { opacity: 0; transform: translateY(calc(var(--distance-micro) * -1)); } }
+.tf-hours__day { transition: color var(--duration-quick) var(--ease-out); }
+.tf-hours__row--off .tf-hours__day { color: var(--text-secondary); }
+@keyframes tf-hours-fade { from { opacity: 0; } }
+
+/* Each range is a grid track that opens from 0fr; leaving, it closes back (same 250ms both ways). */
+.tf-hours__range-wrap { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out); }
+.tf-hours__range-wrap.is-new { animation: tf-hours-grow var(--duration-fast) var(--ease-smooth-out); }
+.tf-hours__range-wrap.is-leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+@keyframes tf-hours-grow { from { grid-template-rows: 0fr; opacity: 0; } }
+/* The clipped track carries no padding (transitions.dev 21): spacing lives on the inner row, so 0fr really is zero. */
+.tf-hours__range-clip { min-height: 0; overflow: clip; overflow-clip-margin: var(--space-4); }
+.tf-hours__range-wrap + .tf-hours__range-wrap .tf-hours__range { padding-top: var(--space-12); }
+.tf-hours__range { display: flex; align-items: center; gap: var(--space-8); }
+.tf-hours__dash { color: var(--text-tertiary); }
+.tf-hours__tools { display: inline-flex; gap: var(--space-2); margin-left: var(--space-4); }
+
+.tf-hours__ranges.is-shaking { animation: tf-hours-shake calc(var(--duration-micro) * 3.5) linear; }
+@keyframes tf-hours-shake {
+  0% { transform: translateX(0); animation-timing-function: var(--ease-smooth-out); }
+  28.57% { transform: translateX(var(--distance-small)); animation-timing-function: var(--ease-smooth-out); }
+  57.14% { transform: translateX(calc(var(--distance-small) * -1)); animation-timing-function: var(--ease-smooth-out); }
+  78.57% { transform: translateX(var(--distance-micro)); animation-timing-function: var(--ease-smooth-out); }
+  100% { transform: translateX(0); }
+}
+.tf-hours__error { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-out); }
+.tf-hours__error.is-shown { grid-template-rows: 1fr; opacity: 1; }
+.tf-hours__error-text { min-height: 0; overflow: hidden; padding-top: var(--space-6); font: 400 13px/20px var(--font-sans); color: var(--danger); }
+
+/* Copy times to: the shared Popover, a fixed menu width with roomier padding. */
+.tf-hours__copy-pop { width: var(--size-menu); padding: var(--space-12); }
+.tf-hours__copy { display: flex; flex-direction: column; gap: var(--space-8); outline: none; }
+.tf-hours__copy-title { margin: 0 0 var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-secondary); }
+.tf-hours__copy-rule { height: 1px; background: var(--border-subtle); margin: var(--space-2) 0; }
+.tf-hours__apply { margin-top: var(--space-4); }
+
+/* A narrow card: the switch sits over its ranges. */
+@container (max-width: 28rem) { .tf-hours__row { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-hours__range-wrap, .tf-hours__error { transition: none; }
+  .tf-hours__range-wrap.is-new, .tf-hours__ranges.is-shaking, .tf-hours__row.is-washed, .tf-hours__layer.is-entering { animation: none; }
+}

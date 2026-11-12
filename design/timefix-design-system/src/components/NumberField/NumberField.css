@@ -1,0 +1,34 @@
+.tf-num__box { padding-right: var(--space-4); }
+.tf-num__box:is(.tf-field--lg *) { padding-right: var(--space-6); }
+.tf-num__affix { flex: none; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tf-num__affix:is(.tf-field--lg *) { font-size: 16px; line-height: 24px; }
+.tf-num__box .tf-num__affix:first-child { margin-right: calc(var(--space-4) * -1); }
+.tf-num__slot { position: relative; flex: 1; align-self: stretch; display: flex; min-width: 0; }
+.tf-num__input { width: 100%; font-variant-numeric: tabular-nums; }
+.tf-num__input[data-popping] { -webkit-text-fill-color: transparent; }
+
+/* transitions.dev 02 number pop-in, drawn over the input while the new value lands. */
+.tf-num__pop { position: absolute; inset: 0; display: flex; align-items: center; white-space: pre; pointer-events: none; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text); }
+.tf-num__pop:is(.tf-field--lg *) { font-size: 16px; line-height: 24px; }
+.tf-num__digit { display: inline-block; will-change: transform, opacity; animation: tf-num-pop var(--duration-very-slow) var(--ease-bounce) both; }
+.tf-num__digit[data-stagger='1'] { animation-delay: var(--duration-micro); }
+.tf-num__digit[data-stagger='2'] { animation-delay: calc(var(--duration-micro) * 2); }
+.tf-num__digit[data-same] { animation: none; }
+@keyframes tf-num-pop { from { transform: translateY(var(--distance-base)); opacity: 0; } }
+
+.tf-num__steps { display: inline-flex; flex: none; gap: var(--space-2); }
+.tf-num__step {
+  display: grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0; border-radius: var(--radius-full);
+  background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-num__step:is(.tf-field--lg *) { width: var(--size-control); height: var(--size-control); }
+.tf-num__step[data-hovered] { background: var(--surface-selected); color: var(--text); }
+.tf-num__step[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-num__step[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-num__digit { animation: none; }
+  .tf-num__step { transition: none; }
+  .tf-num__step[data-pressed] { transform: none; }
+}

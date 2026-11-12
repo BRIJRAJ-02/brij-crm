@@ -1,0 +1,59 @@
+/* Embed options: the way it sits, a made-up site that shows it, and the code to paste. */
+.tf-embed { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+
+/* The site's frame: a quiet browser with three dots and an address. */
+.tf-embed__frame { position: relative; margin: 0; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; box-shadow: var(--shadow-xs); }
+.tf-embed__chrome { display: flex; align-items: center; gap: var(--space-12); height: var(--size-control); padding: 0 var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface-subtle); }
+.tf-embed__dots { display: inline-flex; gap: var(--space-4); }
+.tf-embed__dots > span { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--border-strong); }
+.tf-embed__url { flex: 1; max-width: var(--size-menu); height: calc(var(--size-control-sm) - var(--space-6)); padding: 0 var(--space-12); border-radius: var(--radius-full); background: var(--surface); font: 400 12px/22px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The site: grey lines for its words; a new mode slides in 8px through (08 page side-by-side). */
+.tf-embed__site { position: relative; display: flex; flex-direction: column; gap: var(--space-8); min-height: calc(var(--size-control-lg) * 6); padding: var(--space-16) var(--space-20) var(--space-20); animation: tf-embed-page var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-embed-page { from { opacity: 0; transform: translateX(var(--distance-base)); } }
+.tf-embed__nav { display: flex; align-items: center; gap: var(--space-12); margin-bottom: var(--space-8); }
+.tf-embed__brand { width: var(--space-20); height: var(--space-20); border-radius: var(--radius-sm); background: var(--border-strong); }
+.tf-embed__line { display: block; width: 100%; height: var(--space-8); border-radius: var(--radius-full); background: var(--surface-selected); }
+.tf-embed__line--h { width: 55%; height: var(--space-16); background: var(--border-strong); }
+.tf-embed__line--m { width: 75%; }
+.tf-embed__line--s { width: var(--space-48); height: var(--space-6); }
+
+/* In the page: the booking page small, in a box among the site's lines. */
+.tf-embed__inline { display: flex; justify-content: center; margin-top: var(--space-8); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-subtle); }
+
+/* Popup: the site's own plain button, then the page over a scrim. */
+.tf-embed__site-btn { align-self: flex-start; margin-top: var(--space-8); padding: var(--space-6) var(--space-12); border-radius: var(--radius-sm); border: var(--border-width-hairline) solid var(--border-strong); font: 500 12px/16px var(--font-sans); color: var(--text); }
+.tf-embed__popup-scrim { position: absolute; inset: 0; display: grid; place-items: center; background: var(--scrim); animation: tf-embed-fade var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both; }
+.tf-embed__popup { width: calc(var(--size-menu) - var(--space-16)); height: calc(var(--size-control-lg) * 3 + var(--space-16)); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lg); animation: tf-embed-pop var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both; }
+@keyframes tf-embed-fade { from { opacity: 0; } }
+@keyframes tf-embed-pop { from { opacity: 0; transform: scale(var(--scale-large)); } }
+
+/* Floating: our button in the corner, in the page's colour. */
+.tf-embed__float { position: absolute; right: var(--space-16); bottom: var(--space-16); display: inline-flex; align-items: center; gap: var(--space-6); height: var(--size-control); padding: 0 var(--space-16); border-radius: var(--radius-full); background: var(--tf-embed-accent); color: var(--tf-embed-on-accent); font: 500 13px/20px var(--font-sans); box-shadow: var(--shadow-md); animation: tf-embed-rise var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both; }
+@keyframes tf-embed-rise { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
+
+.tf-embed__caption { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+/* The snippet: a header with what to do and Copy, then the code under it; nothing sits on the code. */
+.tf-embed__code { display: flex; flex-direction: column; overflow: hidden; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); }
+.tf-embed__codehead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding: var(--space-6) var(--space-6) var(--space-6) var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface); }
+.tf-embed__codetitle { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
+.tf-embed__pre { margin: 0; padding: var(--space-12) var(--space-16); background: var(--surface-subtle); font: 400 12px/20px var(--font-mono); color: var(--text); white-space: pre-wrap; word-break: break-all; outline: none; animation: tf-embed-soft calc(var(--duration-quick) + var(--duration-stagger) * 1.25) var(--ease-in-out) both; }
+.tf-embed__pre[data-focus-visible], .tf-embed__pre:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+@keyframes tf-embed-soft { from { opacity: 0; } }
+
+/* 09 icon swap: copy becomes a check. */
+.tf-embed__icon { display: inline-grid; }
+.tf-embed__icon > svg { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
+.tf-embed__icon-b, .tf-embed__icon[data-copied] .tf-embed__icon-a { opacity: 0; transform: scale(0.25); }
+.tf-embed__icon[data-copied] .tf-embed__icon-b { opacity: 1; filter: none; transform: none; color: var(--success); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-embed__site, .tf-embed__popup-scrim, .tf-embed__popup, .tf-embed__float, .tf-embed__pre { animation: none; }
+  .tf-embed__icon > svg { transition: none; }
+}
+/* Clear background: the page sits straight on the site, no card behind it. */
+.tf-embed__inline[data-clear] { border-color: transparent; background: transparent; }
+/* Slide-in: a panel risen from the corner button, the site still in view beside it. */
+.tf-embed__slide { position: absolute; right: var(--space-16); bottom: calc(var(--space-16) + var(--size-control) + var(--space-8)); width: calc(var(--size-menu) - var(--space-32)); max-height: calc(100% - var(--size-control) - var(--space-48)); overflow: hidden; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); animation: tf-embed-rise var(--duration-fast) var(--ease-smooth-out) var(--duration-quick) both; }
+@media (prefers-reduced-motion: reduce) { .tf-embed__slide { animation: none; } }

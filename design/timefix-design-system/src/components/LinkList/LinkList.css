@@ -1,0 +1,76 @@
+/* Link buttons, tiles and the featured card. They read the page's look from --tf-lp-* (set by LinkPage) and fall back
+   to the calm look. Hover lifts 2px with a soft shadow; press eases to .97 over 150ms. */
+.tf-linklist, .tf-linkgrid { list-style: none; margin: 0; padding: 0; }
+.tf-linklist { display: flex; flex-direction: column; gap: var(--space-12); }
+
+.tf-linklist__btn, .tf-linkgrid__tile, .tf-linkcard {
+  --tf-ll-lift: 0px;
+  position: relative; color: var(--tf-lp-btn-text, var(--text)); text-decoration: none; cursor: pointer; outline: none;
+  background: var(--tf-lp-btn, var(--surface));
+  box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-btn-edge, var(--border-subtle)), var(--tf-lp-shadow, var(--shadow-xs));
+  transform: translateY(var(--tf-ll-lift)) scale(var(--tf-ll-scale, 1));
+  transition: transform var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out);
+}
+.tf-linkgrid__tile, .tf-linkcard { background: var(--tf-lp-card, var(--surface)); color: var(--tf-lp-text, var(--text)); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-card-edge, var(--border-subtle)), var(--tf-lp-shadow, var(--shadow-xs)); }
+@media (hover: hover) {
+  .tf-linklist__btn[data-hovered], .tf-linkgrid__tile[data-hovered], .tf-linkcard[data-hovered] { --tf-ll-lift: calc(var(--space-2) * -1); }
+  .tf-linklist__btn[data-hovered] { background: var(--tf-lp-btn-hover, var(--surface)); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-btn-edge, var(--border)), var(--shadow-sm); }
+  .tf-linkgrid__tile[data-hovered], .tf-linkcard[data-hovered] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-card-edge, var(--border)), var(--shadow-sm); }
+}
+.tf-linklist__btn[data-pressed], .tf-linkgrid__tile[data-pressed], .tf-linkcard[data-pressed] { --tf-ll-lift: 0px; }
+.tf-linklist__btn[data-focus-visible], .tf-linkgrid__tile[data-focus-visible], .tf-linkcard[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* A pill: icon | title centred | end slot, the icon and end slots the same width so the title stays centred. */
+.tf-linklist__btn {
+  display: grid; grid-template-columns: var(--size-control) minmax(0, 1fr) var(--size-control); align-items: center; gap: var(--space-8);
+  min-height: calc(var(--size-control-lg) + var(--space-12)); padding: var(--space-6) var(--space-8);
+  border-radius: var(--tf-lp-radius, var(--radius-full));
+}
+.tf-linklist__icon { display: grid; place-items: center; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); color: inherit; }
+.tf-linklist__text { display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; }
+.tf-linklist__title { font: 500 16px/24px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tf-linklist__sub { font: 400 13px/20px var(--font-sans); opacity: 0.72; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tf-linklist__end { display: flex; justify-content: flex-end; }
+
+/* Click counts: a quiet pill, only in the editor. */
+.tf-clicks { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--space-20); padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); font: 500 11px/16px var(--font-sans); white-space: nowrap; }
+
+/* Tiles: two to a row, square pictures. */
+.tf-linkgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-12); }
+.tf-linkgrid__cell { display: flex; min-width: 0; }
+.tf-linkgrid__tile { display: flex; flex-direction: column; width: 100%; padding: var(--space-6); border-radius: var(--radius-lg); overflow: hidden; }
+.tf-linkgrid__pic { aspect-ratio: 1; border-radius: var(--radius-md); }
+.tf-linkgrid__text { display: flex; flex-direction: column; min-width: 0; padding: var(--space-8) var(--space-6) var(--space-4); }
+.tf-linkgrid__title { font: 500 14px/20px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linkgrid__sub { font: 400 13px/20px var(--font-sans); color: var(--tf-lp-muted, var(--text-secondary)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linkgrid__clicks { position: absolute; top: var(--space-12); right: var(--space-12); }
+
+/* The picture area: an image, or the link's icon large on its hue. */
+.tf-linkgrid__pic, .tf-linkcard__pic { position: relative; display: grid; place-items: center; overflow: hidden; background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-linkgrid__pic img, .tf-linkcard__pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tf-linkpic__icon { display: grid; place-items: center; transform: scale(1.6); }
+.tf-linkpic--gray { background: var(--tag-gray-bg); color: var(--tag-gray-text); }
+.tf-linkpic--red { background: var(--tag-red-bg); color: var(--tag-red-text); }
+.tf-linkpic--orange { background: var(--tag-orange-bg); color: var(--tag-orange-text); }
+.tf-linkpic--yellow { background: var(--tag-yellow-bg); color: var(--tag-yellow-text); }
+.tf-linkpic--lime { background: var(--tag-lime-bg); color: var(--tag-lime-text); }
+.tf-linkpic--green { background: var(--tag-green-bg); color: var(--tag-green-text); }
+.tf-linkpic--sky { background: var(--tag-sky-bg); color: var(--tag-sky-text); }
+.tf-linkpic--blue { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
+.tf-linkpic--purple { background: var(--tag-purple-bg); color: var(--tag-purple-text); }
+
+/* Featured card: a wide picture, then title and arrow. */
+.tf-linkcard { display: flex; flex-direction: column; padding: var(--space-6); border-radius: var(--radius-xl); overflow: hidden; }
+.tf-linkcard__pic { aspect-ratio: 16 / 9; border-radius: var(--radius-lg); }
+.tf-linkcard__body { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-12) var(--space-8) var(--space-6) var(--space-8); }
+.tf-linkcard__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-linkcard__title { font: 500 16px/24px var(--font-sans); }
+.tf-linkcard__sub { font: 400 13px/20px var(--font-sans); color: var(--tf-lp-muted, var(--text-secondary)); }
+/* 24 learn more hover: the arrow steps 2px out along its diagonal. */
+.tf-linkcard__arrow { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); background: var(--tf-lp-btn, var(--surface-subtle)); color: var(--tf-lp-btn-text, var(--text)); }
+.tf-linkcard__arrow svg { transition: transform var(--duration-medium) var(--ease-smooth-out); }
+.tf-linkcard[data-hovered] .tf-linkcard__arrow svg { transform: translate(var(--space-2), calc(var(--space-2) * -1)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-linklist__btn, .tf-linkgrid__tile, .tf-linkcard, .tf-linkcard__arrow svg { transition: none; }
+}

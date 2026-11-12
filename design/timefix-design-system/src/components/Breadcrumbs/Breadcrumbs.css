@@ -1,0 +1,30 @@
+.tf-crumbs { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; min-width: 0; font: 400 14px/20px var(--font-sans); }
+.tf-crumbs--sm { font-size: 13px; }
+.tf-crumbs--title { font-size: 15px; line-height: 22px; }
+.tf-crumbs__item { display: flex; align-items: center; gap: var(--space-4); }
+.tf-crumbs__item:last-child { flex-shrink: 1; }
+.tf-crumbs__item:not(:last-child) { flex-shrink: 2; }
+.tf-crumbs__link {
+  display: inline-flex; align-items: center; gap: var(--space-6); height: var(--size-control-sm); padding: 0 var(--space-6);
+  border-radius: var(--radius-sm); color: var(--text-secondary); text-decoration: none; cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-crumbs__text { min-width: min-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A truncated crumb keeps about four characters and its ellipsis; below that the trail folds instead. */
+.tf-crumbs__text.is-long { min-width: 5ch; }
+.tf-crumbs__link { flex-shrink: 1; }
+.tf-crumbs__link svg { flex: none; }
+.tf-crumbs__link[data-hovered]:not([data-current]) { background: var(--surface-hover); color: var(--text); }
+.tf-crumbs__link[data-current] { color: var(--text); font-weight: 500; cursor: default; }
+.tf-crumbs__link[data-focus-visible], .tf-crumbs__more[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-crumbs__sep { flex: none; color: var(--text-tertiary); }
+.tf-crumbs__more {
+  display: inline-grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0;
+  border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-crumbs__more[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-crumbs__more[aria-expanded='true'] { background: var(--surface-selected); color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .tf-crumbs__link, .tf-crumbs__more { transition: none; } .tf-crumbs__more[data-pressed] { transform: none; } }
+/* Phone: only the page you're on; the trail above it folds away. */
+@media (max-width: 40rem) { .tf-crumbs__item:not(:last-child), .tf-crumbs__sep { display: none; } }

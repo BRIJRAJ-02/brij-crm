@@ -1,0 +1,88 @@
+/* RichTextEditor: writing as a page. No box, no ring; the caret marks focus. Tiptap's own stylesheet is off, so its essentials live here. */
+.tf-rte { position: relative; display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; font: 400 15px/24px var(--font-sans); color: var(--text); }
+.tf-rte__content { min-width: 0; }
+.tf-rte__doc { min-height: calc(6 * 1lh); outline: none; white-space: pre-wrap; word-wrap: break-word; font-variant-ligatures: none; caret-color: var(--accent); }
+.tf-rte--readonly .tf-rte__doc { min-height: 0; }
+.tf-rte__doc [contenteditable='false'] { white-space: normal; }
+.tf-rte__doc > * + * { margin-top: var(--space-8); }
+.tf-rte__doc p { margin: 0; }
+.tf-rte__doc h1, .tf-rte__doc h2, .tf-rte__doc h3 { margin: var(--space-20) 0 0; color: var(--text); }
+.tf-rte__doc > :first-child { margin-top: 0; }
+.tf-rte__doc h1 { font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; }
+.tf-rte__doc h2 { font: 500 18px/26px var(--font-sans); }
+.tf-rte__doc h3 { font: 500 15px/22px var(--font-sans); }
+.tf-rte__doc strong { font-weight: 500; }
+.tf-rte__doc a { color: var(--link); text-decoration: underline; text-decoration-color: var(--accent-border); text-underline-offset: var(--space-2); }
+.tf-rte__doc mark { padding: 0 var(--space-2); border-radius: var(--radius-xs); background: var(--tag-yellow-bg); color: inherit; box-decoration-break: clone; }
+.tf-rte__doc code { padding: 0 var(--space-4); border-radius: var(--radius-xs); background: var(--surface-subtle); font: 400 13px/20px var(--font-mono); }
+.tf-rte__doc pre { margin: 0; padding: var(--space-12) var(--space-16); border-radius: var(--radius-md); background: var(--surface-subtle); font: 400 13px/20px var(--font-mono); overflow-x: auto; }
+.tf-rte__doc pre code { padding: 0; background: none; }
+.tf-rte__doc blockquote { margin: 0; padding-left: var(--space-16); border-left: var(--border-width-focus) solid var(--border-strong); color: var(--text-secondary); }
+.tf-rte__doc hr { height: 0; margin: var(--space-16) 0; border: 0; border-top: var(--border-width-hairline) solid var(--border); }
+.tf-rte__doc hr.ProseMirror-selectednode { border-top-color: var(--accent); }
+.tf-rte__doc ul, .tf-rte__doc ol { margin: 0; padding-left: var(--space-24); }
+.tf-rte__doc li + li { margin-top: var(--space-2); }
+.tf-rte__doc li::marker { color: var(--text-tertiary); }
+.tf-rte__doc ::selection { background: var(--accent-soft); }
+
+/* Placeholders: the note's while all is empty, then a hint on the empty line under the caret. */
+.tf-rte__doc .is-empty::before { content: attr(data-placeholder); float: left; height: 0; color: var(--text-tertiary); pointer-events: none; }
+
+/* To-dos: TaskList's round check, the text greying and striking through as it is ticked. */
+.tf-rte__doc ul[data-type='taskList'] { list-style: none; padding-left: 0; }
+.tf-rte__doc ul[data-type='taskList'] ul[data-type='taskList'] { padding-left: var(--space-24); }
+.tf-rte__task { display: flex; align-items: flex-start; gap: var(--space-8); }
+.tf-rte__task-check { display: inline-flex; flex: none; height: 1lh; align-items: center; user-select: none; }
+.tf-rte__task-text { flex: 1; min-width: 0; transition: color var(--duration-fast) var(--ease-smooth-out); }
+.tf-rte__task-text p { text-decoration: line-through transparent; transition: text-decoration-color var(--duration-fast) var(--ease-smooth-out); }
+.tf-rte__task[data-checked] > .tf-rte__task-text { color: var(--text-tertiary); }
+.tf-rte__task[data-checked] > .tf-rte__task-text > p { text-decoration-color: var(--text-tertiary); }
+
+/* Mentions: the shared Mention chip inside a bare button that opens the person. */
+.tf-rte__mention { display: inline; }
+.tf-rte__mention-btn { display: inline; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; font: inherit; color: inherit; cursor: pointer; outline: none; }
+.tf-rte__mention-btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-rte__person { display: flex; flex-direction: column; gap: var(--space-8); min-width: var(--size-menu); padding: var(--space-6); }
+.tf-rte__person-mail { font: 400 13px/20px var(--font-sans); color: var(--link); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .tf-rte__person-mail:hover { text-decoration: underline; } }
+
+/* The @ and / lists: rows drawn like a Menu's (36px, radius-md, wash on the active row), focus staying in the text. */
+.tf-rte__anchor { position: fixed; width: 0; height: 0; pointer-events: none; }
+.tf-rte__pop { max-height: calc(var(--size-control) * 8); }
+.tf-rte__list { display: flex; flex-direction: column; outline: none; }
+.tf-rte__list-head { margin: 0; padding: var(--space-6) var(--space-8) var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-rte__option { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md); font: 400 14px/20px var(--font-sans); color: var(--text); cursor: default; user-select: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-rte__option[aria-selected='true'] { background: var(--surface-hover); }
+.tf-rte__option-icon { flex: none; color: var(--text-secondary); }
+.tf-rte__option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-rte__option-end { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-rte__empty { margin: 0; padding: var(--space-8); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+/* The format bar. BubbleMenu appends it to the page as the selection settles, which replays transitions.dev 05 menu
+   dropdown's open: 250ms from .97 and transparent, growing from the text under it. It leaves at once. */
+.tf-rte__bubble { display: flex; align-items: center; padding: var(--space-4); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-md); transform-origin: bottom center; z-index: var(--z-popover); animation: tf-rte-bubble-in var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-rte-bubble-in { from { opacity: 0; transform: scale(var(--scale-medium)); } }
+.tf-rte__toolbar { display: flex; align-items: center; gap: var(--space-2); }
+.tf-rte__tool { display: inline-grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-rte__tool[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-rte__tool[data-selected] { background: var(--surface-selected); color: var(--text); }
+.tf-rte__tool[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-rte__sep { width: 1px; height: var(--space-16); margin: 0 var(--space-2); background: var(--border); }
+.tf-rte__link { display: flex; align-items: center; gap: var(--space-6); width: calc(var(--size-menu) + var(--space-32)); height: var(--size-control-sm); padding: 0 var(--space-4) 0 var(--space-8); animation: tf-rte-swap var(--duration-quick) var(--ease-in-out) both; }
+@keyframes tf-rte-swap { from { opacity: 0; } }
+.tf-rte__link-icon { flex: none; color: var(--text-tertiary); }
+.tf-rte__link-input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
+.tf-rte__link-input::placeholder { color: var(--text-tertiary); }
+
+.tf-rte__reason { display: flex; align-items: center; gap: var(--space-6); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+/* NoteEditor: the title is the page's heading, no box. */
+.tf-note { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+.tf-note__title { width: 100%; padding: 0; border: 0; background: transparent; resize: none; field-sizing: content; overflow: hidden; color: var(--text); font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; outline: none; caret-color: var(--accent); }
+.tf-note__title::placeholder { color: var(--text-tertiary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-rte__task-text, .tf-rte__task-text p, .tf-rte__option, .tf-rte__tool { transition: none; }
+  .tf-rte__bubble, .tf-rte__link { animation: none; }
+}

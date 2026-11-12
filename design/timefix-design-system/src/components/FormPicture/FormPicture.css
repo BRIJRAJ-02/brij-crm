@@ -1,0 +1,51 @@
+/* FormPicture: the forms list's cards and the builder's device preview. */
+
+/* The picture: the real guest controls laid out at twice the stage's width and shown at half size, clipped to the stage. */
+.tf-fpic { position: relative; height: calc(var(--size-row) * 3 + var(--space-16)); overflow: hidden; border-radius: var(--radius-md); background: var(--canvas); }
+.tf-fpic__stage { position: absolute; top: var(--space-16); left: var(--space-16); width: calc((100% - var(--space-32)) * 2); transform: scale(0.5); transform-origin: top left; }
+.tf-fpic__sheet { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-24); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-sm); font: 400 16px/24px var(--font-sans); color: var(--text); }
+.tf-fpic__name { margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-fpic__q { margin: 0; font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; }
+.tf-fpic__btn { display: flex; }
+
+.tf-fcard { position: relative; display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-8) var(--space-8) var(--space-12); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: 400 14px/20px var(--font-sans);
+  transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+@media (hover: hover) and (pointer: fine) { .tf-fcard:hover { border-color: var(--border); box-shadow: var(--shadow-sm); } }
+.tf-fcard:has(.tf-fcard__name[data-focus-visible]) { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-fcard__body { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-8); padding: 0 var(--space-4); }
+.tf-fcard__text { display: flex; flex-direction: column; min-width: 0; }
+.tf-fcard__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/20px var(--font-sans); color: var(--text); text-decoration: none; outline: none; cursor: pointer; }
+/* The one link covers the card. */
+.tf-fcard__name::after { content: ''; position: absolute; inset: 0; border-radius: var(--radius-lg); }
+.tf-fcard__sub { display: inline-flex; align-items: baseline; gap: var(--space-4); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+
+/* The preview: a quiet bar, then the frame centred on the canvas. */
+.tf-fprev { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-fprev__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+.tf-fprev__label { font: 500 15px/22px var(--font-sans); }
+.tf-fprev__room { display: flex; justify-content: center; min-width: 0; }
+.tf-fprev__frame { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.tf-fprev__frame--desktop { border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.tf-fprev__frame--phone { padding: var(--space-8); border: var(--border-width-hairline) solid var(--border); border-radius: calc(var(--radius-xl) + var(--space-8)); background: var(--surface-subtle); box-shadow: var(--shadow-md); }
+.tf-fprev__chrome { display: grid; grid-template-columns: 1fr minmax(0, 2fr) 1fr; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface-subtle); }
+.tf-fprev__dots { display: inline-flex; gap: var(--space-6); }
+.tf-fprev__dots i { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--border-strong); }
+.tf-fprev__url { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); min-width: 0; height: var(--size-control-sm); padding: 0 var(--space-12); overflow: hidden; border-radius: var(--radius-full); background: var(--surface); color: var(--text-secondary); font: 400 12px/16px var(--font-sans); white-space: nowrap; }
+/* 01 card resize: the viewport eases to the new device's size. */
+.tf-fprev__viewport { position: relative; overflow: hidden; background: var(--canvas); transition: width var(--duration-fast) var(--ease-smooth-out), height var(--duration-fast) var(--ease-smooth-out); }
+.tf-fprev__frame--phone .tf-fprev__viewport { border-radius: var(--radius-xl); }
+/* The form, laid out at the device's own width, scaled to fit; it fades in from on a device change (34). */
+.tf-fprev__screen { position: absolute; top: 0; left: 0; overflow-y: auto; padding: var(--space-32) var(--space-16); transform-origin: top left; animation: tf-fprev-swap var(--duration-fast) var(--ease-in-out) both; }
+.tf-fprev__frame--phone .tf-fprev__screen { padding: var(--space-20) var(--space-12); }
+@keyframes tf-fprev-swap { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-fcard, .tf-fprev__viewport { transition: none; }
+  .tf-fprev__screen { animation: none; }
+}
+.tf-fprev__end { display: inline-flex; align-items: center; gap: var(--space-8); }
+/* A form with a look paints the whole screen in it, padding included. */
+.tf-fprev__screen:has(> .tf-hform--look) { display: flex; flex-direction: column; padding: 0; }
+.tf-fprev__frame--phone .tf-fprev__screen:has(> .tf-hform--look) > .tf-hform--look { padding: var(--space-20) var(--space-12); }
+/* The card's status and its ⋯ menu: the menu sits above the name's stretched press. */
+.tf-fcard__end { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: var(--space-4); flex: none; }

@@ -1,0 +1,45 @@
+.tf-search {
+  --tf-search-h: var(--size-control);
+  --tf-search-glow-peak: 0.42;
+  display: flex; align-items: center; gap: var(--space-8); height: var(--tf-search-h); min-width: 0; padding: 0 var(--space-4) 0 var(--space-12);
+  border-radius: var(--radius-full); border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text);
+  font: 400 14px/20px var(--font-sans); cursor: text;
+  transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out);
+}
+.tf-search--sm { --tf-search-h: var(--size-control-sm); padding-left: var(--space-8); gap: var(--space-6); font-size: 13px; }
+@media (hover: hover) and (pointer: fine) { .tf-search:hover { border-color: var(--border-strong); } }
+.tf-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-search[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-search__icon { flex: none; color: var(--text-tertiary); }
+
+.tf-search__clip { position: relative; flex: 1; align-self: stretch; min-width: 0; overflow: hidden; }
+.tf-search__input { width: 100%; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font: inherit; color: inherit; }
+.tf-search__input::placeholder { color: var(--text-tertiary); }
+.tf-search__input::-webkit-search-cancel-button, .tf-search__input::-webkit-search-decoration { appearance: none; }
+.tf-search__mirror, .tf-search__ph { position: absolute; inset: 0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; pointer-events: none; opacity: 0; }
+.tf-search__ph { color: var(--text-tertiary); }
+.tf-search__clip[data-clearing] .tf-search__input::placeholder { color: transparent; }
+.tf-search__clip[data-clearing] .tf-search__ph { opacity: 1; }
+.tf-search__glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: multiply; }
+:where([data-theme='dark']) .tf-search { --tf-search-glow-peak: 0.85; }
+:where([data-theme='dark']) .tf-search__glow { mix-blend-mode: screen; }
+
+.tf-search__kbd { display: none; flex: none; margin-right: var(--space-6); }
+.tf-search[data-empty]:not(:focus-within) .tf-search__kbd { display: inline-flex; }
+
+/* The clear button: a 24px round icon button that is only there while the field has text. */
+.tf-search__clear {
+  display: grid; place-items: center; flex: none; width: calc(var(--tf-search-h) - var(--space-12)); height: calc(var(--tf-search-h) - var(--space-12));
+  padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-search--sm .tf-search__clear { width: calc(var(--tf-search-h) - var(--space-8)); height: calc(var(--tf-search-h) - var(--space-8)); }
+.tf-search__clear[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-search__clear[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-search[data-empty] .tf-search__clear { opacity: 0; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-search, .tf-search__clear { transition: none; }
+  .tf-search__glow { opacity: 0; }
+}
+.tf-search[data-empty]:not(:focus-within) .tf-search__kbd + .tf-search__clear { display: none; }

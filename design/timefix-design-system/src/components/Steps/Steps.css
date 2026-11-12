@@ -1,0 +1,40 @@
+.tf-steps { list-style: none; margin: 0; padding: 0; display: flex; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-steps--horizontal { align-items: center; gap: var(--space-12); }
+.tf-steps--vertical { flex-direction: column; }
+.tf-steps__item { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.tf-steps--horizontal .tf-steps__item:not(:last-child) { flex: 1; }
+.tf-steps__step { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; border-radius: var(--radius-full); outline: none; }
+.tf-steps__step--button { border: 0; background: none; padding: 0 var(--space-8) 0 0; color: inherit; font: inherit; cursor: pointer; transition: background-color var(--duration-quick) var(--ease-smooth-out); }
+.tf-steps__step--button[data-hovered] { background: var(--surface-hover); }
+.tf-steps__step--button[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+.tf-steps__marker {
+  width: var(--space-24); height: var(--space-24); flex: none; display: grid; place-items: center; border-radius: var(--radius-full);
+  border: 1.5px solid var(--control-border); background: var(--surface); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans);
+  transition: background-color var(--duration-fast) var(--ease-smooth-out), border-color var(--duration-fast) var(--ease-smooth-out), color var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-steps__item[data-state='current'] .tf-steps__marker { border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-soft); }
+.tf-steps__item[data-state='done'] .tf-steps__marker { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+.tf-steps__text { display: flex; flex-direction: column; min-width: 0; }
+.tf-steps__label { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--duration-fast) var(--ease-smooth-out); }
+.tf-steps__item[data-state='current'] .tf-steps__label, .tf-steps__item[data-state='done'] .tf-steps__label { color: var(--text); }
+.tf-steps__desc { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+/* The connector fills blue from the start when its step is done (400ms). */
+.tf-steps__line { position: relative; display: block; flex: 1; min-width: var(--space-16); height: 1.5px; border-radius: var(--radius-full); background: var(--border); overflow: hidden; }
+.tf-steps__fill { position: absolute; inset: 0; background: var(--accent); transform: scaleX(0); transform-origin: left center; transition: transform var(--duration-slow) var(--ease-smooth-out); }
+.tf-steps__item[data-state='done'] .tf-steps__fill { transform: scaleX(1); }
+
+.tf-steps--vertical .tf-steps__item { position: relative; flex-direction: column; align-items: stretch; gap: 0; }
+.tf-steps--vertical .tf-steps__step { align-items: flex-start; padding-bottom: var(--space-20); }
+.tf-steps--vertical .tf-steps__item:last-child .tf-steps__step { padding-bottom: 0; }
+.tf-steps--vertical .tf-steps__marker { margin-top: calc(var(--space-2) * -1); }
+.tf-steps--vertical .tf-steps__label { white-space: normal; }
+.tf-steps--vertical .tf-steps__line { position: absolute; left: calc(var(--space-12) - 0.75px); top: calc(var(--space-24) + var(--space-2)); bottom: var(--space-2); width: 1.5px; height: auto; min-width: 0; }
+.tf-steps--vertical .tf-steps__fill { transform: scaleY(0); transform-origin: center top; }
+.tf-steps--vertical .tf-steps__item[data-state='done'] .tf-steps__fill { transform: scaleY(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-steps__marker, .tf-steps__label, .tf-steps__fill, .tf-steps__step--button { transition: none; }
+}

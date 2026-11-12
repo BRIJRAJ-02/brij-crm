@@ -1,0 +1,19 @@
+.tf-progress { --tf-progress-h: var(--space-6); --tf-progress-fill: var(--accent); display: flex; flex-direction: column; gap: var(--space-6); width: 100%; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-progress--sm { --tf-progress-h: var(--space-4); }
+.tf-progress__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12); }
+.tf-progress__label { font: 500 13px/20px var(--font-sans); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-progress__value { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+.tf-progress__track { position: relative; height: var(--tf-progress-h); border-radius: var(--radius-full); background: var(--surface-selected); overflow: hidden; }
+.tf-progress__fill { height: 100%; border-radius: inherit; background: var(--tf-progress-fill); transition: width var(--duration-slow) var(--ease-smooth-out), background-color var(--duration-fast) var(--ease-smooth-out); }
+.tf-progress:not([aria-valuenow]) .tf-progress__fill { position: absolute; inset: 0 auto 0 0; width: 40%; animation: tf-progress-sweep calc(var(--duration-very-slow) * 3) var(--ease-in-out) infinite; }
+@keyframes tf-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+.tf-meter--warning { --tf-progress-fill: var(--warning); }
+.tf-meter--danger { --tf-progress-fill: var(--danger); }
+.tf-meter--danger .tf-progress__value { color: var(--danger); }
+.tf-meter__hint { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-progress__fill { transition: none; }
+  .tf-progress:not([aria-valuenow]) .tf-progress__fill { animation: none; width: 100%; opacity: 0.4; }
+}

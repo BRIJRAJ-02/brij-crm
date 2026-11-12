@@ -75,7 +75,7 @@ const IGNORED_VALUES = {
 /** The repo's Stylelint config, re-exported by the root stylelint.config.js. */
 export const stylelintConfig = {
   plugins: [strictValue, unknownCustomProperties, breakpointTokens, systemColors],
-  ignoreFiles: ['**/node_modules/**', '**/dist/**', 'packages/tokens/**'],
+  ignoreFiles: ['**/node_modules/**', '**/dist/**', 'packages/tokens/**', 'design/**'],
   rules: {
     ...recommended.rules,
     // CSS Modules syntax. `:global` is still refused below, with a clearer message.

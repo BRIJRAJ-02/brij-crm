@@ -1,0 +1,32 @@
+.tf-team { container-type: inline-size; display: flex; flex-direction: column; gap: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-team__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); }
+.tf-team__title { display: inline-flex; align-items: center; gap: var(--space-8); margin: 0 auto 0 0; font: 500 15px/22px var(--font-sans); }
+.tf-team__search { width: calc(var(--size-menu) + var(--space-16)); max-width: 100%; }
+
+/* Rows sit in a white card with hairlines between; 44px+ tall, washing on hover rather than scaling. */
+.tf-team__list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.tf-team__row { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-very-slow) var(--ease-out); }
+.tf-team__row + .tf-team__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+@media (hover: hover) and (pointer: fine) { .tf-team__row:hover { background: var(--surface-hover); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); } }
+@media (hover: hover) and (pointer: fine) { /* A changed row gets a brief accent wash; a removed one collapses in place. */
+.tf-team__row--washed, .tf-team__row--washed:hover { background: var(--accent-soft); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); } }
+.tf-team__row--leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+.tf-team__clip { min-height: 0; overflow: hidden; }
+.tf-team__line { display: flex; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16); }
+.tf-team__check { display: grid; flex: none; place-items: center; width: var(--size-control-sm); margin-left: calc(var(--space-8) * -1); }
+.tf-team__person { display: flex; flex: 1 1 0; min-width: 0; }
+.tf-team__role { flex: none; width: calc(var(--size-control) * 4); }
+.tf-team__details { display: flex; flex: none; gap: var(--space-4); width: calc(var(--size-control) * 5.5); }
+.tf-team__status { flex: none; width: calc(var(--size-control) * 2.5); }
+.tf-team__seen { flex: none; width: calc(var(--size-control) * 2.5); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-team__menu { display: grid; flex: none; place-items: center; width: var(--size-control-sm); }
+.tf-team__foot { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+
+/* Narrow: the details leave first, then last seen, then the status tag. */
+@container (max-width: 860px) { .tf-team__details { display: none; } }
+@container (max-width: 640px) { .tf-team__seen { display: none; } .tf-team__role { width: calc(var(--size-control) * 3.5); } }
+@container (max-width: 480px) { .tf-team__status { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-team__row { transition: none; }
+}

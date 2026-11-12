@@ -1,0 +1,27 @@
+/* Link: the link colour, an underline that eases in on hover with breathing room under the text. */
+.tf-link {
+  color: var(--link); font-weight: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.22em;
+  text-decoration-color: transparent; border-radius: var(--radius-xs); cursor: pointer; outline: none;
+  transition: text-decoration-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out);
+}
+.tf-link[data-hovered] { text-decoration-color: currentColor; }
+.tf-link[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-link--muted { color: var(--text-secondary); text-decoration-color: var(--border-strong); }
+.tf-link--muted[data-hovered] { color: var(--text); text-decoration-color: currentColor; }
+.tf-link--strong { font-weight: 500; }
+.tf-link__out { display: inline-block; margin-left: var(--space-2); vertical-align: -0.125em; }
+
+/* Learn more (transitions.dev 24): the chevron shifts 2px and its arms rotate 8deg apart about the apex; out is the same clock. */
+.tf-learn {
+  display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text); font: 500 14px/20px var(--font-sans);
+  text-decoration: none; border-radius: var(--radius-xs); cursor: pointer; outline: none;
+}
+.tf-learn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-learn__chevron { display: inline-flex; transform: translateX(0); transition: transform var(--duration-medium) var(--ease-smooth-out); }
+.tf-learn__chevron svg { display: block; }
+.tf-learn__arm { transform-box: view-box; transform-origin: 10px 8px; vector-effect: non-scaling-stroke; transition: transform var(--duration-medium) var(--ease-smooth-out); }
+.tf-learn[data-hovered] .tf-learn__chevron { transform: translateX(calc(var(--distance-micro) / 2)); }
+.tf-learn[data-hovered] .tf-learn__arm--top { transform: rotate(8deg); }
+.tf-learn[data-hovered] .tf-learn__arm--bot { transform: rotate(-8deg); }
+
+@media (prefers-reduced-motion: reduce) { .tf-link, .tf-learn__chevron, .tf-learn__arm { transition: none; } }

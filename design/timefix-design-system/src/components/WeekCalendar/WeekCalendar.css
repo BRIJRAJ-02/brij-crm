@@ -1,0 +1,113 @@
+/* The team week. An hour is a row and a little (48), events are soft tints, other calendars' time is hatched. */
+.tf-week {
+  --tf-week-hour: calc(var(--size-row) + var(--space-4));
+  --tf-week-gutter: calc(var(--size-control-lg) + var(--space-8));
+  --tf-week-cols: var(--tf-week-gutter) repeat(var(--tf-week-days), minmax(0, 1fr));
+  position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg);
+  font: 400 13px/20px var(--font-sans); color: var(--text); user-select: none;
+}
+.tf-week__head { display: grid; grid-template-columns: var(--tf-week-cols); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-week__dayhead { display: flex; align-items: baseline; justify-content: center; gap: var(--space-6); padding: var(--space-8) var(--space-4); border-left: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-week__weekday { font: 500 12px/16px var(--font-sans); color: var(--text-secondary); }
+.tf-week__date { font: 500 18px/26px var(--font-sans); color: var(--text); }
+.tf-week__dayhead--today .tf-week__weekday, .tf-week__dayhead--today .tf-week__date { color: var(--accent); }
+.tf-week__dayhead--today .tf-week__date { font-weight: 500; }
+
+.tf-week__scroll { max-height: var(--tf-week-scroll, calc(var(--tf-week-hour) * 8.5)); overflow-y: auto; overscroll-behavior: contain; }
+/* fillHeight: the week takes its parent's height and the hours scroll in what is left; a phone keeps a tall box while the page scrolls. */
+.tf-week--fill { flex: 1; min-height: calc(var(--size-row) * 6); }
+.tf-week--fill > .tf-week__scroll { flex: 1; min-height: 0; max-height: none; }
+@media (max-width: 40rem) { .tf-week--fill { min-height: 70dvh; } }
+/* narrowScroll: under 34rem each day keeps a readable width and the grid scrolls sideways. */
+.tf-week--swipe { container: tf-week / inline-size; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+@container tf-week (max-width: 34rem) {
+  .tf-week--swipe > .tf-week__head, .tf-week--swipe > .tf-week__scroll { min-width: calc(var(--tf-week-gutter) + var(--tf-week-days) * var(--space-48) * 2); }
+}
+.tf-week__body { position: relative; display: grid; grid-template-columns: var(--tf-week-cols); height: calc(var(--tf-week-hour) * var(--tf-week-hours)); }
+.tf-week__gutter { position: relative; }
+.tf-week__hour { position: absolute; right: var(--space-8); top: calc(var(--tf-week-hour) * var(--tf-at)); transform: translateY(-50%); font: 500 11px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.tf-week__col { position: relative; border-left: var(--border-width-hairline) solid var(--border-subtle); cursor: crosshair; outline: none; touch-action: pan-y; }
+.tf-week__col:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -1); }
+.tf-week__line { position: absolute; left: 0; right: 0; top: calc(var(--tf-week-hour) * var(--tf-at)); border-top: var(--border-width-hairline) solid var(--border-subtle); pointer-events: none; }
+.tf-week__line:first-child { border-top: 0; }
+
+.tf-week__busy, .tf-week__item, .tf-week__sel { position: absolute; top: calc(var(--tf-week-hour) * var(--tf-top) + 1px); height: calc(var(--tf-week-hour) * var(--tf-len) - var(--space-2)); }
+/* Other calendars' time: hatched, never filled, so it reads as texture rather than a meeting. */
+.tf-week__busy { left: 0; right: 0; padding: var(--space-2) var(--space-6); overflow: hidden; color: var(--text-tertiary); font: 500 11px/16px var(--font-sans);
+  background: repeating-linear-gradient(135deg, var(--border-subtle) 0 1px, transparent 1px var(--space-6)); border-top: var(--border-width-hairline) solid var(--border); }
+
+/* The item places an event in its lane; the event fills it. */
+.tf-week__item { left: calc(100% / var(--tf-lanes, 1) * var(--tf-lane, 0) + var(--space-2)); width: calc(100% / var(--tf-lanes, 1) - var(--space-4)); z-index: 1; border-radius: var(--radius-sm); }
+.tf-week__item:focus-within { z-index: 2; }
+.tf-week__event {
+  position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; overflow: hidden;
+  border: 0; border-radius: var(--radius-sm); text-align: left; font: 500 12px/16px var(--font-sans); cursor: pointer; outline: none;
+  box-shadow: 0 0 0 1px var(--surface);
+  transition: box-shadow var(--duration-quick) var(--ease-out);
+}
+.tf-week__event--meeting { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
+.tf-week__event--internal { background: var(--tag-gray-bg); color: var(--tag-gray-text); }
+.tf-week__event--in-person { background: var(--tag-orange-bg); color: var(--tag-orange-text); }
+/* A connected calendar's own event: the busy hatch with its name, opened to read but never moved. */
+.tf-week__event--calendar { color: var(--text-secondary); background: var(--surface) repeating-linear-gradient(135deg, var(--border-subtle) 0 1px, transparent 1px var(--space-6)); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); }
+.tf-week__event[data-hovered] { box-shadow: 0 0 0 1px var(--surface), var(--shadow-sm); }
+.tf-week__event[aria-expanded='true'] { box-shadow: 0 0 0 1px var(--surface), inset 0 0 0 1px currentColor, var(--shadow-sm); }
+.tf-week__event[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+/* Pinned to the top of the event, title then time, each one line. */
+.tf-week__event-body { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: stretch; padding: var(--space-4) var(--space-6); overflow: hidden; }
+.tf-week__event-title, .tf-week__event-time { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-week__event-title { font-weight: 500; }
+/* A source mark before the title (the Timefix mark on bookings), sitting on the text's middle. */
+.tf-week__event-line > .tf-week__event-mark, .tf-week__event-mark { display: inline-flex; vertical-align: -2px; margin-right: var(--space-4); }
+.tf-week__event-time { opacity: 0.8; }
+/* Under 48px: one line, "Title · 10:00 AM", truncated as a whole. */
+.tf-week__event--short .tf-week__event-body { justify-content: center; padding-top: 0; padding-bottom: 0; }
+.tf-week__event-line { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-week__event-line > span { display: inline; }
+/* Conflict sits top right, 2px from the edges; the text keeps clear of it. */
+.tf-week__conflict { position: absolute; top: var(--space-2); right: var(--space-2); display: inline-flex; align-items: center; gap: var(--space-2); height: var(--space-16); padding: 0 var(--space-4); border-radius: var(--radius-xs); background: var(--surface); color: var(--tag-orange-text); font: 500 11px/16px var(--font-sans); }
+.tf-week__event-body.has-conflict { padding-right: calc(var(--size-control-lg) + var(--space-20)); }
+.tf-week__event--short .tf-week__event-body.has-conflict { padding-right: var(--space-24); }
+.tf-week__event--short .tf-week__conflict { top: 50%; transform: translateY(-50%); padding: 0 var(--space-2); }
+
+/* The range being dragged out: an accent wash with its time. */
+.tf-week__sel { left: var(--space-2); right: var(--space-2); z-index: 3; padding: var(--space-2) var(--space-6); border-radius: var(--radius-sm); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent-text); font: 500 12px/16px var(--font-sans); pointer-events: none; animation: tf-week-sel-in var(--duration-quick) var(--ease-smooth-out); }
+@keyframes tf-week-sel-in { from { opacity: 0; } }
+
+/* Now: an accent line across today with a dot at its start. */
+.tf-week__now { position: absolute; left: 0; right: 1px; top: calc(var(--tf-week-hour) * var(--tf-top)); z-index: 4; height: var(--border-width-focus); margin-top: calc(var(--border-width-focus) / -2); background: var(--accent); pointer-events: none; }
+.tf-week__now::before { content: ''; position: absolute; left: calc(var(--space-4) * -1); top: 50%; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--accent); transform: translateY(-50%); }
+
+/* The now time in the gutter, on the line's level, over the hour labels. */
+.tf-week__now-time { position: absolute; right: var(--space-4); top: calc(var(--tf-week-hour) * var(--tf-top)); z-index: 1; transform: translateY(-50%); padding: 0 var(--space-2); border-radius: var(--radius-xs); background: var(--surface); color: var(--accent); font: 500 11px/16px var(--font-sans); white-space: nowrap; }
+
+/* Moving an event (house detail 4): the source stays as a faint ghost, the moved copy lifts (shadow-md, 1.02, no tilt) and shows its new range,
+   then settles over 250ms on drop. The bottom edge is a resize handle. */
+.tf-week__item.is-editable .tf-week__event { cursor: grab; }
+.tf-week__item.is-ghost { opacity: 0.4; }
+.tf-week__item.is-ghost .tf-week__event { box-shadow: none; }
+.tf-week__item--lifted { z-index: 5; pointer-events: none; }
+.tf-week__item--lifted .tf-week__event { cursor: grabbing; box-shadow: 0 0 0 1px var(--surface), var(--shadow-md); transform: scale(1.02); }
+.tf-week__item.is-settling .tf-week__event { animation: tf-week-settle var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-week-settle { from { transform: scale(1.02); box-shadow: 0 0 0 1px var(--surface), var(--shadow-md); } }
+.tf-week__resize { position: absolute; left: var(--space-4); right: var(--space-4); bottom: 0; z-index: 1; height: var(--space-6); cursor: ns-resize; touch-action: none; border-radius: var(--radius-xs); }
+.tf-week__resize::after { content: ''; position: absolute; left: 50%; bottom: var(--space-2); width: var(--space-16); height: 2px; margin-left: calc(var(--space-8) * -1); border-radius: var(--radius-full); background: var(--text-secondary); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .tf-week__item:hover .tf-week__resize::after { opacity: 0.4; } }
+
+/* The event's details open in the shared Popover (05 menu dropdown from the event); it pads a little more for its title. */
+.tf-week__pop { width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-16); }
+.tf-week__dialog { display: flex; flex-direction: column; gap: var(--space-8); outline: none; }
+.tf-week__pop-title { margin: 0; font: 500 15px/22px var(--font-sans); color: var(--text); }
+.tf-week__pop-when { margin: calc(var(--space-6) * -1) 0 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-week__pop-row { display: flex; align-items: center; gap: var(--space-8); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text); }
+.tf-week__pop-row > svg { flex: none; color: var(--text-secondary); }
+.tf-week__pop-row--warn, .tf-week__pop-row--warn > svg { color: var(--tag-orange-text); }
+.tf-week__pop-actions { display: flex; gap: var(--space-8); margin-top: var(--space-4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-week__event, .tf-week__resize::after { transition: none; }
+  .tf-week__sel, .tf-week__item.is-settling .tf-week__event { animation: none; }
+  .tf-week__item--lifted .tf-week__event { transform: none; }
+}

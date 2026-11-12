@@ -1,0 +1,48 @@
+.tf-checklist { display: flex; flex-direction: column; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--surface-shell); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-checklist__head { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-4) 0 var(--space-4); }
+.tf-checklist__heading { flex: 1; min-width: 0; margin: 0; font: inherit; }
+.tf-checklist__trigger {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%; height: var(--size-control-sm); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md);
+  background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-checklist__trigger[data-hovered] { background: var(--surface-hover); }
+.tf-checklist__trigger[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-checklist__title { font: 500 14px/20px var(--font-sans); }
+.tf-checklist__count { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); margin-right: auto; }
+/* Chevron flips through a flat line (scaleY 1 -> -1, 250ms). */
+.tf-checklist__chevron { color: var(--text-secondary); transform: scaleY(1); transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-checklist__chevron path { vector-effect: non-scaling-stroke; }
+.tf-checklist[data-expanded] .tf-checklist__chevron { transform: scaleY(-1); }
+.tf-checklist__bar { padding: var(--space-8) var(--space-12) var(--space-8); }
+
+/* transitions.dev 21 accordion on React Aria's measured height: 250ms, content fades in from. */
+.tf-checklist__panel { height: var(--disclosure-panel-height, auto); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-checklist__inner { opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-checklist[data-expanded] .tf-checklist__inner { opacity: 1; }
+
+.tf-checklist__steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-6); }
+.tf-checklist__step, .tf-checklist__alldone {
+  display: flex; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-12); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-xs);
+}
+.tf-checklist__step.is-done { min-height: 0; padding-block: var(--space-8); background: transparent; box-shadow: none; }
+.tf-checklist__well { width: var(--size-control-sm); height: var(--size-control-sm); flex: none; display: grid; place-items: center; border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-checklist__well--done { background: var(--success-soft); color: var(--success); }
+.tf-checklist__tick { width: var(--space-20); height: var(--space-20); margin-inline: var(--space-4); flex: none; display: grid; place-items: center; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); }
+.tf-checklist__text { flex: 1; min-width: 0; }
+.tf-checklist__step-title { margin: 0; font: 500 14px/20px var(--font-sans); color: var(--text); }
+.tf-checklist__step.is-done .tf-checklist__step-title { font-weight: 400; color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+.tf-checklist__desc { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-checklist__trigger, .tf-checklist__chevron, .tf-checklist__panel, .tf-checklist__inner { transition: none; }
+}
+
+/* Done steps folded into one line: "5 done", opening to the struck list. */
+.tf-checklist__fold { display: flex; padding: var(--space-4) var(--space-12); }
+.tf-checklist__foldbtn { display: inline-flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-8); margin-inline: calc(var(--space-8) * -1); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font: 500 13px/20px var(--font-sans); cursor: pointer; }
+.tf-checklist__foldbtn[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-checklist__foldbtn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-checklist__foldchev { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-checklist__foldchev[data-open] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .tf-checklist__foldchev { transition: none; } }

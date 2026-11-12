@@ -1,0 +1,49 @@
+.tf-select { display: flex; flex-direction: column; min-width: 0; }
+.tf-select[data-invalid] .tf-select__trigger { box-shadow: inset 0 0 0 1px var(--danger); }
+.tf-select__value { display: flex; align-items: center; gap: var(--space-8); flex: 1; min-width: 0; overflow: hidden; }
+.tf-select__value--tags { gap: var(--space-4); }
+.tf-select__value-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-select__placeholder { color: var(--text-tertiary); }
+.tf-select__icon { display: inline-grid; place-items: center; flex: none; color: var(--text-secondary); }
+.tf-select__chev { flex: none; color: var(--text-tertiary); transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-select__trigger[aria-expanded='true'] .tf-select__chev { transform: rotate(180deg); }
+
+.tf-select__pop { display: flex; flex-direction: column; }
+.tf-select__list { display: flex; flex-direction: column; gap: var(--space-2); outline: none; overflow: auto; min-height: 0; max-height: calc(var(--size-row) * 7); }
+.tf-select__empty { padding: var(--space-8); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+/* Options wash, never scale. Vercel's described options are taller, label over grey line. */
+.tf-select__option {
+  display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-8);
+  border-radius: var(--radius-md); color: var(--text); font: 400 14px/20px var(--font-sans); cursor: default; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-select__option--tall { padding-block: var(--space-8); align-items: flex-start; }
+/* Two-line options need air between them, or label and description run into the next option. */
+.tf-select__list:has(.tf-select__option--tall) { gap: var(--space-4); }
+.tf-select__option--tall .tf-select__check { margin-top: var(--space-2); }
+.tf-select__option[data-focused] { background: var(--surface-hover); }
+.tf-select__option[data-pressed] { background: var(--surface-selected); }
+.tf-select__option[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-select__option[data-disabled] { opacity: var(--opacity-disabled); }
+.tf-select__option-main { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.tf-select__option-face { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.tf-select__option--tall .tf-select__option-face { font-weight: 500; }
+.tf-select__desc { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-select__option[data-selected] .tf-select__option-face { font-weight: 500; }
+
+/* "Create “acme”" sits last, apart under a hairline. */
+.tf-select__option--create { color: var(--text-secondary); margin-top: var(--space-4); position: relative; }
+.tf-select__option--create::before { content: ''; position: absolute; left: 0; right: 0; top: calc(var(--space-4) * -1); height: 1px; background: var(--border-subtle); }
+.tf-select__option--create:first-child { margin-top: 0; }
+.tf-select__option--create:first-child::before { display: none; }
+.tf-select__create-name { color: var(--text); font-weight: 500; }
+
+/* The picked tick draws itself (transitions.dev 25 stroke draw); a single list closes 120ms later. */
+.tf-select__check { flex: none; fill: none; stroke: var(--accent); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+.tf-select__check path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset var(--duration-micro) var(--ease-smooth-out); }
+.tf-select__option[data-selected] .tf-select__check path { stroke-dashoffset: 0; transition-duration: var(--duration-quick); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-select__chev, .tf-select__option, .tf-select__check path { transition: none; }
+}

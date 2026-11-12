@@ -1,0 +1,28 @@
+.tf-tabs { display: flex; flex-direction: column; min-width: 0; }
+.tf-tabs__bar {
+  position: relative; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  box-shadow: inset 0 calc(var(--border-width-hairline) * -1) 0 var(--border-subtle);
+}
+.tf-tabs__bar::-webkit-scrollbar { display: none; }
+.tf-tabs__list { display: flex; gap: var(--space-4); width: max-content; min-width: 100%; }
+.tf-tabs__tab {
+  position: relative; display: inline-flex; align-items: center; gap: var(--space-6);
+  height: var(--size-control-lg); padding: 0 var(--space-8); flex: none;
+  font: 500 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap;
+  cursor: pointer; outline: none; border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-tabs__tab svg { flex: none; }
+.tf-tabs__tab[data-hovered], .tf-tabs__tab[data-selected] { color: var(--text); }
+.tf-tabs__tab[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--space-4) * -1); }
+.tf-tabs__tab[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+/* transitions.dev 16, as an underline: the line is measured onto the selected tab. */
+.tf-tabs__line {
+  position: absolute; left: 0; bottom: 0; height: var(--space-2); border-radius: var(--radius-full);
+  width: var(--tf-ind-w, 0); transform: translateX(var(--tf-ind-x, 0)); background: var(--accent);
+  pointer-events: none; will-change: transform, width;
+}
+.tf-tabs__bar[data-ready] .tf-tabs__line { transition: transform var(--duration-fast) var(--ease-smooth-out), width var(--duration-fast) var(--ease-smooth-out); }
+.tf-tabs__panel { padding-top: var(--space-16); outline: none; }
+.tf-tabs__panel[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+@media (prefers-reduced-motion: reduce) { .tf-tabs__tab, .tf-tabs__bar[data-ready] .tf-tabs__line { transition: none; } }

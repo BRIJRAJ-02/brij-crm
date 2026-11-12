@@ -1,0 +1,39 @@
+.tf-swatches { display: flex; flex-direction: column; }
+.tf-swatches__name { color: var(--text-secondary); font-weight: 400; }
+.tf-swatches__row { display: flex; flex-wrap: wrap; gap: var(--space-4); outline: none; }
+
+/* A 28px target holding a 20px dot; the chosen one gets a ring in its own colour and a check that swaps in. */
+.tf-swatch { --tf-swatch: var(--dot-gray); display: grid; place-items: center; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-full); cursor: pointer; outline: none; }
+.tf-swatch > * { grid-area: 1 / 1; }
+.tf-swatch__dot {
+  display: grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-full); background: var(--tf-swatch);
+  box-shadow: 0 0 0 0 var(--surface), 0 0 0 0 var(--tf-swatch);
+  transition: box-shadow var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-swatch[data-hovered] .tf-swatch__dot { box-shadow: 0 0 0 var(--space-2) var(--surface), 0 0 0 calc(var(--space-2) + 1px) var(--border-strong); }
+.tf-swatch[data-selected] .tf-swatch__dot { box-shadow: 0 0 0 var(--space-2) var(--surface), 0 0 0 var(--space-4) var(--tf-swatch); }
+.tf-swatch[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-swatch[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+
+/* transitions.dev 09 icon swap: the check comes in from 0.25 over 250ms, and leaves the same way. */
+.tf-swatch__check {
+  display: grid; place-items: center; color: var(--surface); pointer-events: none;
+  opacity: 0; transform: scale(0.25); 
+  transition: opacity var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
+}
+.tf-swatch[data-selected] .tf-swatch__check { opacity: 1; transform: scale(1); }
+
+/* AccentPicker: swatches, then the hex field with a live preview, then the readability line. */
+.tf-accent { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.tf-accent .tf-pickfield-label { margin-bottom: 0; }
+.tf-accent__hex { display: flex; flex-direction: column; width: calc(var(--size-control) * 4); }
+.tf-accent__field { padding-left: var(--space-8); cursor: text; }
+.tf-accent__field:focus-within { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border); }
+.tf-accent__preview { width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-sm); flex: none; box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.tf-accent__input { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-mono); text-transform: uppercase; outline: none; }
+.tf-accent__contrast { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tf-accent__contrast--low { color: var(--warning); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-swatch__dot, .tf-swatch__check { transition: none; }
+}

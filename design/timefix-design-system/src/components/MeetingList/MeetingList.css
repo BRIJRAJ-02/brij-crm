@@ -1,0 +1,139 @@
+/* The Meetings list. Rows wash on hover and show their actions; a cancelled row folds in place to "Cancelled · Undo". */
+/* Fixed, readable columns: time 160 | title + place | invitee 240 | status 140 | actions; capped so a wide page does not spread a row. */
+.tf-meetings { --tf-meetings-cols: 136px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
+/* 14 skeleton reveal: skeleton and rows share one cell and cross-fade over 400ms. */
+.tf-meetings__skeleton, .tf-meetings__content { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-slow) var(--ease-in-out); }
+.tf-meetings__content { opacity: 0; }
+.tf-meetings.is-revealed .tf-meetings__content { opacity: 1; filter: none; }
+.tf-meetings.is-revealed .tf-meetings__skeleton { opacity: 0; pointer-events: none; }
+.tf-meetings__skeleton { display: flex; flex-direction: column; }
+.tf-meetings__skel-head { display: flex; align-items: center; height: var(--size-control-lg); padding: 0 var(--space-8); }
+.tf-meetings__skel-row { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; height: calc(var(--size-row) + var(--space-16)); padding: 0 var(--space-8); }
+.tf-meetings__skel-two { display: flex; flex-direction: column; gap: var(--space-6); }
+.tf-meetings__skel-person { display: flex; align-items: center; gap: var(--space-12); }
+
+.tf-meetings__group + .tf-meetings__group { margin-top: var(--space-32); }
+.tf-meetings__day { position: sticky; top: 0; z-index: var(--z-sticky); display: flex; align-items: center; gap: var(--space-8); height: var(--size-control-lg); margin: 0; padding: 0 var(--space-4); background: var(--surface); font: 500 16px/24px var(--font-sans); }
+.tf-meetings__count { display: inline-grid; place-items: center; min-width: var(--space-20); height: var(--space-20); padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+.tf-meetings__group--ask .tf-meetings__count { background: var(--accent-soft); color: var(--accent-text); }
+/* "Today" leads in ink (accent for today), the full date follows in grey. */
+.tf-meetings__rel { color: var(--text); }
+.tf-meetings__rel--today { color: var(--accent); }
+.tf-meetings__date { color: var(--text-secondary); font-weight: 400; }
+/* A day is one card; its meetings are rows inside it split by hairlines, so heading, card and row read as three levels. */
+.tf-meetings__rows { list-style: none; margin: var(--space-4) 0 0; padding: var(--space-4); display: flex; flex-direction: column; border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-meetings__group--ask .tf-meetings__rows { border-color: var(--accent-border); }
+.tf-meetings__row + .tf-meetings__row::before { content: ''; position: absolute; top: 0; left: var(--space-8); right: var(--space-8); height: var(--border-width-hairline); background: var(--border-subtle); }
+
+.tf-meetings__row { position: relative; display: grid; min-height: calc(var(--size-row) + var(--space-16)); border-radius: var(--radius-lg); background: transparent; transition: height var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover, .tf-meetings__row:focus-within { background: var(--surface-hover); } }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover::before, .tf-meetings__row:hover + .tf-meetings__row::before { opacity: 0; } }
+.tf-meetings__main, .tf-meetings__strip { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-meetings__main { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; padding: var(--space-8); }
+.tf-meetings--full { max-width: none; }
+.tf-meetings__time { display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+.tf-meetings__time-day { color: var(--text-secondary); font-weight: 400; }
+/* Start over end, so a long range never runs into the title. */
+.tf-meetings__time-start { color: var(--text); font-weight: 500; }
+.tf-meetings__time-end { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+.tf-meetings__what { display: flex; flex-direction: column; min-width: 0; }
+.tf-meetings__title { font: 500 15px/22px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-meetings__with { color: var(--text); }
+.tf-meetings__place { display: inline-flex; align-items: center; gap: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+.tf-meetings__place svg { flex: none; }
+.tf-meetings__status { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: var(--space-4); }
+.tf-meetings__note { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); white-space: nowrap; }
+/* Hover or focus reveals the row's actions; their space is always kept so nothing shifts. */
+.tf-meetings__actions { display: inline-flex; gap: var(--space-2); opacity: 0; transform: translateX(var(--distance-micro)); transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .tf-meetings__row:hover .tf-meetings__actions, .tf-meetings__row:focus-within .tf-meetings__actions, .tf-meetings__actions:has([aria-expanded='true']) { opacity: 1; transform: none; } }
+.tf-meetings__decide { display: inline-flex; gap: var(--space-4); }
+@media (hover: none) { .tf-meetings__actions { opacity: 1; transform: none; } }
+.tf-meetings__row.is-past .tf-meetings__time, .tf-meetings__row.is-past .tf-meetings__title { color: var(--text-secondary); }
+.tf-meetings__row.is-cancelled .tf-meetings__time, .tf-meetings__row.is-cancelled .tf-meetings__title { color: var(--text-tertiary); text-decoration: line-through; }
+
+/* Rows that open their meeting: a pointer, and a focus ring inside the row. */
+.tf-meetings__row.is-openable { cursor: pointer; outline: none; }
+.tf-meetings__row.is-openable:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -1); }
+/* A row that just arrived drops in under its day (list motion: 0 to full height, 12px rise) and keeps a soft accent wash a moment. */
+.tf-meetings__row.is-new { overflow: clip; animation: tf-meetings-drop var(--duration-fast) var(--ease-smooth-out), tf-meetings-wash calc(var(--duration-very-slow) * 3) var(--ease-out); }
+@keyframes tf-meetings-drop { from { height: 0; opacity: 0; transform: translateY(calc(var(--distance-medium) * -1)); } }
+@keyframes tf-meetings-wash { 0%, 40% { background-color: var(--accent-soft); } 100% { background-color: transparent; } }
+
+/* Cancelled in place: the row folds to 44 and the strip resolves where the eye already is. */
+.tf-meetings__strip { display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-8) 0 var(--space-12); opacity: 0; pointer-events: none; }
+.tf-meetings__row.is-strip { min-height: var(--size-row); height: var(--size-row); }
+.tf-meetings__row.is-strip .tf-meetings__main { opacity: 0; pointer-events: none; }
+.tf-meetings__row.is-strip .tf-meetings__strip { opacity: 1; filter: none; pointer-events: auto; }
+.tf-meetings__strip-icon { display: inline-flex; color: var(--tag-red-text); }
+.tf-meetings__strip-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+/* Now: a blue line with a dot at each end, between what is over and what is next. */
+.tf-meetings__now { display: flex; align-items: center; gap: var(--space-8); height: var(--space-16); padding: 0 var(--space-8); }
+.tf-meetings__now-label { font: 600 11px/16px var(--font-sans); color: var(--accent); }
+.tf-meetings__now-line { position: relative; flex: 1; height: var(--border-width-focus); border-radius: var(--radius-full); background: var(--accent); }
+.tf-meetings__now-line::before, .tf-meetings__now-line::after { content: ''; position: absolute; top: 50%; width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: var(--accent); transform: translateY(-50%); }
+.tf-meetings__now-line::before { left: 0; }
+.tf-meetings__now-line::after { right: 0; }
+
+/* Empty: 18 texts reveal. */
+.tf-meetings__empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); padding: var(--space-32) var(--space-16); text-align: center; }
+.tf-meetings__empty-icon { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); margin-bottom: var(--space-6); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-meetings__empty-title { margin: 0; font: 600 15px/22px var(--font-sans); }
+.tf-meetings__empty-sub { margin: 0 0 var(--space-8); color: var(--text-secondary); font-size: 13px; }
+.tf-meetings__reveal { animation: tf-meetings-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
+.tf-meetings__reveal + .tf-meetings__reveal { animation-delay: var(--duration-stagger); }
+.tf-meetings__reveal + .tf-meetings__reveal + .tf-meetings__reveal { animation-delay: calc(var(--duration-stagger) * 2); }
+@keyframes tf-meetings-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
+
+/* Narrow: a tighter time column. */
+@container (max-width: 40rem) {
+  .tf-meetings__main, .tf-meetings__skel-row { grid-template-columns: 80px minmax(0, 1fr) auto auto; }
+  .tf-meetings__skel-person { display: none; }
+}
+/* Phone: time beside the title, then status and actions on their own line under the title, so nothing is cut. */
+@container (max-width: 28rem) {
+  .tf-meetings__main { grid-template-columns: 76px minmax(0, 1fr); row-gap: var(--space-4); column-gap: var(--space-12); align-items: start; }
+  .tf-meetings__status:empty { display: none; }
+  .tf-meetings__status, .tf-meetings__actions { grid-column: 2; }
+  .tf-meetings__actions { justify-self: start; opacity: 1; transform: none; }
+  .tf-meetings__title { white-space: normal; }
+}
+/* "Needs your OK" leads with the day, too long for the narrow time column: the when takes its own line over the meeting
+   ("Mon 16 Nov  3:00 PM · 45 min"), then what, then the note and Decline / Confirm. */
+@container (max-width: 40rem) {
+  .tf-meetings__group--ask .tf-meetings__main { grid-template-columns: minmax(0, 1fr) auto auto; row-gap: var(--space-2); align-items: center; }
+  .tf-meetings__group--ask .tf-meetings__time { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-8); }
+}
+@container (max-width: 28rem) {
+  .tf-meetings__group--ask .tf-meetings__main { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--space-4); }
+  .tf-meetings__group--ask .tf-meetings__what { grid-column: 1 / -1; }
+  .tf-meetings__group--ask .tf-meetings__status { grid-column: 1; }
+  .tf-meetings__group--ask .tf-meetings__decide { grid-column: 2; justify-self: end; }
+}
+
+/* MeetingCard: a shell holding a white card, with an optional tinted strip under it. */
+.tf-meetcard { display: flex; flex-direction: column; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--surface-shell); font: 400 14px/20px var(--font-sans); color: var(--text); min-width: 0; }
+.tf-meetcard--success { background: var(--success-soft); }
+.tf-meetcard--warning { background: var(--warning-soft); }
+.tf-meetcard__card { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
+.tf-meetcard__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-meetcard__time { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-meetcard__title { margin: var(--space-4) 0 0; font: 500 16px/24px var(--font-sans); }
+.tf-meetcard__place { display: flex; align-items: center; gap: var(--space-6); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-meetcard__people { display: flex; align-items: center; gap: var(--space-8); margin-top: var(--space-8); font: 500 13px/20px var(--font-sans); }
+.tf-meetcard__who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-meetcard__strip { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-8) var(--space-8) var(--space-2) var(--space-12); font: 500 13px/20px var(--font-sans); }
+.tf-meetcard--success .tf-meetcard__strip { color: var(--tag-green-text); }
+.tf-meetcard--warning .tf-meetcard__strip { color: var(--tag-orange-text); }
+.tf-meetcard__strip-text { display: inline-flex; align-items: center; gap: var(--space-6); min-width: 0; }
+.tf-meetcard__live { width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: currentColor; }
+.tf-meetcard__strip-action { display: inline-flex; align-items: center; gap: var(--space-4); height: var(--size-control-sm); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-full); background: transparent; color: inherit; font: 600 13px/20px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-meetcard__strip-action svg { transition: transform var(--duration-quick) var(--ease-out); }
+.tf-meetcard__strip-action[data-hovered] { background: var(--surface); }
+.tf-meetcard__strip-action[data-hovered] svg { transform: translateX(var(--distance-micro)); }
+.tf-meetcard__strip-action[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-meetings__skeleton, .tf-meetings__content, .tf-meetings__row, .tf-meetings__main, .tf-meetings__strip, .tf-meetings__actions, .tf-meetcard__strip-action, .tf-meetcard__strip-action svg { transition: none; }
+  .tf-meetings__reveal, .tf-meetings__row.is-new { animation: none; }
+}

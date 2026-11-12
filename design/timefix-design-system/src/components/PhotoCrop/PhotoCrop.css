@@ -1,0 +1,38 @@
+/* The cropper: a dark stage, the photo under a frame, everything the crop cuts behind the scrim. */
+.tf-crop { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-crop__stage { position: relative; display: grid; place-items: center; height: calc(var(--size-menu) + var(--space-64)); border-radius: var(--radius-lg); background: var(--surface-subtle); overflow: hidden; cursor: grab; touch-action: none; user-select: none; outline: none; }
+.tf-crop__stage[data-moving] { cursor: grabbing; }
+.tf-crop__stage:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-crop__frame { position: relative; }
+.tf-crop__frame--round, .tf-crop__frame--square { width: var(--size-menu); aspect-ratio: 1; }
+.tf-crop__frame--wide { width: min(calc(100% - var(--space-32)), var(--size-dialog)); aspect-ratio: 3; }
+.tf-crop__img { position: absolute; left: 50%; top: 50%; max-width: none; pointer-events: none; transition: transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-crop__stage[data-moving] .tf-crop__img { transition: none; }
+
+/* The mask paints over the photo: its huge shadow is the scrim, its edge the frame. */
+.tf-crop__mask { position: absolute; inset: 0; pointer-events: none; box-shadow: 0 0 0 100vmax var(--scrim), inset 0 0 0 var(--border-width-focus) var(--text); transition: border-radius var(--duration-fast) var(--ease-smooth-out); }
+.tf-crop__frame--round .tf-crop__mask { border-radius: var(--radius-full); }
+.tf-crop__frame--wide .tf-crop__mask, .tf-crop__frame--square .tf-crop__mask { border-radius: var(--radius-md); }
+/* Thirds fade in while the photo moves. */
+.tf-crop__thirds { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-crop__thirds::before, .tf-crop__thirds::after { content: ''; position: absolute; border: 0 solid var(--text); }
+.tf-crop__thirds::before { top: 0; bottom: 0; left: calc(100% / 3); width: calc(100% / 3); border-left-width: var(--border-width-hairline); border-right-width: var(--border-width-hairline); }
+.tf-crop__thirds::after { left: 0; right: 0; top: calc(100% / 3); height: calc(100% / 3); border-top-width: var(--border-width-hairline); border-bottom-width: var(--border-width-hairline); }
+.tf-crop__stage[data-moving] .tf-crop__thirds { opacity: var(--opacity-busy); }
+
+.tf-crop__controls { display: flex; align-items: flex-end; gap: var(--space-16); }
+.tf-crop__zoom { flex: 1; }
+.tf-crop__another { margin-right: auto; }
+
+/* A photo shown through its crop. */
+.tf-cropped { position: relative; display: inline-block; flex: none; overflow: hidden; border-radius: var(--radius-md); background: var(--surface-subtle); }
+.tf-cropped--round { border-radius: var(--radius-full); }
+.tf-cropped__img { position: absolute; left: 50%; top: 50%; max-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-crop__img, .tf-crop__mask, .tf-crop__thirds { transition: none; }
+}
+
+/* Demo layout only. */
+.tf-cropdemo { gap: var(--space-16); }
+.tf-cropdemo__actions { gap: var(--space-4); }

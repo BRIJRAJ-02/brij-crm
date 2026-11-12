@@ -1,0 +1,297 @@
+// Step 7: the meeting drawer, and its Reschedule and Reassign dialogs.
+import { copyText } from '../../lib/copy.ts';
+import { useEffect, useMemo, useState } from 'react';
+import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'react-aria-components';
+import { Bell, Check, Clock, Link2, MessageSquareText, MoreHorizontal, Repeat, Share2, UserRound, UserX, Users, Video, X } from 'lucide-react';
+import { Callout } from '../Callout/Callout.tsx';
+import { TextField } from '../Field/Field.tsx';
+import { Link as TextLink } from '../Link/Link.tsx';
+import { Drawer } from '../Drawer/Drawer.tsx';
+import { Dialog } from '../Dialog/Dialog.tsx';
+import { Select } from '../Select/Select.tsx';
+import { PlaceIcon, MeetingStatusTag } from '../MeetingList/MeetingList.tsx';
+import { PersonLine } from '../Avatar/Avatar.tsx';
+import { Tag } from '../Tag/Tag.tsx';
+import { Button, IconButton } from '../Button/Button.tsx';
+import { MenuTrigger, Menu, MenuItem } from '../Menu/Menu.tsx';
+import { TextArea } from '../Field/Field.tsx';
+import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
+import { RadioGroup, Radio } from '../Checkbox/Checkbox.tsx';
+import { ReferencePicker } from '../ComboBox/ComboBox.tsx';
+import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
+import { formatDay, formatLongDay, relativeDayLabel } from '../../lib/format.ts';
+import { cx } from '../../lib/cx.ts';
+import { useToast } from '../Toast/Toast.tsx';
+import { i14, i16 } from './parts.tsx';
+import { PEOPLE, searchPeople } from './meetings.tsx';
+import { ProfileButton } from './guests.tsx';
+import { HOST, HOST_ZONE, TEAM, ZONES, assignedLine, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, remindersFor, OUTCOMES, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+
+/** Props for MeetingDrawer. */
+export interface MeetingDrawerProps {
+  readonly meeting: BookedMeeting | undefined;
+  readonly page: BookingPage | undefined;
+  readonly onClose: () => void;
+  readonly onUpdate: (m: BookedMeeting) => void;
+  /** Cancel, after asking: the reason is kept on the meeting and the note goes to the guest. */
+  readonly onCancel: (m: BookedMeeting, reason?: string, note?: string) => void;
+  readonly onReschedule: (m: BookedMeeting) => void;
+  readonly onReassign: (m: BookedMeeting) => void;
+  readonly onNoShow: (m: BookedMeeting) => void;
+  readonly onJoin: (m: BookedMeeting) => void;
+  readonly onConfirm: (m: BookedMeeting) => void;
+  readonly onDecline: (m: BookedMeeting) => void;
+  /** A business: opens the client's record from the guest line. */
+  readonly onProfile?: (m: BookedMeeting) => void;
+}
+
+/** The meeting: time (both zones when they differ), guest, place with Join, answers, notes, the linked record and activity. */
+export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onReschedule, onReassign, onNoShow, onJoin, onConfirm, onDecline, onProfile }: MeetingDrawerProps) {
+  const { toast } = useToast();
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState('I can’t make it');
+  const [note, setNote] = useState('');
+  const [last, setLast] = useState(meeting);
+  if (meeting && meeting !== last) setLast(meeting);
+  const m = meeting ?? last;
+  const [notes, setNotes] = useState(m?.notes ?? '');
+  const [linking, setLinking] = useState(false);
+  const [linkDraft, setLinkDraft] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => { setChatOpen(false); }, [meeting?.id]);
+  useEffect(() => { setNotes(meeting?.notes ?? ''); }, [meeting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!m) return null;
+  const zoneTime = (tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(m.start);
+  const guestZone = ZONES.find((z) => z.id === m.guestZone);
+  const open = m.status === 'confirmed' || m.status === 'pending';
+  const past = m.end <= new Date();
+  const saveNotes = () => { if (notes !== m.notes) onUpdate({ ...m, notes, activity: [...m.activity, { id: `a-${Date.now()}`, text: `${HOST} edited the notes`, at: new Date() }] }); };
+  return (
+    <Drawer isOpen={meeting !== undefined} onOpenChange={(o) => { if (!o) { saveNotes(); onClose(); } }} title={m.title} subtitle={<span className="tf-num">{formatLongDay(m.start)}</span>}
+      actions={<>
+        <MeetingStatusTag status={m.status} />
+        <MenuTrigger>
+          <IconButton label="More for this meeting"><MoreHorizontal {...i16} /></IconButton>
+          <Menu aria-label="Meeting actions" placement="bottom end" onAction={(k: Key) => {
+            if (k === 'reassign') onReassign(m);
+            else if (k === 'noshow') onNoShow(m);
+            else if (k === 'guest') { const url = `https://timefix.com/b/manage/${m.id.replace(/[^a-z0-9]/gi, '').slice(-10)}`; void copyText(url).then((ok) => toast(ok ? { message: 'Guest link copied. It opens their booking, so share it only with them.', tone: 'success' } : { message: `Couldn’t copy the link. It’s ${url}`, tone: 'danger' })); }
+            else if (k === 'copy') { void copyText(`https://timefix.com/m/${m.id.slice(-6)}`).then((ok) => toast(ok ? { message: 'Meeting link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://timefix.com/m/${m.id.slice(-6)}`}`, tone: 'danger' })); }
+          }}>
+            <MenuItem id="reassign" icon={<Users {...i16} />} isDisabled={!open}>Reassign</MenuItem>
+            <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy meeting link</MenuItem>
+            <MenuItem id="guest" icon={<Share2 {...i16} />} description="Where they move or cancel" isDisabled={!open}>Copy guest link</MenuItem>
+            <MenuItem id="noshow" icon={<UserX {...i16} />} isDisabled={!past || m.status === 'no-show'}>Mark as no-show</MenuItem>
+          </Menu>
+        </MenuTrigger>
+      </>}
+      footerStart={m.status === 'pending' ? <span className="tf-bkf__row">
+        <Button variant="primary" onPress={() => onConfirm(m)}>Confirm</Button>
+        <Button variant="ghost" onPress={() => onDecline(m)}>Decline</Button>
+      </span> : page?.kind === 'service' && m.status === 'confirmed' && m.start.toDateString() === new Date().toDateString() ? <span className="tf-bkf__row">
+        {/* The front desk, one tap each: Arrived, Start, Finish (each with Undo). */}
+        {!m.arrivedAt ? <Button variant="primary" onPress={() => { onUpdate({ ...m, arrivedAt: new Date() }); toast({ message: `${m.invitee.name.split(' ')[0]} is here`, action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Arrived</Button>
+          : !m.startedAt ? <Button variant="primary" onPress={() => { onUpdate({ ...m, startedAt: new Date() }); toast({ message: 'Started', action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Start</Button>
+            : <Button variant="primary" onPress={() => { onUpdate({ ...m, status: 'completed' }); toast({ message: 'Finished', tone: 'success', action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Finish</Button>}
+        {!m.arrivedAt && <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel</Button>}
+        <span className="tf-bkf__muted tf-num">{m.startedAt ? `Started ${m.startedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : m.arrivedAt ? `Here since ${m.arrivedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : ''}</span>
+      </span> : m.status === 'no-show' ? <span className="tf-bkf__row">
+        {/* A no-show gets one easy way back: the page's link in an email, once (Calendly's and Chili Piper's no-show follow-up). */}
+        {m.activity.some((a) => a.text.startsWith('Rebook link sent'))
+          ? <span className="tf-bkf__muted">Link to book again sent to {first(m.invitee.name)}</span>
+          : <Button variant="secondary" icon={<Link2 {...i14} />} onPress={() => { onUpdate({ ...m, activity: [...m.activity, { id: `a-${Date.now()}`, text: `Rebook link sent to ${m.invitee.email || m.invitee.name}`, at: new Date() }] }); toast({ message: `${first(m.invitee.name)} gets an email with a link to book again`, tone: 'success' }); }}>Send a link to book again</Button>}
+      </span> : open && !past ? <span className="tf-bkf__row">
+        <Button variant="secondary" onPress={() => onReschedule(m)}>Reschedule</Button>
+        <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel meeting</Button>
+      </span> : undefined}>
+      {m.eventFailed && (
+        <Callout tone="warning" action={{ label: retrying ? 'Trying…' : 'Try again', onPress: () => { if (retrying) return; setRetrying(true); window.setTimeout(() => { setRetrying(false); onUpdate({ ...m, eventFailed: undefined, activity: [...m.activity, { id: `a-${Date.now()}`, text: 'Added to the calendar', at: new Date() }] }); toast({ message: 'It’s on your calendar now', tone: 'success' }); }, 900); } }}>
+          This booking isn’t on your calendar: the event couldn’t be made.
+        </Callout>
+      )}
+      {m.hostLeft && m.status !== 'cancelled' && (
+        <Callout tone="warning" action={{ label: 'Reassign', onPress: () => onReassign(m) }}>Its host left the workspace and nobody else was free then. Reassign it, or cancel it.</Callout>
+      )}
+      <dl className="tf-bkf__facts">
+        <dt><Clock {...i16} aria-label="When" /></dt>
+        <dd>
+          <span className="tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span> <span className="tf-bkf__muted">India time</span>
+          {guestZone && m.guestZone !== HOST_ZONE && <span className="tf-bkf__sub tf-num">{zoneTime(m.guestZone)} for {first(m.invitee.name)} · {guestZone.label}</span>}
+        </dd>
+        <dt><UserRound {...i16} aria-label="Guest" /></dt>
+        <dd>
+          <PersonLine name={m.invitee.name} sub={m.invitee.email} end={onProfile && page?.kind === 'service' ? <ProfileButton restaurant={false} onPress={() => { saveNotes(); onProfile(m); }} /> : undefined} />
+          {m.guests && m.guests.length > 0 && <span className="tf-bkf__sub">and {m.guests.join(', ')}</span>}
+        </dd>
+        {page && open && (() => {
+          // The reminders this booking gets: sent ones with when, the next one with when it goes.
+          const rs = remindersFor(page, m, new Date());
+          if (rs.length === 0) return null;
+          const at = (d: Date) => `${relativeDayLabel(d)}, ${formatClock(minutesOf(d))}`;
+          return <><dt><Bell {...i16} aria-label="Reminders" /></dt>
+            <dd><span className="tf-bkf-remind">{rs.map((r) => <span key={r.id} className={r.sent ? 'tf-bkf-remind__item is-sent' : 'tf-bkf-remind__item'}>{r.sent ? <Check {...i14} aria-hidden /> : null}{r.sent ? `Sent ${at(r.at)}` : `${r.label}, ${at(r.at)}`}</span>)}</span>
+              <span className="tf-bkf__sub">{page.remindByText ? 'By email and text' : 'By email'}</span></dd></>;
+        })()}
+        <dt><PlaceIcon place={m.place} /></dt>
+        <dd className="tf-bkf__place">
+          <span>{m.placeLabel}{m.host !== HOST ? ` · hosted by ${m.host}` : ''}{m.coHosts?.length ? `${m.host !== HOST ? ',' : ' ·'} with ${m.coHosts.map((c) => (c === HOST ? 'you' : c)).join(' and ')}` : ''}</span>
+          {m.place === 'video' && open && (m.ownLink || !needsLink(m, page)) && <Button size="sm" variant="secondary" icon={<Video {...i14} />} onPress={() => onJoin(m)}>Join</Button>}
+          {m.place === 'video' && open && (
+            <span className="tf-bkf__sub tf-bkf-linkline">
+              {m.ownLink ? <span className="tf-num tf-bkf-linkline__url">{m.ownLink.replace(/^https:\/\//, '')}</span> : needsLink(m, page) ? <span>No link yet.</span> : null}
+              <TextLink onPress={() => { setLinkDraft(m.ownLink ?? ''); setLinking(true); }} weight="strong">{m.ownLink || needsLink(m, page) ? (m.ownLink ? 'Change link' : 'Add meeting link') : 'Change link'}</TextLink>
+            </span>
+          )}
+        </dd>
+        {m.assigned && (<>
+          <dt><Repeat {...i16} aria-label="Assigned" /></dt>
+          <dd><span>Assigned in {m.assigned.group ?? 'its round robin group'}</span><span className="tf-bkf__sub">{m.host === HOST ? 'You' : first(m.host)} {assignedLine(m.assigned)}</span></dd>
+        </>)}
+        {m.chat && m.chat.length > 0 && (<>
+          <dt><MessageSquareText {...i16} aria-label="Booked" /></dt>
+          <dd><span className="tf-bkf__row">Booked by chat<span aria-hidden="true">·</span><TextLink onPress={() => setChatOpen((o) => !o)} weight="strong">{chatOpen ? 'Hide chat' : 'Show chat'}</TextLink></span>
+            {chatOpen && <ol className="tf-bkf-chatlog" aria-label="Chat">{m.chat.map((c, n) => <li key={n} className={c.from === 'visitor' ? 'is-visitor' : 'is-assistant'}><span className="tf-bkf-chatlog__who">{c.from === 'visitor' ? first(m.invitee.name) : 'Assistant'}</span><span>{c.text}</span></li>)}</ol>}
+          </dd>
+        </>)}
+      </dl>
+      <section className="tf-bkf__block" aria-label="Answers">
+        <h3 className="tf-bkf__block-title">Answers</h3>
+        {m.answers.length === 0 ? <p className="tf-bkf__muted">Only name and email were asked.</p> : (
+          <dl className="tf-bkf__answers">{m.answers.map((a) => <div key={a.question}><dt>{a.question}</dt><dd>{a.answer || '—'}</dd></div>)}</dl>
+        )}
+      </section>
+      {past && page?.kind !== 'service' && page?.kind !== 'table' && (m.status === 'confirmed' || m.status === 'completed') && (
+        <section className="tf-bkf__block" aria-label="How it went">
+          <ChoiceChips label="How did it go?" selectionMode="single" size="sm" selectedKeys={m.outcome ? [m.outcome] : []}
+            onSelectionChange={(k) => { const v = [...k][0]; onUpdate({ ...m, outcome: v, activity: [...m.activity, { id: `a-${Date.now()}`, text: v ? `${HOST} marked it ${v.toLowerCase()}` : `${HOST} cleared the outcome`, at: new Date() }] }); }}
+            items={OUTCOMES.map((o) => ({ id: o, label: o }))} />
+        </section>
+      )}
+      <section className="tf-bkf__block" aria-label="Notes">
+        <TextArea label="Your notes" rows={3} value={notes} onChange={setNotes} onBlur={saveNotes} placeholder="Only your team sees these" />
+      </section>
+      <section className="tf-bkf__block" aria-label="Linked record">
+        <h3 className="tf-bkf__block-title">Linked record</h3>
+        {m.record ? (
+          <span className="tf-bkf__record">
+            <PersonLine name={m.record.name} sub={m.record.sub} shape={m.record.kind === 'person' ? 'round' : 'square'} />
+            <Tag size="sm" hue={m.record.kind === 'company' ? 'purple' : m.record.kind === 'record' ? 'gray' : 'blue'}>{m.record.kind === 'company' ? 'Company' : m.record.kind === 'record' ? m.record.object ?? 'Record' : 'Person'}</Tag>
+            <IconButton size="sm" label={`Unlink ${m.record.name}`} onPress={() => onUpdate({ ...m, record: undefined })}><X {...i14} /></IconButton>
+          </span>
+        ) : (
+          <ReferencePicker label="Link to a record" placeholder="Search any record…" description="People, companies, deals and your own objects." recent={[...PEOPLE.slice(0, 2), ...PEOPLE.filter((p) => p.kind === 'record').slice(0, 1)]} search={searchPeople}
+            onSelect={(record) => onUpdate({ ...m, record, activity: [...m.activity, { id: `a-${Date.now()}`, text: `Linked to ${record.name}`, at: new Date() }] })} />
+        )}
+      </section>
+      <section className="tf-bkf__block" aria-label="Activity">
+        <h3 className="tf-bkf__block-title">Activity</h3>
+        <ul className="tf-bkf__activity">
+          {[...m.activity].reverse().map((a) => (
+            <li key={a.id}><span>{a.text}</span><span className="tf-bkf__muted tf-num">{formatDay(a.at)}</span></li>
+          ))}
+        </ul>
+      </section>
+      {page && <p className="tf-bkf__muted">Booked through {page.name}.</p>}
+    {asking && <Dialog isOpen onOpenChange={(o) => { if (!o) setAsking(false); }} title={`Cancel ${m.title}?`} description={`${m.invitee.name} gets an email that it’s off, with a link to book again.`}
+        actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { setAsking(false); onCancel(m, reason, note.trim() || undefined); }}>Cancel meeting</Button></>}>
+        <div className="tf-bkf__stack">
+          <Select label="Why" value={reason} onChange={(v) => { if (v) setReason(v); }} items={['I can’t make it', 'They asked to cancel', 'Booked twice', 'Not a fit', 'Something else'].map((x) => ({ id: x, label: x }))} description="Kept on the meeting; the guest doesn’t see it." />
+          <TextArea label="A note to them" aside="Optional" rows={2} value={note} onChange={setNote} placeholder="Sorry, something came up. Grab another time?" />
+        </div>
+      </Dialog>}
+    {linking && <Dialog isOpen onOpenChange={(o) => { if (!o) setLinking(false); }} size="md" title={m.ownLink ? 'Change meeting link' : 'Add meeting link'} description={`${m.invitee.name} is emailed it.`}
+        actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!/^https:\/\/\S+\.\S+/.test(linkDraft.trim())} onPress={() => {
+          const url = linkDraft.trim(); setLinking(false);
+          onUpdate({ ...m, ownLink: url, activity: [...m.activity, { id: `a-${Date.now()}`, text: `${HOST} ${m.ownLink ? 'changed' : 'added'} the meeting link; ${first(m.invitee.name)} was emailed it`, at: new Date() }] });
+          toast({ message: `Link saved. ${first(m.invitee.name)} is emailed it.`, tone: 'success' });
+        }}>Save and email</Button></>}>
+        <TextField label="Meeting link" value={linkDraft} onChange={setLinkDraft} placeholder="https://meet.google.com/abc-defg-hij" autoFocus type="url"
+          isInvalid={linkDraft.trim() !== '' && !/^https:\/\/\S+\.\S+/.test(linkDraft.trim())} errorMessage="Paste the meeting’s link, starting https://" />
+      </Dialog>}
+      </Drawer>
+  );
+}
+
+/** A video meeting with no link of its own: its page sends links by hand, or the calendar event that makes one failed. */
+const needsLink = (m: BookedMeeting, page: BookingPage | undefined) => m.eventFailed === true || page?.videoLink === 'send' || (page?.videoLink === 'own' && !page.ownLink);
+
+/** Reschedule: the next two weeks of open times on the meeting's page; the guest is told. */
+export function RescheduleDialog({ meeting, state, onClose, onMove }: { readonly meeting: BookedMeeting | undefined; readonly state: BookingsState; readonly onClose: () => void; readonly onMove: (m: BookedMeeting, start: Date) => void }) {
+  const [picked, setPicked] = useState<string>();
+  useEffect(() => { setPicked(undefined); }, [meeting?.id]);
+  const days = useMemo(() => {
+    if (!meeting) return [];
+    const now = new Date();
+    const len = (meeting.end.getTime() - meeting.start.getTime()) / 60_000;
+    const page = state.pages.find((p) => p.id === meeting.pageId);
+    const others = { ...state, meetings: state.meetings.filter((x) => x.id !== meeting.id) };
+    const out: Array<{ day: Date; times: ReadonlyArray<number> }> = [];
+    for (let n = 0; n < 14; n += 1) {
+      const d = dayFrom(now, n);
+      // The page's open times, kept to ones this meeting's host can take (a round robin set to ask the rotation again may move it to whoever is free).
+      // Made by hand: the working day's hours, only ones still ahead and free for the host.
+      const rotate = page?.hostMode === 'roundrobin' && page.rrReschedule === 'rotate';
+      const base = page ? openTimes(page, others, d, now, len) : d.getDay() === 0 || d.getDay() === 6 ? [] : [10, 11, 14, 15, 16].map((h) => h * 60);
+      const ahead = (m: number) => n > 0 || m > now.getHours() * 60 + now.getMinutes();
+      const times = base.filter((m) => ahead(m) && (rotate || personFree(others, meeting.host, d, m, m + len, meeting.id)));
+      if (times.length) out.push({ day: d, times });
+    }
+    return out;
+  }, [meeting, state]);
+  const [dayKey, setDayKey] = useState<string>('');
+  useEffect(() => { setDayKey(days[0] ? isoDay(days[0].day) : ''); }, [days]);
+  const shownDay = days.find((d) => isoDay(d.day) === dayKey) ?? days[0];
+  return (
+    <Dialog isOpen={meeting !== undefined} onOpenChange={(o) => { if (!o) onClose(); }} size="wide" title={meeting ? `Reschedule ${meeting.title.charAt(0).toLowerCase()}${meeting.title.slice(1)}` : 'Reschedule'}
+      description={meeting ? `Now ${formatDay(meeting.start)}, ${formatClockRange(minutesOf(meeting.start), minutesOf(meeting.end))}. ${meeting.invitee.name} gets an email with the new time.` : undefined}
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!picked} onPress={() => { if (meeting && picked) { const [day, min] = picked.split('T'); const d = days.find((x) => isoDay(x.day) === day)?.day; if (d) onMove(meeting, at(d, Number(min))); } }}>Move meeting</Button></>}>
+      {days.length === 0 ? <p className="tf-bkf__muted">No open times in the next two weeks.</p> : (
+        <div className="tf-bkf-resched">
+          <AriaRadioGroup aria-label="Day" value={dayKey} onChange={(k) => { setDayKey(k); setPicked(undefined); }} className="tf-bkf-resched__days">
+            {days.map((d) => (
+              <AriaRadio key={isoDay(d.day)} value={isoDay(d.day)} className="tf-bkf-resched__day">
+                <span className="tf-bkf-resched__dayname">{relativeDayLabel(d.day)}</span>
+                <span className="tf-bkf-resched__count tf-num">{plural(d.times.length, 'time')}</span>
+              </AriaRadio>
+            ))}
+          </AriaRadioGroup>
+          <div className="tf-bkf-resched__times">
+            <span className="tf-bkf__label">{shownDay ? formatLongDay(shownDay.day) : ''}</span>
+            {shownDay && (
+              <ChoiceChips key={dayKey} label={`Times on ${formatLongDay(shownDay.day)}`} isLabelHidden size="md" className="tf-bkf-resched__grid" selectedKeys={picked ? [picked] : []}
+                items={shownDay.times.map((t) => ({ id: `${isoDay(shownDay.day)}T${t}`, label: formatClock(t) }))}
+                onSelectionChange={(keys) => { const k = [...keys][0]; if (k) setPicked(k); }} />
+            )}
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+/** Reassign: a teammate who's free then, or "Next in rotation" for round robin pages. */
+export function ReassignDialog({ meeting, state, onClose, onReassign }: { readonly meeting: BookedMeeting | undefined; readonly state: BookingsState; readonly onClose: () => void; readonly onReassign: (m: BookedMeeting, host: string) => void }) {
+  const [to, setTo] = useState('');
+  useEffect(() => { setTo(''); }, [meeting?.id]);
+  if (!meeting) return <Dialog isOpen={false} title="Reassign" />;
+  const page = state.pages.find((p) => p.id === meeting.pageId);
+  const others = { ...state, meetings: state.meetings.filter((x) => x.id !== meeting.id) };
+  const s = minutesOf(meeting.start);
+  const e = minutesOf(meeting.end);
+  const nextUp = page?.hostMode === 'roundrobin' ? hostFor(others, { ...page, hosts: page.hosts.filter((h) => h !== meeting.host) }, meeting.start, s, e) : undefined;
+  // Free means working, not away, no other meeting and nothing busy on their calendar.
+  const why = (name: string) => busyReason(state, page, name, meeting.start, s, e, meeting.id);
+  const pick = to === 'next' ? nextUp : to;
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} size="md" title={`Reassign ${meeting.title}`} description={`${meeting.invitee.name} keeps the same time; the new host gets the invitation.`}
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!pick} onPress={() => { if (pick) onReassign(meeting, pick); }}>Reassign</Button></>}>
+      <RadioGroup label="Give it to" value={to} onChange={setTo}>
+        {nextUp && <Radio value="next">Next in rotation · {nextUp}</Radio>}
+        {TEAM.filter((n) => n !== meeting.host).map((n) => { const r = why(n); return <Radio key={n} value={n} isDisabled={Boolean(r)}>{n}{r ? <span className="tf-bkf__muted"> · {r}</span> : ''}</Radio>; })}
+        {TEAM.filter((n) => n !== meeting.host).every((n) => why(n)) && !nextUp ? <p className="tf-bkf__muted">No one else is free then. Reschedule instead, or ask {meeting.invitee.name.split(' ')[0]} for another time.</p> : null}
+      </RadioGroup>
+      {page?.hostMode === 'roundrobin' && <p className={cx('tf-bkf__muted', 'tf-bkf__gap-top')}>{page.name} is shared by {plural(page.hosts.length, 'host')}.</p>}
+    </Dialog>
+  );
+}

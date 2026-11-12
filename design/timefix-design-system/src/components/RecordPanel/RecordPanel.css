@@ -1,0 +1,72 @@
+/* transitions.dev 07 panel reveal, travelling on X: 400ms in, 350ms out. */
+.tf-rpanel {
+  display: flex; flex-direction: column; width: var(--size-panel); max-width: 100%; height: 100%; min-height: 0;
+  border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-subtle);
+  font: 400 14px/20px var(--font-sans); color: var(--text); outline: none; z-index: var(--z-drawer);
+  transform: translateX(calc(var(--distance-large) * 2)); opacity: 0; pointer-events: none;
+  transition: transform var(--duration-medium) var(--ease-smooth-out), opacity var(--duration-medium) var(--ease-smooth-out);
+}
+.tf-rpanel[data-open] {
+  transform: translateX(0); opacity: 1; pointer-events: auto;
+  transition: transform var(--duration-slow) var(--ease-smooth-out), opacity var(--duration-slow) var(--ease-smooth-out);
+}
+.tf-rpanel__bar { display: flex; align-items: center; gap: var(--space-8); height: var(--size-row); padding: 0 var(--space-8) 0 var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); flex: none; }
+.tf-rpanel__object { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-rpanel__pos { font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tf-rpanel__tools { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.tf-rpanel__body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-16); }
+.tf-rpanel__hint { display: flex; align-items: center; gap: var(--space-4); margin: 0; padding: var(--space-8) var(--space-16); border-top: var(--border-width-hairline) solid var(--border-subtle); font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); flex: none; }
+
+/* transitions.dev 08 page side-by-side: 250ms, 8px. */
+.tf-pslide { display: grid; }
+.tf-pslide__page { grid-area: 1 / 1; min-width: 0; }
+.tf-pslide--forward { --tf-ps-in: var(--distance-base); --tf-ps-out: calc(var(--distance-base) * -1); }
+.tf-pslide--back { --tf-ps-in: calc(var(--distance-base) * -1); --tf-ps-out: var(--distance-base); }
+.tf-pslide__page--in { animation: tf-ps-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-pslide__page--out { pointer-events: none; animation: tf-ps-out var(--duration-fast) var(--ease-smooth-out) forwards; }
+@keyframes tf-ps-in { from { opacity: 0; transform: translateX(var(--tf-ps-in)); } }
+@keyframes tf-ps-out { to { opacity: 0; transform: translateX(var(--tf-ps-out)); } }
+
+/* Attribute rows: a 28px grey icon well, the name in a fixed column, the value editing in place. */
+.tf-arow { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: var(--space-8); min-height: var(--size-control); }
+.tf-arow__label { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.tf-arow__well { display: inline-grid; place-items: center; width: var(--size-avatar); height: var(--size-avatar); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); flex: none; }
+.tf-arow__name { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-arow__value { padding-left: var(--space-6); }
+
+/* Sections: transitions.dev 21 accordion on React Aria's measured panel height. */
+.tf-rsec { border-top: var(--border-width-hairline) solid var(--border-subtle); padding: var(--space-8) 0; }
+.tf-rsec__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-rsec__heading { margin: 0; font: inherit; }
+.tf-rsec__trigger { display: inline-flex; align-items: center; gap: var(--space-6); height: var(--size-control-sm); padding: 0 var(--space-8) 0 var(--space-4); margin-left: calc(var(--space-4) * -1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-rsec__trigger[data-hovered] { background: var(--surface-hover); }
+.tf-rsec__trigger[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-rsec__chevron { display: inline-grid; color: var(--text-tertiary); transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-rsec[data-expanded] .tf-rsec__chevron { transform: rotate(90deg); }
+.tf-rsec__panel { height: var(--disclosure-panel-height); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-rsec__inner { padding-top: var(--space-6); opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-rsec[data-expanded] .tf-rsec__inner { opacity: 1; }
+
+/* ---------- demo ---------- */
+.tf-rpanel-demo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-12); height: 560px; }
+.tf-rpanel-demo__list { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-6); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 1px var(--border-subtle); align-self: start; }
+.tf-rpanel-demo__row { display: flex; align-items: center; height: var(--size-row); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-rpanel-demo__row[data-hovered] { background: var(--surface-hover); }
+.tf-rpanel-demo__row[aria-current='true'] { background: var(--accent-soft); }
+.tf-rpanel-demo__row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-rpanel-demo__who { display: flex; align-items: center; gap: var(--space-12); margin-bottom: var(--space-16); }
+.tf-rpanel-demo__name { margin: 0; font: 500 16px/24px var(--font-sans); }
+.tf-rpanel-demo__sub { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-rpanel-demo__attrs { display: flex; flex-direction: column; margin-bottom: var(--space-12); }
+.tf-rpanel-demo__chips { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.tf-rpanel-demo__meeting { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-6) 0; }
+.tf-rpanel-demo__mwell { display: inline-grid; place-items: center; width: var(--size-avatar); height: var(--size-avatar); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); flex: none; }
+.tf-rpanel-demo__mtext { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-rpanel-demo__mtitle { font: 500 14px/20px var(--font-sans); }
+.tf-rpanel-demo__mwhen { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tf-rpanel-demo__notes { display: flex; flex-direction: column; gap: var(--space-6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-rpanel, .tf-rpanel[data-open], .tf-rsec__panel, .tf-rsec__inner, .tf-rsec__chevron, .tf-rsec__trigger, .tf-rpanel-demo__row { transition: none; }
+  .tf-pslide__page--in, .tf-pslide__page--out { animation: none; }
+}

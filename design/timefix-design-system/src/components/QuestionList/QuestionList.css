@@ -1,0 +1,140 @@
+/* QuestionList: question cards that reorder by their grip; a question opens in the list's place (page side-by-side, 08). */
+.tf-qbuilder { display: flex; flex-direction: column; min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-qbuilder__open { display: flex; flex-direction: column; gap: var(--space-12); animation: tf-qbuilder-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-qbuilder__nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-qbuilder__pos { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+@keyframes tf-qbuilder-in { from { opacity: 0; transform: translateX(var(--distance-base)); } }
+@media (prefers-reduced-motion: reduce) { .tf-qbuilder__open { animation: none; } }
+
+.tf-qtile { display: inline-grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-qtile--sm { width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); }
+
+.tf-qlist { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+.tf-qlist__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); min-height: var(--size-control); }
+.tf-qlist__title { display: inline-flex; align-items: center; gap: var(--space-8); margin: 0; font: 500 15px/22px var(--font-sans); }
+.tf-qlist__plus { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+
+.tf-qlist__list { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; outline: none; }
+.tf-qlist__row { outline: none; border-radius: var(--radius-lg); }
+.tf-qlist__row:has(.tf-qlist__open:focus-visible) { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* Pressing anywhere on the card opens it; its controls sit above that press. */
+.tf-qlist__card { position: relative; }
+.tf-qlist__open { position: absolute; inset: 0; z-index: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: default; outline: none; }
+.tf-qlist__card > :not(.tf-qlist__open) { position: relative; z-index: 1; }
+.tf-qlist__card > .tf-qlist__text, .tf-qlist__card > .tf-qtile { pointer-events: none; }
+.tf-qlist__chips { pointer-events: auto; }
+.tf-qlist__card { display: flex; align-items: center; gap: var(--space-12); min-height: calc(var(--size-row) + var(--space-16)); padding: var(--space-8) var(--space-8) var(--space-8) var(--space-4); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); cursor: default;
+  transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), opacity var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) and (pointer: fine) { .tf-qlist__row:hover .tf-qlist__card { background: var(--surface-hover); } }
+/* Blue marks the selected question. */
+.tf-qlist__row[data-selected] .tf-qlist__card { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-qlist__grip { display: inline-grid; place-items: center; flex: none; margin-right: calc(var(--space-6) * -1); }
+.tf-qlist__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-qlist__q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/20px var(--font-sans); }
+.tf-qlist__n { color: var(--text-tertiary); }
+.tf-qlist__untitled { color: var(--text-tertiary); font-weight: 400; }
+.tf-qlist__sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-qlist__count { color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+/* Rows always shrink to their column, so a settings panel beside the list never covers them. */
+.tf-qlist__list, .tf-qlist__row, .tf-qlist__row > *, .tf-qlist__card { min-width: 0; }
+.tf-qset__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+.tf-qlist__end { display: inline-flex; align-items: center; gap: var(--space-8); flex: none; font-size: 13px; color: var(--text-secondary); }
+
+
+/* Deleted · Undo opens and closes in place (21 accordion). */
+.tf-qlist__undo { display: grid; grid-template-rows: 0fr; margin-bottom: calc(var(--space-12) * -1); transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), margin var(--duration-fast) var(--ease-smooth-out); }
+.tf-qlist__undo[data-open] { grid-template-rows: 1fr; margin-bottom: 0; }
+.tf-qlist__undo-clip { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-qlist__undo[data-open] .tf-qlist__undo-clip { opacity: 1; filter: none; }
+.tf-qlist__undo-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); margin: 0; min-height: var(--size-control); padding: 0 var(--space-4) 0 var(--space-16); border: var(--border-width-hairline) dashed var(--border); border-radius: var(--radius-lg); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+
+/* The type picker: a two-column grid of type tiles. */
+.tf-qtypes__pop { width: min(calc(var(--size-menu) * 2.2), calc(100vw - var(--space-32))); }
+/* The full picker: a search on top, then the types in labelled groups, two columns each, scrolling inside the popover. */
+.tf-qtypes__wrap { display: flex; flex-direction: column; gap: var(--space-8); max-height: min(34rem, calc(100vh - var(--space-64) * 3)); }
+.tf-qtypes.tf-qtypes--groups { display: flex; flex-direction: column; gap: var(--space-8); overflow-y: auto; overscroll-behavior: contain; padding-bottom: var(--space-4); }
+.tf-qtypes__sec { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.tf-qtypes__sec > .tf-qtypes__head { grid-column: 1 / -1; }
+.tf-qtypes__none { margin: 0; padding: var(--space-16) var(--space-8); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); text-align: center; }
+@media (max-width: 30rem) { .tf-qtypes__sec { grid-template-columns: minmax(0, 1fr); } }
+.tf-qtypes__head { margin: 0; padding: var(--space-6) var(--space-8) var(--space-8); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-qtypes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); outline: none; }
+/* A short list of types: one column, menu width. */
+.tf-qtypes--list { grid-template-columns: minmax(0, 1fr); width: calc(var(--size-menu) + var(--space-32)); }
+.tf-qtypes__item { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-row); padding: var(--space-4) var(--space-8) var(--space-4) var(--space-4); border-radius: var(--radius-md); cursor: default; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-qtypes__item[data-hovered], .tf-qtypes__item[data-focused] { background: var(--surface-hover); }
+.tf-qtypes__item[data-pressed] { background: var(--surface-selected); }
+.tf-qtypes__item[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-qtypes__text { display: flex; flex-direction: column; min-width: 0; }
+.tf-qtypes__label { font: 500 14px/20px var(--font-sans); color: var(--text); }
+.tf-qtypes__hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 12px/16px var(--font-sans); color: var(--text-secondary); }
+
+/* Settings panel. */
+.tf-qset { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; padding: var(--space-16); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); }
+.tf-qset--empty { padding: 0; }
+.tf-qset__head { display: flex; align-items: center; gap: var(--space-12); }
+.tf-qset__title { flex: 1; margin: 0; font: 500 15px/22px var(--font-sans); }
+/* 34 text swap soft: another question's settings fade in from. */
+.tf-qset__body { display: flex; flex-direction: column; gap: var(--space-16); animation: tf-qset-swap var(--duration-fast) var(--ease-in-out) both; }
+@keyframes tf-qset-swap { from { opacity: 0; transform: translateY(var(--distance-micro)); } }
+.tf-qset__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-qset__row-text { display: flex; flex-direction: column; min-width: 0; }
+.tf-qset__row-label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-qset__row-sub { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-qset__options { display: flex; flex-direction: column; gap: var(--space-6); }
+.tf-qset__option-list { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
+.tf-qset__option { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); animation: tf-qset-swap var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-qset__add { align-self: flex-start; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-qlist__plus, .tf-qlist__card, .tf-qlist__grip, .tf-qlist__undo, .tf-qlist__undo-clip, .tf-qtypes__item { transition: none; }
+  .tf-qset__body, .tf-qset__option { animation: none; }
+}
+/* A step's label over the card that opens it. */
+.tf-qlist__step { display: block; padding: var(--space-8) var(--space-4) var(--space-4); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+.tf-qset__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-qset__jumps { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
+.tf-qset__jump { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: var(--space-8); }
+.tf-qset__jump-if { overflow: hidden; color: var(--text); font: 400 13px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+/* A card's chips under its grey line: Shown if, and what to check in its logic. */
+.tf-qlist__chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
+.tf-qlist__step { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-qset__note { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qset__warn { display: flex; align-items: flex-start; gap: var(--space-6); margin: 0; color: var(--warning); font: 500 13px/20px var(--font-sans); }
+.tf-qset__warn > svg { flex: none; margin-top: var(--space-2); }
+/* The type picker: search pinned on top, a compact list beside a live preview of the active type. */
+.tf-qpick__pop { width: min(40rem, calc(100vw - var(--space-32))); padding: 0; overflow: hidden; }
+.tf-qpick { display: flex; flex-direction: column; max-height: min(34rem, calc(100vh - var(--space-64) * 2)); }
+.tf-qpick__search { flex: none; padding: var(--space-12) var(--space-12) var(--space-8); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-qpick__panes { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); min-height: 0; flex: 1; }
+.tf-qpick__list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4) var(--space-6) var(--space-8); border-right: var(--border-width-hairline) solid var(--border-subtle); outline: none; }
+.tf-qpick__head { padding: var(--space-8) var(--space-6) var(--space-4); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
+.tf-qpick__item { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-6); border-radius: var(--radius-md); color: var(--text); font: 500 13px/20px var(--font-sans); cursor: default; }
+.tf-qpick__item[data-active] { background: var(--surface-hover); }
+.tf-qpick__icon { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-qpick__item[data-group='ready'] .tf-qpick__icon { background: var(--accent-soft); color: var(--accent-text); }
+.tf-qpick__item[data-active] .tf-qpick__icon { background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-qpick__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-qpick__none { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); padding: var(--space-12) var(--space-6); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__none p { margin: 0; }
+.tf-qpick__side { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; min-height: 0; overflow-y: auto; padding: var(--space-16); }
+.tf-qpick__preview { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); pointer-events: none; }
+.tf-qpick__ptitle { margin: 0; color: var(--text); font: 500 16px/24px var(--font-sans); }
+.tf-qpick__what { margin: var(--space-4) 0 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__what strong { color: var(--text); font-weight: 500; }
+.tf-qpick__fills { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-qpick__keys { display: inline-flex; align-items: center; gap: var(--space-4); margin-top: auto; color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
+@media (max-width: 40rem) { .tf-qpick__panes { grid-template-columns: minmax(0, 1fr); } .tf-qpick__side { display: none; } .tf-qpick__list { border-right: 0; } }
+/* Calm first: the rules set under More options, as chips above the fold; pressing one opens the fold at its group. */
+.tf-qset__chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: calc(var(--space-4) * -1); }
+/* More options: its groups under small headings, a hairline between them. */
+.tf-qset__more { display: flex; flex-direction: column; }
+.tf-qset__sec { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-16) 0; scroll-margin: var(--space-16); }
+.tf-qset__sec:first-child { padding-top: var(--space-4); }
+.tf-qset__sec:last-child { padding-bottom: 0; }
+.tf-qset__sec + .tf-qset__sec { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-qset__sec-title { margin: 0; color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); border-radius: var(--radius-sm); outline: none; }
+.tf-qset__sec-title:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* A switch line inside a group: no hairline of its own. */
+.tf-qset__line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+.tf-qlist__chips .tf-tag, .tf-qset__chips .tf-tag { max-width: 100%; }

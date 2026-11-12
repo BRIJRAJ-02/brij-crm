@@ -1,0 +1,105 @@
+/* First run's left column: steps, the sliding step pages, then Back and Continue. */
+.tf-onb { display: flex; flex-direction: column; gap: var(--space-24); }
+.tf-onb__form { display: flex; flex-direction: column; gap: var(--space-24); }
+.tf-onb__page { display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-2); }
+.tf-onb__prefix { font: 400 16px/24px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; margin-inline-end: calc(var(--space-8) * -1); }
+.tf-onb__free, .tf-onb__taken { display: inline-flex; align-items: center; gap: var(--space-4); font: 500 13px/20px var(--font-sans); }
+.tf-onb__free { color: var(--success); }
+.tf-onb__taken { color: var(--danger); }
+.tf-onb__range { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); }
+.tf-onb__to { font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__error { font: 400 13px/18px var(--font-sans); color: var(--danger); }
+
+/* Progress: "Step 2 of 6" over one thin segment per step, filled to here. Done segments go back on press. */
+.tf-onb__progress { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-onb__count { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__bar { display: flex; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.tf-onb__seg-item { flex: 1; display: flex; }
+.tf-onb__seg { position: relative; flex: 1; height: var(--space-12); padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-full); outline: none; }
+.tf-onb__seg::before { content: ''; position: absolute; inset: calc(50% - var(--space-2)) 0; border-radius: var(--radius-full); background: var(--border); transition: background-color var(--duration-fast) var(--ease-smooth-out); }
+.tf-onb__seg[data-state='done']::before, .tf-onb__seg[data-state='current']::before { background: var(--accent); }
+@media (hover: hover) and (pointer: fine) { .tf-onb__seg[data-state='done']:hover::before { opacity: var(--opacity-disabled); } }
+.tf-onb__seg:disabled { cursor: default; }
+.tf-onb__seg:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) { .tf-onb__seg::before { transition: none; } }
+.tf-onb__actions { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-onb__next { width: 100%; justify-content: center; }
+.tf-onb__aside { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-onb__aside > :only-child.tf-onb__skip { margin-inline-start: auto; }
+
+/* WorkspacePreview: a booking page in a quiet window plus the team, named by a caption, as wide as the half allows. */
+.tf-wsprev { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; max-width: calc(var(--size-dialog) * 1.5); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-wsprev__caption { display: flex; align-items: center; gap: var(--space-8); margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-wsprev__dot { width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: var(--success); }
+.tf-wsprev__caption-note { margin-inline-start: auto; font-weight: 400; color: var(--text-tertiary); }
+.tf-wsprev__window { background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); overflow: hidden; }
+.tf-wsprev__bar { display: flex; align-items: center; padding: var(--space-12) var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-wsprev__url { display: inline-flex; align-items: center; height: var(--size-control-sm); padding: 0 var(--space-12); border-radius: var(--radius-full); background: var(--surface-subtle); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); max-width: 100%; overflow: hidden; white-space: nowrap; }
+.tf-wsprev__slug { color: var(--text); font-weight: 500; }
+.tf-wsprev__page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+.tf-wsprev__host { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); padding: var(--space-20); border-inline-end: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-wsprev__brand { display: inline-flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); max-width: 100%; }
+.tf-wsprev__name { font: 500 14px/20px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-wsprev__who { display: inline-flex; align-items: center; gap: var(--space-8); }
+.tf-wsprev__owner { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-wsprev__event { font: 500 18px/26px var(--font-sans); }
+.tf-wsprev__meta { display: inline-flex; align-items: center; gap: var(--space-6); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-wsprev__times { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-20); }
+.tf-wsprev__days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-4); }
+/* Open days are grey-filled, closed ones hatched (Cal.com and Calendly read availability as texture, not colour). */
+.tf-wsprev__day {
+  display: grid; place-items: center; height: var(--size-control); border-radius: var(--radius-md); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary);
+  background: repeating-linear-gradient(135deg, transparent 0 var(--space-4), var(--border-subtle) var(--space-4) calc(var(--space-4) + 1px));
+  transition: background-color var(--duration-fast) var(--ease-smooth-out), color var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-wsprev__day--on { background: var(--surface-subtle); color: var(--text); }
+.tf-wsprev__summary { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-wsprev__slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+.tf-wsprev__slot { display: grid; place-items: center; height: var(--size-control); border-radius: var(--radius-full); border: var(--border-width-hairline) solid var(--border); font: 500 13px/20px var(--font-sans); }
+.tf-wsprev__slot--picked { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.tf-wsprev__team { display: flex; align-items: center; gap: var(--space-12); align-self: flex-start; padding: var(--space-12) var(--space-16); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.tf-wsprev__team-title { font: 500 13px/20px var(--font-sans); }
+.tf-wsprev__avatars { display: inline-flex; }
+.tf-wsprev__avatars > * + * { margin-inline-start: calc(var(--space-6) * -1); }
+.tf-wsprev__team-note { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+/* A newly invited face pops in on the bounce curve (transitions.dev 03's appear). */
+.tf-wsprev__pop { display: inline-flex; border-radius: var(--radius-full); box-shadow: 0 0 0 var(--border-width-focus) var(--surface); animation: tf-wsprev-pop var(--duration-very-slow) var(--ease-bounce) both; }
+@keyframes tf-wsprev-pop { from { opacity: 0; transform: scale(var(--scale-large)) translateY(var(--distance-small)); } }
+
+/* The part the current step changes gets an accent ring, easing between parts. */
+.tf-wsprev [data-part] { border-radius: var(--radius-md); outline: var(--border-width-focus) solid transparent; outline-offset: var(--space-4); transition: outline-color var(--duration-fast) var(--ease-smooth-out); }
+.tf-wsprev__url[data-part] { border-radius: var(--radius-full); }
+.tf-wsprev__times[data-part] { border-radius: 0; outline-offset: calc(var(--space-8) * -1); }
+.tf-wsprev__team[data-part] { border-radius: var(--radius-lg); outline-offset: var(--space-2); }
+.tf-wsprev[data-focus='workspace'] [data-part='workspace'],
+.tf-wsprev[data-focus='link'] [data-part='link'],
+.tf-wsprev[data-focus='hours'] [data-part='hours'],
+.tf-wsprev[data-focus='meeting'] [data-part='meeting'],
+.tf-wsprev[data-focus='team'] [data-part='team'] { outline-color: var(--accent-border); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-wsprev__day, .tf-wsprev [data-part] { transition: none; }
+  .tf-wsprev__pop { animation: none; }
+}
+/* Meeting length, the calendar buttons, and the "You're live" link card. */
+.tf-onb__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-onb__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-onb__connect { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-onb__connect > .tf-btn { justify-content: center; }
+.tf-onb__live { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
+.tf-onb__live-icon { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); }
+.tf-onb__live-text { display: flex; flex-direction: column; flex: 1 1 calc(100% - var(--size-control) - var(--space-12)); min-width: 0; font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__live > .tf-btn:first-of-type { margin-inline-start: calc(var(--size-control) + var(--space-12)); }
+.tf-onb__live-text strong { color: var(--text); font: 500 15px/22px var(--font-sans); }
+.tf-onb--live { animation: tf-onb-live var(--duration-slow) var(--ease-smooth-out) both; }
+@keyframes tf-onb-live { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
+@media (prefers-reduced-motion: reduce) { .tf-onb--live { animation: none; } }
+
+/* Your photo beside its upload; free addresses when the link is taken. */
+.tf-onb__photo { display: flex; align-items: center; gap: var(--space-12); }
+.tf-onb__photo > :last-child { flex: 1; min-width: 0; }
+.tf-onb__photo-img { flex: none; width: var(--size-avatar-lg); height: var(--size-avatar-lg); border-radius: var(--radius-full); object-fit: cover; }
+.tf-onb__free-list { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-onb__free-row { display: flex; flex-wrap: wrap; gap: var(--space-8); }

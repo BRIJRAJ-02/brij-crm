@@ -1,0 +1,48 @@
+.tf-phone__box { padding-left: var(--space-4); }
+.tf-phone__box:is(.tf-field--lg *) { padding-left: var(--space-6); }
+.tf-phone__select { display: contents; }
+.tf-phone__code {
+  display: inline-flex; align-items: center; gap: var(--space-4); flex: none; height: calc(var(--tf-field-h) - var(--space-12)); padding: 0 var(--space-6) 0 var(--space-8);
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; outline: none;
+  font: 500 14px/20px var(--font-sans); font-variant-numeric: tabular-nums;
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-phone__code:is(.tf-field--lg *) { font-size: 16px; line-height: 24px; border-radius: var(--radius-md); }
+.tf-phone__code svg { color: var(--text-tertiary); }
+.tf-phone__code[data-hovered], .tf-phone__code[aria-expanded='true'] { background: var(--surface-selected); }
+.tf-phone__code[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-phone__rule { flex: none; width: var(--border-width-hairline); height: calc(var(--tf-field-h) / 2); background: var(--border-strong); }
+.tf-phone__input { font-variant-numeric: tabular-nums; }
+
+/* The country list: transitions.dev 05 menu dropdown, growing from the chip (250ms in at .97, 150ms out to .99). */
+.tf-phone__pop {
+  width: var(--size-menu); max-height: calc(var(--size-control) * 9); display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-md); outline: none; transform-origin: top left;
+}
+.tf-phone__pop[data-placement='top'] { transform-origin: bottom left; }
+.tf-phone__pop[data-entering] { animation: tf-phone-in var(--duration-fast) var(--ease-smooth-out); }
+.tf-phone__pop[data-exiting] { animation: tf-phone-out var(--duration-quick) var(--ease-smooth-out) forwards; }
+@keyframes tf-phone-in { from { opacity: 0; transform: scale(var(--scale-medium)); } }
+@keyframes tf-phone-out { to { opacity: 0; transform: scale(var(--scale-tiny)); } }
+.tf-phone__search { display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); color: var(--text-tertiary); flex: none; }
+.tf-phone__search-input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-phone__search-input::placeholder { color: var(--text-tertiary); }
+.tf-phone__search-input::-webkit-search-cancel-button { appearance: none; }
+.tf-phone__list { flex: 1; overflow: auto; padding: var(--space-4); outline: none; }
+.tf-phone__item {
+  display: grid; grid-template-columns: 1fr auto var(--size-icon); align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-8) 0 var(--space-12);
+  border-radius: var(--radius-md); font: 400 14px/20px var(--font-sans); color: var(--text); cursor: default; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-phone__item[data-focused], .tf-phone__item[data-hovered] { background: var(--surface-hover); }
+.tf-phone__item[data-focus-visible] { box-shadow: inset 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-phone__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-phone__item-dial { color: var(--text-tertiary); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tf-phone__tick { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.tf-phone__item[data-selected] .tf-phone__tick { stroke-dashoffset: 0; transition: stroke-dashoffset var(--duration-medium) var(--ease-smooth-out); }
+.tf-phone__empty { margin: 0; padding: var(--space-12); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-phone__pop[data-entering], .tf-phone__pop[data-exiting] { animation: none; }
+  .tf-phone__code, .tf-phone__item, .tf-phone__item[data-selected] .tf-phone__tick { transition: none; }
+}

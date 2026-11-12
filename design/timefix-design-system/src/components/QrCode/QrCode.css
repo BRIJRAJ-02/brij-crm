@@ -1,0 +1,19 @@
+/* QrCode: dark modules on a light ground in either theme (the code carries data-theme="light", so its tokens are the light
+   theme's), since not every scanner reads an inverted code. */
+.tf-qr { display: block; flex: none; width: var(--size-menu); max-width: 100%; height: auto; border-radius: var(--radius-md); }
+.tf-qr--sm { width: calc(var(--size-menu) / 2); }
+.tf-qr--fill { width: 100%; }
+.tf-qr__ground { fill: var(--surface); }
+.tf-qr__ink { fill: var(--tf-qr-ink, var(--text)); }
+.tf-qr__frame { stroke: var(--tf-qr-ink, var(--text)); }
+.tf-qr__label { fill: var(--tf-qr-ink, var(--text)); font-family: var(--font-sans); }
+/* In a dark app a white tile glares: the ground steps down to the light theme's border-strong, still about 10 to 1 against the ink. */
+[data-theme='dark'] .tf-qr__ground { fill: var(--border-strong); }
+/* Paper keeps white for print; clear lets the caller's tile be the ground. After the dark rule, so they win at equal weight. */
+.tf-qr--ground-paper .tf-qr__ground { fill: var(--surface); }
+.tf-qr--ground-clear .tf-qr__ground { fill: none; }
+
+/* With a column beside it: side by side where there is room, the column under the code where there isn't. */
+.tf-qr-layout { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-16); }
+.tf-qr-layout > .tf-qr { width: calc(var(--size-menu) * 5 / 6); }
+.tf-qr-layout__aside { display: flex; flex: 1 1 calc(var(--size-menu) * 5 / 6); flex-direction: column; gap: var(--space-12); min-width: 0; }

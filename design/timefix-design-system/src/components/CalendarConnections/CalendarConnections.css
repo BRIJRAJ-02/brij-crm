@@ -1,0 +1,63 @@
+/* Connected calendars. A new account drops in at the top of the list; a finished connect draws its tick. */
+.tf-calconn { display: flex; flex-direction: column; gap: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
+.tf-calconn__list { list-style: none; margin: 0; padding: 0; border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); }
+.tf-calconn__row { display: grid; grid-template-rows: 1fr; }
+.tf-calconn__row + .tf-calconn__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-calconn__row.is-new { animation: tf-calconn-drop var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-calconn-drop { from { grid-template-rows: 0fr; opacity: 0; } }
+.tf-calconn__row.is-new .tf-calconn__row-inner { animation: tf-calconn-rise var(--duration-fast) var(--ease-smooth-out), tf-calconn-wash calc(var(--duration-very-slow) * 2) var(--ease-in-out); }
+@keyframes tf-calconn-rise { from { transform: translateY(var(--distance-medium)); } }
+@keyframes tf-calconn-wash { from, 30% { background: var(--accent-soft); } }
+.tf-calconn__row-inner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-12); min-height: 0; overflow: hidden; padding: var(--space-12) var(--space-16); }
+.tf-calconn__row:first-child .tf-calconn__row-inner { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.tf-calconn__tile { display: grid; place-items: center; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); box-shadow: inset 0 0 0 1px var(--border-subtle); color: var(--text); font: 500 15px/1 var(--font-sans); }
+.tf-calconn__who { display: flex; flex-direction: column; min-width: 0; }
+.tf-calconn__email { font: 500 14px/20px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-calconn__sub { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-calconn__status { display: inline-flex; }
+/* A status that just changed pops in once. */
+.tf-calconn__status[data-changed] { animation: tf-calconn-pop var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-calconn-pop { from { opacity: 0; transform: scale(var(--scale-large)); } }
+.tf-calconn__end { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); min-width: calc(var(--size-menu) * 0.75); font-size: 13px; }
+/* The account's calendar count opens its calendars; each one sets conflicts, the week, logging and a colour. */
+.tf-calconn__toggle { display: inline-flex; align-items: center; white-space: nowrap; gap: var(--space-4); width: fit-content; margin: 0; padding: 0; border: 0; border-radius: var(--radius-xs); background: none; cursor: pointer; text-align: left; }
+@media (hover: hover) and (pointer: fine) { .tf-calconn__toggle:hover { color: var(--text); } }
+.tf-calconn__toggle:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: var(--space-2); }
+.tf-calconn__chev { transition: transform var(--duration-quick) var(--ease-out); }
+.tf-calconn__toggle[aria-expanded='true'] .tf-calconn__chev { transform: rotate(180deg); }
+.tf-calconn__cals { display: flex; flex-direction: column; margin: 0; padding: 0 var(--space-16) var(--space-12) calc(var(--space-16) + var(--size-control) + var(--space-12)); list-style: none; animation: tf-calconn-swap var(--duration-quick) var(--ease-out); }
+.tf-calconn__cal { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-8) var(--space-12); padding: var(--space-6) 0; }
+.tf-calconn__cal + .tf-calconn__cal { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-calconn__calname { overflow: hidden; font: 400 14px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-calconn__calopts { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-16); font-size: 13px; }
+.tf-calconn__dot { display: inline-block; flex: none; width: var(--space-12); height: var(--space-12); padding: 0; border: 0; border-radius: var(--radius-full); background: var(--tag-gray-text); cursor: pointer; }
+.tf-calconn__dot[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: var(--space-2); }
+.tf-calconn__dot--sm { width: var(--space-8); height: var(--space-8); cursor: default; }
+.tf-calconn__dot[data-hue='blue'] { background: var(--tag-blue-text); } .tf-calconn__dot[data-hue='green'] { background: var(--tag-green-text); } .tf-calconn__dot[data-hue='purple'] { background: var(--tag-purple-text); }
+.tf-calconn__dot[data-hue='orange'] { background: var(--tag-orange-text); } .tf-calconn__dot[data-hue='red'] { background: var(--tag-red-text); } .tf-calconn__dot[data-hue='sky'] { background: var(--tag-sky-text); }
+.tf-calconn__dot[data-hue='yellow'] { background: var(--tag-yellow-text); } .tf-calconn__dot[data-hue='lime'] { background: var(--tag-lime-text); }
+
+.tf-calconn__add { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-8); padding: 0 var(--space-4); }
+.tf-calconn__add-label { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-calconn__providers { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-calconn__label { display: inline-block; animation: tf-calconn-swap var(--duration-quick) var(--ease-in-out); }
+@keyframes tf-calconn-swap { from { opacity: 0; } }
+/* 10 success check: fade, turn from 80deg, fades in and draw. */
+.tf-calconn__check { display: block; overflow: visible; color: var(--success); animation: tf-calconn-check-in var(--duration-very-slow) var(--ease-smooth-out) both; }
+.tf-calconn__check path { stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: tf-calconn-draw var(--duration-very-slow) var(--ease-smooth-out) var(--duration-micro) forwards; }
+@keyframes tf-calconn-check-in { from { opacity: 0; transform: rotate(80deg); } }
+@keyframes tf-calconn-draw { to { stroke-dashoffset: 0; } }
+
+@container (max-width: 34rem) {
+  .tf-calconn__row-inner { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tf-calconn__end { grid-column: 2 / -1; justify-content: flex-start; min-width: 0; }
+  .tf-calconn__cals { padding-left: var(--space-16); }
+  .tf-calconn__cal { grid-template-columns: auto minmax(0, 1fr); }
+  .tf-calconn__calopts { grid-column: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-calconn__row.is-new, .tf-calconn__row.is-new .tf-calconn__row-inner, .tf-calconn__status, .tf-calconn__label, .tf-calconn__check, .tf-calconn__cals { animation: none; }
+  .tf-calconn__chev { transition: none; }
+  .tf-calconn__check path { animation: none; stroke-dashoffset: 0; }
+}

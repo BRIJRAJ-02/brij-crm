@@ -1,0 +1,9 @@
+.tf-time-select { width: calc(var(--size-control) * 3.5); }
+.tf-time { display: flex; flex-direction: column; min-width: 0; }
+.tf-time__field { width: calc(var(--size-control) * 3.5); gap: 0; font-variant-numeric: tabular-nums; cursor: text; }
+.tf-time[data-invalid] .tf-time__field { box-shadow: inset 0 0 0 1px var(--danger); }
+.tf-time__seg { padding: 0 1px; border-radius: var(--radius-xs); outline: none; caret-color: transparent; }
+.tf-time__seg[data-placeholder] { color: var(--text-tertiary); }
+.tf-time__seg[data-type='literal'] { color: var(--text-tertiary); padding: 0; }
+.tf-time__seg[data-type='dayPeriod'] { margin-left: var(--space-4); }
+.tf-time__seg[data-focused] { background: var(--accent); color: var(--on-accent); }

@@ -1,0 +1,49 @@
+.tf-feed { display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-feed__day { margin: var(--space-12) 0 var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-feed__day:first-child { margin-top: 0; }
+.tf-feed__list { margin: 0; padding: 0; list-style: none; }
+.tf-feed__item { position: relative; display: grid; grid-template-columns: var(--size-icon-lg) minmax(0, 1fr); gap: var(--space-12); padding: var(--space-6) 0; }
+/* The thread between markers. */
+.tf-feed__item::before { content: ''; position: absolute; left: calc(var(--size-icon-lg) / 2); top: calc(var(--space-6) + var(--size-icon-lg) + var(--space-4)); bottom: calc(var(--space-4) * -1); width: 1px; background: var(--border-subtle); }
+.tf-feed__li:last-child .tf-feed__item::before { display: none; }
+.tf-feed__marker { display: grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); }
+.tf-feed__well { display: inline-grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); box-shadow: 0 0 0 2px var(--surface); }
+.tf-feed__well svg { width: 12px; height: 12px; }
+.tf-feed__well--time { background: var(--accent-soft); color: var(--accent-text); }
+.tf-feed__main { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.tf-feed__line { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-feed__text { flex: 1; min-width: 0; }
+.tf-feed__text strong { font-weight: 500; color: var(--text); }
+.tf-feed__time { flex: none; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tf-feed__comment { margin: 0; padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); font: 400 14px/20px var(--font-sans); color: var(--text); white-space: pre-wrap; }
+.tf-feed__preview { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tf-feed__diffs { display: flex; flex-direction: column; gap: var(--space-4); align-items: flex-start; }
+.tf-feed__more { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-6); width: 100%; }
+.tf-feed__more-panel { height: var(--disclosure-panel-height); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); width: 100%; }
+.tf-feed__more-inner { display: flex; flex-direction: column; gap: var(--space-4); opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-feed__more[data-expanded] > .tf-feed__more-panel > .tf-feed__more-inner, .tf-feed__older[data-expanded] > .tf-feed__more-panel > .tf-feed__more-inner { opacity: 1; }
+.tf-feed__pill { display: inline-flex; align-items: center; gap: var(--space-4); height: 24px; padding: 0 var(--space-8); border: 0; border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-feed__pill[data-hovered] { background: var(--surface-selected); color: var(--text); }
+.tf-feed__pill[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-feed__older { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); margin-top: var(--space-8); }
+.tf-feed__pill--older { margin-left: calc(var(--size-icon-lg) + var(--space-12)); }
+.tf-feed__chev { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-feed__older[data-expanded] .tf-feed__chev { transform: scaleY(-1); }
+
+/* Diff rows: attribute, old (quiet), arrow, new. */
+.tf-diff { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-6); min-height: 26px; }
+.tf-diff__attr { display: inline-flex; align-items: center; gap: var(--space-4); min-width: 96px; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-diff__old { display: inline-flex; opacity: 0.6; }
+.tf-diff__arrow { color: var(--text-tertiary); flex: none; }
+.tf-diff__new { display: inline-flex; }
+
+/* Demo */
+.tf-feed-demo { max-width: var(--size-measure); }
+.tf-feed-demo__bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-feed__more-panel, .tf-feed__more-inner, .tf-feed__pill, .tf-feed__chev { transition: none; }
+}
+
+/* An event's own control (a ⋯ menu) sits after its time. */
+.tf-feed__acts { display: inline-flex; flex: none; align-self: center; margin-left: var(--space-4); }

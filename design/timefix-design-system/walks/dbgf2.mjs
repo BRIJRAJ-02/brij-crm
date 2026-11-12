@@ -1,0 +1,13 @@
+import { createRequire } from 'node:module';
+const require = createRequire('/Users/brijraj/Desktop/brijraj/crm/packages/ui/package.json');
+const { chromium } = require('playwright');
+const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1440, height: 900 } }); p.setDefaultTimeout(4000);
+await p.goto('http://127.0.0.1:5391/app.html?r=' + Date.now()); await p.waitForTimeout(1500);
+await p.locator('nav').getByText('Companies', { exact: true }).locator('visible=true').first().click(); await p.waitForTimeout(500);
+await p.locator('.tf-fbar button').first().click(); await p.waitForTimeout(400);
+for (let i = 0; i < 2; i++) await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+console.log('step2', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('[role=dialog]')].map((e) => e.textContent.slice(0, 200)))));
+await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+console.log('step3', JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('[role=dialog]')].map((e) => e.textContent.slice(0, 300)))));
+await p.screenshot({ path: '/private/tmp/claude-501/-Users-brijraj-Desktop-brijraj-crm/6d00fdda-415e-4de5-9bf6-b1c0f80cd086/scratchpad/proto/rt/sweep/dbgf2.png' });
+await b.close();

@@ -1,0 +1,29 @@
+.tf-notes { display: flex; flex-direction: column; gap: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-notes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tf-notes__title { margin: 0; font: 500 14px/20px var(--font-sans); display: inline-flex; align-items: center; gap: var(--space-6); }
+.tf-notes__count { font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tf-notes__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+/* A card never grows past its column: long titles and meta end in an ellipsis instead of spilling under the next card. */
+.tf-notes__grid > li, .tf-notes__grid > li > * { min-width: 0; }
+.tf-note-card { min-width: 0; }
+.tf-note-card__meta > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tf-note-card__meta > :first-child { flex: none; }
+.tf-notes__empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); padding: var(--space-24) var(--space-16); border: var(--border-width-hairline) dashed var(--border-strong); border-radius: var(--radius-lg); text-align: center; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-notes__empty strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-notes__empty svg { color: var(--text-tertiary); margin-bottom: var(--space-4); }
+
+.tf-note-card { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; padding: var(--space-12); border: 0; border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-subtle), var(--shadow-xs); text-align: left; color: var(--text); font: inherit; cursor: pointer; outline: none; transition: box-shadow var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-note-card[data-hovered] { box-shadow: inset 0 0 0 1px var(--border), var(--shadow-sm); }
+.tf-note-card[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-note-card__title { font: 500 14px/20px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-note-card__preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-note-card__meta { display: flex; align-items: center; gap: var(--space-6); margin-top: var(--space-4); font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; overflow: hidden; }
+
+.tf-note-save { display: inline-flex; align-items: center; min-width: 72px; justify-content: flex-end; margin-left: auto; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+
+.tf-notes__page { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-12) var(--space-16) var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-subtle), var(--shadow-xs); color: var(--text); }
+.tf-notes__bar { display: flex; align-items: center; gap: var(--space-8); padding-bottom: var(--space-8); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-notes__meta { display: flex; align-items: center; gap: var(--space-6); margin: 0; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+
+@media (prefers-reduced-motion: reduce) { .tf-note-card { transition: none; } .tf-note-card[data-pressed] { transform: none; } }
+.tf-notes__delete { margin-left: auto; }

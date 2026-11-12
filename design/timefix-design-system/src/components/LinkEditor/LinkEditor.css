@@ -1,0 +1,114 @@
+/* The link page editor: blocks (or the edit panel) on the left, a phone preview on the right, PublishBar floating. */
+.tf-linked-host { container-type: inline-size; }
+.tf-linked {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--space-24);
+  height: calc(var(--size-dialog) * 1.5); color: var(--text); font: 400 14px/20px var(--font-sans);
+}
+
+/* 08 page side-by-side between the list and the edit panel. */
+.tf-linked__side { display: grid; min-height: 0; overflow: clip; overflow-clip-margin: var(--space-6); }
+.tf-linked__pane {
+  grid-area: 1 / 1; display: flex; flex-direction: column; min-height: 0; opacity: 0; visibility: hidden; 
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast);
+}
+.tf-linked__pane[data-pos='before'] { transform: translateX(calc(var(--distance-base) * -1)); }
+.tf-linked__pane[data-pos='after'] { transform: translateX(var(--distance-base)); }
+.tf-linked__pane[data-pos='current'] { opacity: 1; visibility: visible; transform: none; filter: none; transition-delay: 0s; }
+
+.tf-linked__list { display: flex; flex-direction: column; gap: var(--space-12); min-height: 0; height: 100%; overflow-y: auto; padding: var(--space-2) var(--space-2) calc(var(--size-control-lg) + var(--space-32)); }
+.tf-linked__section { display: flex; flex-direction: column; padding: var(--space-12); border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+/* 21 accordion: the Custom colour opens under the looks. */
+.tf-linked__custom { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__custom[data-open] { grid-template-rows: 1fr; }
+.tf-linked__custom-clip { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__custom[data-open] .tf-linked__custom-clip { opacity: 1; filter: none; padding-top: var(--space-12); }
+
+.tf-linked__profile {
+  display: flex; align-items: center; gap: var(--space-12); width: 100%; min-height: var(--size-row); padding: var(--space-12); border: 0; border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); color: var(--text); text-align: left; cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-linked__profile[data-hovered] { background: var(--surface-hover); }
+.tf-linked__profile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+.tf-linked__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-4); }
+.tf-linked__heading { margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+.tf-linked__blocks { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; outline: none; }
+.tf-linked__row {
+  position: relative; display: grid; grid-template-rows: 1fr; border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
+  cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .tf-linked__row:hover { background: var(--surface-hover); } }
+.tf-linked__row:has(.tf-linked__open:focus-visible) { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* Pressing a block opens it; its grip and switch sit above that press. */
+.tf-linked__open { position: absolute; inset: 0; z-index: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; outline: none; }
+.tf-linked__rowin { position: relative; z-index: 1; pointer-events: none; }
+.tf-linked__rowin > .tf-drag-handle, .tf-linked__rowin > .tf-switch, .tf-linked__rowin > :last-child { pointer-events: auto; }
+.tf-linked__row.is-hidden .tf-linked__title, .tf-linked__row.is-hidden .tf-linked__tile { opacity: var(--opacity-disabled); }
+/* A new block drops in at the top; a changed one gets a brief accent wash. */
+.tf-linked__row.is-new { animation: tf-linked-open var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__row.is-new .tf-linked__rowin { animation: tf-linked-rise var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__row.is-changed { animation: tf-linked-wash var(--duration-very-slow) var(--ease-out); }
+@keyframes tf-linked-open { from { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes tf-linked-rise { from { transform: translateY(var(--distance-medium)); } }
+@keyframes tf-linked-wash { from { background: var(--accent-soft); } }
+.tf-linked__rowin { display: flex; align-items: center; gap: var(--space-8); min-height: calc(var(--size-row) + var(--space-12)); min-width: 0; padding: 0 var(--space-12) 0 var(--space-4); overflow: hidden; }
+.tf-linked__tile { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-linked__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-linked__title { font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linked__sub { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linked__undo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin: 0; padding: 0 var(--space-4) 0 var(--space-12); min-height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); animation: tf-linked-fade var(--duration-quick) var(--ease-in-out); }
+@keyframes tf-linked-fade { from { opacity: 0; } }
+/* 09 icon swap: the detected network's mark swaps in. */
+.tf-linked__detected { display: grid; place-items: center; animation: tf-linked-swap var(--duration-fast) var(--ease-in-out) both; }
+@keyframes tf-linked-swap { from { opacity: 0; transform: scale(0.25); } }
+
+/* The phone preview. */
+.tf-linked__preview { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); min-height: 0; }
+.tf-linked__preview-label { margin: 0; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-linked__phone {
+  flex: 1; min-height: 0; width: 100%; max-width: calc(var(--size-menu) * 1.5); overflow-y: auto; overscroll-behavior: contain;
+  border-radius: calc(var(--radius-xl) * 2); border: var(--space-6) solid var(--surface-inverse); background: var(--canvas); box-shadow: var(--shadow-md);
+}
+
+@container (max-width: 48rem) {
+  .tf-linked { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .tf-linked__side { height: calc(var(--size-dialog) * 1.2); }
+  .tf-linked__phone { height: calc(var(--size-dialog) * 1.3); flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-linked__pane, .tf-linked__custom, .tf-linked__custom-clip, .tf-linked__profile, .tf-linked__row { transition: none; }
+  .tf-linked__row.is-new, .tf-linked__row.is-new .tf-linked__rowin, .tf-linked__row.is-changed, .tf-linked__undo, .tf-linked__detected { animation: none; }
+}
+.tf-linked__faq { display: flex; flex-direction: column; gap: var(--space-8); padding-bottom: var(--space-12); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-linked__note { margin: 0; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+/* Wave D1: Design and Details beside each other, Import, the archived list, photos, more options, the import review. */
+.tf-linked__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+.tf-linked__mini { min-height: var(--size-row); padding: var(--space-8) var(--space-12); }
+.tf-linked__baracts { display: inline-flex; align-items: center; gap: var(--space-4); }
+.tf-linked__archived { display: flex; flex-direction: column; gap: var(--space-6); margin: var(--space-8) 0 0; padding: 0; list-style: none; }
+.tf-linked__archived li { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-linked__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-linked__label { color: var(--text); font: 500 13px/20px var(--font-sans); }
+.tf-linked__photo { display: flex; align-items: center; gap: var(--space-12); }
+.tf-linked__photoacts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-linked__switch { padding: 0; }
+.tf-linked__switch > span { display: flex; flex-direction: column; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-linked__share { width: calc(var(--size-control-lg) * 3); aspect-ratio: 1.91; object-fit: cover; border-radius: var(--radius-md); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-linked__thumbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.tf-linked__thumbs li { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
+.tf-linked__thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-md); }
+.tf-linked__more { display: flex; flex-direction: column; padding-top: var(--space-4); }
+/* More options' groups (Look, When and who) under small headings, a hairline between them; set values show as chips above the fold. */
+.tf-linked__sec { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-12) 0 var(--space-16); }
+.tf-linked__sec:last-child { padding-bottom: 0; }
+.tf-linked__sec + .tf-linked__sec { border-top: var(--border-width-hairline) solid var(--border-subtle); padding-top: var(--space-16); }
+.tf-linked__sec-title { margin: 0; color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
+.tf-linked__chips { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.tf-linked__pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+.tf-linked__foot { display: inline-flex; gap: var(--space-4); }
+.tf-linked__found { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-linked__found ul { display: flex; flex-direction: column; gap: var(--space-8); max-height: calc(var(--size-control-lg) * 6); margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.tf-linked__found .tf-tag { align-self: flex-start; }

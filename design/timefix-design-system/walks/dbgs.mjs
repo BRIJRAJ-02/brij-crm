@@ -1,0 +1,7 @@
+import { open, out } from './head.mjs';
+const { p, nav, workspace, done } = await open('light');
+await workspace('Tables'); await p.waitForTimeout(600);
+const find = () => p.evaluate(() => { const H = innerHeight; const hits = []; for (const el of document.querySelectorAll('body *')) { const r = el.getBoundingClientRect(); if (r.bottom > H + 2 && r.height > 0) { const cs = getComputedStyle(el); if (cs.position !== 'absolute' && cs.position !== 'fixed') continue; let cb = el.offsetParent; let inside = false; let a2 = el.parentElement; while (a2 && a2 !== cb) { a2 = a2.parentElement; } if (cb && cb !== document.body) { let q = cb; while (q) { const o = getComputedStyle(q).overflowY; if (o !== 'visible') { inside = true; break; } q = q.parentElement; } } if (inside) continue; hits.push(`ABS ${el.tagName}.${String(el.className).slice(0, 50)} id=${el.id} bottom=${Math.round(r.bottom)} cb=${cb?.className?.toString().slice(0, 40)}`); continue; let pos = cs.position; let a = el.parentElement; let scrolled = false; while (a) { const o = getComputedStyle(a).overflowY; if (o === 'auto' || o === 'scroll' || o === 'hidden' || o === 'clip') { scrolled = true; break; } a = a.parentElement; } if (!scrolled) hits.push(`${el.tagName}.${String(el.className).slice(0, 60)} bottom=${Math.round(r.bottom)} pos=${pos}`); } } return [document.scrollingElement.scrollHeight - H, hits.slice(0, 8)]; });
+console.log('home', JSON.stringify(await find()));
+await nav('Availability'); await p.waitForTimeout(600); console.log('avail', JSON.stringify(await find()));
+await done();

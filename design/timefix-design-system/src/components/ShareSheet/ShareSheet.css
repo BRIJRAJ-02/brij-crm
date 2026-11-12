@@ -1,0 +1,10 @@
+/* ShareSheet: the one share dialog. */
+.tf-share { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-share__link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding: var(--space-12) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-share__url { overflow: hidden; color: var(--text); font: 500 15px/22px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-share__send, .tf-share__row, .tf-share__extra { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-share__qr { display: flex; align-items: center; gap: var(--space-16); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); }
+.tf-share__qrbtns { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); }
+.tf-share__muted { color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-share__extra { padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-share__foot { display: flex; align-items: center; gap: var(--space-4); margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }

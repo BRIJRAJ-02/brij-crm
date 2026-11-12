@@ -1,0 +1,40 @@
+.tf-menu { display: flex; flex-direction: column; outline: none; max-height: inherit; overflow: auto; }
+.tf-menu__section { display: flex; flex-direction: column; }
+.tf-menu__header { padding: var(--space-8) var(--space-8) var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-menu__sep { height: 1px; margin: var(--space-6) calc(var(--space-6) * -1); border: 0; background: var(--border-subtle); flex: none; }
+.tf-menu__empty { padding: var(--space-8); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+/* A row washes instead of scaling (house detail 7). */
+.tf-menu__item {
+  display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-8);
+  border-radius: var(--radius-md); color: var(--text); font: 400 14px/20px var(--font-sans); cursor: default; outline: none; user-select: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-menu__item--tall { padding-block: var(--space-6); align-items: flex-start; }
+.tf-menu__item--tall .tf-menu__icon { margin-top: var(--space-2); }
+.tf-menu__item[data-focused], .tf-menu__item[data-open] { background: var(--surface-hover); }
+.tf-menu__item[data-pressed] { background: var(--surface-selected); }
+.tf-menu__item[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-menu__item[data-disabled] { opacity: var(--opacity-disabled); }
+.tf-menu__icon { display: inline-grid; place-items: center; flex: none; width: var(--size-icon); color: var(--text-secondary); }
+.tf-menu__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-menu__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-menu__desc { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-menu__chev { flex: none; color: var(--text-tertiary); margin-right: calc(var(--space-2) * -1); }
+.tf-menu__item--danger, .tf-menu__item--danger .tf-menu__icon { color: var(--danger); }
+.tf-menu__item--danger[data-focused] { background: var(--danger-soft); }
+
+/* The trailing tick draws itself when picked (transitions.dev 25 checkbox check, stroke draw), then the menu closes 120ms later. */
+.tf-menu__check { flex: none; fill: none; stroke: var(--accent); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+.tf-menu__check path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset var(--duration-micro) var(--ease-smooth-out); }
+.tf-menu__item[data-selected] .tf-menu__check path { stroke-dashoffset: 0; transition-duration: var(--duration-quick); }
+.tf-menu__item[data-selected] .tf-menu__label { font-weight: 500; }
+
+/* ContextMenu: the row stays washed while its menu is open; the anchor is a point at the pointer. */
+.tf-ctx { border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-ctx[data-open] { background: var(--surface-selected); }
+.tf-ctx__anchor { position: fixed; width: 0; height: 0; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-menu__item, .tf-ctx, .tf-menu__check path { transition: none; }
+}

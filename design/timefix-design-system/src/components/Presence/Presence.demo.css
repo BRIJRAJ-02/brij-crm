@@ -1,0 +1,5 @@
+.tf-presence-demo__title { font: 500 14px/20px var(--font-sans); }
+.tf-presence-demo__board { position: relative; display: flex; gap: var(--space-12); height: calc(var(--size-row) * 4.5); padding: var(--space-16); overflow: hidden; border-radius: var(--radius-lg); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-presence-demo__card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-6); width: var(--size-menu); height: max-content; padding: var(--space-12); border-radius: var(--radius-md); border: var(--border-width-hairline) solid var(--border-subtle); box-shadow: var(--shadow-xs); font: 400 13px/20px var(--font-sans); }
+.tf-presence-demo__card strong { font: 500 14px/20px var(--font-sans); }
+.tf-presence-demo__note { margin: 0; padding: var(--space-20) var(--space-16) var(--space-12); border-radius: var(--radius-lg); background: var(--surface); font: 400 14px/24px var(--font-sans); }

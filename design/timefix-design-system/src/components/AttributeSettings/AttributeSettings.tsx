@@ -1,0 +1,415 @@
+import { Button as AriaButton, Radio, RadioGroup, type DropTarget, type Key } from 'react-aria-components';
+import { DragList } from '../../lib/drag.ts';
+import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Lock, Plus } from 'lucide-react';
+import { cx } from '../../lib/cx.ts';
+import { ATTRIBUTE_TYPES, AttributeIcon, AttributeField, type Attribute, type AttributeType, type AttributeValue } from '../AttributeField/AttributeField.tsx';
+import { ConfirmDialog, Dialog } from '../Dialog/Dialog.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
+import { Button } from '../Button/Button.tsx';
+import { TextField } from '../Field/Field.tsx';
+import { Select } from '../Select/Select.tsx';
+import { Switch } from '../Checkbox/Checkbox.tsx';
+import { Callout } from '../Callout/Callout.tsx';
+import { Tag, Count } from '../Tag/Tag.tsx';
+import { SettingsRow } from '../SettingsLayout/SettingsLayout.tsx';
+import { OptionsEditor, type EditableOption } from '../OptionsEditor/OptionsEditor.tsx';
+import { Collapse } from '../Motion/Motion.tsx';
+import './AttributeSettings.css';
+
+/* ------------------------------------------------------------------ model */
+
+/** How a number attribute reads: plain (1,240), two decimals (1,240.00) or compact (1.2K). */
+export type NumberFormat = 'plain' | 'decimal' | 'compact';
+
+/** An attribute as the schema holds it: the field system's Attribute plus its rules and settings. */
+export interface SchemaAttribute extends Attribute {
+  readonly isRequired?: boolean;
+  readonly isUnique?: boolean;
+  /** Made by Timefix (Name, Created at): its type can't change and it can't be archived. */
+  readonly isSystem?: boolean;
+  readonly numberFormat?: NumberFormat;
+  /** What new records start with. Undefined is none. */
+  readonly defaultValue?: AttributeValue;
+  /** Options of a select, multi-select or status, archived ones included. */
+  readonly options?: ReadonlyArray<EditableOption>;
+  /** Archived: out of tables, forms and record pages, values kept; the Archived list brings it back. */
+  readonly archived?: boolean;
+  /** Worked out, never typed: a formula over this record's numbers, a value looked up through a relationship, or a rollup of related records. */
+  readonly computed?: ComputedRule;
+  /** Links to another object's records: which object, one or many, and what the other side calls this link. */
+  readonly relation?: { readonly target: string; readonly many: boolean; readonly otherName: string };
+  /** Required only while another field has one value ("Lost reason when Stage is Lost"). */
+  readonly requiredWhen?: { readonly field: string; readonly is: string };
+}
+
+/** How a computed attribute gets its value. `via` names a relationship; `field` is the field read on the other side. */
+export type ComputedRule =
+  | { readonly kind: 'formula'; readonly source: string }
+  | { readonly kind: 'lookup'; readonly via: string; readonly field: string }
+  | { readonly kind: 'rollup'; readonly via: string; readonly field: string; readonly fn: 'count' | 'sum' | 'avg' | 'min' | 'max' };
+
+/** One line under each type in the type picker: what the type holds. */
+export const ATTRIBUTE_TYPE_HINTS: Readonly<Record<AttributeType, string>> = {
+  text: 'A short line: a title, a code', longText: 'Paragraphs: notes, a summary', number: 'Counts and amounts', currency: 'Money in one currency',
+  percent: 'A share out of 100', date: 'A day, no time', timestamp: 'Set by the system', checkbox: 'Yes or no', select: 'One choice from a list',
+  multiSelect: 'Several choices from a list', status: 'Stages grouped by progress', rating: 'One to five stars', email: 'An email address',
+  phone: 'A phone number', url: 'A link to a page', domain: 'A company website', location: 'A city and country', personalName: 'First and last name',
+  record: 'Links to another record', actor: 'A workspace member', file: 'Attachments',
+};
+
+/** The types a person can pick, in picker order. Timestamps are only made by the system. */
+export const PICKABLE_TYPES: ReadonlyArray<AttributeType> = [
+  'text', 'longText', 'number', 'currency', 'percent', 'date', 'checkbox', 'select', 'multiSelect', 'status', 'rating',
+  'email', 'phone', 'url', 'domain', 'location', 'personalName', 'record', 'actor', 'file',
+];
+
+/** Types the engine can keep unique (no two records share a value). Unique shows only for these. */
+export const UNIQUE_TYPES: ReadonlySet<AttributeType> = new Set<AttributeType>(['text', 'number', 'email', 'phone', 'url', 'domain']);
+
+const NO_DEFAULT: ReadonlySet<AttributeType> = new Set<AttributeType>(['timestamp', 'file', 'record', 'longText', 'personalName']);
+const OPTION_TYPES: ReadonlySet<AttributeType> = new Set<AttributeType>(['select', 'multiSelect', 'status']);
+
+/** Moves the dragged items to a drop target in a list of things with ids. Returns a new list; the old one is untouched. */
+export function reorder<T extends { readonly id: string }>(list: ReadonlyArray<T>, keys: ReadonlySet<Key>, target: DropTarget): ReadonlyArray<T> {
+  if (target.type !== 'item') return list;
+  const moving = list.filter((x) => keys.has(x.id));
+  const rest = list.filter((x) => !keys.has(x.id));
+  const at = rest.findIndex((x) => x.id === target.key);
+  if (at < 0) return list;
+  const i = target.dropPosition === 'after' ? at + 1 : at;
+  return [...rest.slice(0, i), ...moving, ...rest.slice(i)];
+}
+
+/* ------------------------------------------------------------ the list */
+
+/** Props for AttributeList. */
+export interface AttributeListProps {
+  readonly label: string;
+  readonly attributes: ReadonlyArray<SchemaAttribute>;
+  /** The new order, every id. */
+  readonly onReorder: (ids: ReadonlyArray<string>) => void;
+  /** Opens an attribute's settings (press a row, or Enter on it). */
+  readonly onEdit: (id: string) => void;
+  /** The id to mark as just changed: its row washes once. */
+  readonly changedId?: string;
+  /** An object's plural by id, for a relationship's Type column. */
+  readonly pluralOf?: (id: string) => string;
+}
+
+/** An object's attributes in order: drag a row by its grip (or Enter on the grip, arrows, Enter) to move it; press a row to edit it. */
+export function AttributeList({ label, attributes, onReorder, onEdit, changedId, pluralOf: objectName }: AttributeListProps) {
+  return (
+    <DragList ids={attributes.map((a) => a.id)} onReorder={(ids) => onReorder(ids)} textOf={(id) => attributes.find((a) => a.id === id)?.name ?? 'attribute'}
+      overlay={(id) => { const a = attributes.find((x) => x.id === id); return a ? <div className="tf-attributesettings__row"><DragHandle label="" reveal="always" size="sm" isLifted /><RowBody attribute={a} objectName={objectName} /></div> : null; }}>
+      <ul aria-label={label} className="tf-attributesettings__list">
+        {attributes.map((a) => (
+          <DragItem key={a.id} id={a.id} className="tf-attributesettings__row" aria-label={a.name}>
+            {(d) => <>
+              {changedId === a.id && <span key={`${a.id}-${a.name}-${a.type}`} className="tf-attributesettings__wash" aria-hidden="true" />}
+              <button type="button" className="tf-attributesettings__open" aria-label={`Edit ${a.name}`} onClick={() => onEdit(a.id)} />
+              <span className="tf-attributesettings__grip"><DragHandle label={`Move ${a.name}`} size="sm" isLifted={d.isDragging} drag={d.grip} /></span>
+              <RowBody attribute={a} objectName={objectName} />
+              <ChevronRight className="tf-attributesettings__chev" size={16} strokeWidth={1.75} aria-hidden="true" />
+            </>}
+          </DragItem>
+        ))}
+      </ul>
+    </DragList>
+  );
+}
+
+function RowBody({ attribute: a, objectName }: { readonly attribute: SchemaAttribute; readonly objectName?: (id: string) => string }) {
+  return (
+    <span className="tf-attributesettings__body">
+      <span className="tf-attributesettings__icon"><AttributeIcon type={a.type} /></span>
+      <span className="tf-attributesettings__name">{a.name}</span>
+      <span className="tf-attributesettings__type">{typeLabel(a, objectName)}</span>
+      <span className="tf-attributesettings__badges">
+        {a.isRequired && <Tag size="sm">Required</Tag>}
+        {!a.isRequired && a.requiredWhen && <Tag size="sm">Required when</Tag>}
+        {a.isUnique && <Tag size="sm">Unique</Tag>}
+        {a.isSystem && <span className="tf-attributesettings__system"><Lock size={12} strokeWidth={1.75} aria-hidden="true" />System</span>}
+      </span>
+    </span>
+  );
+}
+
+/** What the Type column says: the type, or how a computed or linking attribute works. */
+export function typeLabel(a: SchemaAttribute, objectName?: (id: string) => string): string {
+  if (a.computed) return a.computed.kind === 'formula' ? 'Formula' : a.computed.kind === 'lookup' ? 'Lookup' : 'Rollup';
+  if (a.relation) return `→ ${objectName?.(a.relation.target) ?? 'Records'} · ${a.relation.many ? 'many' : 'one'}`;
+  return ATTRIBUTE_TYPES[a.type].label;
+}
+
+/* ------------------------------------------------------------ type picker */
+
+/** Props for AttributeTypePicker. */
+export interface AttributeTypePickerProps {
+  readonly value: AttributeType;
+  readonly onChange: (type: AttributeType) => void;
+  readonly types?: ReadonlyArray<AttributeType>;
+  readonly isDisabled?: boolean;
+}
+
+/** Every type as a card with its icon and one line, two to a row. Arrows move between them and choose. */
+export function AttributeTypePicker({ value, onChange, types = PICKABLE_TYPES, isDisabled }: AttributeTypePickerProps) {
+  return (
+    <RadioGroup aria-label="Type" value={value} onChange={(v) => onChange(v as AttributeType)} isDisabled={isDisabled} className="tf-attributesettings-typepick">
+      {types.map((t) => (
+        <Radio key={t} value={t} className="tf-attributesettings-typepick__card">
+          <span className="tf-attributesettings-typepick__icon"><AttributeIcon type={t} /></span>
+          <span className="tf-attributesettings-typepick__text">
+            <span className="tf-attributesettings-typepick__label">{ATTRIBUTE_TYPES[t].label}</span>
+            <span className="tf-attributesettings-typepick__hint">{ATTRIBUTE_TYPE_HINTS[t]}</span>
+          </span>
+        </Radio>
+      ))}
+    </RadioGroup>
+  );
+}
+
+/* ------------------------------------------------------------ the drawer */
+
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'SGD'].map((c) => ({ id: c, label: c, description: new Intl.DisplayNames('en', { type: 'currency' }).of(c) }));
+const FORMATS = [{ id: 'plain', label: '1,240', description: 'Whole numbers' }, { id: 'decimal', label: '1,240.00', description: 'Two decimals' }, { id: 'compact', label: '1.2K', description: 'Short' }];
+
+/** Props for AttributeDialog. */
+export interface AttributeDialogProps {
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  /** The object it belongs to, singular ("Deal"). */
+  readonly objectName: string;
+  /** The attribute to edit; leave out to create one. */
+  readonly attribute?: SchemaAttribute;
+  /** How many records hold a value, for the type change warning. */
+  readonly valueCount?: number;
+  /** Saves; the drawer shows Saved, then closes. */
+  readonly onSave: (attribute: SchemaAttribute) => void;
+  /** Archives (edit only, never for a system attribute). */
+  readonly onArchive?: (id: string) => void;
+  /** The object's other attributes: their selects and statuses can make this one "required when". */
+  readonly siblings?: ReadonlyArray<SchemaAttribute>;
+}
+
+const blank = (): SchemaAttribute => ({ id: `attr-${Date.now().toString(36)}`, name: '', type: 'text' });
+const same = (a: SchemaAttribute, b: SchemaAttribute) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Creates or edits one attribute in a dialog (the same surface as New object): name, type (cards with a line each), the type's own settings, its options, the default, Required and Unique. Changing an existing type warns first. */
+export function AttributeDialog({ isOpen, onOpenChange, objectName, attribute, valueCount, onSave, onArchive, siblings = [] }: AttributeDialogProps) {
+  const start = useRef(attribute ?? blank()).current;
+  const [draft, setDraft] = useState<SchemaAttribute>(start);
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showTypes, setShowTypes] = useState(attribute === undefined);
+  const [nameError, setNameError] = useState(false);
+  const isNew = attribute === undefined;
+  const set = (patch: Partial<SchemaAttribute>) => setDraft((d) => ({ ...d, ...patch }));
+  const dirty = !same(draft, start);
+  const typeChanged = !isNew && draft.type !== start.type;
+
+  const pickType = (type: AttributeType) => setDraft((d) => ({
+    ...d, type, defaultValue: undefined, isUnique: UNIQUE_TYPES.has(type) ? d.isUnique : false,
+    currency: type === 'currency' ? (d.currency ?? 'USD') : d.currency,
+    options: OPTION_TYPES.has(type) ? (d.options && d.options.length > 0 ? d.options : starterOptions(type)) : d.options,
+  }));
+  const save = () => {
+    if (draft.name.trim() === '') { setNameError(true); return; }
+    setPhase('saving');
+    window.setTimeout(() => { onSave({ ...draft, name: draft.name.trim() }); setPhase('saved'); onOpenChange(false); }, 400);
+  };
+  const live = draft.options?.filter((o) => !o.archived);
+  const fieldAttr: Attribute = { id: `${draft.id}-default`, name: 'Default value', type: draft.type, options: live, currency: draft.currency };
+
+  return (
+    <Dialog
+      isOpen={isOpen} onOpenChange={onOpenChange} size="wide"
+      title={isNew ? `New ${objectName.toLowerCase()} attribute` : draft.name || start.name}
+      actions={<>
+        {!isNew && !start.isSystem && onArchive ? <Button variant="ghost" className="tf-attributesettings__archive" onPress={() => { onArchive(start.id); onOpenChange(false); }}>Archive</Button> : null}
+        <Button variant="ghost" slot="close">Cancel</Button>
+        <Button variant="primary" isPending={phase === 'saving'} isDisabled={!isNew && !dirty} onPress={save}>{isNew ? 'Create attribute' : 'Save'}</Button>
+      </>}
+    >
+      <TextField
+        label="Name" value={draft.name} autoFocus={isNew} placeholder="Deal value" isRequired
+        onChange={(v) => { set({ name: v }); if (v.trim()) setNameError(false); }}
+        isInvalid={nameError} errorMessage="Give the attribute a name."
+      />
+
+      <section className="tf-attributesettings__group" aria-label="Type">
+        <div className="tf-attributesettings__grouphead">
+          <span className="tf-attributesettings__grouplabel">Type</span>
+          {!isNew && !start.isSystem && <Button size="sm" variant="ghost" onPress={() => setShowTypes((s) => !s)} aria-expanded={showTypes}>{showTypes ? 'Keep type' : 'Change type…'}</Button>}
+        </div>
+        {!showTypes && (
+          <div className="tf-attributesettings__current">
+            <span className="tf-attributesettings__icon"><AttributeIcon type={draft.type} /></span>
+            <span className="tf-attributesettings-typepick__text">
+              <span className="tf-attributesettings-typepick__label">{ATTRIBUTE_TYPES[draft.type].label}</span>
+              <span className="tf-attributesettings-typepick__hint">{ATTRIBUTE_TYPE_HINTS[draft.type]}</span>
+            </span>
+            {start.isSystem && <Lock className="tf-attributesettings__lock" size={14} strokeWidth={1.75} aria-label="Set by Timefix" />}
+          </div>
+        )}
+        <Collapse open={showTypes}>
+          <AttributeTypePicker value={draft.type} onChange={pickType} />
+        </Collapse>
+        {start.isSystem && <Callout tone="neutral">{start.name} is made by Timefix, so its type stays {ATTRIBUTE_TYPES[start.type].label.toLowerCase()}.</Callout>}
+        <Collapse open={typeChanged}>
+          <Callout tone="warning" title={`Change ${start.name || 'it'} to ${ATTRIBUTE_TYPES[draft.type].label.toLowerCase()}?`}>
+            {valueCount !== undefined ? `${valueCount.toLocaleString('en-US')} values convert when you save.` : 'Every value converts when you save.'} Values that don&apos;t fit become empty, and views filtered by it may stop matching.
+          </Callout>
+        </Collapse>
+      </section>
+
+      <Collapse open={draft.type === 'currency'}>
+        <Select label="Currency" items={CURRENCIES} value={draft.currency ?? 'USD'} onChange={(v) => v && set({ currency: v })} description="Values show its symbol. Changing it doesn't convert amounts." />
+      </Collapse>
+      <Collapse open={draft.type === 'number'}>
+        <Select label="Format" items={FORMATS} value={draft.numberFormat ?? 'plain'} onChange={(v) => v && set({ numberFormat: v as NumberFormat })} />
+      </Collapse>
+      {OPTION_TYPES.has(draft.type) && (
+        <OptionsEditor kind={draft.type === 'status' ? 'status' : 'select'} label={draft.type === 'status' ? 'Stages' : 'Options'} options={draft.options ?? []} onChange={(options) => set({ options })} />
+      )}
+
+      {!NO_DEFAULT.has(draft.type) && (
+        <section className="tf-attributesettings__group" aria-label="Default value">
+          <span className="tf-attributesettings__grouplabel">Default value</span>
+          <div className="tf-attributesettings__default">
+            <AttributeField key={`${draft.type}-${draft.currency ?? ''}`} attribute={fieldAttr} value={draft.defaultValue} onChange={(v) => set({ defaultValue: v })} empty="None. Set a default…" />
+          </div>
+          <span className="tf-attributesettings__hint">New records start with it. People can change it.</span>
+        </section>
+      )}
+
+      <div className="tf-attributesettings__rules">
+        <SettingsRow title="Required" description={`A ${objectName.toLowerCase()} can't be saved without it.`} control={<Switch aria-label="Required" isSelected={draft.isRequired === true} onChange={(v) => set({ isRequired: v, requiredWhen: v ? undefined : draft.requiredWhen })} isDisabled={start.isSystem} />} />
+        {!draft.isRequired && !start.isSystem && (() => {
+          const gates = siblings.filter((x) => x.id !== draft.id && !x.archived && (x.type === 'select' || x.type === 'status') && (x.options ?? []).length > 0);
+          if (gates.length === 0) return null;
+          const gate = gates.find((x) => x.id === draft.requiredWhen?.field);
+          return (
+            <div className="tf-attributesettings__when">
+              <Select label="Required when" value={draft.requiredWhen?.field ?? 'never'} onChange={(v) => { const g = gates.find((x) => x.id === v); set({ requiredWhen: g ? { field: g.id, is: (g.options ?? []).find((o) => !o.archived)?.id ?? '' } : undefined }); }}
+                items={[{ id: 'never', label: 'Never' }, ...gates.map((x) => ({ id: x.id, label: x.name }))]} />
+              {gate && <Select label="is" value={draft.requiredWhen?.is ?? null} onChange={(v) => v && set({ requiredWhen: { field: gate.id, is: v } })} items={(gate.options ?? []).filter((o) => !o.archived).map((o) => ({ id: o.id, label: o.label, hue: o.hue }))} optionStyle="tag" />}
+            </div>
+          );
+        })()}
+        {UNIQUE_TYPES.has(draft.type) && (
+          <SettingsRow title="Unique" description={`No two ${objectName.toLowerCase()}s share a value. Imports match on it.`} control={<Switch aria-label="Unique" isSelected={draft.isUnique === true} onChange={(v) => set({ isUnique: v })} />} />
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
+const HUE_ORDER = ['blue', 'green', 'orange', 'purple', 'sky', 'yellow', 'red', 'lime', 'gray'] as const;
+function starterOptions(type: AttributeType): ReadonlyArray<EditableOption> {
+  if (type === 'status') {
+    return [
+      { id: 's-new', label: 'Not started', hue: 'gray', shape: 'draft', group: 'notStarted' },
+      { id: 's-doing', label: 'In progress', hue: 'orange', shape: 'progress', group: 'inProgress' },
+      { id: 's-done', label: 'Done', hue: 'green', shape: 'done', group: 'done' },
+    ];
+  }
+  return [{ id: 'o-1', label: 'Option 1', hue: HUE_ORDER[0] }];
+}
+
+/* ------------------------------------------------------------ the page part */
+
+/** Props for AttributeSettings. */
+export interface AttributeSettingsProps {
+  /** Singular and plural ("Deal", "Deals"). */
+  readonly objectName: string;
+  readonly objectPlural: string;
+  readonly attributes: ReadonlyArray<SchemaAttribute>;
+  readonly onChange: (attributes: ReadonlyArray<SchemaAttribute>) => void;
+  /** Values held per attribute id, for the type change warning. */
+  readonly valueCounts?: Readonly<Record<string, number>>;
+  /** What uses an attribute (views, forms, automations), said before it's archived. */
+  readonly usageOf?: (id: string) => ReadonlyArray<string>;
+  /** Adds the kinds that need their own dialog: formula, lookup, rollup, relationship. Shows "More kinds" beside New attribute. */
+  readonly onNewSpecial?: (kind: 'formula' | 'lookup' | 'rollup' | 'relationship') => void;
+  /** Opens a computed or linking attribute in its own dialog instead of the plain one. */
+  readonly onEditSpecial?: (attribute: SchemaAttribute) => void;
+  /** An object's plural by id, for a relationship's Type column. */
+  readonly pluralOf?: (id: string) => string;
+}
+
+/** An object's attributes on its settings page: the ordered list, New attribute, and the drawer that creates and edits them. */
+export function AttributeSettings({ objectName, objectPlural, attributes, onChange, valueCounts, usageOf, onNewSpecial, onEditSpecial, pluralOf: nameOfObject }: AttributeSettingsProps) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string>();
+  const [session, setSession] = useState(0);
+  const [changed, setChanged] = useState<string>();
+  const [archived, setArchived] = useState<{ readonly attribute: SchemaAttribute; readonly index: number }>();
+  const [asking, setAsking] = useState<SchemaAttribute>();
+  const live = attributes.filter((a) => !a.archived);
+  const gone = attributes.filter((a) => a.archived);
+  const openFor = (id?: string) => { const a = attributes.find((x) => x.id === id); if (a && (a.computed || a.relation) && onEditSpecial) { onEditSpecial(a); return; } setEditing(id); setSession((s) => s + 1); setOpen(true); };
+  const current = attributes.find((a) => a.id === editing);
+  const archive = (a: SchemaAttribute) => { const index = attributes.findIndex((x) => x.id === a.id); setArchived({ attribute: a, index }); onChange(attributes.map((x) => (x.id === a.id ? { ...x, archived: true } : x))); };
+  const uses = asking ? usageOf?.(asking.id) ?? [] : [];
+  return (
+    <section className="tf-attributesettings" aria-labelledby="tf-attributesettings-title">
+      <header className="tf-attributesettings__head">
+        <div className="tf-attributesettings__titles">
+          <h2 id="tf-attributesettings-title" className="tf-attributesettings__title">Attributes <Count>{live.length}</Count></h2>
+          <p className="tf-attributesettings__desc">What every {objectName.toLowerCase()} holds, in the order record pages show it.</p>
+        </div>
+        <span className="tf-attributesettings__adds">
+          {onNewSpecial && (
+            <MenuTrigger>
+              <Button variant="secondary" size="sm" iconEnd={<ChevronDown size={14} strokeWidth={1.75} />}>More kinds</Button>
+              <Menu aria-label="More kinds of attribute" placement="bottom end" onAction={(k) => onNewSpecial(String(k) as 'formula' | 'lookup' | 'rollup' | 'relationship')}>
+                <MenuItem id="relationship" description="Links to another object's records">Relationship</MenuItem>
+                <MenuItem id="formula" description="Works out a number from this record">Formula</MenuItem>
+                <MenuItem id="lookup" description="Shows a linked record's value">Lookup</MenuItem>
+                <MenuItem id="rollup" description="Counts or adds up linked records">Rollup</MenuItem>
+              </Menu>
+            </MenuTrigger>
+          )}
+          <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => openFor(undefined)}>New attribute</Button>
+        </span>
+      </header>
+      {archived && (
+        <Callout
+          key={archived.attribute.id} tone="neutral" onDismiss={() => setArchived(undefined)}
+          action={{ label: 'Undo', onPress: () => { onChange(attributes.map((x) => (x.id === archived.attribute.id ? { ...x, archived: false } : x))); setChanged(archived.attribute.id); setArchived(undefined); } }}
+        >
+          {archived.attribute.name} archived. Its values are kept; bring it back from Archived attributes.
+        </Callout>
+      )}
+      <AttributeList
+        label={`${objectPlural} attributes`} attributes={live} changedId={changed} onEdit={openFor} pluralOf={nameOfObject}
+        onReorder={(ids) => onChange([...ids.map((id) => attributes.find((a) => a.id === id)).filter((a): a is SchemaAttribute => a !== undefined), ...gone])}
+      />
+      {gone.length > 0 && (
+        <section className="tf-attributesettings__archived" aria-label="Archived attributes">
+          <h3 className="tf-attributesettings__grouplabel">Archived attributes <Count>{gone.length}</Count></h3>
+          <ul className="tf-attributesettings__gone">
+            {gone.map((a) => (
+              <li key={a.id}>
+                <span className="tf-attributesettings__icon"><AttributeIcon type={a.type} /></span>
+                <span className="tf-attributesettings__name">{a.name}</span>
+                <span className="tf-attributesettings__type">{typeLabel(a, nameOfObject)}</span>
+                <Button size="sm" variant="secondary" onPress={() => { onChange(attributes.map((x) => (x.id === a.id ? { ...x, archived: false } : x))); setChanged(a.id); }}>Restore</Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <AttributeDialog
+        key={session} isOpen={open} onOpenChange={setOpen} objectName={objectName} attribute={current} siblings={attributes}
+        valueCount={editing ? valueCounts?.[editing] : undefined}
+        onArchive={(id) => { const a = attributes.find((x) => x.id === id); if (a) setAsking(a); }}
+        onSave={(a) => { onChange(current ? attributes.map((x) => (x.id === a.id ? a : x)) : [...attributes, a]); setChanged(a.id); }}
+      />
+      <ConfirmDialog isOpen={asking !== undefined} onOpenChange={(o) => { if (!o) setAsking(undefined); }} title={`Archive ${asking?.name ?? 'it'}?`} tone="primary" confirmLabel={`Archive ${asking?.name ?? ''}`.trim()}
+        consequence={<>Hidden from tables and forms. Values are kept.{uses.length > 0 && <><br />Used by: {uses.join(', ')}</>}</>}
+        onConfirm={() => { if (asking) archive(asking); setAsking(undefined); }} />
+    </section>
+  );
+}

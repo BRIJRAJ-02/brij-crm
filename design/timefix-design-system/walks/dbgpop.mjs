@@ -1,0 +1,10 @@
+import { open } from './head.mjs';
+const { p, nav, done, res } = await open('light');
+await nav('People'); await p.waitForTimeout(500);
+await p.evaluate(() => { window.__log = []; new MutationObserver((ms) => { for (const m of ms) if (m.target.nodeType === 1 && m.target.hasAttribute('data-placement')) window.__log.push(m.target.getAttribute('style')); }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'] }); });
+const tr = p.locator('main').getByRole('button', { name: /All people/ }).first();
+await tr.click(); await p.waitForTimeout(500);
+res.push(JSON.stringify(await p.evaluate(() => window.__log.slice(0, 12))));
+res.push(JSON.stringify(await tr.evaluate((e) => { const r = e.getBoundingClientRect(); return [r.left, r.bottom, getComputedStyle(document.documentElement).zoom]; })));
+res.push(JSON.stringify(await p.evaluate(() => { const pop = document.querySelector('[data-placement]'); const r = pop.getBoundingClientRect(); return [pop.getAttribute('style'), r.left, r.top, pop.parentElement.tagName, getComputedStyle(pop).position, pop.offsetParent?.tagName]; })));
+await done();

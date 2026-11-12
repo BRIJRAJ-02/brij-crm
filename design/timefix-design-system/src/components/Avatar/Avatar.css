@@ -1,0 +1,21 @@
+.tf-avatar { position: relative; display: inline-grid; place-items: center; width: var(--tf-av); height: var(--tf-av); flex: none; font: 600 calc(var(--tf-av) * 0.36)/1 var(--font-sans); letter-spacing: 0.01em; }
+.tf-avatar--round, .tf-avatar--round img { border-radius: var(--radius-full); }
+.tf-avatar--square, .tf-avatar--square img { border-radius: calc(var(--tf-av) * 0.28); }
+.tf-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tf-avatar__status { position: absolute; right: -1px; bottom: -1px; width: 30%; height: 30%; min-width: 8px; min-height: 8px; border-radius: var(--radius-full); box-shadow: 0 0 0 2px var(--surface); }
+.tf-avatar__status--online { background: var(--dot-green); }
+.tf-avatar__status--away { background: var(--dot-yellow); }
+.tf-avatar-group { display: inline-flex; }
+.tf-avatar-group .tf-avatar { box-shadow: 0 0 0 2px var(--surface); transition: translate 320ms var(--ease-bounce-strong), scale 320ms var(--ease-bounce-strong); }
+.tf-avatar-group .tf-avatar + .tf-avatar { margin-left: calc(var(--tf-av) * -0.22); }
+@media (hover: hover) {
+  .tf-avatar-group .tf-avatar:hover { translate: 0 -4px; scale: 1.05; z-index: 1; transition-timing-function: var(--ease-smooth-out); }
+  @media (hover: hover) and (pointer: fine) { .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: 0 -1.8px; transition-timing-function: var(--ease-smooth-out); } }
+}
+.tf-avatar--more { background: var(--surface-subtle); color: var(--text-secondary); font-weight: 500; }
+.tf-person { display: inline-flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.tf-person__text { display: flex; flex-direction: column; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-person[data-text-hidden] .tf-person__text { opacity: 0; pointer-events: none; }
+.tf-person__name { font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-person__sub { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .tf-person__text { transition: none; } .tf-avatar-group .tf-avatar { transition: none; } @media (hover: hover) and (pointer: fine) { .tf-avatar-group .tf-avatar:hover, .tf-avatar-group .tf-avatar:hover + .tf-avatar, .tf-avatar-group .tf-avatar:has(+ .tf-avatar:hover) { translate: none; scale: none; } } }
