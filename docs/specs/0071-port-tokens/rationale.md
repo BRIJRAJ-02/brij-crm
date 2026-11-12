@@ -101,6 +101,22 @@ Shared names (49) take the prototype's values. Prototype only: canvas, surface-s
 
 `packages/tokens` (tokens.json fonts, packs.ts, fonts folder, generator tests), `packages/ui` (vite.ts preload and test, `.storybook/vitest.fonts.ts`, chart-math estimate, Avatar and ReadyPanel comments, LinkPage defaults), `apps/web` (vite.config preload, build.test, `e2e/fonts.flow.ts`, OG cards in `card-image.ts` and `api/card.mjs` with an Inter TTF), `packages/emails` test on the mono stack, comments in contracts and core, and the marketing site's fonts.css comment. `vercel.json` CSP is `font-src 'self'`.
 
+### Cross check, 12 Nov (same model, read only)
+
+An independent pass found 17 gaps; all were resolved in index.md with the owner's go ahead. The load bearing ones:
+- TypeScript reads raw `tokens.json` (`packages/ui/src/lib/token-values.ts`), so `DataGrid` would take a 44px row while the CSS draws 38. Hence the generated `values.ts` and render time reads (AC-16).
+- The prototype's colours miss 0002's contrast minimums in about 26 pairs (for example `control-border` 3.42 on `surface` light, 2.68 on `surface-selected` dark; `text-tertiary` 4.35 light and 4.00 dark on `surface-selected`; `accent` 2.83 on dark `surface-selected`). Minimums kept; smallest lightness moves, listed below by the builder.
+- Public screens served by `index.html` (partner embeds, email preferences, status, public insights) would have taken the static app scale; the scale moved into `theme-boot.js` with a public path list.
+- A single 2px solid focus ring in the accent's own blue vanishes on blue buttons; hence the two ring shadow.
+- The rename script's swaps undo themselves on a second run; hence the guard and the run before rebase rule.
+- The grammar rejected numeric font weights, and the `blur` family would have been emitted.
+
+### Contrast moves (filled in by the builder, step 9)
+
+| Token | Theme | Prototype | Moved to | Pairs it clears |
+|---|---|---|---|---|
+| | | | | |
+
 ### Screenshot baselines
 
 `packages/ui/__screenshots__/`, 1,347 stories × light and dark, Chromium only, shot in `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) by `pnpm test:visual`. CI only compares and uploads new shots as an artifact on failure; a person commits them. No other suite has screenshots.
