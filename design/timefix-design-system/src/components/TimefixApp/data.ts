@@ -861,14 +861,15 @@ function contactForm(now: Date): AppForm {
       r('r9', 17000, 'Ravi Shah', 'ravi@lumen.in', 'Lumen', '11–50', 'Forms that file into our CRM.', { secs: 95, from: { source: 'LinkedIn', medium: 'social', campaign: 'launch', page: 'northwind.com/pricing', via: 'popup' } }),
     ] };
 }
-/** A month of visits to the contact form and the link page, the same every load: sources, how far each got, and finishes that match the submissions. */
+/** Six months of visits to the contact form and the link page, the same every load: sources, how far each got, and finishes that match the submissions.
+ *  Long enough that the period before any range up to 90 days is full, so Insights' deltas read true. */
 function seedVisits(now: Date): ReadonlyArray<Visit> {
   let x = 7;
   const rnd = () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
   const pick = <T,>(xs: ReadonlyArray<T>, fallback: T): T => xs[Math.floor(rnd() * xs.length)] ?? fallback;
   const sources: ReadonlyArray<readonly [string, string | undefined]> = [['Google', 'organic'], ['Google', 'organic'], ['Google', 'cpc'], ['Direct', undefined], ['Direct', undefined], ['LinkedIn', 'social'], ['Instagram', 'social'], ['Newsletter', 'email']];
   const out: Visit[] = [];
-  for (let d = 0; d < 45; d++) {
+  for (let d = 0; d < 180; d++) {
     const formViews = 2 + Math.floor(rnd() * 4); const linkViews = 5 + Math.floor(rnd() * 9);
     for (let i = 0; i < formViews; i++) {
       const [source, medium] = pick(sources, ['Direct', undefined] as const);

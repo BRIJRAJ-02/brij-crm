@@ -1,12 +1,12 @@
 /* The public menu: one calm column a phone holds, sections as pills, dishes as rows with a photo on the right, a bar for the selection. */
-.tf-menupage { container: tf-menupage / inline-size; position: relative; display: flex; flex-direction: column; gap: var(--space-16); width: 100%; max-width: calc(var(--size-dialog) + var(--space-32)); margin: 0 auto; padding: var(--space-20) var(--space-20) var(--space-32); color: var(--text); font: 400 15px/22px var(--font-sans); }
+.tf-menupage { font-synthesis: none; container: tf-menupage / inline-size; position: relative; display: flex; flex-direction: column; gap: var(--space-16); width: 100%; max-width: calc(var(--size-dialog) + var(--space-32)); margin: 0 auto; padding: var(--space-20) var(--space-20) var(--space-32); color: var(--text); font: 400 15px/22px var(--font-sans); }
 .tf-menupage.has-bag { padding-bottom: calc(var(--space-64) + var(--space-32)); }
 .tf-menupage__top { display: flex; flex-direction: column; gap: var(--space-12); }
 .tf-menupage__eyebrow { display: inline-flex; align-items: center; gap: var(--space-8); color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
 .tf-menupage__table { padding: 0 var(--space-8); border-radius: var(--radius-full); background: var(--primary); color: var(--on-primary); font: 600 12px/20px var(--font-sans); }
 .tf-menupage__cover { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-lg); background: var(--surface-subtle); }
 .tf-menupage__brand { display: flex; flex-direction: column; gap: var(--space-4); }
-.tf-menupage__title { margin: 0; font: 600 30px/38px var(--font-sans); letter-spacing: -0.02em; text-wrap: balance; }
+.tf-menupage__title { margin: 0; font: 600 30px/38px var(--tf-face-display, var(--font-sans)); letter-spacing: -0.02em; text-wrap: balance; }
 .tf-menupage__muted { margin: 0; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
 .tf-menupage__tools { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-menupage__filters, .tf-menupage__pills { display: flex; gap: var(--space-6); overflow-x: auto; scrollbar-width: none; }
@@ -17,9 +17,9 @@
 .tf-menupage__pills { position: sticky; top: 0; z-index: 2; margin-inline: calc(var(--space-20) * -1); padding: var(--space-8) var(--space-20); border-bottom: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface); }
 .tf-menupage__pill { border-color: transparent; background: var(--surface-subtle); }
 .tf-menupage__section { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-8); scroll-margin-top: var(--space-64); }
-.tf-menupage__h2 { margin: 0; font: 600 20px/28px var(--font-sans); letter-spacing: -0.01em; }
+.tf-menupage__h2 { margin: 0; font: 600 20px/28px var(--tf-face-display, var(--font-sans)); letter-spacing: -0.01em; }
 .tf-menupage__sub { display: flex; flex-direction: column; gap: var(--space-4); padding-top: var(--space-8); }
-.tf-menupage__h3 { margin: 0; color: var(--text-secondary); font: 600 15px/22px var(--font-sans); }
+.tf-menupage__h3 { margin: 0; color: var(--text-secondary); font: 600 15px/22px var(--tf-face-display, var(--font-sans)); }
 .tf-menupage__dishes { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .tf-menupage__dishes.is-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-12); }
 .tf-menupage__dishes:not(.is-grid) > li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }

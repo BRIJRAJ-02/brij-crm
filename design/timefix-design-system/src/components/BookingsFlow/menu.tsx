@@ -32,7 +32,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { DragArea, DragGroup, DragList, useDragGroup } from '../../lib/drag.ts';
 import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
 import { cx } from '../../lib/cx.ts';
-import { ALLERGENS, DIETS, MENU_LOOKS, MenuPage, dishPrice, menuLookChecks, type Diet, type Menu as MenuT, type MenuAddOn, type MenuDish, type MenuLook, type MenuSection } from '../MenuPage/MenuPage.tsx';
+import { ALLERGENS, DIETS, MENU_FONTS, MENU_LOOKS, MenuPage, fontItems, dishPrice, menuLookChecks, type Diet, type Menu as MenuT, type MenuAddOn, type MenuDish, type MenuLook, type MenuSection } from '../MenuPage/MenuPage.tsx';
 import { ScaledPreview, TabToolbar, i14, i16 } from './parts.tsx';
 import { menuChanges, nextId, plural, type BookingsAction, type BookingsState, type MenuBook } from './state.ts';
 import { bizOf, currentBiz } from './biz.ts';
@@ -447,7 +447,10 @@ function DesignPanel({ value, onChange }: { readonly value: MenuLook; readonly o
           {checks.map((c) => <li key={c.id} data-ok={c.ratio >= c.need || undefined}>{c.ratio >= c.need ? <Check {...i14} aria-hidden /> : <TriangleAlert {...i14} aria-hidden />}<span>{c.label}</span><span className="tf-num">{c.ratio.toFixed(1)}:1 · {c.ratio >= c.need ? 'AA' : `needs ${c.need}:1`}</span></li>)}
         </ul>
         <div className="tf-bkf__pair">
-          <div className="tf-bkf__group"><span className="tf-bkf__label">Font</span><SegmentedControl aria-label="Font" size="sm" selectedKey={value.font} onSelectionChange={(k) => tweak({ font: k === 'mono' ? 'mono' : 'sans' })} items={[{ id: 'sans', label: 'Geist' }, { id: 'mono', label: 'Geist Mono' }]} /></div>
+          <Select label="Headings" value={value.heading ?? value.font} onChange={(k) => { const f = MENU_FONTS.find((x) => x.id === k); if (f) tweak({ heading: f.id }); }} items={fontItems()} searchable={false} />
+          <Select label="Everything else" value={value.font} onChange={(k) => { const f = MENU_FONTS.find((x) => x.id === k); if (f) tweak({ font: f.id }); }} items={fontItems()} searchable={false} />
+        </div>
+        <div className="tf-bkf__pair">
           <div className="tf-bkf__group"><span className="tf-bkf__label">Corners</span><SegmentedControl aria-label="Corners" size="sm" selectedKey={value.corners} onSelectionChange={(k) => tweak({ corners: k === 'sharp' ? 'sharp' : k === 'round' ? 'round' : 'soft' })} items={[{ id: 'sharp', label: 'Sharp' }, { id: 'soft', label: 'Soft' }, { id: 'round', label: 'Round' }]} /></div>
         </div>
         <div className="tf-bkf__group"><span className="tf-bkf__label">Cover</span>

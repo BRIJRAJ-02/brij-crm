@@ -26,7 +26,8 @@ import { Callout } from '../Callout/Callout.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
-import { STAGES, formWho, newId, type AppAction, type AppForm, type AppState, type FormResponse, type ObjectId, LISTS_ON } from './data.ts';
+import { formWho, newId, type Stage, type AppAction, type AppForm, type AppState, type FormResponse, type ObjectId, LISTS_ON } from './data.ts';
+import { stagesOf } from './model.tsx';
 import { SettingsSection } from '../SettingsLayout/SettingsLayout.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
 import { DialogTrigger } from 'react-aria-components';
@@ -625,7 +626,7 @@ export function fileResponse(state: AppState, form: AppForm, questions: Readonly
     if (m) { matched = true; id = m.id; dispatch({ type: 'records/fields', object: 'people', changes: [{ id: m.id, patch: { tags: [...new Set([...m.tags, ...tags])], ...(f.title ? { title: f.title } : {}), ...(f.phone ? { phone: f.phone } : {}), ...(companyId ? { companyId } : {}), ...(hasExtra ? { extra: { ...(m.extra ?? {}), ...extra } } : {}) } }] }); }
     else { id = newId('p'); dispatch({ type: 'person/set', person: { id, name: f.name || email, email, title: f.title ?? '', phone: f.phone, companyId, owner: form.owner, tags, created: now, extra: hasExtra ? extra : undefined } }); }
     dispatch({ type: 'activity/add', activity: { id: newId('a'), record: { object: 'people', id }, kind: 'form', actor: label, text: `sent ${form.name}`, at: r.at } });
-    if (form.alsoDeal && !matched) dispatch({ type: 'deal/set', deal: { id: newId('d'), name: `${label} · ${form.name}`, companyId: companyId ?? '', contactId: id, stage: (STAGES as ReadonlyArray<string>).includes(form.alsoDeal.stage) ? form.alsoDeal.stage as typeof STAGES[number] : 'Lead', amount: Number((f.amount ?? '').replace(/[^\d.]/g, '')) || 0, owner: form.owner, close: new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()), created: now } });
+    if (form.alsoDeal && !matched) dispatch({ type: 'deal/set', deal: { id: newId('d'), name: `${label} · ${form.name}`, companyId: companyId ?? '', contactId: id, stage: (stagesOf(state).some((x) => x.id === form.alsoDeal?.stage) ? form.alsoDeal.stage : stagesOf(state).find((x) => !x.outcome)?.id ?? 'Lead') as Stage, amount: Number((f.amount ?? '').replace(/[^\d.]/g, '')) || 0, owner: form.owner, close: new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()), created: now } });
   } else if (target === 'companies') {
     const m = state.companies.find((c) => (by === 'name' ? c.name.toLowerCase() === key : c.domain.toLowerCase() === key) && key !== '');
     if (m) keepOwn(m as unknown as Readonly<Record<string, unknown>>);
@@ -704,7 +705,7 @@ function RecordsPanel({ state, form, dispatch, set, attrOf, unfiled, onFileEarli
         <SettingsSection title="Also">
           {target === 'people' && <div className="tf-set__switch"><span><strong>Tag them with the form’s name</strong><span className="tf-rec__muted">So you can filter People by “{form.name}”.</span></span><Switch aria-label="Tag with the form's name" isSelected={form.tagWith !== false} onChange={(on) => set({ tagWith: on })} /></div>}
           {target === 'people' && <div className="tf-set__switch"><span><strong>Open a deal for each new person</strong><span className="tf-rec__muted">Named after them and the form, owned by {form.owner.split(' ')[0]}.</span></span><Switch aria-label="Open a deal" isSelected={Boolean(form.alsoDeal)} onChange={(on) => set({ alsoDeal: on ? { stage: 'Lead' } : undefined })} /></div>}
-          {target === 'people' && form.alsoDeal && <div className="tf-rec__form tf-set__narrow"><Select label="In stage" value={form.alsoDeal.stage} onChange={(v) => { if (v) set({ alsoDeal: { stage: v } }); }} items={STAGES.filter((x) => x !== 'Won' && x !== 'Lost').map((x) => ({ id: x, label: x }))} /></div>}
+          {target === 'people' && form.alsoDeal && <div className="tf-rec__form tf-set__narrow"><Select label="In stage" value={form.alsoDeal.stage} onChange={(v) => { if (v) set({ alsoDeal: { stage: v } }); }} items={stagesOf(state).filter((x) => !x.outcome).map((x) => ({ id: x.id, label: x.label }))} /></div>}
           <div className="tf-rec__form tf-set__narrow">{LISTS_ON && <Select label="Add to a list" value={form.toList ?? 'none'} onChange={(v) => set({ toList: v && v !== 'none' ? v : undefined })} items={[{ id: 'none', label: 'No list' }, ...lists.map((l) => ({ id: l.id, label: l.name }))]} description={lists.length === 0 ? `No ${objectWord(state, target, 2).toLowerCase()} lists yet.` : 'Each record goes in its first stage.'} />}</div>
         </SettingsSection>
       )}

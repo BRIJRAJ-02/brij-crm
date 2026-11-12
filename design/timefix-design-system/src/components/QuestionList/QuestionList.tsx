@@ -35,15 +35,48 @@ export function QuestionTypeTile({ kind, size = 'md' }: { readonly kind: Questio
   return <span className={cx('tf-qtile', `tf-qtile--${size}`)} aria-hidden="true"><Icon size={size === 'sm' ? 14 : 16} strokeWidth={1.75} /></span>;
 }
 
-/** The grey line under a question's title: its type, how many choices, and any logic, points, Insights or record field it has. */
-export function questionSummary(q: FormQuestion, all: ReadonlyArray<FormQuestion> = [], targets: ReadonlyArray<SaveTarget> = []): string {
+/** The grey line under a question's title: its type and how many choices. What else it carries shows as chips (questionChips). */
+export function questionSummary(q: FormQuestion, _all: ReadonlyArray<FormQuestion> = [], _targets: ReadonlyArray<SaveTarget> = []): string {
   const parts: string[] = [QUESTION_KINDS[q.kind].label];
   if (HAS_OPTIONS.has(q.kind)) { const n = q.options?.length ?? 0; parts.push(n === 0 ? 'No choices yet' : n === 1 ? '1 choice' : `${n} choices`); }
-  if (q.jumps?.length) parts.push(q.jumps.length === 1 ? '1 jump' : `${q.jumps.length} jumps`);
-  if (q.points && Object.keys(q.points).length) parts.push('Points');
-  if (q.insights) parts.push('In Insights');
-  if (q.saveTo) parts.push(`Saves to ${targets.find((t) => t.id === q.saveTo)?.label ?? q.saveTo}`);
   return parts.join(' · ');
+}
+
+/** The folded groups of a question's More options, in the order they show. */
+export type QuestionSection = 'rules' | 'logic' | 'saves' | 'help';
+/** Each group's small heading. */
+export const SECTION_TITLES: Readonly<Record<QuestionSection, string>> = { rules: 'Answer rules', logic: 'Logic and points', saves: 'Saves to', help: 'Help text' };
+/** A rule set on a question, drawn as a small chip under its title so nothing folded away is forgotten. Pressing it opens its group. */
+export interface QuestionChip { readonly id: string; readonly label: string; readonly section?: QuestionSection; readonly tone: 'plain' | 'logic' | 'warn' }
+const shortDay = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00`));
+const dayWord = (b: string) => (b === 'today' ? 'today' : /^\d{4}-\d{2}-\d{2}$/.test(b) ? shortDay(b) : b);
+
+/** Every rule a question has beyond its words, type and choices: Required (on cards), answer rules, logic, where it saves, help text, and broken rules. */
+export function questionChips(q: FormQuestion, all: ReadonlyArray<FormQuestion> = [], targets: ReadonlyArray<SaveTarget> = [], endings: ReadonlyArray<JumpEnding> = [], withRequired = true): ReadonlyArray<QuestionChip> {
+  const out: QuestionChip[] = [];
+  if (withRequired && q.required && q.kind !== 'statement' && q.kind !== 'hidden') out.push({ id: 'required', label: 'Required', tone: 'plain' });
+  if (q.kind === 'date' && (q.earliest || q.latest)) out.push({ id: 'days', section: 'rules', tone: 'plain', label: q.earliest && q.latest ? `From ${dayWord(q.earliest)} to ${dayWord(q.latest)}` : q.earliest ? `From ${dayWord(q.earliest)}` : `Until ${dayWord(q.latest ?? '')}` });
+  if (q.kind === 'number' && (q.min !== undefined || q.max !== undefined)) out.push({ id: 'range', section: 'rules', tone: 'plain', label: q.min !== undefined && q.max !== undefined ? `${q.min} to ${q.max}` : q.min !== undefined ? `At least ${q.min}` : `At most ${q.max ?? ''}` });
+  if (q.kind === 'scale' && ((q.min ?? 0) !== 0 || (q.max ?? 10) !== 10)) out.push({ id: 'range', section: 'rules', tone: 'plain', label: `${q.min ?? 0} to ${q.max ?? 10}` });
+  if (q.kind === 'scale' && (q.low || q.high)) out.push({ id: 'ends', section: 'rules', tone: 'plain', label: 'End words' });
+  if (q.kind === 'multi' && (q.fewest !== undefined || q.most !== undefined)) out.push({ id: 'picks', section: 'rules', tone: 'plain', label: q.fewest !== undefined && q.most !== undefined ? `${q.fewest} to ${q.most} picks` : q.fewest !== undefined ? `At least ${q.fewest} picks` : `At most ${q.most ?? ''} picks` });
+  if ((q.kind === 'choice' || q.kind === 'multi') && q.other) out.push({ id: 'other', section: 'rules', tone: 'plain', label: 'With Other' });
+  if (q.showIf) out.push({ id: 'showif', section: 'logic', tone: 'logic', label: `Shown if ${all.find((x) => x.id === q.showIf?.questionId)?.title || 'an earlier answer'} is ${q.showIf.is}` });
+  if (q.jumps?.length) out.push({ id: 'jumps', section: 'logic', tone: 'logic', label: q.jumps.length === 1 ? '1 jump' : `${q.jumps.length} jumps` });
+  if (q.points && Object.keys(q.points).length) out.push({ id: 'points', section: 'logic', tone: 'logic', label: 'Points' });
+  if (q.saveTo) out.push({ id: 'saveto', section: 'saves', tone: 'plain', label: `Saves to ${targets.find((t) => t.id === q.saveTo)?.label ?? q.saveTo}${q.overwrite ? ', replaces' : ''}` });
+  if (q.insights) out.push({ id: 'insights', section: 'saves', tone: 'plain', label: 'In Insights' });
+  if (q.description || q.placeholder) out.push({ id: 'help', section: 'help', tone: 'plain', label: 'Help text' });
+  for (const w of logicProblems(q, all, endings)) out.push({ id: `warn:${w}`, section: 'logic', tone: 'warn', label: w });
+  return out;
+}
+
+/** One chip as a Tag: logic purple, a broken rule orange, the rest grey; with `onOpen` it jumps to its group. */
+function RuleChip({ chip, onOpen }: { readonly chip: QuestionChip; readonly onOpen?: (section: QuestionSection | undefined) => void }) {
+  const icon = chip.tone === 'warn' ? <TriangleAlert size={12} strokeWidth={1.75} /> : chip.id === 'showif' ? <Eye size={12} strokeWidth={1.75} /> : undefined;
+  const hue = chip.tone === 'warn' ? 'orange' : chip.tone === 'logic' ? 'purple' : 'gray';
+  return <Tag size="sm" hue={hue} icon={icon} onPress={onOpen ? () => onOpen(chip.section) : undefined}
+    aria-label={onOpen ? `${chip.label}. Open ${chip.section ? SECTION_TITLES[chip.section] : 'the question'}` : undefined}>{chip.label}</Tag>;
 }
 
 /** A thank-you message a jump can end on, besides the main one. */
@@ -214,13 +247,15 @@ export interface QuestionListProps {
   readonly saveTargets?: ReadonlyArray<SaveTarget>;
   /** The form's other thank-you messages, so a jump to one isn't flagged as broken. */
   readonly endings?: ReadonlyArray<JumpEnding>;
+  /** A card's rule chip was pressed: open that question with More options open at the chip's group. */
+  readonly onOpenSection?: (id: string, section: QuestionSection | undefined) => void;
 }
 
 /**
  * A form's questions as cards: grip, type tile, title over its type, a Required switch and a ⋯ menu. Cards reorder by the grip
  * (pointer, or Enter then arrows), the dragged card lifts and the slot opens dashed. Pressing a card opens it in the side panel.
  */
-export function QuestionList({ questions, selectedId, onSelect, onReorder, onRequiredChange, onDuplicate, onDelete, onAdd, freshIds, notice, kinds, title = 'Questions', presets, onPreset, saveTargets, endings = [] }: QuestionListProps) {
+export function QuestionList({ questions, selectedId, onSelect, onReorder, onRequiredChange, onDuplicate, onDelete, onAdd, freshIds, notice, kinds, title = 'Questions', presets, onPreset, saveTargets, endings = [], onOpenSection }: QuestionListProps) {
   // The Logic filter: only questions with rules, the broken ones counted on the switch.
   const [only, setOnly] = useState<'all' | 'logic'>('all');
   const [renaming, setRenaming] = useState<{ readonly id: string; readonly title: string }>();
@@ -257,7 +292,7 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
               const stepNo = questions.slice(0, n + 1).filter((x, m) => m === 0 || x.step).length;
               const showsStep = questions.some((x, m) => m > 0 && x.step) && (n === 0 || q.step !== undefined);
               return <QuestionRow key={q.id} q={q} n={n} stepNo={stepNo} showsStep={showsStep} questions={questions} endings={endings} saveTargets={saveTargets} isSelected={selectedId === q.id}
-                isFresh={freshIds?.has(q.id) ?? false} onSelect={() => onSelect(q.id)} onReorder={onReorder} onRename={() => setRenaming({ id: q.id, title: q.step?.title ?? '' })}
+                isFresh={freshIds?.has(q.id) ?? false} onSelect={() => onSelect(q.id)} onOpenAt={(sec) => (onOpenSection ? onOpenSection(q.id, sec) : onSelect(q.id))} onReorder={onReorder} onRename={() => setRenaming({ id: q.id, title: q.step?.title ?? '' })}
                 onRequiredChange={onRequiredChange} onDelete={onDelete} onDuplicate={onDuplicate} />;
             })}
           </ul>
@@ -272,13 +307,14 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
 }
 
 /** One question card in the list: press it to open it; its grip lifts it (lib/drag.ts). */
-function QuestionRow({ q, n, stepNo, showsStep, questions, endings, saveTargets, isSelected, isFresh, onSelect, onReorder, onRename, onRequiredChange, onDelete, onDuplicate }: {
+function QuestionRow({ q, n, stepNo, showsStep, questions, endings, saveTargets, isSelected, isFresh, onSelect, onOpenAt, onReorder, onRename, onRequiredChange, onDelete, onDuplicate }: {
   readonly q: FormQuestion; readonly n: number; readonly stepNo: number; readonly showsStep: boolean; readonly questions: ReadonlyArray<FormQuestion>;
   readonly endings: ReadonlyArray<JumpEnding>; readonly saveTargets?: ReadonlyArray<SaveTarget>; readonly isSelected: boolean; readonly isFresh: boolean;
-  readonly onSelect: () => void; readonly onReorder: (qs: ReadonlyArray<FormQuestion>) => void; readonly onRename: () => void;
+  readonly onSelect: () => void; readonly onOpenAt: (section: QuestionSection | undefined) => void; readonly onReorder: (qs: ReadonlyArray<FormQuestion>) => void; readonly onRename: () => void;
   readonly onRequiredChange?: (id: string, required: boolean) => void; readonly onDelete: (id: string) => void; readonly onDuplicate: (id: string) => void;
 }) {
   const d = useDragRow(q.id);
+  const chips = questionChips(q, questions, saveTargets, endings, !onRequiredChange);
   return (
     <li {...d.row} className="tf-qlist__row" data-selected={isSelected || undefined} aria-label={q.title || 'Untitled question'}>
       <DropIn animate={isFresh}>
@@ -297,14 +333,12 @@ function QuestionRow({ q, n, stepNo, showsStep, questions, endings, saveTargets,
           <span className="tf-qlist__text">
             <span className="tf-qlist__q"><span className="tf-qlist__n tf-num">{n + 1}.</span> {q.title || <span className="tf-qlist__untitled">Untitled question</span>}</span>
             <span className="tf-qlist__sub">{questionSummary(q, questions, saveTargets)}</span>
-            {(q.showIf || logicProblems(q, questions, endings).length > 0) && <span className="tf-qlist__chips">
-              {q.showIf && <Tag size="sm" hue="purple" icon={<Eye size={12} strokeWidth={1.75} />}>Shown if {questions.find((x) => x.id === q.showIf?.questionId)?.title || 'an earlier answer'} is {q.showIf.is}</Tag>}
-              {logicProblems(q, questions, endings).map((w) => <Tag key={w} size="sm" hue="orange" icon={<TriangleAlert size={12} strokeWidth={1.75} />}>{w}</Tag>)}
+            {chips.length > 0 && <span className="tf-qlist__chips">
+              {chips.map((c) => <RuleChip key={c.id} chip={c} onOpen={(sec) => onOpenAt(sec)} />)}
             </span>}
           </span>
           <span className="tf-qlist__end">
-            {onRequiredChange ? <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>
-              : q.required ? <span className="tf-qlist__req">Required</span> : null}
+            {onRequiredChange && <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>}
             <MenuTrigger>
               <IconButton label={`More for ${q.title || 'question'}`} size="sm"><Ellipsis {...i16} /></IconButton>
               <Menu placement="bottom end" onAction={(k) => { if (k === 'delete') onDelete(q.id); else if (k === 'step') onReorder(questions.map((x) => (x.id === q.id ? { ...x, step: x.step ? undefined : {} } : x))); else onDuplicate(q.id); }}>
@@ -332,10 +366,37 @@ export interface QuestionSettingsProps {
   readonly saveTargets?: ReadonlyArray<SaveTarget>;
   /** The form's other thank-you messages, as places a jump can end. */
   readonly endings?: ReadonlyArray<JumpEnding>;
+  /** Opens with More options open at this group (a card's chip was pressed). */
+  readonly openSection?: QuestionSection;
 }
 
-/** The side panel for the selected question: type, words, required, choices. Its content swaps softly when another question opens (34). */
-export function QuestionSettings({ question: q, onChange, onClose, questions = [], saveTargets, endings = [] }: QuestionSettingsProps) {
+/** The groups a question of this kind has under More options. */
+function sectionsOf(q: FormQuestion, hasTargets: boolean): ReadonlyArray<QuestionSection> {
+  const rules = q.kind === 'date' || q.kind === 'number' || q.kind === 'scale' || q.kind === 'multi' || q.kind === 'choice';
+  const saves = (hasTargets && q.kind !== 'statement') || q.kind === 'choice' || q.kind === 'multi' || q.kind === 'dropdown';
+  return [...(rules ? ['rules' as const] : []), 'logic', ...(saves ? ['saves' as const] : []), ...(q.kind === 'hidden' ? [] : ['help' as const])];
+}
+
+/**
+ * The side panel for the selected question, calm first: its type, words, choices and Required. Everything else folds under one
+ * More options, grouped Answer rules, Logic and points, Saves to and Help text; a rule that is set shows as a chip above the fold,
+ * and pressing it opens the fold at its group. Its content swaps softly when another question opens (34).
+ */
+export function QuestionSettings({ question: q, onChange, onClose, questions = [], saveTargets, endings = [], openSection }: QuestionSettingsProps) {
+  const [more, setMore] = useState(openSection !== undefined);
+  const secs = useRef<Partial<Record<QuestionSection, HTMLElement | null>>>({});
+  const [target, setTarget] = useState<{ readonly s: QuestionSection; readonly n: number } | undefined>(openSection ? { s: openSection, n: 0 } : undefined);
+  // After the fold opens, bring the asked-for group into view and put focus on its heading.
+  useEffect(() => {
+    if (!target) return;
+    const id = window.setTimeout(() => {
+      const el = secs.current[target.s]; if (!el) return;
+      const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+      el.querySelector<HTMLElement>('.tf-qset__sec-title')?.focus({ preventScroll: true });
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [target]);
   if (!q) {
     return (
       <aside className="tf-qset tf-qset--empty" aria-label="Question settings">
@@ -349,6 +410,11 @@ export function QuestionSettings({ question: q, onChange, onClose, questions = [
     const Icon = QUESTION_KINDS[k].icon;
     return { id: k, label: QUESTION_KINDS[k].label, icon: <Icon {...i16} /> };
   });
+  const sections = sectionsOf(q, Boolean(saveTargets));
+  const chips = questionChips(q, questions, saveTargets, endings, false);
+  const jump = (s: QuestionSection | undefined) => { if (!s) return; setMore(true); setTarget({ s, n: (target?.n ?? 0) + 1 }); };
+  const head = (s: QuestionSection) => <h4 className="tf-qset__sec-title" tabIndex={-1}>{SECTION_TITLES[s]}</h4>;
+  const group = (s: QuestionSection, body: ReactNode) => (sections.includes(s) ? <section key={s} className="tf-qset__sec" aria-label={SECTION_TITLES[s]} ref={(el) => { secs.current[s] = el; }}>{head(s)}{body}</section> : null);
   return (
     <aside className="tf-qset" aria-label="Question settings">
       <header className="tf-qset__head">
@@ -359,62 +425,75 @@ export function QuestionSettings({ question: q, onChange, onClose, questions = [
       <div className="tf-qset__body" key={q.id}>
         <Select label="Type" items={kinds} value={q.kind} onChange={(k) => { if (k) set({ kind: k as QuestionKind, options: HAS_OPTIONS.has(k as QuestionKind) && options.length === 0 ? ['Option 1', 'Option 2'] : q.options }); }} />
         <TextArea label="Question" rows={1} value={q.title} onChange={(title) => set({ title })} placeholder="What do you want to ask?" />
-        <TextField label="Description" aside="Optional" value={q.description ?? ''} onChange={(description) => set({ description })} placeholder="A line of help under the question" />
-        {HAS_PLACEHOLDER.has(q.kind) && <TextField label="Placeholder" aside="Optional" value={q.placeholder ?? ''} onChange={(placeholder) => set({ placeholder })} />}
         {(q.kind === 'choice' || q.kind === 'multi' || q.kind === 'dropdown') && <SegmentedControl aria-label="Choice type" size="sm" isFullWidth selectedKey={q.kind}
           onSelectionChange={(k) => set({ kind: k as QuestionKind, ...(k === 'dropdown' ? { other: undefined } : {}), ...(k !== 'multi' ? { fewest: undefined, most: undefined } : {}) })}
           items={[{ id: 'choice', label: 'Pick one' }, { id: 'multi', label: 'Pick several' }, { id: 'dropdown', label: 'Dropdown' }]} />}
         {HAS_OPTIONS.has(q.kind) && <OptionsEditor options={options} onChange={(next) => set({ options: next })} />}
-        {(q.kind === 'choice' || q.kind === 'multi') && <div className="tf-qset__row">
-          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Add “Other”</span><span className="tf-qset__row-sub">A last choice that opens a line to type in.</span></span>
-          <Switch isSelected={q.other ?? false} onChange={(other) => set({ other: other || undefined })} aria-label="Add Other" />
-        </div>}
-        {q.kind === 'multi' && <div className="tf-qset__pair">
-          <TextField label="Fewest picks" aside="Optional" inputMode="numeric" value={q.fewest === undefined ? '' : String(q.fewest)} onChange={(v) => { const n = Number(v.replace(/[^\d]/g, '')); set({ fewest: v.trim() === '' || !n ? undefined : n }); }}
-            isInvalid={q.fewest !== undefined && q.most !== undefined && q.fewest > q.most} errorMessage="More than the most." />
-          <TextField label="Most picks" aside="Optional" inputMode="numeric" value={q.most === undefined ? '' : String(q.most)} onChange={(v) => { const n = Number(v.replace(/[^\d]/g, '')); set({ most: v.trim() === '' || !n ? undefined : n }); }}
-            isInvalid={q.most !== undefined && q.most > options.length + (q.other ? 1 : 0)} errorMessage="More than there are choices." />
-        </div>}
-        {q.kind === 'date' && <div className="tf-qset__pair">
-          <Select label="Earliest day" value={q.earliest === undefined ? 'any' : q.earliest === 'today' ? 'today' : 'day'} onChange={(v) => set({ earliest: v === 'today' ? 'today' : v === 'day' ? q.earliest && q.earliest !== 'today' ? q.earliest : new Date().toISOString().slice(0, 10) : undefined })}
-            items={[{ id: 'any', label: 'Any day' }, { id: 'today', label: 'Today' }, { id: 'day', label: 'A day…' }]} />
-          <TextField label="Latest day" aside="Optional" type="date" value={q.latest ?? ''} onChange={(v) => set({ latest: v || undefined })} isInvalid={Boolean(q.latest && q.earliest && q.earliest !== 'today' && q.latest < q.earliest)} errorMessage="Before the earliest day." />
-        </div>}
-        {q.kind === 'date' && q.earliest && q.earliest !== 'today' && <TextField label="Earliest" type="date" value={q.earliest} onChange={(v) => set({ earliest: v || undefined })} />}
-        {(q.kind === 'number' || q.kind === 'scale') && <div className="tf-qset__pair">
-          <TextField label="Lowest" inputMode="numeric" value={q.min === undefined ? (q.kind === 'scale' ? '0' : '') : String(q.min)} onChange={(v) => set({ min: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
-          <TextField label="Highest" inputMode="numeric" value={q.max === undefined ? (q.kind === 'scale' ? '10' : '') : String(q.max)} onChange={(v) => set({ max: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
-        </div>}
-        {q.kind === 'scale' && <div className="tf-qset__pair">
-          <TextField label="Word under the lowest" value={q.low ?? ''} placeholder="Not likely" onChange={(low) => set({ low: low || undefined })} />
-          <TextField label="Word under the highest" value={q.high ?? ''} placeholder="Very likely" onChange={(high) => set({ high: high || undefined })} />
-        </div>}
         {q.kind === 'consent' && <SegmentedControl aria-label="Consent for" selectedKey={q.consentKind ?? 'terms'} onSelectionChange={(k) => set({ consentKind: k === 'marketing' ? 'marketing' : 'terms', required: k !== 'marketing' })} items={[{ id: 'terms', label: 'Terms (must tick)' }, { id: 'marketing', label: 'Marketing (optional)' }]} />}
- {q.kind === 'consent' && <p className="tf-qset__note">Consent record: each tick is kept on the submission with these exact words and when they ticked.</p>}
-        {(q.kind === 'checkbox' || q.kind === 'consent') && <TextField label="Words beside the box" value={q.defaultValue ?? ''} placeholder={q.kind === 'consent' ? (q.consentKind === 'marketing' ? 'Yes, email me news and offers' : 'I agree to the terms') : 'Yes'} onChange={(v) => set({ defaultValue: v || undefined })} />}
+        {(q.kind === 'checkbox' || q.kind === 'consent') && <TextField label="Words beside the box" value={q.defaultValue ?? ''} placeholder={q.kind === 'consent' ? (q.consentKind === 'marketing' ? 'Yes, email me news and offers' : 'I agree to the terms') : 'Yes'} onChange={(v) => set({ defaultValue: v || undefined })}
+          description={q.kind === 'consent' ? 'Each tick is kept with these words and its time.' : undefined} />}
         {q.kind === 'hidden' && <TextField label="Value when the link has none" value={q.defaultValue ?? ''} placeholder="website" description={`The link can set it: ?${(q.title || 'source').toLowerCase().replace(/[^a-z0-9]+/g, '_')}=newsletter`} onChange={(v) => set({ defaultValue: v || undefined })} />}
         {q.kind !== 'statement' && q.kind !== 'hidden' && <div className="tf-qset__row">
-          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Required</span><span className="tf-qset__row-sub">Visitors can't go on without an answer.</span></span>
+          <span className="tf-qset__row-label">Required</span>
           <Switch isSelected={q.required ?? false} onChange={(required) => set({ required })} aria-label="Required" />
         </div>}
-        {saveTargets && q.kind !== 'statement' && <Select label="Save answer to" value={q.saveTo ?? 'none'} onChange={(v) => set({ saveTo: !v || v === 'none' ? undefined : v })} description="The record field this answer fills in."
-          items={[{ id: 'none', label: 'Kept with the submission only' }, ...saveTargets.map((t) => ({ id: t.id, label: t.label }))]} />}
-        {saveTargets && q.saveTo && <div className="tf-qset__row">
-          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Replace what’s on the record</span><span className="tf-qset__row-sub">{q.overwrite ? 'A new answer replaces the value there.' : 'Off: only fills it when it’s empty; a different answer waits for you.'}</span></span>
-          <Switch isSelected={q.overwrite ?? false} onChange={(overwrite) => set({ overwrite: overwrite || undefined })} aria-label="Replace what’s on the record" />
-        </div>}
-        {(HAS_OPTIONS.has(q.kind) || q.kind === 'yesno') && q.kind !== 'ranking' && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'multi') && <div className="tf-qset__row">
-          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Use as “How did you hear about us” in Insights</span><span className="tf-qset__row-sub">Insights counts where people came from by this answer.</span></span>
-          <Switch isSelected={q.insights ?? false} onChange={(insights) => set({ insights: insights || undefined })} aria-label="Use in Insights" />
-        </div>}
-        <LogicSettings q={q} questions={questions} set={set} endings={endings} />
-        {logicProblems(q, questions, endings).map((w) => <p key={w} className="tf-qset__warn" role="alert"><TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />{w}. Pick again or remove it.</p>)}
+        {chips.length > 0 && <div className="tf-qset__chips" role="group" aria-label="Set under More options">{chips.map((c) => <RuleChip key={c.id} chip={c} onOpen={jump} />)}</div>}
+        <ShowMore showLabel="More options" hideLabel="Fewer options" isExpanded={more} onExpandedChange={setMore}>
+          <div className="tf-qset__more">
+            {group('rules', <>
+              {(q.kind === 'choice' || q.kind === 'multi') && <div className="tf-qset__line">
+                <span className="tf-qset__row-text"><span className="tf-qset__row-label">Add “Other”</span><span className="tf-qset__row-sub">A last choice to type in.</span></span>
+                <Switch isSelected={q.other ?? false} onChange={(other) => set({ other: other || undefined })} aria-label="Add Other" />
+              </div>}
+              {q.kind === 'multi' && <div className="tf-qset__pair">
+                <TextField label="Fewest picks" aside="Optional" inputMode="numeric" value={q.fewest === undefined ? '' : String(q.fewest)} onChange={(v) => { const n = Number(v.replace(/[^\d]/g, '')); set({ fewest: v.trim() === '' || !n ? undefined : n }); }}
+                  isInvalid={q.fewest !== undefined && q.most !== undefined && q.fewest > q.most} errorMessage="More than the most." />
+                <TextField label="Most picks" aside="Optional" inputMode="numeric" value={q.most === undefined ? '' : String(q.most)} onChange={(v) => { const n = Number(v.replace(/[^\d]/g, '')); set({ most: v.trim() === '' || !n ? undefined : n }); }}
+                  isInvalid={q.most !== undefined && q.most > options.length + (q.other ? 1 : 0)} errorMessage="More than there are choices." />
+              </div>}
+              {q.kind === 'date' && <div className="tf-qset__pair">
+                <Select label="Earliest day" value={q.earliest === undefined ? 'any' : q.earliest === 'today' ? 'today' : 'day'} onChange={(v) => set({ earliest: v === 'today' ? 'today' : v === 'day' ? q.earliest && q.earliest !== 'today' ? q.earliest : new Date().toISOString().slice(0, 10) : undefined })}
+                  items={[{ id: 'any', label: 'Any day' }, { id: 'today', label: 'Today' }, { id: 'day', label: 'A day…' }]} />
+                <TextField label="Latest day" aside="Optional" type="date" value={q.latest ?? ''} onChange={(v) => set({ latest: v || undefined })} isInvalid={Boolean(q.latest && q.earliest && q.earliest !== 'today' && q.latest < q.earliest)} errorMessage="Before the earliest day." />
+              </div>}
+              {q.kind === 'date' && q.earliest && q.earliest !== 'today' && <TextField label="Earliest" type="date" value={q.earliest} onChange={(v) => set({ earliest: v || undefined })} />}
+              {(q.kind === 'number' || q.kind === 'scale') && <div className="tf-qset__pair">
+                <TextField label="Lowest" inputMode="numeric" value={q.min === undefined ? (q.kind === 'scale' ? '0' : '') : String(q.min)} onChange={(v) => set({ min: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
+                <TextField label="Highest" inputMode="numeric" value={q.max === undefined ? (q.kind === 'scale' ? '10' : '') : String(q.max)} onChange={(v) => set({ max: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
+              </div>}
+              {q.kind === 'scale' && <div className="tf-qset__pair">
+                <TextField label="Word under the lowest" value={q.low ?? ''} placeholder="Not likely" onChange={(low) => set({ low: low || undefined })} />
+                <TextField label="Word under the highest" value={q.high ?? ''} placeholder="Very likely" onChange={(high) => set({ high: high || undefined })} />
+              </div>}
+            </>)}
+            {group('logic', <>
+              <LogicSettings q={q} questions={questions} set={set} endings={endings} />
+              {logicProblems(q, questions, endings).map((w) => <p key={w} className="tf-qset__warn" role="alert"><TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />{w}. Pick again or remove it.</p>)}
+            </>)}
+            {group('saves', <>
+              {saveTargets && q.kind !== 'statement' && <Select label="Save answer to" value={q.saveTo ?? 'none'} onChange={(v) => set({ saveTo: !v || v === 'none' ? undefined : v })}
+                items={[{ id: 'none', label: 'Kept with the submission only' }, ...saveTargets.map((t) => ({ id: t.id, label: t.label }))]} />}
+              {saveTargets && q.saveTo && <div className="tf-qset__line">
+                <span className="tf-qset__row-text"><span className="tf-qset__row-label">Replace what’s on the record</span><span className="tf-qset__row-sub">{q.overwrite ? 'A new answer replaces the value there.' : 'Off: only fills it when empty.'}</span></span>
+                <Switch isSelected={q.overwrite ?? false} onChange={(overwrite) => set({ overwrite: overwrite || undefined })} aria-label="Replace what’s on the record" />
+              </div>}
+              {(q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'multi') && <div className="tf-qset__line">
+                <span className="tf-qset__row-text"><span className="tf-qset__row-label">Use as “How did you hear about us” in Insights</span></span>
+                <Switch isSelected={q.insights ?? false} onChange={(insights) => set({ insights: insights || undefined })} aria-label="Use in Insights" />
+              </div>}
+            </>)}
+            {group('help', <>
+              <TextField label="Description" aside="Optional" value={q.description ?? ''} onChange={(description) => set({ description: description || undefined })} placeholder="A line of help under the question" />
+              {HAS_PLACEHOLDER.has(q.kind) && <TextField label="Placeholder" aside="Optional" value={q.placeholder ?? ''} onChange={(placeholder) => set({ placeholder: placeholder || undefined })} />}
+            </>)}
+          </div>
+        </ShowMore>
       </div>
     </aside>
   );
 }
 
-/** Show only if, steps, jumps and points, folded under More options so a plain question stays calm. */
+/** Show only if, steps, jumps and points: the Logic and points group of More options. */
 function LogicSettings({ q, questions, set, endings }: { readonly q: FormQuestion; readonly questions: ReadonlyArray<FormQuestion>; readonly set: (patch: Partial<FormQuestion>) => void; readonly endings: ReadonlyArray<JumpEnding> }) {
   const at = questions.findIndex((x) => x.id === q.id);
   const earlier = questions.slice(0, Math.max(0, at)).filter((x) => HAS_OPTIONS.has(x.kind) || x.kind === 'yesno');
@@ -423,46 +502,43 @@ function LogicSettings({ q, questions, set, endings }: { readonly q: FormQuestio
   const setJump = (is: string, v: string | null) => { const rest = (q.jumps ?? []).filter((j) => j.is !== is); set({ jumps: !v || v === 'next' ? (rest.length ? rest : undefined) : [...rest, { is, to: v }] }); };
   const source = questions.find((x) => x.id === q.showIf?.questionId);
   const choices = answersOf(q);
-  const hasLogic = Boolean(q.showIf || q.jumps?.length || q.points || q.step);
   return (
-    <ShowMore showLabel="Logic and points" hideLabel="Hide logic and points" defaultExpanded={hasLogic}>
-      <div className="tf-qset__logic">
-        <div className="tf-qset__group">
-          <span className="tf-qset__row-label">Show only if</span>
-          {earlier.length === 0 ? <span className="tf-qset__row-sub">Add an earlier choice question first.</span> : <div className="tf-qset__pair">
-            <Select label="Question" isLabelHidden value={q.showIf?.questionId ?? 'always'} onChange={(v) => { if (!v || v === 'always') set({ showIf: undefined }); else set({ showIf: { questionId: v, is: answersOf(questions.find((x) => x.id === v))[0] ?? '' } }); }}
-              items={[{ id: 'always', label: 'Always show' }, ...earlier.map((x) => ({ id: x.id, label: x.title || 'Untitled question' }))]} />
-            {q.showIf && <Select label="Answer" isLabelHidden value={q.showIf.is} onChange={(v) => { if (v && q.showIf) set({ showIf: { ...q.showIf, is: v } }); }} items={answersOf(source).map((o) => ({ id: o, label: `is ${o}` }))} />}
-          </div>}
-          {q.showIf && <span className="tf-qset__row-sub">Hidden answers aren’t kept.</span>}
-        </div>
-        {at > 0 && <div className="tf-qset__row">
-          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Start a new step here</span><span className="tf-qset__row-sub">One question at a time shows a step as one page.</span></span>
-          <Switch isSelected={q.step !== undefined} onChange={(on) => set({ step: on ? {} : undefined })} aria-label="Start a new step here" />
+    <>
+      <div className="tf-qset__group">
+        <span className="tf-qset__row-label">Show only if</span>
+        {earlier.length === 0 ? <span className="tf-qset__row-sub">Add an earlier choice question first.</span> : <div className="tf-qset__pair">
+          <Select label="Question" isLabelHidden value={q.showIf?.questionId ?? 'always'} onChange={(v) => { if (!v || v === 'always') set({ showIf: undefined }); else set({ showIf: { questionId: v, is: answersOf(questions.find((x) => x.id === v))[0] ?? '' } }); }}
+            items={[{ id: 'always', label: 'Always show' }, ...earlier.map((x) => ({ id: x.id, label: x.title || 'Untitled question' }))]} />
+          {q.showIf && <Select label="Answer" isLabelHidden value={q.showIf.is} onChange={(v) => { if (v && q.showIf) set({ showIf: { ...q.showIf, is: v } }); }} items={answersOf(source).map((o) => ({ id: o, label: `is ${o}` }))} />}
         </div>}
-        {q.step && <TextField label="Step title" aside="Optional" value={q.step.title ?? ''} onChange={(title) => set({ step: { title: title || undefined } })} placeholder="About your company" />}
-        {choices.length > 0 && <div className="tf-qset__group">
-          <span className="tf-qset__row-label">After this question</span>
-          <ul className="tf-qset__jumps">
-            {choices.map((o) => {
-              const to = q.jumps?.find((j) => j.is === o)?.to ?? 'next';
-              return <li key={o} className="tf-qset__jump"><span className="tf-qset__jump-if">If {o}</span>
-                <Select label={`After ${o}, go to`} isLabelHidden value={destinations.some((d) => d.id === to) ? to : null} placeholder="Pick again" onChange={(v) => setJump(o, v)} items={destinations} /></li>;
-            })}
-            {q.jumps?.some((j) => j.is !== '*') && <li className="tf-qset__jump"><span className="tf-qset__jump-if">Otherwise</span>
-              <Select label="Otherwise, go to" isLabelHidden value={q.jumps.find((j) => j.is === '*')?.to ?? 'next'} onChange={(v) => setJump('*', v)} items={destinations} /></li>}
-          </ul>
-        </div>}
-        {choices.length > 0 && q.kind !== 'yesno' && <div className="tf-qset__group">
-          <div className="tf-qset__row">
-            <span className="tf-qset__row-text"><span className="tf-qset__row-label">Give points</span><span className="tf-qset__row-sub">Each answer adds its points; the total is the score.</span></span>
-            <Switch isSelected={q.points !== undefined} onChange={(on) => set({ points: on ? Object.fromEntries(choices.map((o, n) => [o, n])) : undefined })} aria-label="Give points" />
-          </div>
-          {q.points && <ul className="tf-qset__jumps">{choices.map((o) => <li key={o} className="tf-qset__jump"><span className="tf-qset__jump-if">{o}</span>
-            <NumberField aria-label={`Points for ${o}`} value={q.points?.[o] ?? 0} minValue={-100} maxValue={100} onChange={(n) => set({ points: { ...(q.points ?? {}), [o]: Number.isFinite(n) ? n : 0 } })} /></li>)}</ul>}
-        </div>}
+        {q.showIf && <span className="tf-qset__row-sub">Hidden answers aren’t kept.</span>}
       </div>
-    </ShowMore>
+      {at > 0 && <div className="tf-qset__line">
+        <span className="tf-qset__row-text"><span className="tf-qset__row-label">Start a new step here</span><span className="tf-qset__row-sub">A step shows as one page.</span></span>
+        <Switch isSelected={q.step !== undefined} onChange={(on) => set({ step: on ? {} : undefined })} aria-label="Start a new step here" />
+      </div>}
+      {q.step && <TextField label="Step title" aside="Optional" value={q.step.title ?? ''} onChange={(title) => set({ step: { title: title || undefined } })} placeholder="About your company" />}
+      {choices.length > 0 && <div className="tf-qset__group">
+        <span className="tf-qset__row-label">After this question</span>
+        <ul className="tf-qset__jumps">
+          {choices.map((o) => {
+            const to = q.jumps?.find((j) => j.is === o)?.to ?? 'next';
+            return <li key={o} className="tf-qset__jump"><span className="tf-qset__jump-if">If {o}</span>
+              <Select label={`After ${o}, go to`} isLabelHidden value={destinations.some((d) => d.id === to) ? to : null} placeholder="Pick again" onChange={(v) => setJump(o, v)} items={destinations} /></li>;
+          })}
+          {q.jumps?.some((j) => j.is !== '*') && <li className="tf-qset__jump"><span className="tf-qset__jump-if">Otherwise</span>
+            <Select label="Otherwise, go to" isLabelHidden value={q.jumps.find((j) => j.is === '*')?.to ?? 'next'} onChange={(v) => setJump('*', v)} items={destinations} /></li>}
+        </ul>
+      </div>}
+      {choices.length > 0 && q.kind !== 'yesno' && <div className="tf-qset__group">
+        <div className="tf-qset__line">
+          <span className="tf-qset__row-text"><span className="tf-qset__row-label">Give points</span><span className="tf-qset__row-sub">The total is the score.</span></span>
+          <Switch isSelected={q.points !== undefined} onChange={(on) => set({ points: on ? Object.fromEntries(choices.map((o, n) => [o, n])) : undefined })} aria-label="Give points" />
+        </div>
+        {q.points && <ul className="tf-qset__jumps">{choices.map((o) => <li key={o} className="tf-qset__jump"><span className="tf-qset__jump-if">{o}</span>
+          <NumberField aria-label={`Points for ${o}`} value={q.points?.[o] ?? 0} minValue={-100} maxValue={100} onChange={(n) => set({ points: { ...(q.points ?? {}), [o]: Number.isFinite(n) ? n : 0 } })} /></li>)}</ul>}
+      </div>}
+    </>
   );
 }
 
@@ -516,6 +592,8 @@ export interface QuestionBuilderProps {
 /** The builder's Questions tab: the list, and a question opens in its place with "All questions" to go back, so the page keeps one editor column beside its one preview. Delete collapses to "Deleted · Undo" for 6s. */
 export function QuestionBuilder({ questions, onChange, kinds, title, saveTargets, presets = QUESTION_PRESETS, endings }: QuestionBuilderProps) {
   const [selected, setSelected] = useState<string | undefined>(undefined);
+  // A card's chip opens its question with More options open at the chip's group.
+  const [section, setSection] = useState<QuestionSection>();
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const [undo, setUndo] = useState<{ readonly question: FormQuestion; readonly index: number }>();
   const timer = useRef<number | undefined>(undefined);
@@ -523,6 +601,7 @@ export function QuestionBuilder({ questions, onChange, kinds, title, saveTargets
   const insert = (q: FormQuestion, at: number) => {
     onChange([...questions.slice(0, at), q, ...questions.slice(at)]);
     setFresh(new Set([q.id]));
+    setSection(undefined);
     setSelected(q.id);
   };
   const remove = (id: string) => {
@@ -552,16 +631,17 @@ export function QuestionBuilder({ questions, onChange, kinds, title, saveTargets
       {open ? (
         <div className="tf-qbuilder__open" key={open.id}>
           <div className="tf-qbuilder__nav">
-            <Button size="sm" variant="ghost" icon={<ArrowLeft {...i16} />} onPress={() => setSelected(undefined)}>All questions</Button>
+            <Button size="sm" variant="ghost" icon={<ArrowLeft {...i16} />} onPress={() => { setSelected(undefined); setSection(undefined); }}>All questions</Button>
             <span className="tf-qbuilder__pos tf-num">{at + 1} of {questions.length}</span>
           </div>
-          <QuestionSettings question={open} questions={questions} saveTargets={saveTargets} endings={endings} onChange={(next) => onChange(questions.map((q) => (q.id === next.id ? next : q)))} />
+          <QuestionSettings question={open} questions={questions} saveTargets={saveTargets} endings={endings} openSection={section} onChange={(next) => onChange(questions.map((q) => (q.id === next.id ? next : q)))} />
         </div>
       ) : (
         <QuestionList
           questions={questions}
           selectedId={selected}
-          onSelect={setSelected}
+          onSelect={(id) => { setSection(undefined); setSelected(id); }}
+          onOpenSection={(id, sec) => { setSection(sec); setSelected(id); }}
           onReorder={onChange}
           onDuplicate={(id) => { const n = questions.findIndex((q) => q.id === id); const q = questions[n]; if (q) insert({ ...q, id: newId(), title: q.title ? `${q.title} (copy)` : '' }, n + 1); }}
           onDelete={remove}

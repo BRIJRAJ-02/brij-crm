@@ -1,6 +1,8 @@
 /* The public link page. A look is a set of --tf-lp-* values that LinkList, LinkGrid, LinkCard and SocialLinks read;
    switching looks eases every colour over 250ms. Night is the dark theme on this subtree. */
 .tf-linkpage {
+  /* A pack with one weight (Display) draws regular, never a synthesised bold. */
+  font-synthesis: none;
   --tf-lp-bg: var(--canvas);
   --tf-lp-text: var(--text);
   --tf-lp-muted: var(--text-secondary);

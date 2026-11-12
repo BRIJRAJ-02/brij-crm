@@ -92,6 +92,10 @@
 /* The inline editor sits over its cell. */
 .tf-grid__editor { min-width: max(var(--trigger-width), calc(var(--size-menu) * 0.75)); padding: var(--space-4); }
 .tf-grid__field { display: flex; }
+/* A refused edit: the box turns red and the reason sits under it until the value changes or Esc. */
+.tf-grid__input[data-invalid] { border-color: var(--danger); box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft); }
+.tf-grid__refused { display: flex; align-items: flex-start; gap: var(--space-6); max-width: var(--size-menu); margin: 0; padding: var(--space-6) var(--space-4) var(--space-2); color: var(--danger); font: 500 13px/18px var(--font-sans); }
+.tf-grid__refused > svg { flex: none; margin-top: var(--space-2); }
 .tf-grid__input {
   width: 100%; height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md);
   border: var(--border-width-hairline) solid var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);

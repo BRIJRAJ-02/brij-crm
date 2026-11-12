@@ -22,6 +22,8 @@ export interface SelectOption {
   readonly hue?: Hue;
   /** A 16px icon or Avatar before a plain label. */
   readonly icon?: ReactNode;
+  /** Draws the label in this font stack, a token or pack variable (a font list previews each face). */
+  readonly face?: string;
   readonly isDisabled?: boolean;
 }
 
@@ -67,7 +69,7 @@ export interface MultiSelectProps extends SelectCommon {
 
 function OptionFace({ item, style }: { readonly item: SelectOption; readonly style: 'plain' | 'tag' }) {
   if (style === 'tag' || item.status || item.hue) return <Tag size="sm" status={item.status} hue={item.hue}>{item.label}</Tag>;
-  return <>{item.icon !== undefined && <span className="tf-select__icon" aria-hidden="true">{item.icon}</span>}<span className="tf-select__value-text">{item.label}</span></>;
+  return <>{item.icon !== undefined && <span className="tf-select__icon" aria-hidden="true">{item.icon}</span>}<span className="tf-select__value-text" style={item.face ? { fontFamily: item.face } : undefined}>{item.label}</span></>;
 }
 
 function Tick() {

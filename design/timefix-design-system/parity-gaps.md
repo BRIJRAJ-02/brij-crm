@@ -129,3 +129,16 @@ Wave D2 notes: every drag list goes through src/lib/drag.ts (dnd-kit, zoom-safe)
 - [x] History: sign-ins move to Account (as the real app)
 
 Wave E notes: Webhooks sits under Settings › Developer (the real app parks it out of the nav); the real app has 36 role powers; there is no plans UI in the real app, so "ask for more room" opens an email dialog; public pages and Super admin are in the Demo menu. House rules: no screen CSS reaches into a library part (SettingsLayout narrowPane/contentInset, WeekCalendar fillHeight/narrowScroll, HostedFormPreview showBar, PoweredByFoot, BrandCard variant, DoneMark, WeekPopActions, TileGrid compact); Breadcrumbs and AppShell carry their own phone rules.
+
+## Finishing pass (12 Nov)
+- [x] Form question settings calm: type, words, choices, Required up front; Answer rules, Logic and points, Saves to, Help text behind More options; chips for every rule that's set open its group. Link blocks fold the same way.
+- [x] Form language covers answer checks and the guest's own words (placeholders, Other, pickers, dates) in English, Hindi, Spanish, French, German.
+- [x] Link import: "Paste the page" (HTML or text), reviewed with ticks; the address field says the real app fetches it.
+- [x] Fonts: the real app's nine faces (Host Grotesk, Fraunces, Newsreader, Bricolage Grotesque, Outfit, Instrument Serif via Google Fonts) on menu and link page Design.
+- [x] Formula kind stays fixed, as in the real app, and the dialog says why.
+- [x] Won/Lost read from each stage's outcome everywhere.
+- [x] "Required when" enforced on table cell edits, paste and bulk clear.
+- [x] Menu look carries to business and reservation pages and their popups; link page and form popups wear their look.
+- [x] Insights seeded 180 days (realistic deltas); table QR item says "View menu"; a double-click edit no longer opens the record panel.
+
+Still English: PhoneField's country picker, Country question names, the thank-you's answer readback; "Powered by Timefix" stays English on purpose.

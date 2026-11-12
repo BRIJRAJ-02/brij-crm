@@ -131,6 +131,7 @@ function ComputedDialog({ state, o, kind, attribute, onClose, onSave, onArchive 
       actions={<>{onArchive && <Button variant="ghost" onPress={onArchive}>Archive</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!ready} onPress={() => onSave(draft)}>{attribute ? 'Save' : `Create ${title.toLowerCase()}`}</Button></>}>
       <div className="tf-rec__form">
         <TextField label="Name" value={name} onChange={setName} autoFocus={!attribute} placeholder={kind === 'formula' ? 'Weighted value' : kind === 'lookup' ? 'Company industry' : 'Open deals'} />
+        {attribute && <span className="tf-rec__muted">{`It stays a ${title.toLowerCase()}: for ${kind === 'formula' ? 'a lookup or rollup' : kind === 'lookup' ? 'a formula or rollup' : 'a formula or lookup'}, or a different result type, create a new attribute.`}</span>}
         {kind === 'formula' ? (
           <FormulaEditor label="Formula" value={source} onChange={setSource} attributes={formulaAttributes(state, o.id)} sample={{ name: sample?.name ?? 'A record', values: Object.fromEntries(Object.entries(sample ? valuesOf(state, o.id, sample, 2) : {}).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, Number(v)])) }} />
         ) : (

@@ -2,7 +2,7 @@ Disclosure rows fold content away under a 44px head that opens a panel below it,
 
 **Use it for**: grouped settings on a booking page or form (Availability, Booking questions, Notifications), FAQs on public pages, filter sections, and the advanced options of a settings section. **Don't use it for**: switching between peer sections (use `Tabs`) or hiding the only thing on a page.
 
-**The consumer provides**: `DisclosureGroup` (`allowsMultipleExpanded`, `defaultExpandedKeys` or controlled `expandedKeys`, `variant` `card` or `plain`) holding `DisclosureItem`s (`id`, `title`, optional grey `description`, 16px `icon`, an `end` slot for a Count or Tag, `isDisabled`). `ShowMore` takes the advanced fields as children and optional show and hide labels.
+**The consumer provides**: `DisclosureGroup` (`allowsMultipleExpanded`, `defaultExpandedKeys` or controlled `expandedKeys`, `variant` `card` or `plain`) holding `DisclosureItem`s (`id`, `title`, optional grey `description`, 16px `icon`, an `end` slot for a Count or Tag, `isDisabled`). `ShowMore` takes the advanced fields as children and optional show and hide labels; pass `isExpanded` and `onExpandedChange` to open it from outside (a chip that jumps to a folded setting).
 
 **States**: closed, hover (row washes), open (chevron points up), focus-visible (ring inside the row), disabled.
 

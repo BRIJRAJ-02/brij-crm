@@ -18,8 +18,8 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { TimeField } from '../TimeField/TimeField.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import {
-  COUNTRIES, OTHER_PREFIX, dayBound, isAddress, isBooking, isFiles, isList, isPhone, isText,
-  type AddressValue, type AnswerValue, type BookingSource, type FileAnswer, type FormQuestion,
+  COUNTRIES, GUEST_WORDS, OTHER_PREFIX, dayBound, isAddress, isBooking, isFiles, isList, isPhone, isText, localeOf,
+  type AddressValue, type AnswerValue, type BookingSource, type FileAnswer, type FormLang, type FormQuestion, type GuestWords,
 } from './answers.ts';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -41,60 +41,63 @@ export interface QuestionInputProps {
   readonly onPicked?: () => void;
   readonly booking?: BookingSource;
   readonly onUpload?: UploadFile;
+  /** The form's language: placeholders, hints, Other, the file drop and the pickers' words (GUEST_WORDS). English when left out. */
+  readonly lang?: FormLang;
 }
 
 /** The guest control for one question: 44px, 16px text, filled boxes, choice cards with letter keys. */
 export function QuestionInput(props: QuestionInputProps) {
   const { question: q, value, onChange, labelId, isInvalid } = props;
+  const g = GUEST_WORDS[props.lang ?? 'en'];
   const text = isText(value) ? value : '';
   switch (q.kind) {
     case 'short':
-      return <TextField size="lg" aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? 'Type your answer'} isInvalid={isInvalid} />;
+      return <TextField size="lg" aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? g.typeAnswer} isInvalid={isInvalid} />;
     case 'email':
       return <TextField size="lg" type="email" autoComplete="email" aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? 'name@company.com'} isInvalid={isInvalid} />;
     case 'long':
-      return <TextArea size="lg" rows={3} aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? 'Type your answer'} isInvalid={isInvalid} description="Shift + Enter for a new line" />;
+      return <TextArea size="lg" rows={3} aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? g.typeAnswer} isInvalid={isInvalid} description={g.newLine} />;
     case 'phone':
-      return <PhoneField size="lg" label="Phone number" value={isPhone(value) ? value : undefined} onChange={onChange} isInvalid={isInvalid} />;
+      return <PhoneField size="lg" label={g.phone} value={isPhone(value) ? value : undefined} onChange={onChange} isInvalid={isInvalid} />;
     case 'choice':
     case 'multi':
       return <ChoiceCards {...props} />;
     case 'dropdown':
       return <Dropdown {...props} />;
     case 'rating':
-      return <StarRating value={typeof value === 'number' ? value : undefined} onChange={(n, goOn) => { onChange(n); if (goOn) props.onPicked?.(); }} labelId={labelId} />;
+      return <StarRating value={typeof value === 'number' ? value : undefined} onChange={(n, goOn) => { onChange(n); if (goOn) props.onPicked?.(); }} labelId={labelId} words={g} />;
     case 'date':
-      return <DateAnswer value={text} onChange={onChange} labelId={labelId} isInvalid={isInvalid} earliest={dayBound(q.earliest)} latest={dayBound(q.latest)} />;
+      return <DateAnswer value={text} onChange={onChange} labelId={labelId} isInvalid={isInvalid} words={g} earliest={dayBound(q.earliest)} latest={dayBound(q.latest)} />;
     case 'file':
       return <FileAnswerInput {...props} />;
     case 'address':
-      return <AddressInput value={isAddress(value) ? value : undefined} onChange={onChange} labelId={labelId} />;
+      return <AddressInput value={isAddress(value) ? value : undefined} onChange={onChange} labelId={labelId} words={g} />;
     case 'ranking':
-      return <Ranking options={isList(value) ? value : q.options ?? []} onChange={onChange} labelId={labelId} />;
+      return <Ranking options={isList(value) ? value : q.options ?? []} onChange={onChange} labelId={labelId} words={g} />;
     case 'signature':
-      return <SignaturePad value={text} onChange={onChange} labelId={labelId} />;
+      return <SignaturePad value={text} onChange={onChange} labelId={labelId} words={g} />;
     case 'booking':
-      return props.booking ? <BookingPicker source={props.booking} value={isBooking(value) ? value : undefined} onChange={(v) => { onChange(v); }} labelId={labelId} /> : null;
+      return props.booking ? <BookingPicker source={props.booking} value={isBooking(value) ? value : undefined} onChange={(v) => { onChange(v); }} labelId={labelId} words={g} locale={localeOf(props.lang ?? 'en')} /> : null;
     case 'url':
       return <TextField size="lg" type="url" inputMode="url" autoComplete="url" aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? 'example.com'} isInvalid={isInvalid} />;
     case 'number':
-      return <TextField size="lg" inputMode="decimal" aria-labelledby={labelId} value={text} onChange={(v) => onChange(v.replace(/[^\d.,-]/g, ''))} placeholder={q.placeholder ?? (q.min !== undefined && q.max !== undefined ? `${q.min} to ${q.max}` : 'A number')} isInvalid={isInvalid} />;
+      return <TextField size="lg" inputMode="decimal" aria-labelledby={labelId} value={text} onChange={(v) => onChange(v.replace(/[^\d.,-]/g, ''))} placeholder={q.placeholder ?? (q.min !== undefined && q.max !== undefined ? g.range(q.min, q.max) : g.aNumber)} isInvalid={isInvalid} />;
     case 'yesno':
       return <ChoiceCards {...props} question={{ ...q, kind: 'choice', options: ['Yes', 'No'] }} />;
     case 'country':
       return <Dropdown {...props} question={{ ...q, options: q.options?.length ? q.options : COUNTRIES }} />;
     case 'checkbox':
     case 'consent':
-      return <TickBox label={q.defaultValue || (q.kind === 'consent' ? (q.consentKind === 'marketing' ? 'Yes, email me news and offers' : 'I agree to the terms') : 'Yes')} checked={text === 'Yes'} onChange={(on) => onChange(on ? 'Yes' : '')} labelId={labelId} isInvalid={isInvalid} />;
+      return <TickBox label={q.defaultValue || (q.kind === 'consent' ? (q.consentKind === 'marketing' ? g.news : g.agree) : g.yes)} checked={text === 'Yes'} onChange={(on) => onChange(on ? 'Yes' : '')} labelId={labelId} isInvalid={isInvalid} />;
     case 'time':
-      return <TimeAnswer value={text} onChange={onChange} labelId={labelId} />;
+      return <TimeAnswer value={text} onChange={onChange} labelId={labelId} label={g.time} />;
     case 'datetime': {
       const [d = '', t = ''] = text.split('T');
       const join = (dd: string, tt: string) => onChange(dd || tt ? `${dd}T${tt}` : '');
-      return <div className="tf-hq__pair"><DateAnswer value={d} onChange={(v) => join(v, t)} labelId={labelId} isInvalid={isInvalid} /><TimeAnswer value={t} onChange={(v) => join(d, v)} labelId={labelId} /></div>;
+      return <div className="tf-hq__pair"><DateAnswer value={d} onChange={(v) => join(v, t)} labelId={labelId} isInvalid={isInvalid} words={g} /><TimeAnswer value={t} onChange={(v) => join(d, v)} labelId={labelId} label={g.time} /></div>;
     }
     case 'scale':
-      return <Scale min={q.min ?? 0} max={q.max ?? 10} low={q.low ?? 'Not likely'} high={q.high ?? 'Very likely'} value={typeof value === 'number' ? value : undefined} onChange={(n) => { onChange(n); props.onPicked?.(); }} labelId={labelId} isInvalid={isInvalid} />;
+      return <Scale min={q.min ?? 0} max={q.max ?? 10} low={q.low ?? g.notLikely} high={q.high ?? g.veryLikely} value={typeof value === 'number' ? value : undefined} onChange={(n) => { onChange(n); props.onPicked?.(); }} labelId={labelId} isInvalid={isInvalid} />;
     case 'statement':
     case 'hidden':
       return null;
@@ -105,7 +108,11 @@ export function QuestionInput(props: QuestionInputProps) {
 
 /** Choice cards: full width rows with a letter key; the letter on the keyboard picks it. Single picks tick and may go on.
  *  With `other`, a last "Other" card opens a line to type in; its answer reads "Other: <words>". Multiple choice says its pick limits. */
-function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicked }: QuestionInputProps) {
+function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicked, lang }: QuestionInputProps) {
+  const g = GUEST_WORDS[lang ?? 'en'];
+  // Yes or no and Other keep their English answers (logic and reports read them); the guest reads them in the form's language.
+  const yesNo = q.options?.length === 2 && q.options[0] === 'Yes' && q.options[1] === 'No';
+  const shownAs = (opt: string) => (opt === 'Other' && q.other ? g.other : yesNo && opt === 'Yes' ? g.yes : yesNo && opt === 'No' ? g.no : opt);
   const options = q.other ? [...(q.options ?? []), 'Other'] : q.options ?? [];
   const multi = q.kind === 'multi';
   const raw = isList(value) ? value : [];
@@ -135,13 +142,13 @@ function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicke
   const card = (opt: string, n: number) => (
     <>
       <span className="tf-hq__key" aria-hidden="true">{LETTERS[n]}</span>
-      <span className="tf-hq__choice-label">{opt}</span>
+      <span className="tf-hq__choice-label">{shownAs(opt)}</span>
       <svg className="tf-hq__tick" width={18} height={18} viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength={1} /></svg>
     </>
   );
   const limits = multi && (q.fewest !== undefined || q.most !== undefined)
-    ? q.fewest !== undefined && q.most !== undefined ? (q.fewest === q.most ? `Pick ${q.fewest}. ` : `Pick ${q.fewest} to ${q.most}. `) : q.most !== undefined ? `Pick up to ${q.most}. ` : `Pick at least ${q.fewest ?? 1}. `
-    : multi ? 'Pick as many as fit. ' : '';
+    ? `${q.fewest !== undefined && q.most !== undefined ? (q.fewest === q.most ? g.pickExactly(q.fewest) : g.pickRange(q.fewest, q.most)) : q.most !== undefined ? g.pickUpTo(q.most) : g.pickAtLeast(q.fewest ?? 1)} `
+    : multi ? `${g.pickAny} ` : '';
   return (
     <div onKeyDown={onKeyDown} onPointerDown={() => { byPointer.current = true; }}>
       {multi ? (
@@ -153,21 +160,22 @@ function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicke
           {options.map((opt, n) => <Radio key={opt} value={opt} className="tf-hq__choice">{card(opt, n)}</Radio>)}
         </RadioGroup>
       )}
-      {otherOn && <div className="tf-hq__other"><TextField size="lg" aria-label="Other, in your words" value={otherWords} placeholder="Type your answer" autoFocus
+      {otherOn && <div className="tf-hq__other"><TextField size="lg" aria-label={g.otherLabel} value={otherWords} placeholder={g.typeOwn} autoFocus
         onChange={(w) => onChange(multi ? picked.map((x) => (x === 'Other' ? `${OTHER_PREFIX}${w}` : x)) : `${OTHER_PREFIX}${w}`)} /></div>}
-      <p className="tf-hq__aside">{limits}Press a letter to pick.</p>
+      <p className="tf-hq__aside">{limits}{g.pressLetter}</p>
     </div>
   );
 }
 
 /** A long list in a 44px filled trigger that opens the shared Popover (05 menu dropdown); stays pressed while open. */
-function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked }: QuestionInputProps) {
+function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked, lang }: QuestionInputProps) {
+  const g = GUEST_WORDS[lang ?? 'en'];
   const items = (q.options ?? []).map((o) => ({ id: o }));
   return (
     <Select aria-labelledby={labelId} selectedKey={isText(value) && value ? value : null} isInvalid={isInvalid}
       onSelectionChange={(k: Key | null) => { if (k !== null) { onChange(String(k)); onPicked?.(); } }} className="tf-hq__select">
       <AriaButton className="tf-hq__box tf-hq__trigger">
-        <SelectValue className="tf-hq__value">{({ isPlaceholder, selectedText }) => (isPlaceholder ? <span className="tf-hq__placeholder">Choose…</span> : selectedText)}</SelectValue>
+        <SelectValue className="tf-hq__value">{({ isPlaceholder, selectedText }) => (isPlaceholder ? <span className="tf-hq__placeholder">{g.choose}</span> : selectedText)}</SelectValue>
         <ChevronDown {...i16} className="tf-hq__chev" aria-hidden />
       </AriaButton>
       <Popover width="trigger" className="tf-hq__pop">
@@ -185,17 +193,17 @@ function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked }
 }
 
 /** Five 44px stars; hovering previews the rating, a pick pops the star (02 pop-in on the bounce curve). */
-function StarRating({ value, onChange, labelId }: { readonly value?: number; readonly onChange: (n: number, byPointer: boolean) => void; readonly labelId: string }) {
+function StarRating({ value, onChange, labelId, words: g }: { readonly value?: number; readonly onChange: (n: number, byPointer: boolean) => void; readonly labelId: string; readonly words: GuestWords }) {
   const [hover, setHover] = useState<number>();
   const byPointer = useRef(false);
   const lit = hover ?? value ?? 0;
-  const words = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+  const words = ['', ...g.stars];
   return (
     <div className="tf-hq__rating-row" onPointerDown={() => { byPointer.current = true; }}>
       <RadioGroup aria-labelledby={labelId} orientation="horizontal" value={value ? String(value) : null} onChange={(v) => { onChange(Number(v), byPointer.current); byPointer.current = false; }}
         className="tf-hq__rating">
         {[1, 2, 3, 4, 5].map((n) => (
-          <Radio key={n} value={String(n)} aria-label={`${n} of 5, ${words[n]}`} className={cx('tf-hq__star', n <= lit && 'is-lit')}
+          <Radio key={n} value={String(n)} aria-label={g.ofFive(n, words[n] ?? '')} className={cx('tf-hq__star', n <= lit && 'is-lit')}
             onHoverStart={() => setHover(n)} onHoverEnd={() => setHover(undefined)}>
             <Star size={28} strokeWidth={1.5} aria-hidden="true" />
           </Radio>
@@ -207,7 +215,7 @@ function StarRating({ value, onChange, labelId }: { readonly value?: number; rea
 }
 
 /** A date typed in segments or picked from the shared Calendar, in a 44px filled box. */
-function DateAnswer({ value, onChange, labelId, isInvalid, earliest, latest }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly isInvalid?: boolean; /** YYYY-MM-DD bounds: days outside them can't be picked. */ readonly earliest?: string; readonly latest?: string }) {
+function DateAnswer({ value, onChange, labelId, isInvalid, earliest, latest, words: g }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly isInvalid?: boolean; readonly words: GuestWords; /** YYYY-MM-DD bounds: days outside them can't be picked. */ readonly earliest?: string; readonly latest?: string }) {
   let parsed: CalendarDate | null = null;
   try { parsed = value ? parseDate(value) : null; } catch { parsed = null; }
   const bound = (b: string | undefined) => { try { return b ? parseDate(b) : undefined; } catch { return undefined; } };
@@ -215,9 +223,9 @@ function DateAnswer({ value, onChange, labelId, isInvalid, earliest, latest }: {
     <AriaDatePicker aria-labelledby={labelId} value={parsed} onChange={(d) => onChange(d ? d.toString() : '')} isInvalid={isInvalid} className="tf-hq__date" minValue={bound(earliest)} maxValue={bound(latest)}>
       <Group className="tf-hq__box">
         <DateInput className="tf-hq__date-input">{(segment) => <DateSegment segment={segment} className="tf-hq__seg" />}</DateInput>
-        <AriaButton className="tf-hq__date-btn" aria-label="Open calendar"><CalendarDays {...i16} /></AriaButton>
+        <AriaButton className="tf-hq__date-btn" aria-label={g.openCalendar}><CalendarDays {...i16} /></AriaButton>
       </Group>
-      <Popover placement="bottom start" label="Calendar"><Calendar /></Popover>
+      <Popover placement="bottom start" label={g.calendar}><Calendar /></Popover>
     </AriaDatePicker>
   );
 }
@@ -233,10 +241,10 @@ function TickBox({ label, checked, onChange, labelId, isInvalid }: { readonly la
 }
 
 /** A time typed as hours and minutes; the answer is "HH:MM". */
-function TimeAnswer({ value, onChange, labelId }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string }) {
+function TimeAnswer({ value, onChange, labelId, label }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly label: string }) {
   let parsed: Time | null = null;
   try { parsed = value ? parseTime(value) : null; } catch { parsed = null; }
-  return <div className="tf-hq__timebox"><TimeField label="Time" isLabelHidden aria-labelledby={labelId} hourCycle={12} value={parsed} onChange={(t) => onChange(t ? `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}` : '')} /></div>;
+  return <div className="tf-hq__timebox"><TimeField label={label} isLabelHidden aria-labelledby={labelId} hourCycle={12} value={parsed} onChange={(t) => onChange(t ? `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}` : '')} /></div>;
 }
 
 /** A row of numbers from low to high (0–10 by default) with a word under each end; a pick goes on in a one-at-a-time form. */
@@ -254,7 +262,8 @@ function Scale({ min, max, low, high, value, onChange, labelId, isInvalid }: { r
 
 let fileSeq = 0;
 /** The shared FileDrop, then each file as a FileRow that fills while it uploads. */
-function FileAnswerInput({ value, onChange, onUpload }: QuestionInputProps) {
+function FileAnswerInput({ value, onChange, onUpload, lang }: QuestionInputProps) {
+  const g = GUEST_WORDS[lang ?? 'en'];
   const files = isFiles(value) ? value : [];
   const patch = (id: string, change: Partial<FileAnswer> | undefined) =>
     onChange((cur) => (isFiles(cur) ? cur : []).map((f) => (f.id === id ? (change ? { ...f, ...change } : { id: f.id, name: f.name, size: f.size, type: f.type }) : f)));
@@ -267,9 +276,9 @@ function FileAnswerInput({ value, onChange, onUpload }: QuestionInputProps) {
   };
   return (
     <div className="tf-hq__files">
-      <FileDrop label="Drop a file or browse" description="PDF, PNG or JPG, up to 10 MB" onFiles={add} variant={files.length ? 'compact' : 'zone'} />
+      <FileDrop label={g.dropFile} description={g.fileHint} onFiles={add} variant={files.length ? 'compact' : 'zone'} />
       {files.length > 0 && (
-        <FileList label="Attached files">
+        <FileList label={g.attached}>
           {files.map((f) => <FileRow key={f.id} name={f.name} size={f.size} type={f.type} progress={f.progress} onRemove={() => onChange((cur) => (isFiles(cur) ? cur : []).filter((x) => x.id !== f.id))} />)}
         </FileList>
       )}
@@ -279,23 +288,23 @@ function FileAnswerInput({ value, onChange, onUpload }: QuestionInputProps) {
 
 const EMPTY_ADDRESS: AddressValue = { street: '', apartment: '', city: '', postcode: '', country: '' };
 /** Street, apartment, city beside postcode, and country: the shared fields two to a row, stacking on a phone. */
-function AddressInput({ value = EMPTY_ADDRESS, onChange, labelId }: { readonly value?: AddressValue; readonly onChange: (v: AddressValue) => void; readonly labelId: string }) {
+function AddressInput({ value = EMPTY_ADDRESS, onChange, labelId, words: g }: { readonly value?: AddressValue; readonly onChange: (v: AddressValue) => void; readonly labelId: string; readonly words: GuestWords }) {
   const set = (k: keyof AddressValue) => (v: string) => onChange({ ...value, [k]: v });
   return (
     <div role="group" aria-labelledby={labelId}>
       <FieldGroup columns={2}>
-        <TextField size="lg" label="Street" autoComplete="address-line1" value={value.street} onChange={set('street')} />
-        <TextField size="lg" label="Apartment" aside="Optional" autoComplete="address-line2" value={value.apartment} onChange={set('apartment')} />
-        <TextField size="lg" label="City" autoComplete="address-level2" value={value.city} onChange={set('city')} />
-        <TextField size="lg" label="Postcode" autoComplete="postal-code" value={value.postcode} onChange={set('postcode')} />
-        <TextField size="lg" label="Country" autoComplete="country-name" value={value.country} onChange={set('country')} />
+        <TextField size="lg" label={g.street} autoComplete="address-line1" value={value.street} onChange={set('street')} />
+        <TextField size="lg" label={g.apartment} aside={g.optional} autoComplete="address-line2" value={value.apartment} onChange={set('apartment')} />
+        <TextField size="lg" label={g.city} autoComplete="address-level2" value={value.city} onChange={set('city')} />
+        <TextField size="lg" label={g.postcode} autoComplete="postal-code" value={value.postcode} onChange={set('postcode')} />
+        <TextField size="lg" label={g.country} autoComplete="country-name" value={value.country} onChange={set('country')} />
       </FieldGroup>
     </div>
   );
 }
 
 /** Rows in order, moved by their grip with a pointer, or with Space then the arrows (lib/drag.ts): the row lifts, the others slide aside, a dashed gap shows where it lands. */
-function Ranking({ options, onChange, labelId }: { readonly options: ReadonlyArray<string>; readonly onChange: (v: ReadonlyArray<string>) => void; readonly labelId: string }) {
+function Ranking({ options, onChange, labelId, words: g }: { readonly options: ReadonlyArray<string>; readonly onChange: (v: ReadonlyArray<string>) => void; readonly labelId: string; readonly words: GuestWords }) {
   const row = (o: string, grip: ReactNode) => <>{grip}<span className="tf-hq__rank-n tf-num" aria-hidden="true">{options.indexOf(o) + 1}</span><span className="tf-hq__choice-label">{o}</span></>;
   return (
     <DragList ids={options} onReorder={(ids) => onChange(ids)} textOf={(id) => id}
@@ -303,7 +312,7 @@ function Ranking({ options, onChange, labelId }: { readonly options: ReadonlyArr
       <ul aria-labelledby={labelId} className="tf-hq__rank">
         {options.map((o) => (
           <DragItem key={o} id={o} className="tf-hq__rank-row">
-            {(d) => row(o, <button type="button" className="tf-hq__grip" aria-label={`Move ${o}`} {...d.grip}><GripVertical {...i16} /></button>)}
+            {(d) => row(o, <button type="button" className="tf-hq__grip" aria-label={g.move(o)} {...d.grip}><GripVertical {...i16} /></button>)}
           </DragItem>
         ))}
       </ul>
@@ -312,7 +321,7 @@ function Ranking({ options, onChange, labelId }: { readonly options: ReadonlyArr
 }
 
 /** A pad three times as wide as tall, inked in the text colour; or the name typed instead. Clear starts again. */
-function SignaturePad({ value, onChange, labelId }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string }) {
+function SignaturePad({ value, onChange, labelId, words: g }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string; readonly words: GuestWords }) {
   const [mode, setMode] = useState<'draw' | 'type'>(value && !value.startsWith('data:') ? 'type' : 'draw');
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -348,20 +357,20 @@ function SignaturePad({ value, onChange, labelId }: { readonly value: string; re
   return (
     <div className="tf-hq__sign" role="group" aria-labelledby={labelId}>
       <div className="tf-hq__sign-head">
-        <SegmentedControl aria-label="How to sign" size="sm" items={[{ id: 'draw', label: 'Draw' }, { id: 'type', label: 'Type' }]} selectedKey={mode}
+        <SegmentedControl aria-label={g.howSign} size="sm" items={[{ id: 'draw', label: g.draw }, { id: 'type', label: g.type }]} selectedKey={mode}
           onSelectionChange={(k) => { setMode(k === 'type' ? 'type' : 'draw'); onChange(''); }} />
-        {mode === 'draw' && <Button size="sm" variant="ghost" icon={<Eraser size={14} strokeWidth={1.75} />} onPress={clear} isDisabled={!value}>Clear</Button>}
+        {mode === 'draw' && <Button size="sm" variant="ghost" icon={<Eraser size={14} strokeWidth={1.75} />} onPress={clear} isDisabled={!value}>{g.clear}</Button>}
       </div>
       {mode === 'draw' ? (
         <div className="tf-hq__pad" data-empty={!value || undefined}>
-          <canvas ref={canvas} className="tf-hq__canvas" aria-label="Signature pad. Draw with a pointer, or switch to Type." role="img"
+          <canvas ref={canvas} className="tf-hq__canvas" aria-label={g.pad} role="img"
             onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-          <span className="tf-hq__pad-hint" aria-hidden="true">Sign here</span>
+          <span className="tf-hq__pad-hint" aria-hidden="true">{g.signHere}</span>
           <span className="tf-hq__pad-line" aria-hidden="true" />
         </div>
       ) : (
         <div className="tf-hq__typed">
-          <TextField size="lg" label="Your full name" value={value} onChange={onChange} autoComplete="name" />
+          <TextField size="lg" label={g.fullName} value={value} onChange={onChange} autoComplete="name" />
           {value && <p className="tf-hq__typed-ink" aria-hidden="true">{value}</p>}
         </div>
       )}
@@ -370,17 +379,17 @@ function SignaturePad({ value, onChange, labelId }: { readonly value: string; re
 }
 
 /** The booking step: the shared month Calendar beside the open times of the picked day (BookingFlow's picker, as a question). */
-function BookingPicker({ source, value, onChange, labelId }: { readonly source: BookingSource; readonly value?: { readonly date: string; readonly minutes: number }; readonly onChange: (v: { date: string; minutes: number }) => void; readonly labelId: string }) {
+function BookingPicker({ source, value, onChange, labelId, words: g, locale }: { readonly source: BookingSource; readonly value?: { readonly date: string; readonly minutes: number }; readonly onChange: (v: { date: string; minutes: number }) => void; readonly labelId: string; readonly words: GuestWords; readonly locale: string }) {
   const first = (() => { for (let n = 0; n < 60; n += 1) { const d = source.today.add({ days: n }); if (source.isDayOpen(d)) return d; } return source.today; })();
   const [date, setDate] = useState<CalendarDate>(() => (value ? parseDate(value.date) : first));
   const slots = source.slotsFor(date);
-  const day = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(date.year, date.month - 1, date.day));
+  const day = new Intl.DateTimeFormat(locale === 'en-US' ? 'en-GB' : locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(date.year, date.month - 1, date.day));
   return (
     <div className="tf-hq__book" role="group" aria-labelledby={labelId}>
-      <Calendar aria-label="Day" value={date} onChange={setDate} minValue={source.today} isDateUnavailable={(d) => !source.isDayOpen(d as CalendarDate)} />
+      <Calendar aria-label={g.day} value={date} onChange={setDate} minValue={source.today} isDateUnavailable={(d) => !source.isDayOpen(d as CalendarDate)} />
       <div className="tf-hq__slots">
         <p className="tf-hq__slots-day" key={date.toString()}>{day}</p>
-        <ul className="tf-hq__slot-list" key={`l${date.toString()}`} aria-label={`Open times on ${day}`}>
+        <ul className="tf-hq__slot-list" key={`l${date.toString()}`} aria-label={g.openTimes(day)}>
           {slots.map((m) => {
             const chosen = value?.date === date.toString() && value.minutes === m;
             return (
@@ -391,7 +400,7 @@ function BookingPicker({ source, value, onChange, labelId }: { readonly source: 
               </li>
             );
           })}
-          {slots.length === 0 && <li className="tf-hq__aside">No times left on this day.</li>}
+          {slots.length === 0 && <li className="tf-hq__aside">{g.noTimes}</li>}
         </ul>
       </div>
     </div>

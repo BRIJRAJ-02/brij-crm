@@ -65,8 +65,11 @@ export function DisclosureItem({ id, title, description, icon, end, children, de
 }
 
 /** The settings "Show advanced" link: a quiet text button whose label swaps and whose chevron flips, revealing extra fields below. */
-export function ShowMore({ children, showLabel = 'Show advanced settings', hideLabel = 'Hide advanced settings', defaultExpanded = false }: { readonly children: ReactNode; readonly showLabel?: string; readonly hideLabel?: string; readonly defaultExpanded?: boolean }) {
-  const [open, setOpen] = useState(defaultExpanded);
+export function ShowMore({ children, showLabel = 'Show advanced settings', hideLabel = 'Hide advanced settings', defaultExpanded = false, isExpanded, onExpandedChange }: { readonly children: ReactNode; readonly showLabel?: string; readonly hideLabel?: string; readonly defaultExpanded?: boolean;
+  /** Controlled: open from outside (a chip that jumps to a folded setting). */ readonly isExpanded?: boolean; readonly onExpandedChange?: (open: boolean) => void }) {
+  const [own, setOwn] = useState(defaultExpanded);
+  const open = isExpanded ?? own;
+  const setOpen = (o: boolean) => { setOwn(o); onExpandedChange?.(o); };
   return (
     <AriaDisclosure isExpanded={open} onExpandedChange={setOpen} className="tf-acc__item tf-showmore">
       <AriaButton slot="trigger" className="tf-showmore__trigger">

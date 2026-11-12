@@ -28,6 +28,7 @@ import { SharedInsights } from './growparts.tsx';
 import { CopyToWorkspace, wsName, type CopySubject, type WorkspaceKey } from './copyws.tsx';
 import { guessFor } from './forms.tsx';
 import { BUILT_IN_ATTRIBUTES, type AppForm } from './data.ts';
+import { outcomeOf } from './model.tsx';
 import { lumen as lumenSeed, olive as oliveSeed, northwind as northwindSeed, type BookingPage } from '../BookingsFlow/BookingsFlow.tsx';
 import { NewObjectDialog, SettingsScreen, groupsFor } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
@@ -81,7 +82,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [lostAsk, setLostAsk] = useState<ReadonlyArray<string>>();
   const dispatch = useCallback((a: AppAction) => {
     if (!previewing.current && a.type === 'records/fields' && a.object === 'deals') {
-      const fresh = a.changes.filter((c) => c.patch.stage === 'Lost' && (() => { const d = stateRef.current.deals.find((x) => x.id === c.id); return d !== undefined && d.stage !== 'Lost' && !d.lostReason; })()).map((c) => c.id);
+      const lostIn = (stage: string | undefined) => stage !== undefined && outcomeOf(stateRef.current, stage) === 'lost';
+      const fresh = a.changes.filter((c) => lostIn(typeof c.patch.stage === 'string' ? c.patch.stage : undefined) && (() => { const d = stateRef.current.deals.find((x) => x.id === c.id); return d !== undefined && !lostIn(d.stage) && !d.lostReason; })()).map((c) => c.id);
       if (fresh.length) window.setTimeout(() => setLostAsk(fresh), 0);
     }
     if (previewing.current && a.type !== 'preview/set' && a.type !== 'inbox/set' && a.type !== 'inbox/all-read') { toastRef.current?.({ message: `You’re previewing as a ${previewing.current.toLowerCase()}. Nothing changes until you stop previewing.` }); return; }

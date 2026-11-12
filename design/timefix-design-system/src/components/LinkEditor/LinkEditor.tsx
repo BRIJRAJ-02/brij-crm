@@ -4,6 +4,7 @@ import { DragList } from '../../lib/drag.ts';
 import { DragHandle, DragItem } from '../DragHandle/DragHandle.tsx';
 import { AlignLeft, Archive, ArchiveRestore, AtSign, CalendarClock, CalendarDays, FileText, Heading, HelpCircle, Image, Images, Import, Link2, Mail, Megaphone, Minus, Palette, Play, Plus, Quote, Settings2, Trash2 } from 'lucide-react';
 import { Dialog } from '../Dialog/Dialog.tsx';
+import { Callout } from '../Callout/Callout.tsx';
 import { FileDrop } from '../FileDrop/FileDrop.tsx';
 import { PhotoCrop } from '../PhotoCrop/PhotoCrop.tsx';
 import { ShowMore } from '../Disclosure/Disclosure.tsx';
@@ -23,7 +24,11 @@ import { ClickCount } from '../LinkList/LinkList.tsx';
 import { LinkPage, LINK_ICONS, LINK_PAGE_LOOKS, isShown, linkIcon, mediaKind, type LinkBlock, type LinkIconName, type LinkPageBooking, type LinkPageLook, type LinkPageProfile, type LinkStyle } from '../LinkPage/LinkPage.tsx';
 import { detectNetwork, SocialLinksEditor, SocialMark, socialLabel, type SocialLink } from '../SocialLinks/SocialLinks.tsx';
 import { cx } from '../../lib/cx.ts';
+import { MENU_FONTS, fontItems, type MenuFont } from '../../lib/fonts.ts';
 import './LinkEditor.css';
+
+/** A day as "12 Nov" for a block's schedule chip. */
+const shortDay = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00`)) : iso);
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 
@@ -34,6 +39,8 @@ export interface LinkPageDraft {
   readonly blocks: ReadonlyArray<LinkBlock>;
   readonly look: LinkPageLook;
   readonly accent: string;
+  /** The page's face from the guest looks' font list; left out, Modern. */
+  readonly font?: MenuFont;
   /** The page's details: the title browsers and search show, a closing line, the picture a shared link shows, and search indexing. */
   readonly details?: { readonly siteTitle?: string; readonly closing?: string; readonly shareImage?: string; readonly indexed?: boolean };
 }
@@ -70,12 +77,22 @@ const GROUNDS = [{ hex: '#F7F3EE', name: 'Sand' }, { hex: '#EEF4FF', name: 'Sky'
 const readImages = (files: readonly File[]) => Promise.all(files.filter((f) => f.type.startsWith('image/')).map((f) => new Promise<{ readonly src: string; readonly alt: string }>((resolve) => { const r = new FileReader(); r.onload = () => resolve({ src: String(r.result), alt: f.name.replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ') }); r.readAsDataURL(f); })));
 const fmtDay = (d: string) => new Date(`${d}T00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 /** Links found in pasted text, each once, with a title from its address. */
-export function findLinks(text: string): ReadonlyArray<{ readonly href: string; readonly title: string }> {
+export function findLinks(text: string, html?: string): ReadonlyArray<{ readonly href: string; readonly title: string }> {
   const seen = new Set<string>();
-  return (text.match(/(?:https?:\/\/|www\.)[^\s<>"')]+/gi) ?? []).map((u) => (u.startsWith('http') ? u : `https://${u}`).replace(/[.,;]+$/, ''))
-    .filter((u) => !/linktr\.ee|beacons\.ai|bio\.link|lnk\.bio/i.test(u) && !seen.has(u.toLowerCase()) && Boolean(seen.add(u.toLowerCase())))
-    .map((href) => ({ href, title: titleFromUrl(href) || href }));
+  const key = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+  // A pasted page (its HTML from the clipboard, or HTML pasted as text): each link's address and the words on it.
+  const source = html ?? (/<a\s[^>]*href/i.test(text) ? text : undefined);
+  const anchors = source ? [...new DOMParser().parseFromString(source, 'text/html').querySelectorAll('a[href]')].map((a) => ({ href: a.getAttribute('href') ?? '', label: (a.textContent ?? '').replace(/\s+/g, ' ').trim() })) : [];
+  const plain = (text.match(/(?:https?:\/\/|www\.)[^\s<>"')]+/gi) ?? []).map((href) => ({ href, label: '' }));
+  return [...anchors, ...plain]
+    .map((x) => ({ href: (x.href.startsWith('http') || x.href.startsWith('mailto:') ? x.href : x.href.startsWith('www.') ? `https://${x.href}` : '').replace(/[.,;]+$/, ''), label: x.label }))
+    .filter((x) => x.href !== '' && !LINK_HOSTS.test(x.href) && !seen.has(key(x.href)) && Boolean(seen.add(key(x.href))))
+    .map((x) => ({ href: x.href, title: x.label && x.label.length <= 80 && !/^(https?:|www\.)/i.test(x.label) ? x.label : titleFromUrl(x.href) || x.href }));
 }
+/** Link-in-bio sites: their own links (the page itself, sign up, report, privacy) never come across. */
+const LINK_HOSTS = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:linktr\.ee|linktree\.com|beacons\.ai|beacons\.page|bento\.me|bio\.link|lnk\.bio|carrd\.co)(?:[/?#]|$)/i;
+/** An address someone typed for their link-in-bio page: "linktr.ee/priya", "https://bento.me/priya". */
+const looksLikeAddress = (v: string) => /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v.trim());
 
 /** How many things differ between the draft and the live page (a moved block counts once). */
 export function changesBetween(a: LinkPageDraft, b: LinkPageDraft): number {
@@ -86,7 +103,7 @@ export function changesBetween(a: LinkPageDraft, b: LinkPageDraft): number {
   if (order(a) !== order(b)) n += 1;
   if (JSON.stringify(a.profile) !== JSON.stringify(b.profile)) n += 1;
   if (JSON.stringify(a.socials) !== JSON.stringify(b.socials)) n += 1;
-  if (a.look !== b.look || (a.look === 'custom' && a.accent !== b.accent)) n += 1;
+  if (a.look !== b.look || (a.look === 'custom' && a.accent !== b.accent) || a.font !== b.font) n += 1;
   if (JSON.stringify(a.details ?? {}) !== JSON.stringify(b.details ?? {})) n += 1;
   return n;
 }
@@ -148,6 +165,8 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
   const [deleted, setDeleted] = useState<{ readonly block: LinkBlock; readonly index: number }>();
   const [status, setStatus] = useState<Exclude<PublishBarStatus, 'live' | 'draft'>>();
   const [importing, setImporting] = useState(false);
+  // The block whose More options is open; another block opens with it shut.
+  const [moreFor, setMoreFor] = useState<string>();
   const [cropping, setCropping] = useState<'avatar' | 'cover' | 'ground'>();
   const [dropping, setDropping] = useState<LinkBlock>();
   const timers = useRef<number[]>([]);
@@ -303,6 +322,7 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
         <>
           <div className="tf-linked__group"><span className="tf-linked__label">Template</span>
             <SegmentedControl aria-label="Look" size="sm" isFullWidth items={LINK_PAGE_LOOKS.filter((l) => l.id !== 'custom').map((l) => ({ id: l.id, label: l.label }))} selectedKey={draft.look === 'custom' ? 'calm' : draft.look} onSelectionChange={(k) => setDraft((d) => ({ ...d, look: k as LinkPageLook }))} /></div>
+          <Select label="Font" value={draft.font ?? 'sans'} onChange={(k) => { const f = MENU_FONTS.find((x) => x.id === k); if (f) setDraft((d) => ({ ...d, font: f.id === 'sans' ? undefined : f.id })); }} items={fontItems()} searchable={false} />
           <div className="tf-linked__group"><span className="tf-linked__label">Colour</span>
             <div className="tf-set__switch tf-linked__switch"><span>Your own button colour</span><Switch aria-label="Your own button colour" isSelected={draft.look === 'custom'} onChange={(on) => setDraft((d) => ({ ...d, look: on ? 'custom' : 'calm' }))} /></div>
             {draft.look === 'custom' && <AccentPicker label="Button colour" value={draft.accent} onChange={(accent) => setDraft((d) => ({ ...d, accent }))} />}</div>
@@ -336,13 +356,6 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
           <TextField label="Title" value={block.title} placeholder="What the button says" onChange={(title) => patch(block.id, { title })} />
           <TextField label="Address" type="url" value={block.href} placeholder="https://" onChange={(href) => patch(block.id, { href, ...(!block.title || block.title === titleFromUrl(block.href) ? { title: titleFromUrl(href) } : {}) })}
             icon={<span className="tf-linked__detected" key={net ?? 'none'}>{net ? <SocialMark network={net} size={16} /> : <Link2 {...i16} />}</span>} />
-          <TextField label="Line under the title" aside="Optional" value={block.subtitle ?? ''} onChange={(subtitle) => patch(block.id, { subtitle: subtitle || undefined })} />
-          <Select label="Shown as" items={[{ id: 'button', label: 'Button' }, { id: 'tile', label: 'Tile, two to a row' }, { id: 'featured', label: 'Featured card with picture' }]}
-            value={block.style ?? 'button'} onChange={(s) => patch(block.id, { style: (s ?? 'button') as LinkStyle })} />
-          {block.style && block.style !== 'button' && (block.image ? <span className="tf-linked__photo"><img className="tf-linked__share" src={block.image} alt="" /><Button size="sm" variant="ghost" onPress={() => patch(block.id, { image: undefined })}>Remove picture</Button></span>
-            : <FileDrop variant="compact" label="Add the link’s picture" description="PNG, JPG or WebP" acceptedFileTypes={['image/*']} allowsMultiple={false} onFiles={(fs) => { void readImages(fs).then((xs) => { if (xs[0]) patch(block.id, { image: xs[0].src }); }); }} />)}
-          <Select label="Icon" items={[{ id: 'auto', label: net && net !== 'website' ? 'Network mark' : 'None' }, ...(Object.keys(LINK_ICONS) as LinkIconName[]).map((k) => ({ id: k, label: LINK_ICONS[k].label, icon: LINK_ICONS[k].icon(16) }))]}
-            value={block.icon ?? 'auto'} onChange={(k) => patch(block.id, { icon: k === 'auto' || k === null ? undefined : (k as LinkIconName) })} />
         </>
       );
     }
@@ -413,17 +426,46 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
     return null;
   })();
 
+  // Calm first: a block's look, schedule, size and Ask first fold under More options; what is set shows as chips that open it.
+  const lookOf = (b: LinkBlock): ReactNode => {
+    if (b.kind !== 'link') return null;
+    const net = detectNetwork(b.href);
+    const block = b;
+    return <>
+        <TextField label="Line under the title" aside="Optional" value={block.subtitle ?? ''} onChange={(subtitle) => patch(block.id, { subtitle: subtitle || undefined })} />
+        <Select label="Shown as" items={[{ id: 'button', label: 'Button' }, { id: 'tile', label: 'Tile, two to a row' }, { id: 'featured', label: 'Featured card with picture' }]}
+          value={block.style ?? 'button'} onChange={(s) => patch(block.id, { style: (s ?? 'button') as LinkStyle })} />
+        {block.style && block.style !== 'button' && (block.image ? <span className="tf-linked__photo"><img className="tf-linked__share" src={block.image} alt="" /><Button size="sm" variant="ghost" onPress={() => patch(block.id, { image: undefined })}>Remove picture</Button></span>
+          : <FileDrop variant="compact" label="Add the link’s picture" description="PNG, JPG or WebP" acceptedFileTypes={['image/*']} allowsMultiple={false} onFiles={(fs) => { void readImages(fs).then((xs) => { if (xs[0]) patch(block.id, { image: xs[0].src }); }); }} />)}
+        <Select label="Icon" items={[{ id: 'auto', label: net && net !== 'website' ? 'Network mark' : 'None' }, ...(Object.keys(LINK_ICONS) as LinkIconName[]).map((k) => ({ id: k, label: LINK_ICONS[k].label, icon: LINK_ICONS[k].icon(16) }))]}
+          value={block.icon ?? 'auto'} onChange={(k) => patch(block.id, { icon: k === 'auto' || k === null ? undefined : (k as LinkIconName) })} />
+    </>;
+  };
+  const chipsOf = (b: LinkBlock): ReadonlyArray<string> => [
+    ...(b.kind === 'link' && b.subtitle ? ['Line under the title'] : []),
+    ...(b.kind === 'link' && b.style && b.style !== 'button' ? [b.style === 'tile' ? 'Tile' : 'Featured card'] : []),
+    ...(b.kind === 'link' && b.icon ? [`Icon: ${LINK_ICONS[b.icon].label}`] : []),
+    ...(b.showFrom || b.showUntil ? [b.showFrom && b.showUntil ? `Shows ${shortDay(b.showFrom)} to ${shortDay(b.showUntil)}` : b.showFrom ? `Shows from ${shortDay(b.showFrom)}` : `Shows until ${shortDay(b.showUntil ?? '')}`] : []),
+    ...(b.size ? [b.size === 'small' ? 'Small' : 'Large card'] : []),
+    ...(b.kind === 'link' || b.kind === 'media' ? (b.gate ? [b.gate === 'sensitive' ? 'Asks first' : `${b.gate} and over`] : []) : []),
+  ];
   const more = block && block.kind !== 'divider' && block.kind !== 'social' && (
-    <ShowMore key={block.id} showLabel="More options" hideLabel="Fewer options" defaultExpanded={Boolean(block.showFrom || block.showUntil || block.size || block.gate)}>
-      <div className="tf-linked__more">
-        <div className="tf-linked__pairs"><TextField label="Show from" aside="Optional" type="date" value={block.showFrom ?? ''} onChange={(v) => patch(block.id, { showFrom: v || undefined })} />
+    <>
+      {chipsOf(block).length > 0 && <div className="tf-linked__chips" role="group" aria-label="Set under More options">{chipsOf(block).map((c) => <Tag key={c} size="sm" onPress={() => setMoreFor(block.id)} aria-label={`${c}. Open More options`}>{c}</Tag>)}</div>}
+      <ShowMore key={block.id} showLabel="More options" hideLabel="Fewer options" isExpanded={moreFor === block.id} onExpandedChange={(o) => setMoreFor(o ? block.id : undefined)}>
+        <div className="tf-linked__more">
+          {block.kind === 'link' && <section className="tf-linked__sec" aria-label="Look"><h4 className="tf-linked__sec-title">Look</h4>{lookOf(block)}</section>}
+          <section className="tf-linked__sec" aria-label="When and who"><h4 className="tf-linked__sec-title">When and who</h4>
+            <div className="tf-linked__pairs"><TextField label="Show from" aside="Optional" type="date" value={block.showFrom ?? ''} onChange={(v) => patch(block.id, { showFrom: v || undefined })} />
           <TextField label="Show until" aside="Optional" type="date" value={block.showUntil ?? ''} onChange={(v) => patch(block.id, { showUntil: v || undefined })} isInvalid={Boolean(block.showFrom && block.showUntil && block.showUntil < block.showFrom)} errorMessage="Before the first day." /></div>
-        {block.kind !== 'header' && block.kind !== 'faq' && block.kind !== 'signup' && block.kind !== 'gallery' && <Select label="Size" value={block.size ?? 'normal'} onChange={(v) => patch(block.id, { size: v === 'small' ? 'small' : v === 'large' ? 'large' : undefined })}
+            {block.kind !== 'header' && block.kind !== 'faq' && block.kind !== 'signup' && block.kind !== 'gallery' && <Select label="Size" value={block.size ?? 'normal'} onChange={(v) => patch(block.id, { size: v === 'small' ? 'small' : v === 'large' ? 'large' : undefined })}
           items={[{ id: 'normal', label: 'Full width' }, { id: 'small', label: 'Small, two to a row' }, ...(block.kind === 'link' ? [{ id: 'large', label: 'Large card' }] : [])]} />}
-        {(block.kind === 'link' || block.kind === 'media') && <Select label="Ask first" value={block.gate ?? 'none'} onChange={(v) => patch(block.id, { gate: v === 'sensitive' || v === '18' || v === '21' ? v : undefined })}
+            {(block.kind === 'link' || block.kind === 'media') && <Select label="Ask first" value={block.gate ?? 'none'} onChange={(v) => patch(block.id, { gate: v === 'sensitive' || v === '18' || v === '21' ? v : undefined })}
           items={[{ id: 'none', label: 'Don’t ask' }, { id: 'sensitive', label: 'Sensitive content', description: 'Visitors confirm before it opens' }, { id: '18', label: '18 and over' }, { id: '21', label: '21 and over' }]} />}
-      </div>
-    </ShowMore>
+          </section>
+        </div>
+      </ShowMore>
+    </>
   );
   const panelTitle = shown === 'profile' ? 'Profile' : shown === 'design' ? 'Design' : shown === 'details' ? 'Details' : block ? `Edit ${KIND_LABEL[block.kind].toLowerCase()}` : '';
   return (
@@ -445,7 +487,7 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
       <div className="tf-linked__preview">
         <p className="tf-linked__preview-label">Preview · updates as you type</p>
         <div className="tf-linked__phone">
-          <LinkPage profile={draft.profile} socials={draft.socials} blocks={draft.blocks} look={draft.look} accent={draft.accent} booking={booking} closing={draft.details?.closing} members={members} isPreview />
+          <LinkPage profile={draft.profile} socials={draft.socials} blocks={draft.blocks} look={draft.look} accent={draft.accent} font={draft.font} booking={booking} closing={draft.details?.closing} members={members} isPreview />
         </div>
       </div>
       {importing && <ImportLinks onClose={() => setImporting(false)} onAdd={(found) => { const made = found.map((x) => { nextId += 1; return { kind: 'link' as const, id: `new-link-${nextId}`, title: x.title, href: x.href }; }); setBlocks((bs) => [...bs, ...made]); setImporting(false); }} />}
@@ -460,17 +502,24 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
   );
 }
 
-/** Import from Linktree and the like: paste your page's links (or the page's text), review what was found, add the ones you want.
- *  It reads what you paste; it never fetches another site. */
+/** Import from Linktree, Beacons, Bento and the like. The real app fetches the page from its address; here nothing can fetch another
+ *  site, so the honest way is "Paste the page": select everything on it, copy, paste. Its links (address and words) are read from the
+ *  pasted HTML or text, deduped, shown to review with ticks, then added at the end as buttons. */
 export function ImportLinks({ onClose, onAdd }: { readonly onClose: () => void; readonly onAdd: (links: ReadonlyArray<{ readonly href: string; readonly title: string }>) => void }) {
+  const [address, setAddress] = useState('');
   const [text, setText] = useState('');
+  // The page as copied: browsers put its HTML on the clipboard beside the text, so each link keeps the words on it.
+  const [html, setHtml] = useState<string>();
   const [found, setFound] = useState<ReadonlyArray<{ readonly href: string; readonly title: string }>>();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const onlyPage = found !== undefined && found.length === 0 && /linktr\.ee|beacons\.ai|bio\.link|lnk\.bio/i.test(text);
+  const pasteBox = useRef<HTMLDivElement>(null);
+  const hasAddress = looksLikeAddress(address);
+  const find = () => { const f = findLinks(text, html); setFound(f); setPicked(new Set(f.map((x) => x.href))); };
+  const toPaste = () => pasteBox.current?.querySelector('textarea')?.focus();
   return (
-    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Bring your links across" description="From Linktree, Beacons or any page: paste its links, or select all on that page and paste."
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Bring your links across" description="From Linktree, Beacons, Bento or any page."
       actions={found && found.length > 0 ? <><Button variant="ghost" onPress={() => setFound(undefined)}>Back</Button><Button variant="primary" isDisabled={picked.size === 0} onPress={() => onAdd(found.filter((x) => picked.has(x.href)))}>{`Add ${picked.size} ${picked.size === 1 ? 'link' : 'links'}`}</Button></>
-        : <><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!text.trim()} onPress={() => { const f = findLinks(text); setFound(f); setPicked(new Set(f.map((x) => x.href))); }}>Find links</Button></>}>
+        : <><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!text.trim()} onPress={find}>Find links</Button></>}>
       {found && found.length > 0 ? (
         <div className="tf-linked__found">
           <p className="tf-linked__note">{found.length === 1 ? '1 link found.' : `${found.length} links found.`} Untick any you don’t want. They land at the end, as buttons.</p>
@@ -478,8 +527,14 @@ export function ImportLinks({ onClose, onAdd }: { readonly onClose: () => void; 
         </div>
       ) : (
         <div className="tf-linked__found">
-          <TextArea label="Your links" rows={5} value={text} onChange={(v) => { setText(v); setFound(undefined); }} placeholder={'https://instagram.com/you\nhttps://youtube.com/@you\nhttps://yourshop.com'} />
-          {found && <p className="tf-linked__note" role="alert">{onlyPage ? 'We can’t open other sites from here. Open your page there, select everything, copy it and paste it here: its links come with it.' : 'No links in that. Paste addresses that start with https:// or www.'}</p>}
+          <TextField label="Your page’s address" aside="Optional" value={address} onChange={setAddress} placeholder="linktr.ee/you" />
+          {hasAddress && <Callout tone="info" action={{ label: 'Paste the page instead', onPress: toPaste }}>The real app opens this page and finds its links for you. This preview can’t open other sites.</Callout>}
+          <div ref={pasteBox} onPaste={(e) => { const h = e.clipboardData.getData('text/html'); setHtml(h || undefined); setFound(undefined); }}>
+            <TextArea label="Your links" rows={5} value={text} onChange={(v) => { setText(v); setFound(undefined); if (!v.trim()) setHtml(undefined); }}
+              placeholder={'https://instagram.com/you\nhttps://youtube.com/@you\nhttps://yourshop.com'}
+              description={html ? 'Page pasted with its links.' : 'Paste the page: open it, press ⌘A then ⌘C, and paste here. Its HTML or a list of links works too.'} />
+          </div>
+          {found && <p className="tf-linked__note" role="alert">{LINK_HOSTS.test(text.trim()) ? 'That’s the page’s address. Here, paste the page itself: open it, select everything, copy and paste.' : 'No links in that. Paste the whole page, its HTML, or addresses that start with https:// or www.'}</p>}
           <Tag size="sm" hue="gray">Nothing is published until you do</Tag>
         </div>
       )}

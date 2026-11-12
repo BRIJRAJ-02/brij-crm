@@ -9,6 +9,8 @@ import { SearchField } from '../SearchField/SearchField.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Checkbox, Radio, RadioGroup } from '../Checkbox/Checkbox.tsx';
 import { cx } from '../../lib/cx.ts';
+import { fontFace, type MenuFont } from '../../lib/fonts.ts';
+import { LookContext } from '../../lib/look.ts';
 import './MenuPage.css';
 
 /** A dietary mark. One spice level at most. */
@@ -69,12 +71,17 @@ export interface Menu {
   readonly placeIds?: ReadonlyArray<string>;
 }
 
-/** How a business's guest menu looks: a preset, its three colours, a face, corners and a cover. */
+export { MENU_FONTS, fontFace, fontItems, type MenuFont } from '../../lib/fonts.ts';
+
+/** How a business's guest menu looks: a preset, its three colours, its faces, corners and a cover. */
 export interface MenuLook {
   readonly preset: 'classic' | 'bistro' | 'garden' | 'night' | 'custom';
   /** "#RRGGBB": the page, the words, the buttons and chosen chips. */
   readonly ground: string; readonly text: string; readonly accent: string;
-  readonly font: 'sans' | 'mono';
+  /** The face of everything else (body, buttons, prices). */
+  readonly font: MenuFont;
+  /** The headings' face (the name, sections); left out, the same as `font`. */
+  readonly heading?: MenuFont;
   readonly corners: 'sharp' | 'soft' | 'round';
   readonly cover?: string;
 }
@@ -105,7 +112,7 @@ export function menuLookProps(l: MenuLook): { readonly 'data-theme': 'light' | '
       '--surface': l.ground, '--surface-raised': l.ground, '--text': l.text, '--text-secondary': `color-mix(in srgb, ${l.text} 72%, ${l.ground})`, '--text-tertiary': `color-mix(in srgb, ${l.text} 55%, ${l.ground})`,
       '--surface-subtle': `color-mix(in srgb, ${l.text} 6%, ${l.ground})`, '--surface-hover': `color-mix(in srgb, ${l.text} 9%, ${l.ground})`, '--border': `color-mix(in srgb, ${l.text} 16%, ${l.ground})`, '--border-subtle': `color-mix(in srgb, ${l.text} 10%, ${l.ground})`,
       '--primary': l.accent, '--on-primary': on, '--primary-hover': `color-mix(in srgb, ${l.accent} 88%, black)`, '--accent': l.accent, '--on-accent': on,
-      '--font-sans': l.font === 'mono' ? 'var(--font-mono)' : undefined, '--radius-lg': r, '--radius-md': r, background: 'var(--surface)',
+      '--font-sans': l.font === 'sans' ? undefined : fontFace(l.font), '--tf-face-display': fontFace(l.heading ?? l.font), '--radius-lg': r, '--radius-md': r, background: 'var(--surface)', color: 'var(--text)',
     } as CSSProperties,
   };
 }
@@ -160,7 +167,12 @@ export interface MenuPageProps {
 
 /** A restaurant's public menu at timefix.com/<handle>/menu: a menu switcher, search and dietary filters, sections as pills, dishes with
  *  photos, a sheet for sizes and add-ons, and a selection to show the server. Nothing is ordered or sent from the page. */
-export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, day = new Date().getDay(), look, money = inr, onBookTable, isPreview = false, foot, onRequest, requested = [] }: MenuPageProps) {
+export function MenuPage(props: MenuPageProps) {
+  // Its sheets and pickers open in the menu's own look.
+  return <LookContext.Provider value={props.look ? menuLookProps(props.look) : undefined}><MenuPageBody {...props} /></LookContext.Provider>;
+}
+
+function MenuPageBody({ venue, line, cover, menus, dishes, addOns, table, now = 12 * 60, day = new Date().getDay(), look, money = inr, onBookTable, isPreview = false, foot, onRequest, requested = [] }: MenuPageProps) {
   const themed = look ? menuLookProps(look) : undefined;
   const coverSrc = cover ?? look?.cover;
   const live = menus.filter((m) => m.isLive && m.sections.some((s) => s.dishIds.length > 0 || (s.subs ?? []).some((x) => x.dishIds.length > 0)));

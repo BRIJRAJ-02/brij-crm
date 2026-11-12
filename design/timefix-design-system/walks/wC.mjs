@@ -231,9 +231,9 @@ await t('6 questions: presets, show only if, steps, jumps, points, insights, sav
   await main().getByRole('button', { name: 'Add question' }).click(); await p.waitForTimeout(400);
   await need(p.getByRole('option', { name: /How did you hear about us/ }), 'presets'); await shot('80-presets');
   await p.getByRole('option', { name: /How did you hear about us/ }).click(); await p.waitForTimeout(500);
+  await main().locator('.tf-qset').getByRole('button', { name: 'More options' }).click(); await p.waitForTimeout(300);
   await need(main().getByText('Use as “How did you hear about us” in Insights'), 'insights switch');
   await need(main().getByRole('button', { name: /Save answer to/ }), 'save answer to');
-  await main().getByRole('button', { name: 'Logic and points' }).click(); await p.waitForTimeout(300);
   await need(main().getByText('Show only if'), 'show only if'); await need(main().getByText('After this question'), 'jumps');
   await main().getByRole('switch', { name: 'Give points' }).evaluate((e) => e.click()); await p.waitForTimeout(300);
   await need(main().getByRole('spinbutton', { name: /Points for Google/ }).or(main().getByRole('textbox', { name: /Points for Google/ })), 'points');

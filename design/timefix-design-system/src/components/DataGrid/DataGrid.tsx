@@ -2,8 +2,8 @@ import {
   Button as AriaButton, Cell, Column, ColumnResizer, Input, ResizableTableContainer, Row, Table, TableBody, TableHeader, TextField,
   type Selection, type SortDescriptor,
 } from 'react-aria-components';
-import { useEffect, useRef, useState, type ClipboardEvent, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, EyeOff, ListFilter, Plus, Settings2 } from 'lucide-react';
+import { useEffect, useRef, useState, type ClipboardEvent, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown, EyeOff, ListFilter, Plus, Settings2, TriangleAlert } from 'lucide-react';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
 import { Avatar, PersonLine } from '../Avatar/Avatar.tsx';
 import { Tag, type Hue } from '../Tag/Tag.tsx';
@@ -101,6 +101,9 @@ export interface DataGridProps {
   readonly onSelectionChange?: (s: Selection) => void;
   /** A committed inline edit. The row washes `accent-soft` once. */
   readonly onCellChange?: (rowId: string, columnId: string, value: string) => void;
+  /** Checks an edit before it lands: a message refuses it. The editor stays open over the cell with the message; Esc puts the value back.
+   *  Delete on a cell asks it too (with an empty value) and opens the editor with the message instead of clearing. */
+  readonly validateCell?: (rowId: string, columnId: string, value: string) => string | undefined;
   /** Opens a record (Enter or a click on a row). Selection stays on the checkboxes, so a click never toggles a row by accident. */
   readonly onRowAction?: (rowId: string) => void;
   /** Shows the "+ New record" row; return the new row's id to open its name for typing. */
@@ -136,12 +139,21 @@ const CALC_ROW = '__calc';
 const EDITABLE: ReadonlySet<GridColumnType> = new Set(['name', 'text', 'number', 'select', 'status']);
 const REVEAL_MS = 400; // --duration-slow, transitions.dev 14 skeleton reveal
 const WASH_MS = 1000;
+/** How long a click on an editable cell waits for a second click before it opens the row: a double-click edits, never flashing the row open. */
+const DOUBLE_CLICK_MS = 320;
 
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary, calcs, onPaste, onClear, onColumnResize, hideHeader = false , isSelectable = true }: DataGridProps) {
-  const [editing, setEditing] = useState<Editing | undefined>(undefined);
+export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, validateCell, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary, calcs, onPaste, onClear, onColumnResize, hideHeader = false , isSelectable = true }: DataGridProps) {
+  const [editing, setEditingRaw] = useState<Editing | undefined>(undefined);
+  // A refused edit's message, shown in the editor over its cell until the value changes or Esc.
+  const [refused, setRefused] = useState<string>();
+  const editingRef = useRef<Editing | undefined>(undefined);
+  const setEditing = (e: Editing | undefined) => { setRefused(undefined); editingRef.current = e; setEditingRaw(e); };
+  // A menu closes itself just after a pick; when that pick was refused, the editor holds open through that close.
+  const hold = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(hold.current), []);
   const [calcMenu, setCalcMenu] = useState<{ readonly colId: string; readonly anchor: HTMLElement }>();
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
   const revealing = useReveal(isLoading);
@@ -149,24 +161,52 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
   // The text editor's latest draft: a click outside commits it, Esc drops it.
   const draftRef = useRef<string | undefined>(undefined);
 
+  // A click opens the row only when no second click follows: on an editable cell it waits DOUBLE_CLICK_MS, so the first click of a
+  // double-click (which edits the cell) never opens the row's panel. A click on a read-only cell, and Enter, open at once.
+  const lastDown = useRef<{ readonly at: number; readonly count: number; readonly editable: boolean } | undefined>(undefined);
+  const pendingOpen = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(pendingOpen.current), []);
+  const cancelOpen = () => { window.clearTimeout(pendingOpen.current); pendingOpen.current = undefined; };
+  const onPointerDownCapture = (e: PointerEvent<HTMLDivElement>) => {
+    const now = performance.now(); const prev = lastDown.current;
+    const count = prev && now - prev.at < DOUBLE_CLICK_MS ? prev.count + 1 : 1;
+    lastDown.current = { at: now, count, editable: (e.target as Element).closest('[data-edit]') !== null };
+    if (count >= 2) cancelOpen();
+  };
+  const rowAction = (rowId: string) => {
+    if (!onRowAction) return;
+    const down = lastDown.current;
+    const byPointer = down !== undefined && performance.now() - down.at < 1000;
+    if (byPointer && down.count >= 2) return;
+    cancelOpen();
+    if (byPointer && down.editable) { pendingOpen.current = window.setTimeout(() => { pendingOpen.current = undefined; onRowAction(rowId); }, DOUBLE_CLICK_MS); return; }
+    onRowAction(rowId);
+  };
+
   const wash = (rowId: string) => {
     setWashed((s) => new Set(s).add(rowId));
     window.setTimeout(() => setWashed((s) => { const n = new Set(s); n.delete(rowId); return n; }), WASH_MS);
   };
   const commit = (rowId: string, colId: string, value: string) => {
     const before = rows.find((r) => r.id === rowId)?.values[colId];
+    if (String(before ?? '') === value) { setEditing(undefined); return; }
+    const no = validateCell?.(rowId, colId, value);
+    // An option list closes before it commits: open the editor again over the cell, with the reason.
+    if (no && !editingRef.current) { open(wrapRef.current?.querySelector(`[data-edit="${rowId}|${colId}"]`) ?? null, no); return; }
+    if (no) { setRefused(no); window.clearTimeout(hold.current); hold.current = window.setTimeout(() => { hold.current = undefined; }, CLOSE_AFTER_PICK_MS * 3); return; }
     setEditing(undefined);
-    if (String(before ?? '') === value) return;
     onCellChange?.(rowId, colId, value);
     wash(rowId);
   };
-  const open = (cellEl: Element | null) => {
+  const open = (cellEl: Element | null, message?: string) => {
     const anchor = cellEl?.closest('td');
     const target = anchor?.querySelector<HTMLElement>('[data-edit]');
     const [rowId, colId] = (target?.dataset.edit ?? '').split('|');
     if (!anchor || !rowId || !colId) return false;
+    cancelOpen();
     draftRef.current = undefined;
     setEditing({ rowId, colId, anchor });
+    if (message) setRefused(message);
     return true;
   };
   // Enter on a focused editable cell opens its editor (before the row's own Enter handling).
@@ -177,7 +217,7 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
   const onKeyDownCapture = (e: KeyboardEvent) => {
     if (editing) return;
     const active = document.activeElement;
-    if ((e.key === 'Delete' || e.key === 'Backspace') && active?.tagName === 'TD' && onClear) { const at = cellAt(active); const col = columns.find((c) => c.id === at?.[1]); if (at && col && !col.isReadOnly) { e.preventDefault(); onClear(at[0], at[1]); } return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && active?.tagName === 'TD' && onClear) { const at = cellAt(active); const col = columns.find((c) => c.id === at?.[1]); if (at && col && !col.isReadOnly) { e.preventDefault(); const no = validateCell?.(at[0], at[1], ''); if (no) open(active, no); else onClear(at[0], at[1]); } return; }
     if (e.key !== 'Enter') return;
     if (active?.tagName === 'TD' && open(active)) { e.preventDefault(); e.stopPropagation(); }
   };
@@ -201,7 +241,7 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
   const shown: ReadonlyArray<GridRecord> = isLoading ? SKELETON_ROWS.map((id) => ({ id, values: {} })) : rows;
 
   return (
-    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing', hideHeader && 'tf-grid--headless', !isSelectable && 'tf-grid--plain')} onKeyDownCapture={onKeyDownCapture} onPaste={paste} aria-busy={isLoading || undefined}>
+    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing', hideHeader && 'tf-grid--headless', !isSelectable && 'tf-grid--plain')} onKeyDownCapture={onKeyDownCapture} onPointerDownCapture={onPointerDownCapture} onPaste={paste} aria-busy={isLoading || undefined}>
       <ResizableTableContainer className="tf-grid__scroll" onResizeEnd={onColumnResize ? (m) => onColumnResize(Object.fromEntries([...m].filter(([, w]) => typeof w === 'number').map(([k, w]) => [String(k), Number(w)]))) : undefined}>
         <Table
           aria-label={label}
@@ -209,7 +249,7 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           selectionMode={isSelectable ? 'multiple' : 'none'}
           selectedKeys={selectedKeys}
           onSelectionChange={onSelectionChange}
-          onRowAction={(k) => { if (k !== CALC_ROW) onRowAction?.(String(k)); }}
+          onRowAction={(k) => { if (k !== CALC_ROW) rowAction(String(k)); }}
           sortDescriptor={sortDescriptor}
           onSortChange={onSortChange}
           disabledKeys={isLoading ? SKELETON_ROWS : calcs ? [CALC_ROW] : undefined}
@@ -315,9 +355,10 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           triggerRef={{ current: editing.anchor }}
           isOpen
           onOpenChange={(o) => {
-            if (o) return;
+            if (o || hold.current !== undefined) return;
             const d = draftRef.current;
-            if (d !== undefined) commit(editRow.id, editCol.id, d.trim()); else setEditing(undefined);
+            // A click outside with a refused value puts the value back, like Esc.
+            if (d !== undefined && !refused) commit(editRow.id, editCol.id, d.trim()); else setEditing(undefined);
           }}
           placement="bottom start"
           offset={-editing.anchor.getBoundingClientRect().height}
@@ -327,9 +368,10 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           {editCol.attribute ? (
             <div className="tf-grid__attr">
               <AttributeEditor attribute={editCol.attribute} value={cellToValue(editCol.attribute, editRow.values[editCol.id])} autoFocus
-                onCommit={(v) => { draftRef.current = undefined; commit(editRow.id, editCol.id, valueToCell(editCol.attribute ?? { id: '', name: '', type: 'text' }, v)); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />
+                onCommit={(v) => { commit(editRow.id, editCol.id, valueToCell(editCol.attribute ?? { id: '', name: '', type: 'text' }, v)); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />
             </div>
-          ) : <CellEditor column={editCol} value={String(editRow.values[editCol.id] ?? '')} draftRef={draftRef} onCommit={(v) => { draftRef.current = undefined; commit(editRow.id, editCol.id, v); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />}
+          ) : <CellEditor column={editCol} value={String(editRow.values[editCol.id] ?? '')} draftRef={draftRef} isInvalid={refused !== undefined} onDraft={() => setRefused(undefined)} onCommit={(v) => { commit(editRow.id, editCol.id, v); }} onCancel={() => { draftRef.current = undefined; setEditing(undefined); }} />}
+          {refused && <p className="tf-grid__refused" role="alert"><TriangleAlert size={14} strokeWidth={1.75} aria-hidden="true" />{refused} Esc puts it back.</p>}
         </Popover>
       )}
     </div>
@@ -347,7 +389,7 @@ function menuFor(only?: ReadonlyArray<ColumnAction>) {
   return [...sorts, ...(sorts.length && rest.length ? ['sep' as const] : []), ...rest];
 }
 
-function CellEditor({ column, value, draftRef, onCommit, onCancel }: { readonly column: GridColumn; readonly value: string; readonly draftRef: { current: string | undefined }; readonly onCommit: (v: string) => void; readonly onCancel: () => void }) {
+function CellEditor({ column, value, draftRef, isInvalid = false, onDraft, onCommit, onCancel }: { readonly column: GridColumn; readonly value: string; readonly draftRef: { current: string | undefined }; readonly isInvalid?: boolean; readonly onDraft?: () => void; readonly onCommit: (v: string) => void; readonly onCancel: () => void }) {
   const [draft, setDraft] = useState(value);
   if (column.type === 'select' || column.type === 'status') {
     return (
@@ -365,7 +407,7 @@ function CellEditor({ column, value, draftRef, onCommit, onCancel }: { readonly 
     );
   }
   return (
-    <TextField aria-label={column.name} value={draft} onChange={(v) => { draftRef.current = v; setDraft(v); }} autoFocus className="tf-grid__field">
+    <TextField aria-label={column.name} value={draft} onChange={(v) => { draftRef.current = v; setDraft(v); onDraft?.(); }} autoFocus className="tf-grid__field" isInvalid={isInvalid}>
       <Input
         className="tf-grid__input"
         inputMode={column.type === 'number' ? 'decimal' : undefined}

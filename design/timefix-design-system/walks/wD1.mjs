@@ -45,7 +45,7 @@ await t('2 builder: steps, shown if chip, logic filter, warnings, endings, route
   await openForm('Talk to sales');
   // Show only if on Company: when team size is 51–200.
   await main().getByRole('row', { name: 'What are you hoping to fix?' }).or(main().getByRole('listitem', { name: 'What are you hoping to fix?' })).first().click(); await p.waitForTimeout(400);
-  await main().getByRole('button', { name: 'Logic and points' }).click(); await p.waitForTimeout(300);
+  await main().locator('.tf-qset').getByRole('button', { name: 'More options' }).click(); await p.waitForTimeout(300);
   await main().getByRole('button', { name: /Question/ }).filter({ hasText: 'Always show' }).click(); await p.waitForTimeout(300);
   await p.getByRole('option', { name: 'How big is your team?' }).click(); await p.waitForTimeout(300);
   await main().getByRole('button', { name: 'All questions' }).click(); await p.waitForTimeout(400);
@@ -53,10 +53,10 @@ await t('2 builder: steps, shown if chip, logic filter, warnings, endings, route
   // A jump to an ending, and an Otherwise line.
   await main().getByRole('row', { name: 'How big is your team?' }).or(main().getByRole('listitem', { name: 'How big is your team?' })).first().click(); await p.waitForTimeout(400);
   await need(main().getByRole('button', { name: 'Pick one' }).or(main().getByRole('radio', { name: 'Pick one' })), 'choice type switch');
+  await main().locator('.tf-qset').getByRole('button', { name: 'More options' }).click().catch(() => undefined); await p.waitForTimeout(300);
   await need(main().getByRole('switch', { name: 'Add Other' }), 'other switch');
   await main().getByRole('switch', { name: 'Add Other' }).evaluate((e) => e.click()); await p.waitForTimeout(200);
   await need(main().getByRole('button', { name: /Save answer to/ }), 'save answer to');
-  await main().getByRole('button', { name: 'Logic and points' }).click().catch(() => undefined); await p.waitForTimeout(300);
   await main().getByRole('button', { name: /After Just me, go to/ }).click(); await p.waitForTimeout(300);
   await p.getByRole('option', { name: '→ The thank you' }).click(); await p.waitForTimeout(300);
   await need(main().getByText('Otherwise', { exact: true }), 'otherwise line');
@@ -85,6 +85,7 @@ await t('2 builder: steps, shown if chip, logic filter, warnings, endings, route
   await p.keyboard.press('ArrowDown'); await p.waitForTimeout(150); await p.getByRole('searchbox', { name: 'Find a question type' }).fill('zzz'); await p.waitForTimeout(200);
   await need(p.getByText('No type matches “zzz”.'), 'no match'); await shot('16c-picker-none'); await p.getByRole('button', { name: 'Show every type' }).click(); await p.waitForTimeout(150);
   await p.getByRole('searchbox', { name: 'Find a question type' }).fill('date'); await p.waitForTimeout(200); await p.getByRole('option', { name: 'Date', exact: true }).click(); await p.waitForTimeout(400);
+  await main().locator('.tf-qset').getByRole('button', { name: 'More options' }).click(); await p.waitForTimeout(300);
   await need(main().getByRole('button', { name: /Earliest day/ }), 'earliest'); await need(main().getByRole('textbox', { name: /Latest day/ }).or(main().getByRole('group', { name: /Latest day/ })), 'latest');
   await shot('16-date-limits');
   await main().getByRole('button', { name: 'All questions' }).click(); await p.waitForTimeout(300);
@@ -198,11 +199,11 @@ await t('7 link page: new blocks, schedule, size, ask first, archive, import', a
   for (const k of ['Next times', 'Video or music', 'Picture', 'Gallery', 'Banner']) await need(p.getByRole('menuitem', { name: new RegExp(`^${k}`) }), k);
   await shot('75-add-menu'); await esc();
   await add('Banner'); await panel().getByRole('textbox', { name: 'Headline' }).fill('New: weekend slots');
-  await panel().getByRole('button', { name: 'More options' }).click(); await p.waitForTimeout(300);
+  await panel().getByRole('button', { name: 'More options', exact: true }).click(); await p.waitForTimeout(300);
   await need(panel().getByRole('group', { name: /Show from/ }).or(panel().getByRole('textbox', { name: /Show from/ })), 'schedule'); await need(panel().getByRole('button', { name: /Size/ }), 'size');
   await shot('76-more-options'); await panel().getByRole('button', { name: 'Close' }).first().click(); await p.waitForTimeout(400);
   await add('Next times'); await need(main().getByRole('list', { name: 'Next open times' }), 'next times in preview'); await panel().getByRole('button', { name: 'Close' }).first().click(); await p.waitForTimeout(400);
-  await add('Video or music'); await panel().getByRole('textbox', { name: 'Address' }).fill('https://youtube.com/watch?v=calm'); await panel().getByRole('button', { name: 'More options' }).click(); await p.waitForTimeout(200);
+  await add('Video or music'); await panel().getByRole('textbox', { name: 'Address' }).fill('https://youtube.com/watch?v=calm'); await panel().getByRole('button', { name: 'More options', exact: true }).click(); await p.waitForTimeout(200);
   await panel().getByRole('button', { name: /Ask first/ }).click(); await p.waitForTimeout(200); await p.getByRole('option', { name: /18 and over/ }).click(); await p.waitForTimeout(300);
   await shot('77-media-gate'); await panel().getByRole('button', { name: 'Close' }).first().click(); await p.waitForTimeout(400);
   await add('Picture'); await upload(panel()); await panel().getByRole('textbox', { name: 'Describe it' }).fill('The studio'); await need(main().locator('.tf-linkpage__picture img'), 'picture in preview');

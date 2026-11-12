@@ -34,7 +34,6 @@
 .tf-qlist__n { color: var(--text-tertiary); }
 .tf-qlist__untitled { color: var(--text-tertiary); font-weight: 400; }
 .tf-qlist__sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
-.tf-qlist__req { color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); white-space: nowrap; }
 .tf-qlist__count { color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 /* Rows always shrink to their column, so a settings panel beside the list never covers them. */
 .tf-qlist__list, .tf-qlist__row, .tf-qlist__row > *, .tf-qlist__card { min-width: 0; }
@@ -93,8 +92,6 @@
 }
 /* A step's label over the card that opens it. */
 .tf-qlist__step { display: block; padding: var(--space-8) var(--space-4) var(--space-4); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
-/* Logic and points: Show only if, steps, jumps by answer, points per choice. */
-.tf-qset__logic { display: flex; flex-direction: column; gap: var(--space-16); padding-top: var(--space-8); }
 .tf-qset__group { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-qset__jumps { display: flex; flex-direction: column; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
 .tf-qset__jump { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: var(--space-8); }
@@ -128,3 +125,16 @@
 .tf-qpick__fills { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 .tf-qpick__keys { display: inline-flex; align-items: center; gap: var(--space-4); margin-top: auto; color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
 @media (max-width: 40rem) { .tf-qpick__panes { grid-template-columns: minmax(0, 1fr); } .tf-qpick__side { display: none; } .tf-qpick__list { border-right: 0; } }
+/* Calm first: the rules set under More options, as chips above the fold; pressing one opens the fold at its group. */
+.tf-qset__chips { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: calc(var(--space-4) * -1); }
+/* More options: its groups under small headings, a hairline between them. */
+.tf-qset__more { display: flex; flex-direction: column; }
+.tf-qset__sec { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-16) 0; scroll-margin: var(--space-16); }
+.tf-qset__sec:first-child { padding-top: var(--space-4); }
+.tf-qset__sec:last-child { padding-bottom: 0; }
+.tf-qset__sec + .tf-qset__sec { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-qset__sec-title { margin: 0; color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); border-radius: var(--radius-sm); outline: none; }
+.tf-qset__sec-title:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* A switch line inside a group: no hairline of its own. */
+.tf-qset__line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+.tf-qlist__chips .tf-tag, .tf-qset__chips .tf-tag { max-width: 100%; }

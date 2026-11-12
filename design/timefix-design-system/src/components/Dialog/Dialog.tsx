@@ -1,7 +1,8 @@
 import { Dialog as AriaDialog, DialogTrigger as AriaDialogTrigger, Heading, Input, Label, Modal, ModalOverlay, TextField, type TextFieldProps } from 'react-aria-components';
-import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { useContext, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { Plus, X } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
+import { LookContext } from '../../lib/look.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
 import './Dialog.css';
 
@@ -36,9 +37,11 @@ export function DialogTrigger({ children, isOpen, defaultOpen, onOpenChange }: {
 
 /** The modal surface over a scrim: one question or a short form, a single card with no header or footer bands. Scales up from 0.96 over 250ms, closes over 150ms. */
 export function Dialog({ isOpen, onOpenChange, title, description, children, actions, size = 'md', showClose = true, isDismissable = true, 'aria-label': ariaLabel }: DialogProps) {
+  // Opened from a themed guest page (a dark menu), it wears that page's look.
+  const look = useContext(LookContext);
   return (
     <ModalOverlay isOpen={isOpen} onOpenChange={onOpenChange} isDismissable={isDismissable} className="tf-scrim tf-overlay">
-      <Modal className={cx('tf-dialog', `tf-dialog--${size}`)}>
+      <Modal className={cx('tf-dialog', `tf-dialog--${size}`)} {...(look ? { 'data-theme': look['data-theme'], style: { ...look.style, background: undefined } } : {})}>
         <AriaDialog className="tf-dialog__dialog" aria-label={ariaLabel}>
           <DialogContent title={title} description={description} actions={actions} showClose={showClose}>{children}</DialogContent>
         </AriaDialog>

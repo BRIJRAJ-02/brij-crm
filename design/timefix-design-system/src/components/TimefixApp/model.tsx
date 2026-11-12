@@ -50,6 +50,8 @@ export function stagesOf(state: AppState): ReadonlyArray<{ readonly id: string; 
   const attr = schemaOf(state, 'deals')?.attributes.find((a) => a.id === 'stage');
   return (attr?.options ?? STAGES.map((x) => ({ id: x, label: x }))).filter((o) => !('archived' in o && o.archived)).map((o) => ({ id: o.id, label: o.label, outcome: 'outcome' in o ? o.outcome : o.id === 'Won' ? 'won' : o.id === 'Lost' ? 'lost' : undefined, targetDays: 'targetDays' in o ? o.targetDays : undefined }));
 }
+/** A stage's outcome, read from Settings › Objects (never from its name), so a renamed Won or a second won stage still counts. */
+export const outcomeOf = (state: AppState, stage: string): 'won' | 'lost' | undefined => stagesOf(state).find((s) => s.id === stage)?.outcome;
 /** Is the deal still open (its stage has no won or lost outcome)? */
 export const isOpenDeal = (state: AppState, d: Deal): boolean => !stagesOf(state).find((s) => s.id === d.stage)?.outcome;
 /** Days a deal may sit in its stage before it reads as stale: the stage's target, else the workspace default. */
@@ -392,6 +394,22 @@ export function isRequiredFor(a: SchemaAttribute, values: Readonly<Record<string
   if (a.isRequired) return true;
   const w = a.requiredWhen; if (!w) return false;
   return String(values[w.field] ?? '') === w.is;
+}
+
+/** Would writing this value leave a required field empty, by Required or by a "required when" rule that now holds? The same words as the
+ *  record page and New record, or undefined. Only fields the edit touches count: the field itself, and fields whose rule reads it. */
+export function requiredProblem(state: AppState, object: ObjectId, rec: AnyRecord, col: string, value: string): string | undefined {
+  const next: Readonly<Record<string, Cell>> = { ...valuesOf(state, object, rec), [col]: value };
+  const empty = (v: Cell) => v === undefined || String(v).trim() === '';
+  const hit = liveAttributes(schemaOf(state, object)).filter((a) => !a.computed && !a.relation && (a.id === col || a.requiredWhen?.field === col) && isRequiredFor(a, next) && empty(next[a.id]));
+  if (hit.length === 0) return undefined;
+  const names = hit.map((a) => a.name).join(', ');
+  const now = hit.some((a) => !a.isRequired && a.requiredWhen);
+  if (hit.every((a) => a.id === col)) return `${names} is required${now ? ' now' : ''}.`;
+  const w = hit.find((a) => a.requiredWhen)?.requiredWhen;
+  const gate = w ? ownFields(state, object).find((f) => f.id === w.field) : undefined;
+  const is = w ? (gate?.options?.find((o) => o.id === w.is)?.label ?? (w.field === 'stage' ? stagesOf(state).find((x) => x.id === w.is)?.label : undefined) ?? w.is) : '';
+  return `Fill in ${names} first: ${hit.length === 1 ? 'it is' : 'they are'} required${w && gate ? ` when ${gate.name} is ${is}` : ''}.`;
 }
 
 /** A new custom record's starting shape. */

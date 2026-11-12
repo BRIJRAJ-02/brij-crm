@@ -29,7 +29,7 @@ import { copyText } from '../../lib/copy.ts';
 import { cx } from '../../lib/cx.ts';
 import type { Attribute } from '../AttributeField/AttributeField.tsx';
 import { liveEntries, inr, isBuiltIn, newId, type AppAction, type AppState, type CalcKind, type Deal, type ObjectId, type SavedView, type Stage, type ViewAccess, LISTS_ON } from './data.ts';
-import { STAGE_LOOK, beforeOf, blankCustom, calcText, calcsFor, dayOf, filterFields, groupableFields, groupsOf, isOpenDeal, kindOf, kindsOf, liveAttributes, objectDef, oddsOf, ownFields, passesView, patchFor, recordOf, schemaOf, staleAfter, stagesOf, wordsOf, ymd, type FieldDef } from './model.tsx';
+import { STAGE_LOOK, requiredProblem, beforeOf, blankCustom, calcText, calcsFor, dayOf, filterFields, groupableFields, groupsOf, isOpenDeal, kindOf, kindsOf, liveAttributes, objectDef, oddsOf, ownFields, passesView, patchFor, recordOf, schemaOf, staleAfter, stagesOf, wordsOf, ymd, type FieldDef } from './model.tsx';
 import { ACCESS_WORDS, BulkEditDialog, NewRecordDialog, RenameDialog, ViewAccessDialog, ViewNamer, attributeOf, fieldValue } from './recordforms.tsx';
 import { valueToCell } from '../DataGrid/DataGrid.tsx';
 
@@ -168,6 +168,8 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       if (c.col === 'email' && c.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.value.trim())) { toast({ message: `“${c.value}” isn’t an email address. Nothing changed.`, tone: 'danger' }); return 0; }
       if (c.col === 'name' && !c.value.trim()) { toast({ message: 'A name can’t be empty. Nothing changed.', tone: 'danger' }); return 0; }
       const patch = patchFor(state, object, rec, c.col, c.value); if (!patch) continue;
+      const needs = requiredProblem(state, object, rec, c.col, c.value);
+      if (needs) { toast({ message: `${changes.length > 1 ? `${rec.name}: ` : ''}${needs} Nothing changed.`, tone: 'danger' }); return 0; }
       const cur = byId.get(c.id) ?? { patch: {}, before: {} };
       const before = beforeOf(rec, patch);
       const merged = { ...cur.patch, ...patch, ...(patch.extra ? { extra: { ...(cur.patch.extra as object | undefined), ...(patch.extra as object) } } : {}) };
@@ -202,7 +204,8 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     if (colId === 'name') { toast({ message: 'A name can’t be empty.' }); return; }
     const targets = ids.includes(rowId) && ids.length > 1 ? ids : [rowId];
     const n = write(targets.map((id) => ({ id, col: colId, value: '' })), targets.length === 1 ? 'Cleared' : `Cleared ${def.columns.find((c) => c.id === colId)?.name ?? 'the field'} on {n} ${def.many}`);
-    if (n === 0) toast({ message: `${def.columns.find((c) => c.id === colId)?.name ?? 'That field'} can’t be empty.` });
+    const refused = targets.some((id) => { const rec = recordOf(state, object, id); return rec !== undefined && requiredProblem(state, object, rec, colId, '') !== undefined; });
+    if (n === 0 && !refused) toast({ message: `${def.columns.find((c) => c.id === colId)?.name ?? 'That field'} can’t be empty.` });
   };
   /** Sets one field on many records; Undo puts back only that field, so later edits stay. */
   const setMany = (rowIds: ReadonlyArray<string>, col: string, value: string, message: string) => write(rowIds.map((id) => ({ id, col, value })), message);
@@ -271,7 +274,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined} hideHeader={opts.hideHeader}
       onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
       onColumnAction={columnAction} columnActions={onAttributes && canEdit ? undefined : ['ascending', 'descending', 'filter', 'hide']}
-      onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit && !rowGroup ? () => { setCreating({}); return undefined; } : undefined} addLabel={`New ${def.one}`}
+      onCellChange={canEdit ? setCell : undefined} validateCell={canEdit ? (rowId, col, value) => { const rec = recordOf(state, object, rowId); return rec ? requiredProblem(state, object, rec, col, value) : undefined; } : undefined} onRowAction={setPeek} onAddRow={canEdit && !rowGroup ? () => { setCreating({}); return undefined; } : undefined} addLabel={`New ${def.one}`}
       calcs={!rowGroup || Object.values(view.calcs ?? {}).some((k) => k !== 'none') ? calcs(list) : undefined} onPaste={canEdit ? paste(list) : undefined} onClear={canEdit ? clear : undefined}
       onColumnResize={(wd) => edit({ widths: { ...(view.widths ?? {}), ...wd } })}
       emptyState={empty} />

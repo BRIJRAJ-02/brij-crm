@@ -8,7 +8,8 @@ import { ArrowLeft, CalendarClock, CalendarPlus, ChevronRight, CalendarX2, Clock
 import type { BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BrandCard } from '../BookingFlow/BookingFlow.tsx';
 import { VenueGuest, type OnWaitlist } from './guest-venue.tsx';
-import { MenuPage } from '../MenuPage/MenuPage.tsx';
+import { MenuPage, menuLookProps } from '../MenuPage/MenuPage.tsx';
+import { LookContext } from '../../lib/look.ts';
 import { BookingChat, type BookingChatLine, type BookingChatBooked } from '../BookingChat/BookingChat.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Button as AriaButton } from 'react-aria-components';
@@ -73,6 +74,10 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
   useGuestScale(Boolean(play && page));
   if (!play || !page) return null;
   const scenario = play.scenario;
+  // The business page, the reservation page and the menu wear the menu's look: its colours, faces and corners, edge to edge.
+  const venue = scenario === 'profile' || scenario === 'menu' || (scenario === 'book' && page.kind === 'table');
+  const look = state.menuLive?.look ?? state.menu?.look;
+  const venueLook = venue && look ? menuLookProps(look) : undefined;
   return (
     <div className="tf-bkf-guestmode">
       <header className="tf-bkf-guestmode__bar" aria-label="Guest mode">
@@ -83,11 +88,13 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
         <span className="tf-bkf__spacer" />
         <Button ref={back} size="sm" variant="secondary" icon={<ArrowLeft {...i14} aria-hidden="true" />} onPress={onClose}>Back to Bookings</Button>
       </header>
-      <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || scenario === 'menu' || (scenario === 'book' && page?.kind === 'table') || undefined}>
+      <LookContext.Provider value={venueLook}>
+      <main className="tf-bkf-guestmode__page" data-device={device} data-venue={venue || undefined} {...(venueLook ?? {})}>
         <div className="tf-bkf-guestmode__frame" data-device={device}>
           <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} table={play.table} prefill={play.prefill} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} onTableRequest={onTableRequest} />
         </div>
       </main>
+      </LookContext.Provider>
     </div>
   );
 }

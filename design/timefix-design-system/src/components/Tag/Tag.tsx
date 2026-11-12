@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Button as AriaButton } from 'react-aria-components';
 import { cx } from '../../lib/cx.ts';
 import { StatusIcon, type StatusShape } from '../Icon/StatusIcon.tsx';
 import './Tag.css';
@@ -18,13 +19,25 @@ export interface TagProps {
   readonly size?: 'sm' | 'md' | 'pill';
   /** A white tag with a hairline, for neutral facts (a price, a plan). */
   readonly outline?: boolean;
+  /** Makes the tag a jump link to where its value is set (a question's More options). Never an action that changes data. */
+  readonly onPress?: () => void;
+  /** The accessible name when the visible words need more context ("Open Logic and points: Shown if …"). */
+  readonly 'aria-label'?: string;
   readonly children: ReactNode;
 }
 
 /** A select, multi-select or status value. Text and icon take the hue on its soft ground. */
-export function Tag({ hue, status, icon, size = 'md', outline = false, children }: TagProps) {
+export function Tag({ hue, status, icon, size = 'md', outline = false, onPress, 'aria-label': ariaLabel, children }: TagProps) {
   const h = hue ?? (status ? STATUS_HUE[status] : 'gray');
   const s = size === 'pill' ? 18 : size === 'sm' ? 12 : 14;
+  if (onPress) {
+    return (
+      <AriaButton className={cx('tf-tag', `tf-tag--${size}`, outline ? 'tf-tag--outline' : `tf-tag--${h}`, 'tf-tag--button')} onPress={onPress} aria-label={ariaLabel}>
+        {status ? <StatusIcon shape={status} size={s} /> : icon}
+        <span className="tf-tag__text">{children}</span>
+      </AriaButton>
+    );
+  }
   return (
     <span className={cx('tf-tag', `tf-tag--${size}`, outline ? 'tf-tag--outline' : `tf-tag--${h}`)}>
       {status ? <StatusIcon shape={status} size={s} /> : icon}

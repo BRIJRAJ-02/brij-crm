@@ -1,5 +1,5 @@
-import { Button as AriaButton } from 'react-aria-components';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { Button as AriaButton, I18nProvider, useLocale } from 'react-aria-components';
+import { useEffect, useId, useMemo, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, CircleAlert, Copy, CornerDownLeft } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -8,9 +8,10 @@ import { Kbd } from '../Kbd/Kbd.tsx';
 import { Logo } from '../Logo/Logo.tsx';
 import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { ProgressBar } from '../Progress/Progress.tsx';
-import { answerText, checkAnswer, type AnswerValue, type BookingSource, type FormAnswers, type FormQuestion } from './answers.ts';
+import { GUEST_WORDS, answerText, checkAnswer, localeOf, type FormLang, type AnswerValue, type BookingSource, type FormAnswers, type FormQuestion } from './answers.ts';
 import { QuestionInput, type UploadFile } from './QuestionInput.tsx';
 import { guestLookProps, type GuestLookValue } from '../GuestLook/GuestLook.tsx';
+import { LookContext, type LookScope } from '../../lib/look.ts';
 import './HostedForm.css';
 
 export * from './answers.ts';
@@ -20,8 +21,8 @@ export { QuestionInput, type QuestionInputProps, type UploadFile } from './Quest
 export type HostedFormMode = 'one' | 'page' | 'steps';
 /** A thank-you message besides the main one: a jump, a rule or a route can end a visit here. `{{score}}` in its words shows the score. */
 export interface FormEnding { readonly id: string; readonly title: string; readonly line?: string; readonly action?: { readonly label: string; readonly href: string } }
-/** The visitor's language for the form's own words (buttons, hints, steps). Question words are the owner's. */
-export type FormLang = 'en' | 'hi' | 'es' | 'fr' | 'de';
+/** The visitor's language for the form's own words (buttons, hints, steps, answer checks). Question words are the owner's. */
+export type { FormLang } from './answers.ts';
 /** What a send carries besides the answers: which ending it reached, the score, and the seconds from first answer to send. */
 export interface SendMeta { readonly ending?: string; readonly score: number; readonly secs: number }
 
@@ -142,10 +143,11 @@ interface SlotProps {
   readonly onPicked?: () => void;
   readonly booking?: BookingSource;
   readonly onUpload?: UploadFile;
+  readonly lang: FormLang;
 }
 
 /** A question's number, heading, description, control and error line; shakes when an attempt is refused (12). */
-function QuestionSlot({ question: q, index, value, onChange, error, attempt, large, onPicked, booking, onUpload }: SlotProps) {
+function QuestionSlot({ question: q, index, value, onChange, error, attempt, large, onPicked, booking, onUpload, lang }: SlotProps) {
   const id = useId();
   const { ref, shake } = useShake<HTMLDivElement>();
   const seen = useRef(attempt);
@@ -157,11 +159,11 @@ function QuestionSlot({ question: q, index, value, onChange, error, attempt, lar
     <div className={cx('tf-hform__q', large && 'tf-hform__q--large')} data-question={q.id}>
       <p className="tf-hform__num tf-num" aria-hidden="true">{index + 1}<ArrowRight size={12} strokeWidth={2} /></p>
       <h3 id={`${id}-t`} className="tf-hform__title" tabIndex={-1}>
-        {q.title}{q.required ? <span className="tf-hform__req" aria-label="required"> *</span> : null}
+        {q.title}{q.required ? <span className="tf-hform__req" aria-label={GUEST_WORDS[lang].required}> *</span> : null}
       </h3>
       {q.description && <p className="tf-hform__desc">{q.description}</p>}
       <div ref={ref} className="tf-hform__control">
-        <QuestionInput question={q} value={value} onChange={onChange} labelId={`${id}-t`} isInvalid={error !== undefined} onPicked={onPicked} booking={booking} onUpload={onUpload} />
+        <QuestionInput question={q} value={value} onChange={onChange} labelId={`${id}-t`} isInvalid={error !== undefined} onPicked={onPicked} booking={booking} onUpload={onUpload} lang={lang} />
       </div>
       {error && <p className="tf-hform__error" role="alert"><CircleAlert size={14} strokeWidth={1.75} aria-hidden="true" />{error}</p>}
     </div>
@@ -182,7 +184,8 @@ export function SentAnswers({ questions, answers, booking }: { readonly question
 }
 
 /** Finish later: one quiet line that saves a draft, then opens to "Saved" and Copy link (21 accordion), Copy swapping to Copied. */
-export function FinishLater({ onSave }: { readonly onSave: () => Promise<string> }) {
+export function FinishLater({ onSave, lang = 'en' }: { readonly onSave: () => Promise<string>; /** The form's language for its words. */ readonly lang?: FormLang }) {
+  const g = GUEST_WORDS[lang];
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
@@ -199,18 +202,18 @@ export function FinishLater({ onSave }: { readonly onSave: () => Promise<string>
   };
   return (
     <div className="tf-hform__later" data-open={state === 'saved' || undefined}>
-      {failedCopy && <p className="tf-hform__error" role="alert">Copy didn’t work. Select this link and copy it: {link}</p>}
+      {failedCopy && <p className="tf-hform__error" role="alert">{g.copyFailed(link)}</p>}
       {state !== 'saved' && (
         <AriaButton className="tf-hform__later-btn" onPress={() => { void save(); }} isDisabled={state === 'saving'}>
-          {state === 'saving' ? 'Saving…' : state === 'failed' ? "Couldn't save. Try again" : 'Finish later'}
+          {state === 'saving' ? g.saving : state === 'failed' ? g.saveFailed : g.finishLater}
         </AriaButton>
       )}
       <div className="tf-hform__later-panel">
         <div className="tf-hform__later-clip">
           <p className="tf-hform__later-row" role="status">
-            <span className="tf-hform__later-saved"><SuccessCheck size={14} />Saved. Your answers wait for you.</span>
+            <span className="tf-hform__later-saved"><SuccessCheck size={14} />{g.saved}</span>
             <Button size="sm" variant="soft" icon={<Copy size={14} strokeWidth={1.75} />} onPress={() => { void copy(); }}>
-              <TextSwap swapKey={copied ? 'y' : 'n'}>{copied ? 'Copied' : 'Copy link'}</TextSwap>
+              <TextSwap swapKey={copied ? 'y' : 'n'}>{copied ? g.copied : g.copyLink}</TextSwap>
             </Button>
           </p>
         </div>
@@ -258,8 +261,10 @@ export function PoweredByFoot({ align }: { readonly align?: 'center' }) {
  */
 export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel, prefill = {}, brand, onReach, look, thanks: thanksIn, endings = [], endingFor, lang = 'en', corners = 'rounded', onEdit, isFramed = false }: HostedFormProps) {
   const w = WORDS[lang];
+  const g = GUEST_WORDS[lang];
+  const parentLocale = useLocale().locale;
   const submitWords = submitLabel ?? w.submit;
-  const thanks = thanksIn ?? { title: w.thanks, line: 'Your answers are in. You can close this page.' };
+  const thanks = thanksIn ?? { title: w.thanks, line: g.thanksLine };
   // Hidden fields never show: they carry their value (from the link or the default) straight into the answers.
   const questions = allQuestions.filter((q) => q.kind !== 'hidden');
   const hiddenAnswers = Object.fromEntries(allQuestions.filter((q) => q.kind === 'hidden').map((q) => [q.id, prefill[q.id] ?? q.defaultValue ?? '']));
@@ -296,7 +301,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
       if (all[id] === undefined) return all;
       const q = questions.find((x) => x.id === id);
       const value = typeof next === 'function' ? undefined : next;
-      if (!q || value === undefined || checkAnswer(q, value) !== undefined) return all;
+      if (!q || value === undefined || checkAnswer(q, value, lang) !== undefined) return all;
       const { [id]: _gone, ...rest } = all;
       return rest;
     });
@@ -348,7 +353,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
     window.clearTimeout(advance.current);
     const q = questions[step];
     if (!q) return;
-    const problem = checkAnswer(q, answers[q.id]);
+    const problem = checkAnswer(q, answers[q.id], lang);
     if (problem) { refuse({ [q.id]: problem }); return; }
     setErrors({});
     go(step);
@@ -371,7 +376,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const submitPage = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const found: Record<string, string> = {};
-    for (const q of questions) { if (!shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id]); if (p) found[q.id] = p; }
+    for (const q of questions) { if (!shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id], lang); if (p) found[q.id] = p; }
     const first = questions.find((q) => found[q.id]);
     if (first) {
       refuse(found);
@@ -390,7 +395,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const nextStep = () => {
     const g = groups[step] ?? [];
     const found: Record<string, string> = {};
-    for (const n of g) { const q = questions[n]; if (!q || !shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id]); if (p) found[q.id] = p; }
+    for (const n of g) { const q = questions[n]; if (!q || !shown(q, answers)) continue; const p = checkAnswer(q, answers[q.id], lang); if (p) found[q.id] = p; }
     if (Object.keys(found).length) { refuse(found); return; }
     setErrors({});
     const jump = g.map((n) => jumpOf(questions[n], answers)).find((x) => x !== undefined);
@@ -408,10 +413,10 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
 
   const slot = (q: FormQuestion, n: number, large: boolean) => (
     <QuestionSlot key={q.id} question={q} index={n} value={answers[q.id]} onChange={setAnswer(q.id)} error={errors[q.id]} attempt={attempt}
-      large={large} onPicked={large && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating' || q.kind === 'yesno' || q.kind === 'scale' || q.kind === 'country') ? picked : undefined} booking={booking} onUpload={onUpload} />
+      large={large} onPicked={large && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating' || q.kind === 'yesno' || q.kind === 'scale' || q.kind === 'country') ? picked : undefined} booking={booking} onUpload={onUpload} lang={lang} />
   );
-  const alert = failed && <p className="tf-hform__alert" role="alert"><CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />We couldn't send that. Check your connection and try again.</p>;
-  const later = onFinishLater && <FinishLater onSave={() => onFinishLater(answers)} />;
+  const alert = failed && <p className="tf-hform__alert" role="alert"><CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />{g.sendFailed}</p>;
+  const later = onFinishLater && <FinishLater onSave={() => onFinishLater(answers)} lang={lang} />;
   const score = scoreOf(questions, answers);
   const recall = (x: string | undefined) => x?.replace(/\{\{\s*score\s*\}\}/g, String(score));
   const ending = endings.find((e) => e.id === ended);
@@ -434,7 +439,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
         <span className="tf-hform__form-name">{nameLine}{step === 0 && !sent ? ledeLine('tf-hform__lede-one') : null}</span>
         <span className="tf-hform__count tf-num" aria-hidden="true">{Math.min(step + 1, questions.length)} / {questions.length}</span>
       </div>
-      <ProgressBar size="sm" aria-label="Progress" value={sent ? questions.length : step} maxValue={questions.length} className="tf-hform__progress" />
+      <ProgressBar size="sm" aria-label={g.progress} value={sent ? questions.length : step} maxValue={questions.length} className="tf-hform__progress" />
       <Pages label={title} page={sent ? questions.length : step} pages={[
         ...questions.map((q, n) => (
           <div key={q.id} className="tf-hform__step">
@@ -475,7 +480,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
         <h2 className="tf-hform__name">{nameLine}</h2>
         {step === 0 ? ledeLine('tf-hform__lede') : null}
       </header>
-      <ProgressBar size="sm" aria-label="Progress" value={sent ? groups.length : step} maxValue={groups.length} className="tf-hform__progress tf-hform__progress--steps" />
+      <ProgressBar size="sm" aria-label={g.progress} value={sent ? groups.length : step} maxValue={groups.length} className="tf-hform__progress tf-hform__progress--steps" />
       <Pages label={title} page={sent ? groups.length : step} pages={[
         ...groups.map((g, s) => {
           const head = questions[g[0] ?? 0]?.step?.title;
@@ -498,7 +503,13 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
     </div>
   );
 
-  return (
+  // Its dropdowns and date pickers open outside the page: they wear its look (theme, accent, face, corners) and speak its language.
+  const scope = useMemo<LookScope | undefined>(() => {
+    if (!look && corners !== 'square') return undefined;
+    const base = look ? guestLookProps(look) : undefined;
+    return { 'data-theme': base?.['data-theme'], style: { ...base?.style, ...(corners === 'square' ? SQUARE_RADII : {}) } };
+  }, [look, corners]);
+  const page = (
     <div className={cx('tf-hform', look && 'tf-hform--look', isFramed && 'tf-hform--framed')} data-corners={corners === 'square' ? 'square' : undefined} {...(look ? guestLookProps(look) : {})}>
       <div className="tf-hform__card">
         {brand && <div className="tf-hform__brand">
@@ -511,4 +522,9 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
       <PoweredByFoot />
     </div>
   );
+  // Always wrapped, so changing the language never remounts the form; English keeps the surrounding locale.
+  const spoken = <I18nProvider locale={lang === 'en' ? parentLocale : localeOf(lang)}>{page}</I18nProvider>;
+  return <LookContext.Provider value={scope}>{spoken}</LookContext.Provider>;
 }
+/** Square corners, as the form's root sets them in CSS, for the popups it opens outside itself. */
+const SQUARE_RADII = { '--radius-xl': 'var(--radius-xs)', '--radius-lg': 'var(--radius-xs)', '--radius-md': 'var(--radius-xs)', '--radius-sm': 'var(--radius-xs)' } as CSSProperties;

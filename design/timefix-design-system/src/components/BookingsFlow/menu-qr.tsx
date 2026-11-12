@@ -88,7 +88,7 @@ export function QrCodes({ state, dispatch, onGuest, onTables }: { readonly state
                       else if (k === 'png') { const svg = refs.current[t.id]; if (svg) void downloadQr(svg, `${t.name}-menu`, 'png').then(saved); }
                       else if (k === 'renew') setRenew(t);
                     }}>
-                      <MenuItem id="open" icon={<Eye {...i16} />}>Scan it as a guest</MenuItem>
+                      <MenuItem id="open" icon={<Eye {...i16} />}>View menu</MenuItem>
                       <MenuItem id="stats" icon={<BarChart3 {...i16} />} description={`${scansOf(t)} scans in 30 days`}>Analytics</MenuItem>
                       <MenuItem id="copy" icon={<Copy {...i16} />} description={tableMenuUrl(state, t)}>Copy link</MenuItem>
                       <MenuItem id="png" icon={<Download {...i16} />}>Download PNG</MenuItem>

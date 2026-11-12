@@ -6,6 +6,6 @@ A dialog asks one question or collects a short form over a scrim, and holds the 
 
 **States**: closed, opening, open, pending (the action shows a spinner; Esc and the scrim are held), invalid rows (red edge plus one line), step n of m.
 
-**Interaction**: focus moves in and is trapped; Cancel takes focus first in a confirm. Esc, × and a click outside mean "keep editing" and close without acting. Enter submits a form. Opens with transitions.dev modal (0.96 → 1, 250ms; out 150ms); steps slide side by side (8px, 250ms) while the card's height eases to fit; new invite rows drop in.
+**Interaction**: focus moves in and is trapped; Cancel takes focus first in a confirm. Esc, × and a click outside mean "keep editing" and close without acting. Enter submits a form. Opens with transitions.dev modal (0.96 → 1, 250ms; out 150ms); steps slide side by side (8px, 250ms) while the card's height eases to fit; new invite rows drop in. Inside a themed guest page (`LookContext`: the menu, business, reservation, link and form pages), the dialog wears that page's look, like Popover.
 
 **Replaces**: Modal, ModalTrigger, the confirm patterns, InviteDialog.

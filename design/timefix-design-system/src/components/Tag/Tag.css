@@ -25,3 +25,9 @@
 .tf-tag-pop { display: inline-flex; animation: tf-tag-pop var(--duration-fast) var(--ease-smooth-out); }
 @keyframes tf-tag-pop { from { opacity: 0; transform: scale(var(--scale-large)); } }
 @media (prefers-reduced-motion: reduce) { .tf-tag-pop { animation: none; } }
+/* A tag that jumps to where its value is set: a hairline on hover, the focus ring on keys; long words end in an ellipsis. */
+.tf-tag--button { max-width: 100%; margin: 0; border: 0; cursor: pointer; outline: none; transition: box-shadow var(--duration-quick) var(--ease-out); }
+.tf-tag--button[data-hovered] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); }
+.tf-tag--button[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-tag__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .tf-tag--button { transition: none; } }

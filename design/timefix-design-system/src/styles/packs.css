@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..800&family=Fraunces:wght@100..900&family=Newsreader:wght@200..800&family=Bricolage+Grotesque:wght@200..800&family=Outfit:wght@100..900&family=Instrument+Serif&display=swap');
+
+/* The guest looks' font packs, the real app's (packages/tokens packs.css and packs-templates.css): six faces beside Geist and
+   Geist Mono, each with a fallback built from a local system font with its metrics matched, so the swap moves nothing. The menu,
+   reservation and business pages and the link page draw from it. Faces load from Google Fonts here (the real app serves its own). */
+@font-face { font-family: 'Host Grotesk Fallback'; src: local('Arial'); size-adjust: 104.98%; ascent-override: 96.69%; descent-override: 30.01%; line-gap-override: 0%; }
+@font-face { font-family: 'Fraunces Fallback'; src: local('Times New Roman'); size-adjust: 115.45%; ascent-override: 84.71%; descent-override: 22.09%; line-gap-override: 0%; }
+@font-face { font-family: 'Outfit Fallback'; src: local('Arial'); size-adjust: 99.82%; ascent-override: 100.18%; descent-override: 26.05%; line-gap-override: 0%; }
+@font-face { font-family: 'Newsreader Fallback'; src: local('Times New Roman'); size-adjust: 105.48%; ascent-override: 69.68%; descent-override: 25.12%; line-gap-override: 0%; }
+@font-face { font-family: 'Bricolage Grotesque Fallback'; src: local('Arial'); size-adjust: 105.43%; ascent-override: 88.21%; descent-override: 25.61%; line-gap-override: 0%; }
+@font-face { font-family: 'Instrument Serif Fallback'; src: local('Times New Roman'); size-adjust: 83.94%; ascent-override: 117.94%; descent-override: 36.93%; line-gap-override: 0%; }
+
+:root {
+  --font-pack-grotesk: 'Host Grotesk', 'Host Grotesk Fallback', ui-sans-serif, system-ui, sans-serif;
+  --font-pack-editorial: 'Fraunces', 'Fraunces Fallback', ui-serif, Georgia, serif;
+  --font-pack-geometric: 'Outfit', 'Outfit Fallback', ui-sans-serif, system-ui, sans-serif;
+  --font-pack-classic: 'Newsreader', 'Newsreader Fallback', ui-serif, Georgia, serif;
+  --font-pack-friendly: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', ui-sans-serif, system-ui, sans-serif;
+  --font-pack-display: 'Instrument Serif', 'Instrument Serif Fallback', ui-serif, Georgia, serif;
+  /* The phone's own face, and copies of the app's two, so a look that sets --font-sans can still name them. */
+  --font-pack-device: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-pack-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-pack-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}

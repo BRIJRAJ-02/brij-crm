@@ -38,7 +38,7 @@ import { MergeDialog, twinOf } from './duplicates.tsx';
 import { NewRecordDialog, attributeOf, fieldValue } from './recordforms.tsx';
 import { valueToCell } from '../DataGrid/DataGrid.tsx';
 import { dayFrom, inr, isBuiltIn, isEmptyNote, newId, recordName, ymdOf, type Activity, type AnyRecord, type AppAction, type AppState, type ObjectId, type RecordLink, type Stage, LISTS_ON } from './data.ts';
-import { STAGE_LOOK, blankCustom, isRequiredFor, linkedRecords, liveAttributes, ownFields, patchFor, recordOf, recordsOf, relationsOf, schemaOf, stagesOf, valuesOf, wordsOf } from './model.tsx';
+import { STAGE_LOOK, blankCustom, isRequiredFor, linkedRecords, liveAttributes, outcomeOf, ownFields, patchFor, recordOf, recordsOf, relationsOf, schemaOf, stagesOf, valuesOf, wordsOf } from './model.tsx';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -255,8 +255,8 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       {deal && <>
         {fieldRow({ id: 'amount', name: 'Amount', type: 'currency', currency: 'INR' }, 'amount', deal.amount, (v) => Number(v) || 0)}
         {fieldRow({ id: 'close', name: 'Close date', type: 'date' }, 'close', ymdOf(deal.close), (v) => (typeof v === 'string' ? dayFrom(v) ?? deal.close : deal.close))}
-        {deal.stage === 'Lost' && fieldRow({ id: 'lostReason', name: 'Lost reason', type: 'select', options: LOST_REASONS.map((x) => ({ id: x, label: x, hue: 'red' as const })) }, 'lostReason', deal.lostReason, (v) => (v ? String(v) : undefined))}
-        {deal.stage === 'Lost' && fieldRow({ id: 'lostNote', name: 'Lost note', type: 'text' }, 'lostNote', deal.lostNote ?? '')}
+        {outcomeOf(state, deal.stage) === 'lost' && fieldRow({ id: 'lostReason', name: 'Lost reason', type: 'select', options: LOST_REASONS.map((x) => ({ id: x, label: x, hue: 'red' as const })) }, 'lostReason', deal.lostReason, (v) => (v ? String(v) : undefined))}
+        {outcomeOf(state, deal.stage) === 'lost' && fieldRow({ id: 'lostNote', name: 'Lost note', type: 'text' }, 'lostNote', deal.lostNote ?? '')}
       </>}
       {company && object === 'companies' && <>
         {fieldRow({ id: 'domain', name: 'Domain', type: 'domain' }, 'domain', company.domain)}

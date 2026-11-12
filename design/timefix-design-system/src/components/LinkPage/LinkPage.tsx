@@ -10,6 +10,8 @@ import { TextSwap } from '../Motion/Motion.tsx';
 import type { Hue } from '../Tag/Tag.tsx';
 import { LinkCard, LinkGrid, LinkList, type LinkItem } from '../LinkList/LinkList.tsx';
 import { detectNetwork, SocialLinks, SocialMark, type SocialLink } from '../SocialLinks/SocialLinks.tsx';
+import { fontFace, type MenuFont } from '../../lib/fonts.ts';
+import { LookContext, type LookScope } from '../../lib/look.ts';
 import './LinkPage.css';
 
 /** The four looks a link page comes in, plus Custom (the owner's brand colour on the buttons). */
@@ -226,6 +228,8 @@ export interface LinkPageProps {
   readonly look?: LinkPageLook;
   /** The Custom look's brand colour (a hex); its buttons take it with readable text. */
   readonly accent?: string;
+  /** The page's face, from the guest looks' font list (MENU_FONTS); left out, the template's (Modern). */
+  readonly font?: MenuFont;
   /** Opens BookingFlow from a booking block. Without it the Book button waits. */
   readonly booking?: LinkPageBooking;
   /** In the editor's phone preview: links don't navigate. */
@@ -242,7 +246,7 @@ export interface LinkPageProps {
 }
 
 /** A person's public link page, Linktree simple: avatar, name and bio, their social marks, then their blocks in order (buttons, tiles, a featured card, headings, dividers, a booking block), and "Powered by Timefix". */
-export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACCENT_SWATCHES[0]?.hex ?? '#1F5FD6', booking, isPreview = false, showClicks = false, onSignup, closing, now, members = [] }: LinkPageProps) {
+export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACCENT_SWATCHES[0]?.hex ?? '#1F5FD6', font, booking, isPreview = false, showClicks = false, onSignup, closing, now, members = [] }: LinkPageProps) {
   const darkGround = profile.groundColour ? contrastOnWhiteText(profile.groundColour) >= 4.5 : false;
   // Hidden, archived, out-of-date blocks, and blocks with nothing in them yet, don't show.
   const shown = blocks.filter((b) => isShown(b, now));
@@ -252,7 +256,20 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
     ...(look === 'custom' ? { '--tf-lp-custom': accent, '--tf-lp-on-custom': contrastOnWhiteText(accent) >= 4.5 ? '#FFFFFF' : '#111111' } : {}),
     ...(profile.ground ? { '--tf-lp-ground': `url("${profile.ground}")` } : {}),
     ...(profile.groundColour ? { '--tf-lp-bg': profile.groundColour } : {}),
+    ...(font && font !== 'sans' ? { '--font-sans': fontFace(font) } : {}),
   } as CSSProperties;
+  const theme = look === 'night' || darkGround ? 'dark' : profile.groundColour ? 'light' : undefined;
+  // Its dialogs (a gated link's question) and pickers (a booking card's) open outside the page: they wear its theme, ground, face and buttons.
+  const onCustom = contrastOnWhiteText(accent) >= 4.5 ? '#FFFFFF' : '#111111';
+  const ground = profile.groundColour ?? (look === 'soft' ? 'var(--tag-orange-bg)' : undefined);
+  const scope: LookScope = {
+    ...(theme ? { 'data-theme': theme } : {}),
+    style: {
+      ...(font && font !== 'sans' ? { '--font-sans': fontFace(font) } : {}),
+      ...(ground ? { '--surface': ground, '--surface-raised': ground } : {}),
+      ...(look === 'custom' ? { '--primary': accent, '--primary-hover': `color-mix(in srgb, ${accent} 88%, black)`, '--on-primary': onCustom, '--accent': accent, '--on-accent': onCustom } : {}),
+    } as CSSProperties,
+  };
 
   // Runs of buttons become one LinkList, runs of tiles one LinkGrid, so a screen reader hears one list per run.
   const draw = (list: ReadonlyArray<LinkBlock>): ReactNode[] => {
@@ -315,7 +332,8 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
   }
 
   return (
-    <div className="tf-linkpage" data-look={look} data-theme={look === 'night' || darkGround ? 'dark' : profile.groundColour ? 'light' : undefined} data-ground={profile.ground ? true : undefined} style={style}>
+    <LookContext.Provider value={scope}>
+    <div className="tf-linkpage" data-look={look} data-theme={theme} data-ground={profile.ground ? true : undefined} style={style}>
       <PageColumn>
         {/* A cover band in the page's colour (or the owner's photo), the face overlapping its lower edge (owner's 11 Nov reference). */}
         <div className="tf-linkpage__cover" data-photo={profile.cover ? true : undefined} aria-hidden="true">{profile.cover && <img src={profile.cover} alt="" />}</div>
@@ -336,6 +354,7 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
         </footer>
       </PageColumn>
     </div>
+    </LookContext.Provider>
   );
 }
 

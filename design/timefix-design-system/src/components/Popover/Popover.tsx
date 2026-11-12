@@ -1,5 +1,6 @@
 import { Popover as AriaPopover, type PopoverProps as AriaPopoverProps, Dialog, DialogTrigger, Button as AriaButton, Link, SearchField, Input, PopoverContext, useSlottedContext } from 'react-aria-components';
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
+import { LookContext } from '../../lib/look.ts';
 import { Info, Search } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import './Popover.css';
@@ -38,8 +39,10 @@ export function Popover({ children, width = 'content', label, flush = false, cla
   // A submenu takes React Aria's side placement; everything else opens below its trigger's start.
   const isSubmenu = useSlottedContext(PopoverContext)?.trigger === 'SubmenuTrigger';
   const place = placement ?? (isSubmenu ? undefined : 'bottom start');
+  // Opened from a themed guest page (a dark menu), it wears that page's look.
+  const look = useContext(LookContext);
   return (
-    <AriaPopover {...rest} {...(place ? { placement: place } : {})} className={cx('tf-popover', 'tf-overlay', `tf-popover--${width}`, flush && 'tf-popover--flush', className)}>
+    <AriaPopover {...rest} {...(place ? { placement: place } : {})} {...(look ? { 'data-theme': look['data-theme'], style: { ...look.style, background: undefined } } : {})} className={cx('tf-popover', 'tf-overlay', `tf-popover--${width}`, flush && 'tf-popover--flush', className)}>
       {label !== undefined ? <Dialog className="tf-popover__dialog" aria-label={label}>{children}</Dialog> : children}
     </AriaPopover>
   );
