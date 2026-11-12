@@ -97,7 +97,7 @@ The owner delegates design calls; each is decided here, with options and the rea
 | Next times chunk | 1.37 kB |
 | Notice sheet chunk | 463 B |
 
-All of `apps/web/dist/assets`, gzipped: 2,169,429 B of JavaScript and 149,413 B of CSS. The whole library's CSS modules, each minified and gzipped: 145,527 B.
+All of `apps/web/dist/assets`, gzipped, grew a little in both JavaScript and CSS. **AC-9 is not met in full**: the hosted form's JavaScript (+50 B) and CSS (+70 B), the signature chunk (+60 B), the booking page's JavaScript (+14 B), the picture chunk (+10 B) and the notice sheet (+6 B) grew; first load JavaScript and CSS shrank and the booking page's CSS held. Part of the JavaScript is noise: a changed chunk's content hash changes the import strings of every chunk that loads it, and about a hundred route chunks moved by 10 to 14 B each with no code change. The real growth is the review's accessibility fixes (the accent-text edges on checked controls, a pressed fill on every button, the restored field box), the checkbox's drawn tick and Button's `soft` look, less the retired tokens (about 130 B off every page's stylesheet).
 
 Tier 1 folders on the base, from `node packages/ui/scripts/part-cost.ts --tier 1 --ref f81623f0c` (bytes, gzipped; CSS minified by Lightning CSS, TS and TSX transformed and minified by Oxc, the build's own tools):
 
@@ -132,7 +132,7 @@ The after tables are filled in per tier below.
 
 ### Tier 1 after
 
-`node packages/ui/scripts/part-cost.ts --tier 1 --against f81623f0c` on the tier 1 tip (bytes, gzipped):
+`node packages/ui/scripts/part-cost.ts --tier 1 --against f81623f0c` before the design system review's fixes (bytes, gzipped). On the tier's tip after them (1bed2bd46): CSS 16,077 → 17,221 and JS 24,019 → 24,076, **3% more**.
 
 | Folder | CSS before → after | JS before → after | Change |
 |---|---|---|---|
@@ -161,23 +161,23 @@ The after tables are filled in per tier below.
 | DragHandle | 478 → 532 | 443 → 443 | 5.9% |
 | Total | 16077 → 17130 | 24019 → 24049 | 2.7% |
 
-**AC-8 is not met for tier 1: the touched folders cost 2.7% more, not 30% less.** Why: tier 1 kept every behaviour (AC-3), and the prototype adds motion and states the library didn't draw: the drawn tick, the switch's stretch and overshoot, the slider's value bubble, RecordChipList's hover spring, the link chip's wash. The cuts that were available were taken (one rule per hue through custom properties, the stack fan and the tooltip arrow dropped, dead focus halos, folded duplicates). The atoms are small and mostly unique code; there is little duplicate left in them to remove. Where phase 1 can cut a lot is tier 2 and 3, whose folded parts duplicate whole components (Table, SampleTable and DataGrid; four bars and FloatingBar; Stats, RecordStats, TileGrid and Card), and in retiring legacy tokens every page loads. The owner decides whether AC-8 stays per tier, moves to the whole phase, or measures the built pages instead (see the report).
+**AC-8 is not met for tier 1: the touched folders cost 3% more, not 30% less.** Why: tier 1 kept every behaviour (AC-3), and the prototype adds motion and states the library didn't draw: the drawn tick, the switch's stretch and overshoot, the slider's value bubble, RecordChipList's hover spring, the link chip's wash. The cuts that were available were taken (one rule per hue through custom properties, the stack fan and the tooltip arrow dropped, dead focus halos, folded duplicates). The atoms are small and mostly unique code; there is little duplicate left in them to remove. Where phase 1 can cut a lot is tier 2 and 3, whose folded parts duplicate whole components (Table, SampleTable and DataGrid; four bars and FloatingBar; Stats, RecordStats, TileGrid and Card), and in retiring legacy tokens every page loads. The owner decides whether AC-8 stays per tier, moves to the whole phase, or measures the built pages instead (see the report).
 
 `pnpm size` on the tier 1 tip against the base:
 
 | Line | Base | Tier 1 | Budget now |
 |---|---|---|---|
-| First load JavaScript | 296.64 kB | 296.62 kB | 296.7 kB (was 300) |
-| First load CSS | 7.86 kB | 7.73 kB | 7.8 kB (was 40) |
-| Hosted form JavaScript | 205.91 kB | 205.95 kB | 206 kB (was 223) |
-| Hosted form CSS | 18.57 kB | 18.58 kB | 18.6 kB (was 18.8) |
+| First load JavaScript | 296.64 kB | 296.61 kB | 296.7 kB (was 300) |
+| First load CSS | 7.86 kB | 7.79 kB | 7.8 kB (was 40) |
+| Hosted form JavaScript | 205.91 kB | 205.96 kB | 206 kB (was 223) |
+| Hosted form CSS | 18.57 kB | 18.64 kB | 18.7 kB (was 18.8) |
 | Form step layouts, lazy | 5.75 kB | 5.75 kB | 5.8 kB (was 10) |
-| Form signature and ranking, lazy | 6.25 kB | 6.30 kB | 6.4 kB (was 14) |
-| Booking page JavaScript | 188.89 kB | 188.89 kB | 188.9 kB (was 230) |
-| Booking page CSS | 19.37 kB | 19.30 kB | 19.4 kB (was 19.5) |
+| Form signature and ranking, lazy | 6.25 kB | 6.31 kB | 6.4 kB (was 14) |
+| Booking page JavaScript | 188.89 kB | 188.90 kB | 189 kB (was 230) |
+| Booking page CSS | 19.37 kB | 19.37 kB | 19.4 kB (was 19.5) |
 | Media block chunk | 1.14 kB | 1.14 kB | 1.2 kB (was 1.5) |
-| Picture and gallery chunk | 1.67 kB | 1.67 kB | 1.7 kB (was 2) |
+| Picture and gallery chunk | 1.67 kB | 1.68 kB | 1.7 kB (was 2) |
 | Next times chunk | 1.37 kB | 1.37 kB | 1.4 kB (was 1.5) |
-| Notice sheet chunk | 463 B | 465 B | 500 B (was 800) |
+| Notice sheet chunk | 463 B | 469 B | 500 B (was 800) |
 
 All of `apps/web/dist/assets`, gzipped: JavaScript 2,169,429 to 2,170,195 B, CSS 149,413 to 150,063 B. **AC-9 is not met in full**: the hosted form's JavaScript (+40 B), its CSS (+10 B), the signature chunk (+50 B) and the notice sheet (+2 B) grew, and so did the totals. Part of the JavaScript is noise: a changed chunk's content hash changes the import strings of every chunk that loads it, and about a hundred route chunks moved by 10 to 14 B each with no code change. The real growth is the checkbox's tick wrapper (about 20 B) and Button's `soft` look. The CSS totals grew by the new motion above, less the retired tokens (130 B off every page's first load).
