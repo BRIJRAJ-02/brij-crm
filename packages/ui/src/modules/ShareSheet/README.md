@@ -46,7 +46,7 @@ Open (the link, the QR code, the ways, Download), with an invite, with "Put it o
 
 ## Keyboard
 
-Focus opens on Done. Tab goes Copy link, Email, WhatsApp, More (where the device has a share sheet), Download (Enter or the arrows open PNG and SVG), Put it on your site, the thing's own ways, then Done. Esc closes.
+Focus opens on Done. Tab goes the title bar's close button (×), Copy link, Email, WhatsApp, More (where the device has a share sheet), Download (Enter or the arrows open PNG and SVG), Put it on your site, the thing's own ways, then Done. Esc closes.
 
 ## Differences from the artifact
 

@@ -1,50 +1,31 @@
-/* AIAssist: Ask AI as a card. The header (the violet sparkle, the only place the `ai` colour shows, the heading and
-   what it is about), a body that scrolls (the start line and its suggestions, or the question and its answer), and
-   the prompt at the foot. Motion is the app's: rises of a distance token and fades, no blur and no press scale;
-   under reduced motion only the fades stay. */
+/* AIAssist: the conversation and the prompt, with no frame of its own (the screen hosts it in a Panel or a Card,
+   whose title, subtitle and close it uses). The conversation scrolls between the top and the prompt. Motion is the
+   app's: the answer's newest words fade in, the status line's steps swap through TextSwap under a sweeping light,
+   and the row under an answer arrives through Reveal's drop; no blur and no press scale, and under reduced motion
+   only the fades stay. */
 @layer components {
   .root {
     display: flex;
+    flex: 1;
     flex-direction: column;
+    gap: var(--space-12);
     min-block-size: 0;
     max-block-size: 100%;
-    border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-sm);
     color: var(--text);
     font: var(--text-body);
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    padding-block: var(--space-12) var(--space-8);
-    padding-inline: var(--space-16) var(--space-12);
-  }
-
-  .title {
-    margin: 0;
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-  }
-
-  .context {
-    flex: 1;
-    min-inline-size: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    letter-spacing: var(--tracking-body);
   }
 
   .body {
     flex: 1;
     min-block-size: 0;
-    overflow: auto;
-    padding-block: var(--space-8) var(--space-16);
-    padding-inline: var(--space-16);
+    overflow-y: auto;
+    border-radius: var(--radius-md);
+  }
+
+  .body:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-text);
+    outline-offset: var(--border-width-hairline);
   }
 
   .start {
@@ -53,23 +34,9 @@
     gap: var(--space-16);
   }
 
-  /* The start line rises out, then the suggestions follow it a stagger apart (transitions.dev's texts reveal). */
   .headline {
     margin: 0;
     font: var(--text-body-lg-strong);
-    animation: rise var(--duration-very-slow) var(--ease-smooth-out) backwards;
-  }
-
-  .suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-6);
-  }
-
-  .suggestion {
-    display: inline-flex;
-    animation: rise var(--duration-very-slow) var(--ease-smooth-out) backwards;
-    animation-delay: calc(var(--duration-stagger) * (var(--suggestion, 0) + 1));
   }
 
   .turn {
@@ -78,13 +45,16 @@
     gap: var(--space-12);
   }
 
+  /* The question as the person's own bubble, drawn as BookingChat draws a speech bubble: its corner on the person's
+     side is the small one. */
   .question {
     align-self: flex-end;
-    max-inline-size: 85%;
+    max-inline-size: 80%;
     margin: 0;
-    padding-block: var(--space-8);
-    padding-inline: var(--space-12);
-    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-xl);
+    border-end-end-radius: var(--radius-xs);
     background: var(--surface-subtle);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
@@ -109,7 +79,7 @@
     animation: sweep var(--duration-pulse) var(--ease-linear) infinite;
   }
 
-  /* Line breaks in an answer are kept; a long word or address wraps rather than widening the card. */
+  /* Line breaks in an answer are kept; a long word or address wraps rather than widening the slot. */
   .answer {
     overflow-wrap: anywhere;
     white-space: pre-wrap;
@@ -125,41 +95,8 @@
     color: var(--text-tertiary);
   }
 
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    animation: rise var(--duration-fast) var(--ease-smooth-out) backwards;
-  }
-
   .prompt {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    padding-block: 0 var(--space-12);
-    padding-inline: var(--space-12);
-  }
-
-  .promptFoot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-8);
-  }
-
-  .hint {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-4);
-    color: var(--text-tertiary);
-    font: var(--text-caption);
-  }
-
-  @keyframes rise {
-    from {
-      opacity: 0;
-      translate: 0 var(--distance-medium);
-    }
+    flex: none;
   }
 
   @keyframes fade {
@@ -178,14 +115,7 @@
     }
   }
 
-  /* Reduced motion keeps the fades and drops the movement: the rises become fades, the band holds still. */
   @media (prefers-reduced-motion: reduce) {
-    .headline,
-    .suggestion,
-    .actions {
-      animation-name: fade;
-    }
-
     .shimmer {
       animation: none;
       background-image: none;
@@ -194,7 +124,7 @@
   }
 
   @media (forced-colors: active) {
-    .root {
+    .question {
       border-color: CanvasText;
     }
 

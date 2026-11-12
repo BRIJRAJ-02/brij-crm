@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, spyOn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
@@ -107,6 +107,7 @@ export const Closing: Story = {
 export const Everything: Story = {
   args: {
     title: 'Discovery call is live',
+    description: 'Anyone with the link can book a time with you.',
     invite: 'Pick a time that suits you:',
     embedHref: '/w/acme/bookings/discovery-call/embed',
     extra: (
@@ -118,7 +119,9 @@ export const Everything: Story = {
     footer: 'Bookings go to your calendar',
   },
   play: async ({ args, userEvent }) => {
-    const sheet = within(await openSheet());
+    const dialog = await openSheet();
+    const sheet = within(dialog);
+    await expect(dialog).toHaveAccessibleDescription('Anyone with the link can book a time with you.');
     const message = encodeURIComponent(`Pick a time that suits you: ${ADDRESS}`);
     await expect(sheet.getByRole('link', { name: 'Email' })).toHaveAttribute(
       'href',
@@ -139,6 +142,27 @@ export const Everything: Story = {
     await expect(onSite).toHaveAttribute('href', '/w/acme/bookings/discovery-call/embed');
     await userEvent.click(onSite);
     await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+  },
+};
+
+/** Download saves the code as a PNG; when the browser refuses, a toast says so and the sheet stays open. */
+export const DownloadFails: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ userEvent }) => {
+    const sheet = within(await openSheet());
+    // The browser refusing the file: the saved code is made through a `blob:` address, so refuse making one.
+    const refuse = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new Error('Blocked.');
+    });
+    try {
+      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
+      await settleAnimations();
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
+      await expect(await screen.findByText('The QR code didn’t save. Try again.')).toBeInTheDocument();
+      await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    } finally {
+      refuse.mockRestore();
+    }
   },
 };
 

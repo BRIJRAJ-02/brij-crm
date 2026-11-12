@@ -1,8 +1,8 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
+import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
 import { TextSwap } from '../../atoms/TextSwap/TextSwap.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -28,7 +28,7 @@ export type AIAnswer = Promise<string> | AsyncIterable<string>;
 
 /** Props for AIAssist. */
 export interface AIAssistProps {
-  /** What the AI is looking at ("Acme Corp"): said after the heading, in the start line and in the prompt. */
+  /** What the AI is looking at ("Acme Corp"): said in the start line and in the prompt. */
   readonly context: string;
   /** Questions to start from, as chips before the first question. */
   readonly suggestions?: readonly string[];
@@ -42,8 +42,11 @@ export interface AIAssistProps {
   readonly onAsk: (question: string, signal: AbortSignal) => AIAnswer;
   /** Save as note, handed the whole answer; left out, the button isn't drawn. */
   readonly onSaveNote?: (answer: string) => void;
-  /** Close, in the panel's header; left out, the button isn't drawn. */
-  readonly onClose?: () => void;
+  /**
+   * Why Ask AI can't be used here (AI is off for the workspace, the viewer can't read the record): the prompt, Ask
+   * and the suggestions turn off, and this shows under the prompt. Left out, it is ready.
+   */
+  readonly disabledReason?: string;
 }
 
 /** How long each status step shows before the next swaps in: the prototype's two seconds, a reading pace. */
@@ -117,6 +120,18 @@ interface Turn {
 /** How often a whole answer handed over at once shows its next words: about the prototype's pace. */
 const REVEAL_TICK_MS = 50;
 
+/** How near the end of the conversation counts as following it: about one line, so a newest line keeps in view. */
+const FOLLOW_SLACK_PX = 48;
+
+/** What the one status region says for each phase; a failure is the Callout's own alert. */
+const SAID: Readonly<Record<Phase, string>> = {
+  thinking: strings.thinking,
+  streaming: strings.thinking,
+  done: strings.answerReady,
+  stopped: strings.stopped,
+  failed: '',
+};
+
 /** True for an answer that arrives in pieces. */
 function isStreamed(answer: AIAnswer): answer is AsyncIterable<string> {
   return typeof (answer as Partial<AsyncIterable<string>>)[Symbol.asyncIterator] === 'function';
@@ -135,12 +150,14 @@ export function AIAssist({
   thinking = strings.thinkingSteps,
   onAsk,
   onSaveNote,
-  onClose,
+  disabledReason,
 }: AIAssistProps) {
-  const titleId = useId();
   const [draft, setDraft] = useState('');
   const [turn, setTurn] = useState<Turn>();
   const prompt = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const stopButton = useRef<HTMLButtonElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const isDisabled = disabledReason !== undefined;
   // The question in flight: its id (a newer question or Stop retires it), its abort, and its reveal and frame timers.
   const run = useRef({ id: 0, controller: undefined as AbortController | undefined, timer: 0, frame: 0 });
   const isBusy = turn?.phase === 'thinking' || turn?.phase === 'streaming';
@@ -181,6 +198,8 @@ export function AIAssist({
   };
 
   const finish = (id: number, phase: 'done' | 'failed') => {
+    // Stop goes with the answer it stopped: focus on it moves to the prompt rather than to the page.
+    if (stopButton.current !== null && document.activeElement === stopButton.current) prompt.current?.focus();
     update(id, (was) => {
       const stream = settleStream(was.stream);
       // An answer with no words is no answer.
@@ -234,7 +253,7 @@ export function AIAssist({
 
   const ask = (typed: string) => {
     const question = typed.trim();
-    if (question === '' || isBusy) return;
+    if (question === '' || isBusy || isDisabled) return;
     retire();
     const id = run.current.id;
     const controller = new AbortController();
@@ -277,54 +296,60 @@ export function AIAssist({
     ask(draft);
   };
 
+  /** Asks from a control that goes with the asking (a suggestion, Try again): focus moves on to the prompt. */
+  const askFrom = (question: string) => {
+    ask(question);
+    prompt.current?.focus();
+  };
+
+  // The newest words stay in view while they arrive, unless the person has scrolled up to read.
+  const stream = turn?.stream;
+  useEffect(() => {
+    const scroller = body.current;
+    if (scroller === null || stream === undefined) return;
+    if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < FOLLOW_SLACK_PX) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+  }, [stream]);
+
   const answer = turn === undefined ? '' : streamedText(turn.stream);
   const isAnswered = turn?.phase === 'done' || turn?.phase === 'stopped';
 
   return (
-    <section className={styles.root} aria-labelledby={titleId}>
-      <header className={styles.head}>
-        <Icon name="sparkles" tone="ai" />
-        <h2 id={titleId} className={styles.title}>
-          {strings.title}
-        </h2>
-        <span className={styles.context}>{strings.about(context)}</span>
-        {turn !== undefined && !isBusy && (
-          <Button variant="ghost" icon="plus" label={strings.newQuestion} onPress={startOver} />
-        )}
-        {onClose !== undefined && <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />}
-      </header>
-
-      <div className={styles.body}>
+    <div className={styles.root}>
+      {/* The conversation scrolls on its own, from the keyboard too, since nothing in it may take focus mid answer. */}
+      {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex -- a scrolling region must be reachable */}
+      <div ref={body} className={styles.body} role="region" aria-label={strings.conversation} tabIndex={0}>
         {turn === undefined ? (
           <div className={styles.start}>
             <p className={styles.headline}>{strings.startTitle(context)}</p>
             {suggestions.length > 0 && (
-              <div className={styles.suggestions} role="group" aria-label={strings.suggestions}>
-                {suggestions.map((suggestion, index) => (
-                  <span key={suggestion} className={styles.suggestion} style={{ '--suggestion': String(index) }}>
-                    <Button
-                      isRound
-                      onPress={() => {
-                        ask(suggestion);
-                      }}
-                    >
-                      {suggestion}
-                    </Button>
-                  </span>
+              <ButtonGroup label={strings.suggestions} layout="row">
+                {suggestions.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    isRound
+                    isDisabled={isDisabled}
+                    onPress={() => {
+                      askFrom(suggestion);
+                    }}
+                  >
+                    {suggestion}
+                  </Button>
                 ))}
-              </div>
+              </ButtonGroup>
             )}
           </div>
         ) : (
           <div className={styles.turn}>
-            <p className={styles.question}>{turn.question}</p>
+            <p className={styles.question}>
+              <VisuallyHidden>{strings.youAsked} </VisuallyHidden>
+              {turn.question}
+            </p>
             {turn.phase === 'thinking' && (
               <p className={styles.thinking}>
                 <Icon name="sparkles" tone="ai" size="sm" />
                 <ThinkingLine steps={thinking} />
-                <VisuallyHidden>
-                  <span role="status">{strings.thinking}</span>
-                </VisuallyHidden>
               </p>
             )}
             {turn.phase === 'failed' ? (
@@ -333,7 +358,7 @@ export function AIAssist({
                 actions={
                   <Button
                     onPress={() => {
-                      ask(turn.question);
+                      askFrom(turn.question);
                     }}
                   >
                     {strings.tryAgain}
@@ -344,28 +369,35 @@ export function AIAssist({
               </Callout>
             ) : (
               turn.phase !== 'thinking' && (
-                // Read once it is whole: busy while it arrives, so a screen reader waits instead of reading every piece.
-                <div className={styles.answer} aria-live="polite" aria-busy={isBusy}>
+                // Busy while it arrives; the status region says when it is ready, rather than reading every piece.
+                <div className={styles.answer} aria-busy={isBusy}>
                   <StreamText stream={turn.stream} />
                   {turn.phase === 'stopped' && <span className={styles.stopped}>{strings.stopped}</span>}
                 </div>
               )
             )}
-            {isAnswered && answer !== '' && (
-              <div className={styles.actions}>
-                <CopyButton value={answer} label={strings.copy} announcement={strings.copied} variant="ghost" />
-                {onSaveNote !== undefined && (
-                  <Button
-                    variant="ghost"
-                    icon="notebook"
-                    onPress={() => {
-                      onSaveNote(answer);
-                    }}
-                  >
-                    {strings.saveNote}
+            {!isBusy && (
+              <Reveal variant="drop">
+                <ButtonGroup label={strings.answerActions} layout="row">
+                  {isAnswered && answer !== '' && (
+                    <CopyButton value={answer} label={strings.copy} announcement={strings.copied} variant="ghost" />
+                  )}
+                  {isAnswered && answer !== '' && onSaveNote !== undefined && (
+                    <Button
+                      variant="ghost"
+                      icon="notebook"
+                      onPress={() => {
+                        onSaveNote(answer);
+                      }}
+                    >
+                      {strings.saveNote}
+                    </Button>
+                  )}
+                  <Button variant="ghost" icon="plus" onPress={startOver}>
+                    {strings.newQuestion}
                   </Button>
-                )}
-              </div>
+                </ButtonGroup>
+              </Reveal>
             )}
           </div>
         )}
@@ -382,28 +414,31 @@ export function AIAssist({
           onChange={setDraft}
           onKeyDown={keyDown}
           placeholder={strings.placeholder(context)}
+          isDisabled={isDisabled}
+          {...(disabledReason === undefined ? { hint: strings.hint } : { disabledReason })}
+          suffix={
+            isBusy ? (
+              <Button ref={stopButton} icon="square" label={strings.stop} isRound onPress={stop} />
+            ) : (
+              <Button
+                variant="primary"
+                icon="arrow-up"
+                label={strings.ask}
+                isRound
+                isDisabled={isDisabled || draft.trim() === ''}
+                onPress={() => {
+                  ask(draft);
+                }}
+              />
+            )
+          }
         />
-        <div className={styles.promptFoot}>
-          <span className={styles.hint}>
-            <Kbd>{strings.enterKey}</Kbd>
-            {strings.toAsk}
-          </span>
-          {isBusy ? (
-            <Button icon="square" label={strings.stop} isRound onPress={stop} />
-          ) : (
-            <Button
-              variant="primary"
-              icon="arrow-up"
-              label={strings.ask}
-              isRound
-              isDisabled={draft.trim() === ''}
-              onPress={() => {
-                ask(draft);
-              }}
-            />
-          )}
-        </div>
       </div>
-    </section>
+
+      {/* One status region, there from the start, so each change is heard: working, ready, stopped. */}
+      <VisuallyHidden>
+        <span role="status">{turn === undefined ? '' : SAID[turn.phase]}</span>
+      </VisuallyHidden>
+    </div>
   );
 }

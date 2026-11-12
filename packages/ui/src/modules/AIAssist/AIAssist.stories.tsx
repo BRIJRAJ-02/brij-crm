@@ -62,7 +62,6 @@ const meta = {
     suggestions: ['Summarise this company', 'What changed this week?', 'Who should I talk to next?'],
     onAsk: fn(() => Promise.resolve(SUMMARY)),
     onSaveNote: fn(),
-    onClose: fn(),
   },
   render: (args) => (
     <Stage width="dialog">
@@ -81,18 +80,28 @@ function mockOf(onAsk: AIAssistProps['onAsk']): Mock<AIAssistProps['onAsk']> {
 
 /** The answer region, once a question is asked. */
 function answerOf(canvasElement: HTMLElement): HTMLElement {
-  const answer = canvasElement.querySelector<HTMLElement>('[aria-live="polite"][aria-busy]');
+  const answer = canvasElement.querySelector<HTMLElement>('[role="region"] [aria-busy]');
   if (answer === null) throw new Error('no answer yet');
   return answer;
 }
 
-/** Before the first question: the start line, the suggestions as chips, and Ask off until something is typed. */
+/** What the one status region says now. */
+function said(canvasElement: HTMLElement): string {
+  return canvasElement.querySelector('[role="status"]:not(:empty)')?.textContent ?? '';
+}
+
+/**
+ * Before the first question: the start line, the suggestions as chips, the prompt with how to use it, and Ask off
+ * until something is typed. The conversation scrolls from the keyboard.
+ */
 export const Start: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
     await settleAnimations();
-    await expect(canvas.getByRole('region', { name: 'Ask AI' })).toBeInTheDocument();
-    await expect(canvas.getByText('about Acme Corp')).toBeInTheDocument();
+    await expect(canvas.getByRole('region', { name: 'Conversation' })).toHaveAttribute('tabindex', '0');
+    await expect(canvas.getByRole('textbox', { name: 'Ask a question' })).toHaveAccessibleDescription(
+      'Enter to ask, Shift+Enter for a new line',
+    );
     await expect(canvas.getByText('What do you want to know about Acme Corp?')).toBeVisible();
     const chips = within(canvas.getByRole('group', { name: 'Suggested questions' })).getAllByRole('button');
     await expect(chips.map((chip) => chip.textContent)).toEqual([
@@ -112,11 +121,15 @@ export const Start: Story = {
 /** Thinking: the question, one status line (said once to screen readers), and Stop in Ask's place. */
 export const Thinking: Story = {
   args: { onAsk: fn(() => new Promise<string>(() => undefined)) },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Summarise this company' }));
     await expect(args.onAsk).toHaveBeenCalledWith('Summarise this company', expect.any(AbortSignal));
-    await expect(canvas.getByText('Summarise this company', { selector: 'p' })).toBeInTheDocument();
-    await expect(canvas.getByText('Working on an answer').closest('[role="status"]')).not.toBeNull();
+    // The chip went with the start; focus moved on to the prompt rather than to the page.
+    await expect(canvas.getByRole('textbox', { name: 'Ask a question' })).toHaveFocus();
+    await expect(canvas.getByText('Summarise this company', { selector: 'p' })).toHaveTextContent(
+      'You asked: Summarise this company',
+    );
+    await expect(said(canvasElement)).toBe('Working on an answer');
     await expect(canvas.getByText('Reading the timeline')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Ask' })).toBeNull();
@@ -137,6 +150,7 @@ export const Answered: Story = {
     await expect(args.onAsk).toHaveBeenCalledWith('Summarise this company', expect.any(AbortSignal));
     await waitFor(() => expect(answerOf(canvasElement)).toHaveTextContent(SUMMARY), { timeout: 4000 });
     await expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'false');
+    await expect(said(canvasElement)).toBe('Answer ready');
     await settleAnimations();
     await expect(canvas.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Save as note' }));
@@ -171,9 +185,12 @@ export const Streaming: Story = {
     await expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'true');
     await expect(canvas.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Copy' })).toBeNull();
+    // Stop has focus as the answer ends on its own: focus moves to the prompt, not to the page.
+    canvas.getByRole('button', { name: 'Stop' }).focus();
     answer.push(' A demo is booked for Thursday.');
     answer.end();
     await waitFor(() => expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'false'));
+    await expect(canvas.getByRole('textbox', { name: 'Ask a question' })).toHaveFocus();
     await expect(answerOf(canvasElement)).toHaveTextContent(
       'Stage moved from Lead to Qualified. A demo is booked for Thursday.',
     );
@@ -199,6 +216,7 @@ export const Stopped: Story = {
     await expect(canvas.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Ask' })).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Ask a question' })).toHaveFocus();
+    await expect(said(canvasElement)).toBe('Stopped.');
   },
 };
 
@@ -209,7 +227,9 @@ export const Failed: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Summarise this company' }));
     await expect(await canvas.findByText('Couldn’t get an answer. Try again.')).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Copy' })).toBeNull();
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Couldn’t get an answer. Try again.');
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(canvas.getByRole('textbox', { name: 'Ask a question' })).toHaveFocus();
     await expect(args.onAsk).toHaveBeenCalledTimes(2);
     await expect(args.onAsk).toHaveBeenLastCalledWith('Summarise this company', expect.any(AbortSignal));
   },
@@ -273,11 +293,29 @@ export const LongStream: Story = {
   },
 };
 
-/** Close, where the screen gives it, in the header. */
-export const Closable: Story = {
+/** No suggestions: the start line alone, and the prompt. */
+export const NoSuggestions: Story = {
   parameters: { crm: { screenshot: false } },
+  args: { suggestions: [] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('What do you want to know about Acme Corp?')).toBeInTheDocument();
+    await expect(canvas.queryByRole('group', { name: 'Suggested questions' })).toBeNull();
+  },
+};
+
+/** Ask AI off here (AI is off for the workspace): the prompt, Ask and the suggestions are off, and the reason shows. */
+export const Disabled: Story = {
+  args: { disabledReason: 'Ask AI is off for this workspace. An admin can turn it on in Settings.' },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Close' }));
-    await expect(args.onClose).toHaveBeenCalledTimes(1);
+    const prompt = canvas.getByRole('textbox', { name: 'Ask a question' });
+    await expect(prompt).toBeDisabled();
+    await expect(prompt).toHaveAccessibleDescription(
+      'Ask AI is off for this workspace. An admin can turn it on in Settings.',
+    );
+    await expect(canvas.getByRole('button', { name: 'Ask' })).toBeDisabled();
+    const chip = canvas.getByRole('button', { name: 'Summarise this company' });
+    await expect(chip).toBeDisabled();
+    await userEvent.click(chip);
+    await expect(args.onAsk).not.toHaveBeenCalled();
   },
 };

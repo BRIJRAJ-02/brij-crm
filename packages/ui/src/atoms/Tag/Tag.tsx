@@ -28,7 +28,8 @@ export function Tag({ children, hue = 'gray', isArchived = false, tone }: TagPro
   return (
     <span
       className={styles.root}
-      data-hue={isArchived ? 'gray' : hue}
+      // The `ai` tone draws no hue at all, so it never rests on which rule comes later in the stylesheet.
+      data-hue={isAi ? undefined : isArchived ? 'gray' : hue}
       data-archived={isArchived || undefined}
       data-tone={tone}
     >

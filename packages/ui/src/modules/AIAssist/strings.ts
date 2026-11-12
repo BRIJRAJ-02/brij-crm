@@ -1,8 +1,7 @@
 /** AIAssist's built in copy. */
 export const strings = {
-  /** The panel's heading and name. */
-  title: 'Ask AI',
-  about: (context: string) => `about ${context}`,
+  /** The scrolling conversation's name for screen readers. */
+  conversation: 'Conversation',
   /** The start headline, before the first question. */
   startTitle: (context: string) => `What do you want to know about ${context}?`,
   suggestions: 'Suggested questions',
@@ -12,14 +11,18 @@ export const strings = {
   thinking: 'Working on an answer',
   question: 'Ask a question',
   placeholder: (context: string) => `Ask about ${context}…`,
-  /** The keycap and its words beside Ask. */
-  enterKey: '↵',
-  toAsk: 'to ask',
+  /** Under the prompt: how to ask, and how to write more than one line. */
+  hint: 'Enter to ask, Shift+Enter for a new line',
+  /** Before the question, for screen readers: whose words they are. */
+  youAsked: 'You asked:',
+  /** Said once the whole answer is in. */
+  answerReady: 'Answer ready',
+  /** The row under an answer: Copy, Save as note, New question. */
+  answerActions: 'Answer',
   ask: 'Ask',
   stop: 'Stop',
   stopped: 'Stopped.',
   newQuestion: 'New question',
-  close: 'Close',
   copy: 'Copy',
   copied: 'Answer copied',
   saveNote: 'Save as note',
