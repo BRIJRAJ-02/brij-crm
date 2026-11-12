@@ -20,23 +20,29 @@
   }
 
   /* The chip inside lifts, not the row's cell, so the pointer never slips off the cell as it moves. */
-  .item > :any-link {
+  .lift {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .lift[data-linked] {
     transition: translate var(--duration-medium) var(--ease-bounce-strong);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .item:hover > :any-link {
+    .item:hover > .lift[data-linked] {
       translate: 0 calc(-1 * var(--distance-micro));
       transition-timing-function: var(--ease-smooth-out);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .item > :any-link {
+    .lift[data-linked] {
       transition: none;
     }
 
-    .item:hover > :any-link {
+    .item:hover > .lift[data-linked] {
       translate: none;
     }
   }

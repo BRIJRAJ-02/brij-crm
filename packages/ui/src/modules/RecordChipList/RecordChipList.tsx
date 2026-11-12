@@ -65,7 +65,10 @@ export function RecordChipList({
     <ul className={styles.root} aria-label={label}>
       {records.map((record) => (
         <li key={`${record.display.objectId}:${record.display.recordId}`} className={styles.item}>
-          <RecordChip display={record.display} {...(record.href === undefined ? {} : { href: record.href })} />
+          {/* The list's own span lifts a linked chip on hover, so the list never styles RecordChip's element. */}
+          <span className={styles.lift} data-linked={record.href === undefined ? undefined : ''}>
+            <RecordChip display={record.display} {...(record.href === undefined ? {} : { href: record.href })} />
+          </span>
         </li>
       ))}
     </ul>

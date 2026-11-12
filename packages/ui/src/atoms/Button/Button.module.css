@@ -414,6 +414,7 @@
   /* Pressed, the colour deepens and the size never changes (no press scale in the app). */
   .root[data-pressed]:not(
       [data-disabled],
+      [data-selected],
       [data-variant='primary'],
       [data-variant='danger-solid'],
       [data-variant='value'],
