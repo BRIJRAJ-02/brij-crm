@@ -41,3 +41,14 @@ New (booking socials, 25 October 2026). The owner asked for social links on book
 ## Size
 
 The tooltips load on their own (`SocialLinksTips.tsx`, `lazy`), so a booking page's first load gains only the row and its few lines of CSS: measured on 25 October 2026 against land, 1.45 kB of JavaScript (224.62 of 230 kB) and 0.18 kB of CSS (17.56 of 18 kB), gzipped.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's SocialLinks: each mark a link Button in the tier 1 pill look, in a row whose hit areas meet. On a public page (which sets `--social-lift`) the hovered mark lifts and its neighbours rise by the prototype's 0.45 falloff, up on the smooth-out curve and back with the strong bounce (transitions.dev 11, avatar group hover), all CSS; the app sets no lift.
+
+**States**: none drawn when empty; rest, hover (lift on public pages), focus (Button's outline ring), the tooltip on hover or focus.
+
+**Differences from the prototype**
+- `round` keeps the owner's link page design (outlined 44px circles, `size="touch"`), where the prototype draws ghost marks; `quiet` is the ghost row.
+- The neighbours' second step (0.2) and the hovered mark's growth are not drawn: the second step would need a third compound selector (past the house limit), and a mark that grows reads as pressable twice.
+- Every link opens a new tab with `rel="me nofollow noopener noreferrer"` through ButtonLink's `safeHref`.

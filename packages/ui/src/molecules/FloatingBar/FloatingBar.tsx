@@ -1,4 +1,4 @@
-import { useEffect, useRef, type HTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useRef, type HTMLAttributes, type ReactNode, type Ref } from 'react';
 import styles from './FloatingBar.module.css';
 
 /** Props for FloatingBar. */
@@ -28,10 +28,32 @@ export interface FloatingBarProps {
 // Waits this long for the exit's transition before calling it done anyway (motion off, a hidden tab).
 const EXIT_FALLBACK_MS = 400;
 
+/** Props for FloatingBarGroup. */
+export interface FloatingBarGroupProps {
+  readonly children: ReactNode;
+  /** Nothing before it in the bar: no hairline, and it takes the row's spare room. */
+  readonly isAlone?: boolean;
+  /** At the bar's end, kept whole (the save bar's Discard and Save). */
+  readonly isEnd?: boolean;
+  readonly ref?: Ref<HTMLSpanElement>;
+}
+
 /**
- * The floating bar's shell, shared by the bulk bar and the save bar: a
- * toolbar tall bar on the raised surface with the popover shadow and large
- * corners, which rises in as it mounts and sinks out when `isLeaving`.
+ * A run of actions inside a FloatingBar, after a hairline: the one rule the bulk bar and the save bar both drew, so
+ * neither keeps a copy (spec 0072, the folded bars). Not exported from the package: the bars in `modules/` use it.
+ */
+export function FloatingBarGroup({ children, isAlone = false, isEnd = false, ref }: FloatingBarGroupProps) {
+  return (
+    <span ref={ref} className={styles.group} data-alone={isAlone || undefined} data-end={isEnd || undefined}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The floating bar's shell, shared by the bulk bar and the save bar: the
+ * Timefix prototype's white pill with the large shadow, which rises in as it
+ * mounts and drops away when `isLeaving`.
  * Reduced motion fades it; `isInstant` (opened from the keyboard) skips the
  * motion. On a narrow view it spans the width.
  */

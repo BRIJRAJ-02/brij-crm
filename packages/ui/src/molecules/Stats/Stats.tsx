@@ -47,6 +47,7 @@ export function Stats({ label, items, isLoading = false, size = 'default', varia
       {isLoading ? (
         <div className={styles.root} data-size={size} data-variant={variant}>
           {Array.from({ length: Math.max(items.length, LOADING_COUNT) }, (_, index) => (
+            // Static: loading placeholders, never reordered (spec 0072, AC-16).
             <div key={index} className={styles.stat}>
               <Skeleton width="short" />
               <div className={styles.value}>

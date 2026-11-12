@@ -5,6 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BulkActionBar } from './BulkActionBar.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Modules/BulkActionBar',
@@ -393,7 +394,11 @@ export const InFooter: Story = {
     await expect(frame).not.toBeNull();
     const box = bar.getBoundingClientRect();
     const outer = frame?.getBoundingClientRect();
-    // Centred in the foot: the gaps either side match, but for the shell's own uneven padding (12 and 8).
-    await expect(Math.abs(box.left - (outer?.left ?? 0) - ((outer?.right ?? 0) - box.right))).toBeLessThanOrEqual(8);
+    // Centred in the foot: the gaps either side match, but for the shell's own uneven padding (space-16 before the
+    // words, space-4 after the last action: the prototype's bar).
+    const uneven = tokenLength('space-16') - tokenLength('space-4');
+    await expect(Math.abs(box.left - (outer?.left ?? 0) - ((outer?.right ?? 0) - box.right))).toBeLessThanOrEqual(
+      uneven + 1,
+    );
   },
 };

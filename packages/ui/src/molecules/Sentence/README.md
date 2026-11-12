@@ -34,3 +34,11 @@ Tab moves through the controls in reading order, then the end control.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Sentence: the lead word in `text-body-strong` and `text-secondary`, at the end of a fixed column (a large control and `space-20`), level with a small control's line; the words and controls in the body type, `space-4` apart, wrapping together; the line padded `space-4` above and below. The end control (a remove) waits for the line's hover or focus with a pointer and always shows under a finger. Under 480px of its container the lead sits over the line.
+
+**Use it for** a rule read as a sentence (a view filter written out, an automation's trigger, a form question's Show when). **Don't use it for** a table's quick filter chips or a formula.
+
+**Differences from the prototype**: the library's Sentence is the line only: the controls are the caller's own Selects and Fields (with hidden labels), not the prototype's attribute, comparison and value pills, and there is no and/or toggle or add and remove motion (the prototype's ConditionRow is phase 2's). `lead` left out drops the column.

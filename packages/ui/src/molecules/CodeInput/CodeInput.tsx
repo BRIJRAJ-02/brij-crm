@@ -126,6 +126,7 @@ export function CodeInput({
         />
         {boxes.map((character, index) => (
           <span
+            // Static: one box per position of the code, never reordered (spec 0072, AC-16).
             key={index}
             className={styles.box}
             data-filled={character === '' ? undefined : ''}

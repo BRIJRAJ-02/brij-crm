@@ -32,7 +32,7 @@ New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same gr
 ```
 
 - Equal size tiles to pick from by sight (spec 0058): a picture slot (a Lucide mark through `icon`, or a `thumbnail` of the real thing) over a short `name`, both on one left edge. Every track is at least `size-column-narrow` and the tracks share the width, so every tile has one width and the rows share one height.
-- `mode="select"` (the default) is a radio group: Tab lands on the chosen tile (or the first), arrows move and pick, and the chosen tile has the accent line as its border, a soft fill and a tick in its corner that eases in on opacity and scale. `mode="action"` makes each tile a button that calls `onAction(id)` (Add block).
+- `mode="select"` (the default) is a radio group: Tab lands on the chosen tile (or the first), arrows move and pick, and the chosen tile has the accent line as its border (doubled by a hairline ring), its picture tinted `accent-soft`, and a tick in its corner that pops in on the bounce curve. `mode="action"` makes each tile a button that calls `onAction(id)` (Add block).
 - `isLabelVisible` (select mode) shows the `label` over the tiles in a Field's label style and names the group by it, so a form reads Title, Type, Duration down one rhythm with the group named once (New booking page's Type, 5 November 2026: a FieldGroup around the grid named it twice for screen readers). Why a prop: the label belongs to the group, as SegmentedControl's `isLabelVisible` does. Story: `ChoiceLabelled`.
 - `autoFocus` (select mode) focuses the chosen tile, or the first, as the grid mounts, so the arrows browse at once: a dialog whose first step is this choice (the form template gallery, 5 November 2026). Why a prop: the dialog would otherwise focus itself, and the person would Tab once before choosing. Inline on a page, leave it off. Story: `ChoiceAutoFocus`.
 - `onConfirm` (select mode) is called when a tile is confirmed: Enter on it, or a double click (forms fixes 3: the form template gallery, where Enter or a double click on a template uses it, as its Use button does). The tile is picked first. Why a prop: a radio does nothing on Enter, and only the grid knows which tile the key or the double click was on. Left out, Enter stays a radio's. Story: `ChoiceConfirm`.
@@ -46,7 +46,7 @@ New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same gr
 - A tile with a description is wrapped by its tooltip's trigger; the wrapper fills the grid cell, so every tile is one size with or without one (`ChoiceDisabled` checks it with the alignment probe).
 - Why a variant, not a new component: it is the same grid of equal cells, with tiles that are pickable rather than Cards. The block kind grid, preset thumbnails and embed tiles all use it; the radio group (`Radio variant="cards"`) is a list of sentences, which is what this replaces.
 - `hue` tints an `icon` tile's picture slot in a data hue (its tag colours) with the mark drawn `lg` in the hue's text colour, so a grid of kinds (Add block) reads at a glance instead of as grey boxes. A `thumbnail` keeps its own colours.
-- Focus is the library's ring, as on a primary Button: the accent line just outside the tile past a hairline gap, plus the soft halo, so a focused chosen tile differs from a chosen one (spec 0058, AC-4).
+- Focus is the prototype's outline ring (`border-width-focus` in `focus-ring`) outside the tile past a gap, so a focused chosen tile differs from a chosen one (spec 0058, AC-4).
 - The tracks are `auto-fit`: a short run (three embed tiles in a wide card) shares the whole row and ends on the container's right edge.
 - Motion: hover colour, selection ring and tick only; nothing moves on first paint; under reduced motion the tick is there at once, with no fade or scale (spec 0058, AC-2).
 
@@ -69,3 +69,15 @@ Not in the artifact.
 ## Large pictures
 
 `pictureSize="large"` (choice grids with `showsDescription` and `keepsPicture` only) draws each picture a column (`size-column`) tall and the tracks at least a column wide, two to a row in a settings card. It is for a choice that is a whole page seen before it is picked: the link page's four templates (spec 0068, AC-6804), where the small slot showed too little to choose by. Chosen, it keeps the ring and tick of any select tile.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's TileGrid (folded into Card): `variant="choice"` (ChoiceTiles) draws its tiles: the surface with a `border` hairline and `radius-lg`; under the pointer the edge steps up to `border-strong` and the fill washes `surface-hover`; chosen, the `accent-text` edge doubled by a hairline ring, the picture slot tinted `accent-soft` with its mark in `accent-text`, and the tick popping in on `ease-bounce` (`duration-very-slow`) and leaving over `duration-quick`. Focus is the outline ring outside the tile. The label above is `text-body-sm-strong` in the text colour; a tile's line and reason are `text-body-sm`. A hued picture loses its outline (the prototype's tags have none), so the legacy `tag-*-border` tokens leave this folder. The layout grid (no `variant`) is the prototype's Shell grid and is unchanged.
+
+**Use it for** a visual pick-one (a location, a template, an embed style) or a gallery of things to start (`mode="action"`). **Don't use it for** more than about eight plain choices: use a Select.
+
+**States**: rest, hover, chosen, focus visible, disabled (with its reason), action tiles.
+
+**Differences from the prototype**: the tick stays `size-icon` in the corner at `space-8` (the prototype's compact tile's size; the library's tiles are a narrow column wide); the chosen tile keeps the surface rather than a tint; a picture slot (`size-column-min` tall, a mark or a thumbnail) replaces the prototype's icon well; `showsDescription`, `keepsPicture`, `pictureSize`, `tileWidth`, `hue`, `isLabelVisible` and the entering rise are kept; there is no number pop or `columns` count (the grid's own width decides).
+
+**Repeats from its replacer**: nothing of Card's: the tile is its own part in the prototype too.

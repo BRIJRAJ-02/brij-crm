@@ -7,7 +7,7 @@ import { Toolbar as AriaToolbar } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
-import { FloatingBar } from '../../molecules/FloatingBar/FloatingBar.tsx';
+import { FloatingBar, FloatingBarGroup } from '../../molecules/FloatingBar/FloatingBar.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
@@ -246,7 +246,7 @@ export function BulkActionBar({
             {strings.selectAllMatching(matching)}
           </Button>
         )}
-        <span ref={actionsRef} className={styles.actions} data-alone={!hasCount || undefined}>
+        <FloatingBarGroup ref={actionsRef} isAlone={!hasCount}>
           {shown.progress === undefined ? (
             children
           ) : (
@@ -272,7 +272,7 @@ export function BulkActionBar({
               )}
             </>
           )}
-        </span>
+        </FloatingBarGroup>
         <Button variant="ghost" icon="x" label={strings.clear} onPress={onClear} isDisabled={isRunning} />
         <VisuallyHidden>
           <span role="status">{said.text}</span>

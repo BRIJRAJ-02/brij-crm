@@ -263,6 +263,7 @@ function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readon
         const isShown = index + 1 === shown.month;
         return (
           <AriaButton
+            // Static: the year's twelve months in order, never reordered (spec 0072, AC-16).
             key={index}
             slot={null}
             className={styles.monthCell}

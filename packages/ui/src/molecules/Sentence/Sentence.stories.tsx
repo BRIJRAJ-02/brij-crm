@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -44,6 +44,14 @@ export const Default: Story = {
       </Sentence>
     </Stage>
   ),
+  play: async ({ canvas, userEvent }) => {
+    // The end control waits for the line's hover or focus with a pointer, and Tab still reaches it last.
+    const remove = canvas.getByRole('button', { name: 'Remove action 1' });
+    remove.focus();
+    await expect(remove).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    await expect(canvas.getByRole('textbox', { name: 'Days' })).toHaveFocus();
+  },
 };
 
 /** In a narrow container the lead word sits above its line. */

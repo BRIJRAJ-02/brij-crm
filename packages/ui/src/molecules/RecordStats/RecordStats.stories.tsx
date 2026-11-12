@@ -109,6 +109,18 @@ export const Pressed: Story = {
   },
 };
 
+/** Reached with Tab: the tile that goes somewhere is one stop, named by its label, marked for the keyboard. */
+export const FocusVisible: Story = {
+  args: { onOpen: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const tasks = canvas.getByRole('button', { name: 'Open tasks' });
+    await expect(tasks).toHaveFocus();
+    await expect(tasks).toHaveAccessibleDescription('3');
+  },
+};
+
 /** In a narrow slot: two stats to a row. */
 export const Narrow: Story = {
   args: { width: 'narrow' },

@@ -1,12 +1,9 @@
-/* AttributeList: rows of a name column (an 11px label with its type's icon,
-   and a small lock when it can't change) and a value column, each at least
-   size-row tall. Names sit at the top, centred on the first line of their
-   value (a size-control line, space-4 from the row's top), so a value or an
-   editor growing taller (a textarea, a hint under a field) never moves its
-   name. A value that can change takes surface-hover under a pointer, with
-   its pencil button showing on hover or focus; an empty one reads "Set
-   Name…" in text-tertiary, and an empty read only one "Not set". Below 320px
-   the name sits above the value. */
+/* AttributeList: takes its look from the Timefix prototype's DescriptionList (spec 0072). Rows of a name column (the
+   type's icon on its grey tile and the name in text-body-sm, text-secondary, with a small lock when it can't change)
+   and a value column, each at least size-control tall. Names sit at the top, level with the value's first line, so a
+   value or an editor growing taller (a textarea, a hint under a field) never moves its name. A value that can change
+   washes surface-hover under a pointer, with its pencil button showing on hover or focus; an empty one reads "Set
+   Name…" in text-tertiary, and an empty read only one "Not set". Below 320px the name sits above the value. */
 @layer components {
   .root {
     display: flex;
@@ -25,22 +22,23 @@
 
   .row {
     display: grid;
-    grid-template-columns: calc(6 * var(--size-chip)) minmax(0, 1fr);
-    column-gap: var(--space-12);
+    /* The prototype's fixed name column: 136 at full size, four controls less space-8. */
+    grid-template-columns: calc(4 * var(--size-control) - var(--space-8)) minmax(0, 1fr);
+    column-gap: var(--space-8);
     align-items: start;
-    min-block-size: var(--size-row);
+    min-block-size: var(--size-control);
   }
 
-  /* One row tall, so its line centres where the value's first line does. */
+  /* One control tall, so its line centres where the value's first line does. */
   .label {
     display: flex;
     gap: var(--space-8);
     align-items: center;
-    min-block-size: var(--size-row);
+    min-block-size: var(--size-control);
     min-inline-size: 0;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* A long name ("Associated company") takes a second line rather than an ellipsis with no way to read the rest;
@@ -50,14 +48,13 @@
     overflow-wrap: anywhere;
   }
 
-  /* The value's first line (size-control tall) sits space-4 down: centred in a size-row, level with the name. */
+  /* The value's first line is size-control tall, level with the name. */
   .cell {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     min-inline-size: 0;
     margin: 0;
-    padding-block: var(--space-4);
   }
 
   .editable {
@@ -70,6 +67,7 @@
   .action {
     display: flex;
     opacity: 0;
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   .action:focus-within {
@@ -82,14 +80,15 @@
     gap: var(--space-4);
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--size-control-sm);
-    padding-inline: var(--space-6);
-    margin-inline: calc(-1 * var(--space-6));
+    min-block-size: var(--size-control);
+    padding-inline: var(--space-8);
+    margin-inline: calc(-1 * var(--space-8));
     overflow: hidden;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -125,7 +124,7 @@
   /* The fold's button, at the list's foot, lined up with the names. */
   .more {
     display: flex;
-    margin-inline-start: calc(-1 * var(--space-6));
+    margin-inline-start: calc(-1 * var(--space-8));
   }
 
   /* Show N empty values at the start, the list's own actions at the end. */
@@ -151,8 +150,8 @@
 
   .error {
     color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   @container (width < 320px) {
@@ -163,11 +162,7 @@
     }
 
     .label {
-      min-block-size: var(--size-chip);
-    }
-
-    .cell {
-      padding-block: 0;
+      min-block-size: var(--space-24);
     }
   }
 }

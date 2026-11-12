@@ -45,4 +45,19 @@ Not in the artifact.
 
 ## Pressable
 
-`onPress` (inline cards with a `title`) makes the whole card one press target that opens something, such as a Service floor's table tile opening that table (spec 0066 B7). The title becomes a button whose hit area stretches over the card, so the card is one tab stop named by its title; the card draws the focus ring and, under a fine pointer, a stronger hairline on hover. Buttons in `actions` stay their own targets above it; a pressable card keeps its other content (the body, the footer note) inside the press. Why a variant rather than a new tile: the floor's tile is a card in every other way (title, a state in the eyebrow, a line, a footer note), and a second card look would split the library. Story: Pressable.
+`onPress` (inline cards with a `title`) makes the whole card one press target that opens something, such as a Service floor's table tile opening that table (spec 0066 B7). The title becomes a button whose hit area stretches over the card, so the card is one tab stop named by its title; the card draws the outline ring outside its edge and, under a fine pointer, a stronger hairline and a `surface-hover` wash on hover. Buttons in `actions` stay their own targets above it; a pressable card keeps its other content (the body, the footer note) inside the press. Why a variant rather than a new tile: the floor's tile is a card in every other way (title, a state in the eyebrow, a line, a footer note), and a second card look would split the library. Story: Pressable.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Card: the surface with a `border-subtle` hairline, `radius-lg` and `shadow-xs`; the header `space-16` in with the title in `text-heading` over a grey `text-body-sm` description, `space-12` between them and the actions; the body `space-12` under the header and `space-16` at its sides and foot. A pressable card washes `surface-hover` with a `border-strong` edge under the pointer and wears the outline ring outside its edge on focus.
+
+Stats and RecordStats, which the prototype folds into Card's StatCard, keep their own modules in its look (decision 14). Sharing one implementation was built and measured: a `CardStats` part both rendered cut their duplicate CSS by 264 B gzipped but cost 320 B more script, and every page that draws only one of them (Home's Stats, a record's RecordStats) loaded both layouts, about 0.6 to 0.9 kB more; so it was not kept.
+
+**Use it for** one block of related content (a settings section, a dashboard tile, "Up next"). **Don't use it for** list rows, or to decorate: a card groups.
+
+**States**: rest, pressable (hover, focus visible), busy (`isBusy`), sunken, bare, page.
+
+**Differences from the prototype**
+- No `Shell` (the tinted frame grouping cards) and no `CardLink` with the opening chevron yet: owed to the screens that group cards (phase 4's Home); a card's link is a Link or Button in `actions`.
+- Kept beyond the prototype: `eyebrow`, `footer` and `footerNote`, `tone` (`sunken`, `bare`), `placement="page"` and its sizes, `isFlush`, `isBusy`, `onPress`, `CardTitleLevel`.
+- The StatCard's number pop, sparkline and breakdown bars are not drawn (Stats and RecordStats have no such props); owed to the screen phase that needs them.

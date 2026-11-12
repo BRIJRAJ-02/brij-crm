@@ -48,6 +48,19 @@
     background: transparent;
   }
 
+  /* With no ground, a toned line takes its colour on its words too (the tone colours hold 4.5:1 on the surface). */
+  .root[data-tone='success'][data-placement='bar'] {
+    color: var(--success);
+  }
+
+  .root[data-tone='warning'][data-placement='bar'] {
+    color: var(--warning);
+  }
+
+  .root[data-tone='danger'][data-placement='bar'] {
+    color: var(--danger);
+  }
+
   .root[data-placement='bar'] .icon {
     padding-block-start: 0;
   }

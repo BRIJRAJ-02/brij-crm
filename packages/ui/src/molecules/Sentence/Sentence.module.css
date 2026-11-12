@@ -1,11 +1,15 @@
-/* Sentence: a lead word, then words and inline controls that wrap like text. */
+/* Sentence: the Timefix prototype's condition line (spec 0072): a lead word in a fixed column, then words and inline
+   controls that wrap like text, a row's padding above and below; the end control (a remove) shows on the line's hover
+   or focus with a pointer, always under a finger. */
 @layer components {
   .root {
     container-type: inline-size;
     display: grid;
-    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control-sm);
+    /* The prototype's lead column: a large control and space-20. */
+    grid-template-columns: calc(var(--size-control-lg) + var(--space-20)) minmax(0, 1fr) var(--size-control-sm);
     gap: var(--space-8);
     align-items: start;
+    padding-block: var(--space-4);
   }
 
   /* No lead (`lead` left out): the words start at the line's own edge. */
@@ -13,11 +17,15 @@
     grid-template-columns: minmax(0, 1fr) var(--size-control-sm);
   }
 
+  /* The lead sits level with a small control's line, at the column's end, next to the words. */
   .lead {
-    padding-block: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-block-size: var(--size-control-sm);
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     text-align: end;
   }
 
@@ -25,16 +33,26 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    column-gap: var(--space-6);
-    row-gap: var(--space-4);
+    gap: var(--space-4);
     min-inline-size: 0;
+    min-block-size: var(--size-control-sm);
     color: var(--text);
     font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .end {
     display: flex;
     justify-content: flex-end;
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+
+  /* With a pointer, the end control waits for the line's hover or focus (the prototype's remove); a finger has no
+     hover, so it always shows there. */
+  @media (hover: hover) and (pointer: fine) {
+    .root:not(:hover, :focus-within) .end {
+      opacity: 0;
+    }
   }
 
   @container (inline-size < 480px) {
@@ -44,6 +62,7 @@
 
     .lead {
       grid-column: 1 / -1;
+      justify-content: flex-start;
       text-align: start;
     }
   }

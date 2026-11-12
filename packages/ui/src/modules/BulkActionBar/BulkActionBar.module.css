@@ -1,18 +1,19 @@
-/* BulkActionBar: in the FloatingBar's shell, the count in body-strong, then
-   the offer, the actions space-8 apart after a hairline, and Clear at the
-   end. A running action's progress takes the actions' place and the room
-   they had, giving it back on a narrow bar, so Cancel never pokes out. */
+/* BulkActionBar: in the FloatingBar's shell (the Timefix prototype's bar, spec 0072), the count in body-strong
+   tabular figures, then the offer, then the actions in FloatingBar's group after its hairline, and Clear at the end.
+   A running action's progress takes the actions' place and the room they had, giving it back on a narrow bar, so
+   Cancel never pokes out. */
 @layer components {
   .root {
     display: flex;
     flex: 1;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--space-4);
     align-items: center;
     min-inline-size: 0;
   }
 
   .count {
+    padding-inline-end: var(--space-4);
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -20,24 +21,9 @@
     white-space: nowrap;
   }
 
-  .actions {
-    display: inline-flex;
-    gap: var(--space-8);
-    align-items: center;
-    min-inline-size: 0;
-    padding-inline-start: var(--space-8);
-    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
-  /* Nothing before it (no count while an action runs, or none selected): no hairline to set it apart. */
-  .actions[data-alone] {
-    flex: 1 1 auto;
-    padding-inline-start: 0;
-    border-inline-start: none;
-  }
-
+  /* A running action's bar: a menu's width and space-48 at most before it gives way. */
   .progress {
-    flex: 1 1 var(--size-measure-sm);
+    flex: 1 1 calc(var(--size-menu) + var(--space-48));
     min-inline-size: 0;
   }
 }

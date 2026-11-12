@@ -1061,8 +1061,8 @@ export const FloatingBar: Story = {
     const press = presser((keys) => userEvent.keyboard(keys));
     const grid = canvas.getByRole('grid', { name: 'Companies' });
     const bar = canvas.getByRole('toolbar', { name: 'Selected records' });
-    // The bar as drawn is FloatingBar's surface around the toolbar. Its padding is 12 before the count and 8 after
-    // Clear (whose own padding makes up the rest), so the toolbar inside sits 2 px right of the bar's centre.
+    // The bar as drawn is FloatingBar's surface around the toolbar (space-16 before the count and space-4 after
+    // Clear, spec 0072), so the toolbar inside sits off the bar's centre; the surface is what is centred.
     const surface = bar.parentElement;
     await expect(surface).not.toBeNull();
     if (surface === null) return;

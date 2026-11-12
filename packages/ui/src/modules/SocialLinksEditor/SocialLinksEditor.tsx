@@ -219,6 +219,7 @@ export function SocialLinksEditor({
     ) : undefined;
   const body = isLoading ? (
     <>
+      {/* Static: two loading rows, never reordered (spec 0072, AC-16). */}
       {[0, 1].map((index) => (
         <SettingsRow key={index} title={strings.loadingRow} leading={<Skeleton shape="tile" />} control="field">
           <Skeleton shape="field" />

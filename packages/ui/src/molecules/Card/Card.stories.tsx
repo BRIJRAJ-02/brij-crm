@@ -59,6 +59,20 @@ export const Pressable: Story = {
   },
 };
 
+/** A pressable card reached with Tab: one stop, named by its title (the card draws the outline ring). */
+export const PressableFocused: Story = {
+  args: { title: 'T4', description: '4 seats', onPress: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <Card {...args}>Ada · 4 guests</Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'T4' })).toHaveFocus();
+  },
+};
+
 /** No frame: a page card inside a layout that frames it (AuthLayout's split screen). */
 export const Bare: Story = {
   args: { tone: 'bare', placement: 'page', size: 'sm', title: 'Sign in', children: 'The page’s task.' },

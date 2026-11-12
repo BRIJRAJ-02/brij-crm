@@ -47,3 +47,13 @@ Tab moves through each value's links and its pencil button; a read only value's 
 ## Differences from the artifact
 
 The artifact's record page shows details as a static list; this edits in place.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DescriptionList (spec 0072), which replaces it: the fixed name column (136 at full size, `4 * size-control - space-8`), the type's icon on its grey tile and the name in `text-body-sm` and `text-secondary`, each row a control tall with the name level with the value's first line, the value washing `surface-hover` (`radius-md`, `space-8` in) under the pointer, the pencil fading in on the row's hover or focus. Errors read `text-body-sm`.
+
+**States**: filled, empty ("Set Name…" in `text-tertiary`, quiet until hovered in a folded list), hover, editing (the field set's editor in place), read only (a lock with its reason, "Not set" when empty), loading, folded (Show N empty values).
+
+**Differences from the prototype**: a click on the value or the pencil opens the attribute type's own editor (the field set), not the prototype's crossfading text field; the copy button on email, phone and website rows is the value display's own. Kept: folding empty values, the list's actions, the lock and its reason, the narrow layout (name over value under 320px).
+
+**Repeats from its replacer** (AC-4): the row's grid, the name's type and colour and the value's hover wash, as DescriptionList's rows draw them; it can't render DescriptionList, which is read only. They leave with this export.

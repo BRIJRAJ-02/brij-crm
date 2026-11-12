@@ -41,3 +41,17 @@ Only its buttons take focus.
 - `row` is the default and the artifact's centred tile is gone: a block draws a bare glyph or an illustration.
 - An error always has Try again (`onRetry`, else a reload), with its mark and title in the danger colour; the tone sets the announcement.
 - `isLoading` is new.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's EmptyState for `block` and `fill`: `space-48` and `space-24` of room, the glyph (or an error's alert, a lock's lock) in a round raised well a large control wide (`surface-raised`, `shadow-sm` and a hairline `border-subtle` ring, the glyph in `text-secondary`), the title in `text-heading`, one line in `text-secondary` at most half a measure wide, and the actions `space-16` under it. `row` stays the library's quiet line with a bare mark.
+
+**Use it for** a first run (`block`, a whole surface with nothing yet), a whole view's empty, failed or locked state (`fill`), and a list's or a panel's empty line (`row`). **Don't use it for** loading data (pass `isLoading`, which draws skeleton lines), and don't give it two primary actions.
+
+**States**: first run (well, heading, line, action), error (the alert in the well and the title in `danger`, Try again), locked (the lock in the well), loading (skeleton lines, busy), with an illustration (the picture in the well's place), row.
+
+**Differences from the prototype**
+- The library's default is `row`, one line in a list's place, which the prototype doesn't draw; its `md` and `sm` sizes are the library's `block` and `row`.
+- `illustration` (a SpotIllustration over a first run) is kept, though the prototype draws no illustrations; it takes the well's place.
+- `tone` (error with Try again, locked) and `isLoading` are kept. The prototype's `NoResults` is a `row` with a Clear filters action.
+- Owed: the prototype's texts reveal (transitions.dev 18). Built and taken out in tier 2: EmptyState draws inside dozens of modules and screens, and a reveal that starts at opacity 0 sits at its first frame under the test helpers, so every play that reads an empty state (Chart's, Board's, the flows') would need `settleAnimations()` first. It lands with the screen phases that own those plays.

@@ -1,5 +1,6 @@
-/* Card: a raised surface with a hairline and radius-lg; a header with the
-   title and its actions, the body, and a footer on the card's own surface under a hairline. */
+/* Card: the Timefix prototype's card (spec 0072): the surface with a border-subtle hairline, radius-lg and shadow-xs;
+   a header with the title (text-heading) over a grey text-body-sm line and its actions, the body, and a footer on the
+   card's own surface under a hairline. */
 @layer components {
   .root {
     display: flex;
@@ -8,7 +9,7 @@
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
+    background: var(--surface);
     box-shadow: var(--shadow-xs);
     color: var(--text);
   }
@@ -43,7 +44,9 @@
      card draws the ring and the hover, and its own buttons sit above the stretch. */
   .root[data-pressable] {
     position: relative;
-    transition: border-color var(--duration-quick) var(--ease-out);
+    transition:
+      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out);
   }
 
   .press {
@@ -67,31 +70,32 @@
     outline: none;
   }
 
+  /* The prototype's outline ring, outside the card's own edge. */
   .root[data-pressable]:has(.press:focus-visible) {
-    border-color: var(--accent-text);
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
+  /* Under the pointer, the prototype's tile hover: the edge steps up and the fill washes. */
   @media (hover: hover) and (pointer: fine) {
     .root[data-pressable]:hover {
       border-color: var(--border-strong);
+      background: var(--surface-hover);
     }
   }
 
   .head {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-8);
-    padding-block: var(--space-12) 0;
+    gap: var(--space-12);
+    padding-block: var(--space-16) 0;
     padding-inline: var(--space-16);
   }
 
   /* A card that is its header alone (a form's email question in Analytics: its count, never its answers) keeps the
      same room under the header as above it, rather than its description against the bottom edge. */
   .head:last-child {
-    padding-block-end: var(--space-12);
+    padding-block-end: var(--space-16);
   }
 
   .heading {
@@ -122,8 +126,8 @@
 
   .description {
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* The actions stand on the title's line: their box is one title line tall (1lh of text-title) and centres
@@ -153,10 +157,20 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* --body-top: the room above what the body holds, which the child after a hidden marker takes as its margin. */
   .body {
+    --body-top: var(--space-16);
+    --after-marker: var(--space-16);
+
     padding: var(--space-16);
+    padding-block-start: var(--body-top);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* Under a header, the prototype's body starts space-12 below it. */
+  .head + .body {
+    --body-top: var(--space-12);
   }
 
   /* What runs to the Card's edges itself (a Table with edge="card"). */
@@ -173,18 +187,24 @@
      When one comes first, the shown child after it takes the air above it as its margin, so the body's own
      top padding steps aside rather than doubling it. */
   .body:has(> :first-child:is([hidden], :empty:not([class]))) {
+    --after-marker: var(--body-top);
+
     padding-block-start: 0;
+  }
+
+  .body > :nth-child(2) {
+    margin-block-start: var(--after-marker);
   }
 
   /* The footer's quiet line: it takes the room the buttons leave and wraps rather than pushing them, and on its
      own line (a narrow card) it reads before them. */
   .footNote {
-    flex: 1 1 var(--size-measure-sm);
+    flex: 1 1 var(--size-menu);
     margin: 0;
     min-inline-size: 0;
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-align: start;
   }
 

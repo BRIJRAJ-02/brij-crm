@@ -1,6 +1,6 @@
-/* Stats: figures side by side that wrap, each at least a column wide; the
-   value in heading type with tabular figures, the label and the comparison
-   in label type, quiet. */
+/* Stats: figures side by side that wrap, each at least a column wide, in the look of the Timefix prototype's StatCard
+   (folded into Card, spec 0072): a grey text-body-sm-strong label over the value in tabular figures, the comparison in
+   text-body-sm under it. On cards (or as one headline figure) the value takes the display type. */
 @layer components {
   .root {
     display: grid;
@@ -23,16 +23,16 @@
   }
 
   .root[data-variant='cards'] .stat {
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-16);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
+    background: var(--surface);
     box-shadow: var(--shadow-xs);
   }
 
   .label {
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     color: var(--text-secondary);
   }
 
@@ -45,10 +45,10 @@
     white-space: nowrap;
   }
 
-  /* One headline figure on its own: the page's biggest type. */
-  .root[data-size='large'] .value {
-    font: var(--text-title-lg);
-    letter-spacing: var(--tracking-title-lg);
+  /* A StatCard's figure, or one headline figure on its own: the prototype's display type. */
+  .root:is([data-variant='cards'], [data-size='large']) .value {
+    font: var(--text-display);
+    letter-spacing: var(--tracking-display);
   }
 
   .comparison {
@@ -56,9 +56,9 @@
     align-items: center;
     gap: var(--space-4);
     margin: 0;
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     font-variant-numeric: tabular-nums;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
   }
 }

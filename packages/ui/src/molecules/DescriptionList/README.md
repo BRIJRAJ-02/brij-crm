@@ -35,3 +35,13 @@ Only what its descriptions hold takes focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DescriptionList (read only): every row a control tall, the term in `text-body-sm` and `text-secondary` at the top of its row, level with the value's first line in the body type, so a taller value never moves its term. `compact` is the prototype's fixed name column (136 at full size, `4 * size-control - space-8`) with rows a small control tall; `stacked` puts each term over its value.
+
+**Use it for** read only label and value pairs: a booking's or a submission's details, a summary. **Don't use it for** a record's editable attributes (AttributeList) or tabular data (DataGrid).
+
+**States**: filled, a placeholder value (`text-tertiary`), with a copy button (shown on the row's hover or focus with a pointer, always under a finger), stacked.
+
+**Differences from the prototype**: no icon wells and no inline editing here (AttributeList draws those); the default layout sizes its term column to the longest term, `compact` is the prototype's fixed column. `address` and `copy` are kept.

@@ -48,3 +48,15 @@ Tab enters the toolbar once; the left and right arrows move between its buttons.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from FloatingBar (spec 0072), the prototype's bar: the count in `text-body-strong` tabular figures, the offer, then the actions in FloatingBar's group after its hairline, `space-4` apart, and the round Clear at the end. A running action's progress takes the actions' place, at most a menu's width and `space-48` before it gives way.
+
+**Use it for** actions on selected records. **Don't use it for** one record's actions (its row menu).
+
+**States**: some selected (with the offer), all matching, running (progress, Review, Cancel, Cancelling), leaving.
+
+**Differences from the prototype**: white, not ink (FloatingBar's differences); the count is one phrase ("3 selected"), not a rolling number on a chip; the offer to select all matching, progress, Review and Cancel are the library's.
+
+**Repeats from its replacer** (AC-4): nothing now: its actions group is FloatingBar's `FloatingBarGroup` (it drew its own hairline group before); it keeps only the count's type and the progress's width.

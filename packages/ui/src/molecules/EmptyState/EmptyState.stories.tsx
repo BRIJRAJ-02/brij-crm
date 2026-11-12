@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { probeAlignment } from '../../lib/alignment-probe.ts';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SpotIllustration } from '../SpotIllustration/SpotIllustration.tsx';
 import { EmptyState } from './EmptyState.tsx';
@@ -54,7 +55,7 @@ export const Row: Story = {
   },
 };
 
-/** A whole surface's first run: a centred block with a bare glyph (never a tile), one line and the next step. */
+/** A whole surface's first run: a centred block with its glyph in the prototype's well, one heading and the next step; the lines rise into place in turn. */
 export const FirstRun: Story = {
   args: {
     title: 'No deals yet',
@@ -72,12 +73,12 @@ export const FirstRun: Story = {
   play: async ({ canvas }) => {
     const status = canvas.getByRole('status');
     await expect(status).toHaveAttribute('data-layout', 'block');
-    const mark = status.firstElementChild;
-    await expect(mark).not.toBeNull();
-    if (mark === null) return;
-    // The glyph is bare: no edge and no fill behind it.
-    await expect(getComputedStyle(mark).borderTopStyle).toBe('none');
-    await expect(getComputedStyle(mark).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    // The well is decoration: the heading says what is missing, and the actions are the only stops.
+    await expect(status.firstElementChild?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    await settleAnimations();
+    await expect(canvas.getByText('No deals yet')).toBeVisible();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Add deal' })).toHaveFocus();
   },
 };
 
@@ -159,6 +160,7 @@ export const FailedBlock: Story = {
   args: { tone: 'error', title: 'Couldn’t load deals', layout: 'block', onRetry: fn() },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'block');
+    await settleAnimations();
     await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
   },
 };
@@ -214,6 +216,7 @@ export const Illustration: Story = {
   ),
   play: async ({ canvas }) => {
     // The picture is decoration: the heading alone says what is missing.
+    await settleAnimations();
     await expect(canvas.getByText('No booking pages yet')).toBeVisible();
     const status = canvas.getByRole('status');
     // The picture draws at its own size: the slot shrink wraps, so a picture with no width of its own vanishes.

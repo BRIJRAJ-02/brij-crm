@@ -28,3 +28,11 @@ It takes no focus and is hidden from screen readers; the EmptyState title says w
 ## Differences from the artifact
 
 The artifact has no illustrations.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's EmptyState (spec 0072), which replaces it: the prototype draws no illustrations, only a glyph in a raised well. Kept for its callers (Links, Forms, Link page first runs), its drawing moves to the prototype's language: the raised card with `shadow-sm`, a form's fields filled `surface-subtle` with no edge, its button an ink (`--primary`) pill, the picked time in the accent tint.
+
+**Differences from the prototype**: the whole part. It leaves with its export when the screen phases move its callers to EmptyState's well.
+
+**Repeats from its replacer**: nothing; EmptyState draws no picture.

@@ -1,25 +1,34 @@
 /* EmptyState. The row (the default) is one quiet line at a list row's height, at the start, in the list's place:
-   the title in secondary text and the action after it, with no mark. The block is centred in its slot, for a
-   whole surface's first run: an illustration or a bare glyph, never a tile. The fill grows the block to its slot's
-   height. An error looks different from emptiness in every layout: its alert mark and its title in the danger
-   colour, with Try again. A lock shows its bare mark in tertiary. */
+   the title in secondary text and the action after it, with no mark. The block is the Timefix prototype's empty state
+   (spec 0072), centred in its slot for a whole surface's first run: its glyph in a round raised well, a heading, one
+   line and the action. The fill grows the
+   block to its slot's height. An error looks different from emptiness in every layout: its alert mark and its title in
+   the danger colour, with Try again. A lock shows its mark in the secondary grey. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-6);
-    padding-block: var(--space-32);
-    padding-inline: var(--space-16);
+    padding-block: var(--space-48);
+    padding-inline: var(--space-24);
     text-align: center;
   }
 
-  /* A bare mark, no tile: a glyph over a block's title, or beside a row's. */
+  /* A block's glyph sits in the prototype's well: a round raised tile a large control wide, a soft drop and a
+     hairline ring, the glyph in the secondary grey. A row's mark (below) stays bare. */
   .icon {
-    display: inline-flex;
+    display: inline-grid;
     flex: none;
-    margin-block-end: var(--space-2);
-    color: var(--text-tertiary);
+    place-items: center;
+    inline-size: var(--size-control-lg);
+    block-size: var(--size-control-lg);
+    margin-block-end: var(--space-16);
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+    box-shadow:
+      var(--shadow-sm),
+      0 0 0 var(--border-width-hairline) var(--border-subtle);
+    color: var(--text-secondary);
   }
 
   /* The illustration slot: a picture over the title, centred, at most size-column wide. */
@@ -27,18 +36,19 @@
     display: grid;
     place-content: center;
     max-inline-size: var(--size-column);
-    margin-block-end: var(--space-8);
+    margin-block-end: var(--space-16);
     color: var(--text-tertiary);
   }
 
   .title {
     color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .text {
-    max-inline-size: var(--size-measure-sm);
+    max-inline-size: calc(var(--size-measure) / 2);
+    margin-block-start: var(--space-4);
     color: var(--text-secondary);
     text-wrap: pretty;
     font: var(--text-body);
@@ -54,7 +64,7 @@
   /* Loading: skeleton lines where the title and text go, a line's measure wide. */
   .lines {
     display: flex;
-    inline-size: min(var(--size-measure-sm), 100%);
+    inline-size: min(calc(var(--size-measure) / 2), 100%);
     padding-block: var(--space-4);
   }
 
@@ -63,7 +73,7 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: var(--space-8);
-    margin-block-start: var(--space-8);
+    margin-block-start: var(--space-16);
   }
 
   /* Fill: the block grown to its slot's height, centred in it (an empty view with the whole area). */
@@ -87,8 +97,15 @@
     text-align: start;
   }
 
+  /* A row's mark is bare: no well, at the row's icon size. */
   .root[data-layout='row'] .icon {
+    display: inline-flex;
+    inline-size: auto;
+    block-size: auto;
     margin: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--text-tertiary);
   }
 
   .root[data-layout='row'] .title {
@@ -97,7 +114,7 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .root[data-layout='row'][data-tone='error'] .title {
+  .root[data-layout='row'][data-tone='error'] :is(.icon, .title) {
     color: var(--danger);
   }
 
@@ -130,6 +147,7 @@
   /* A row's line of help runs the width of its slot: a measure wraps it early inside a wide card. */
   .root[data-layout='row'] .text {
     max-inline-size: none;
+    margin-block-start: 0;
     color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);

@@ -14,9 +14,10 @@
     outline: none;
   }
 
+  /* The Timefix prototype's outline ring (spec 0072), when focus is sent here from the keyboard. */
   .root:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   .placeholder {

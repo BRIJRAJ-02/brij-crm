@@ -25,7 +25,7 @@ New. Home's metrics row needs figures read at a glance: a label, a large value a
 - Values use tabular figures, so they line up as they change.
 - `size="large"` sets each value in the page's biggest type (`text-note-title`): one headline figure on its own. Why a variant: a report's big number is the same label and value, only larger, and a second figure component would have repeated the `dl`, the loading skeleton and the comparison line (the reports lane, 31 October 2026).
 
-- `variant="cards"` sets each figure on Card's own surface, hairline, corners and shadow, a `space-12` gap between them, one row that wraps: a page's figures above the Cards that explain them (a form's Analytics: Views, Starts, Finished, Completion, Median time, 5 November 2026). Why a variant: the figures are the same `dl`, loading and comparison; a Card per figure would draw a header and body for a label and a number, and plain figures floating over a page of Cards read as unfinished (the owner: "vibe coded").
+- `variant="cards"` sets each figure on Card's own surface, hairline, corners and shadow (the prototype's StatCard, its value in `text-display`), a `space-12` gap between them, one row that wraps: a page's figures above the Cards that explain them (a form's Analytics: Views, Starts, Finished, Completion, Median time, 5 November 2026). Why a variant: the figures are the same `dl`, loading and comparison; a Card per figure would draw a header and body for a label and a number, and plain figures floating over a page of Cards read as unfinished (the owner: "vibe coded").
 
 ## States
 
@@ -41,3 +41,13 @@ None: nothing in it takes focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from Card (spec 0072): the prototype folds Stats into Card's StatCard. Its own module draws the StatCard's figure (decision 14: sharing one part with RecordStats was measured heavier per page, see Card's README): a grey `text-body-sm-strong` label over the value in tabular figures (`text-title` in a row, `text-display` with `variant="cards"` or `size="large"`), the comparison in `text-body-sm` and `text-secondary` under it.
+
+**States**: figures, loading (skeletons, the group busy), nothing (renders nothing), a label that links.
+
+**Differences from the prototype**: no number pop, sparkline or breakdown; `href` on a label, `trend` arrows in no colour (up isn't always good) and the `plain` row are kept.
+
+**Repeats from its replacer** (AC-4): the figure's label, value and comparison type (and the `cards` variant's Card surface, edge, corners and shadow); they leave with this export.

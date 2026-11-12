@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
-import { FloatingBar } from '../../molecules/FloatingBar/FloatingBar.tsx';
+import { FloatingBar, FloatingBarGroup } from '../../molecules/FloatingBar/FloatingBar.tsx';
 import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import styles from './SaveBar.module.css';
@@ -174,7 +174,7 @@ export function SaveBar({
         </span>
       </span>
       {shown !== 'saved' && (
-        <span className={styles.actions}>
+        <FloatingBarGroup isEnd>
           {onDiscard !== undefined && (
             <ModalTrigger isOpen={isAsking} onOpenChange={setAsking}>
               <Button variant="ghost" isDisabled={shown === 'saving'}>
@@ -206,7 +206,7 @@ export function SaveBar({
           >
             {isError ? strings.tryAgain : saveLabel}
           </Button>
-        </span>
+        </FloatingBarGroup>
       )}
     </FloatingBar>
   );

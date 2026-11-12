@@ -34,3 +34,11 @@ Tab reaches the tag; Enter, Space or Down opens the menu; the arrows move; Enter
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Named in the prototype's FloatingBar `replaces`, but the library's VisitorBar is one small Button on a booking page (who is booking, with Not you), not a bar: it keeps its own look, and takes only the prototype's outline ring for the focus sent to it (spec 0072).
+
+**Differences from the prototype**: no floating bar; a placeholder holds its space while it loads and it fades in.
+
+**Repeats from its replacer**: nothing.

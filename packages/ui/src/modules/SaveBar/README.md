@@ -45,3 +45,15 @@ Tab reaches Discard, then Save, after the page's content. ⌘S or ⌘↵ saves. 
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from FloatingBar (spec 0072), the prototype's SaveBar: the status in `text-body-strong` at the start (a check in `success` once saved, an alert in `danger` when the save failed), then Discard and Save in FloatingBar's group at the end.
+
+**Use it for** unsaved changes on a settings page or an editor. **Don't use it for** a public page's draft: that is PublishBar.
+
+**States**: unsaved, blocked (the reason in the status, Save disabled), saving (Save pending), saved (the check, then the bar drops away), failed (the reason, Try again).
+
+**Differences from the prototype**: white, not ink; no orange status dot (the check and the alert carry saved and failed); Save keeps its check icon and ⌘S keycap; the Discard confirm is the library's.
+
+**Repeats from its replacer** (AC-4): nothing now: its actions group is FloatingBar's `FloatingBarGroup`.

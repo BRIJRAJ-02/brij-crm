@@ -1,21 +1,21 @@
-/* ChoiceTiles (TileGrid variant="choice", spec 0058): equal size tiles to pick from by sight. Each track is at least
-   size-column-narrow and the tracks share the width, so every tile has one width; the rows share one height. A tile is
-   a picture slot (size-column-min tall, a mark or a thumbnail centred in it) over a one line name, both on one left
-   edge, space-12 in from the tile's edge. The chosen tile takes the accent line as its border and soft fill with a
-   tick in its top end corner. Press scales to scale-press; the tick eases in on opacity and scale (at once under
-   reduced motion). */
+/* ChoiceTiles (TileGrid variant="choice", spec 0058), in the Timefix prototype's TileGrid look (spec 0072): equal size
+   tiles to pick from by sight. Each track is at least size-column-narrow and the tracks share the width, so every tile
+   has one width; the rows share one height. A tile is a picture slot (size-column-min tall, a mark or a thumbnail
+   centred in it) over a one line name, on the surface with a border hairline and radius-lg. Under the pointer the edge
+   steps up and the fill washes; the chosen tile takes the accent edge, doubled by a hairline ring, its picture tinted
+   accent-soft, and a tick that pops into its top end corner on the bounce curve (at once under reduced motion). */
 @layer components {
   /* With a visible label (`isLabelVisible`): the label, as a Field's, over the tiles. */
   .labelled {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-8);
   }
 
   .title {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   .root {
@@ -49,16 +49,17 @@
     min-inline-size: 0;
     padding: var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     text-align: start;
     outline: none;
     transition:
-      background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-smooth-out),
+      border-color var(--duration-quick) var(--ease-smooth-out),
+      box-shadow var(--duration-quick) var(--ease-smooth-out),
       scale var(--duration-quick) var(--ease-smooth-out);
   }
 
@@ -80,14 +81,17 @@
     box-sizing: border-box;
     block-size: var(--size-column-min);
     overflow: hidden;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--surface-subtle);
     color: var(--text-secondary);
+    transition:
+      background-color var(--duration-quick) var(--ease-smooth-out),
+      color var(--duration-quick) var(--ease-smooth-out);
   }
 
-  /* A tinted slot: the kind's data hue, its mark in the hue's text colour, so the grid reads at a glance. */
+  /* A tinted slot: the kind's data hue, its mark in the hue's text colour, so the grid reads at a glance. No
+     outline, as the prototype's tags have none. */
   .picture[data-hue] {
-    border: var(--border-width-hairline) solid var(--picture-edge);
     background: var(--picture-bg);
     color: var(--picture-fg);
   }
@@ -95,55 +99,46 @@
   .picture[data-hue='gray'] {
     --picture-bg: var(--tag-gray-bg);
     --picture-fg: var(--tag-gray-text);
-    --picture-edge: var(--tag-gray-border);
   }
 
   .picture[data-hue='red'] {
     --picture-bg: var(--tag-red-bg);
     --picture-fg: var(--tag-red-text);
-    --picture-edge: var(--tag-red-border);
   }
 
   .picture[data-hue='orange'] {
     --picture-bg: var(--tag-orange-bg);
     --picture-fg: var(--tag-orange-text);
-    --picture-edge: var(--tag-orange-border);
   }
 
   .picture[data-hue='yellow'] {
     --picture-bg: var(--tag-yellow-bg);
     --picture-fg: var(--tag-yellow-text);
-    --picture-edge: var(--tag-yellow-border);
   }
 
   .picture[data-hue='lime'] {
     --picture-bg: var(--tag-lime-bg);
     --picture-fg: var(--tag-lime-text);
-    --picture-edge: var(--tag-lime-border);
   }
 
   .picture[data-hue='green'] {
     --picture-bg: var(--tag-green-bg);
     --picture-fg: var(--tag-green-text);
-    --picture-edge: var(--tag-green-border);
   }
 
   .picture[data-hue='sky'] {
     --picture-bg: var(--tag-sky-bg);
     --picture-fg: var(--tag-sky-text);
-    --picture-edge: var(--tag-sky-border);
   }
 
   .picture[data-hue='blue'] {
     --picture-bg: var(--tag-blue-bg);
     --picture-fg: var(--tag-blue-text);
-    --picture-edge: var(--tag-blue-border);
   }
 
   .picture[data-hue='purple'] {
     --picture-bg: var(--tag-purple-bg);
     --picture-fg: var(--tag-purple-text);
-    --picture-edge: var(--tag-purple-border);
   }
 
   /* A thumbnail fills the slot; a mark sits centred in it. */
@@ -274,8 +269,8 @@
   .reason {
     min-inline-size: 0;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .describe {
@@ -301,32 +296,36 @@
     pointer-events: none;
   }
 
+  /* Chosen: the accent edge, doubled inward by a hairline ring (box-shadow, so nothing moves), on the surface. */
   .tile[data-selected] {
     border-color: var(--accent-text);
-    background: var(--accent-soft);
+    box-shadow: 0 0 0 var(--border-width-hairline) var(--accent-text);
   }
 
+  /* The tick pops in on the bounce curve (transitions.dev 03's pop) and leaves quickly. */
   .tile[data-selected] .tick {
     opacity: 1;
     scale: 1;
+    transition:
+      opacity var(--duration-slow) var(--ease-bounce),
+      scale var(--duration-very-slow) var(--ease-bounce);
   }
 
   .tile[data-selected] .picture:not([data-hue]) {
-    background: var(--surface-raised);
+    background: var(--accent-soft);
+    color: var(--accent-text);
   }
 
-  /* Focus is the library's ring, as on a primary Button: the accent line just outside the tile past a hairline gap,
-     with the soft halo. A chosen tile already has the accent line as its border, so the halo alone (under 3:1 and
-     unseen in dark) left a focused chosen tile looking like any chosen tile. */
+  /* Focus is the prototype's outline ring, outside the tile past a gap, so a chosen tile's accent edge never hides
+     it. */
   .tile[data-focus-visible] {
-    border-color: var(--accent-text);
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .tile[data-hovered]:not([data-selected], [data-disabled]) {
+      border-color: var(--border-strong);
       background: var(--surface-hover);
     }
   }
@@ -342,7 +341,8 @@
 
   /* Reduced motion: the tick is there at once (spec 0058, AC-2), with no fade or scale; colours still ease. */
   @media (prefers-reduced-motion: reduce) {
-    .tick {
+    .tick,
+    .tile[data-selected] .tick {
       scale: 1;
       transition: none;
     }
@@ -350,7 +350,8 @@
     .tile {
       transition:
         background-color var(--duration-quick) var(--ease-out),
-        border-color var(--duration-quick) var(--ease-out);
+        border-color var(--duration-quick) var(--ease-out),
+        box-shadow var(--duration-quick) var(--ease-out);
     }
   }
 
@@ -360,7 +361,7 @@
     }
 
     .tile[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
+      outline-color: Highlight;
     }
   }
 

@@ -22,3 +22,15 @@ Publish asks nothing (publishing is reversible through Versions). Discard draft 
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from FloatingBar's `white` tone (spec 0072), the prototype's PublishBar: the raised surface with a hairline, `space-4` around the actions and `space-16` before the words, the status in `text-body-strong` with a `space-6` dot in `dot-orange` while changes wait, the changes list in `text-body-sm`.
+
+**Use it for** a public page's draft against what guests see, at the head of its editor. **Don't use it for** unsaved settings: that is SaveBar.
+
+**States**: live, paused, draft (the dot and the count, Changes, Discard, Publish), publishing (Publish pending), published, refused (the reason and its fix).
+
+**Differences from the prototype**: it stays an inline strip at the head of the editor (spec 0068) rather than a floating pill, so it doesn't render FloatingBar: its corners are `radius-xl` (it grows a list of the changes), and its shadow stays `shadow-xs`. The changes list, versions and restore, Preview as a link, the refusal's fix and the skeleton are the library's.
+
+**Repeats from its replacer**: the dot and the status type, which FloatingBar itself doesn't draw (its bars bring their own words); nothing to share.

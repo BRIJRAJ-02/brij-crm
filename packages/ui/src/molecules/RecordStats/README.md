@@ -36,3 +36,13 @@ Tab reaches each stat that goes somewhere; Enter or Space presses it.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from Card (spec 0072): the prototype folds RecordStats into Card's StatCard. Its own module draws the StatCard's figure in its hairline strip (decision 14: sharing one part with Stats was measured heavier per page, see Card's README): a grey `text-body-sm-strong` label (its icon muted) over its value in `text-title` tabular figures (`text-body-strong` with four or more, or under 480px). A stat that goes somewhere washes `surface-hover` under the pointer and wears the outline ring just inside its tile on focus (the strip clips anything outside it).
+
+**States**: a count, a moment, a value, loading (a skeleton, busy), none, pressable (hover, focus visible).
+
+**Differences from the prototype**: the hairline strip, `onPress` per stat, counts at least, times and "None" are kept; the StatCard's number pop is not drawn.
+
+**Repeats from its replacer** (AC-4): the figure's label, value and comparison type (shared with Stats); they leave with this export.
