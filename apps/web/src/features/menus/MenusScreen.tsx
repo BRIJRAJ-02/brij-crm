@@ -85,7 +85,7 @@ export type Open =
   | { readonly kind: 'group'; readonly groupId?: string }
   | { readonly kind: 'discard' }
   | { readonly kind: 'publish' }
-  | { readonly kind: 'qr' }
+  | { readonly kind: 'share' }
   | { readonly kind: 'hide' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
   | { readonly kind: 'duplicateMenu'; readonly menuId: string; readonly name: string }
@@ -403,15 +403,18 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
           label={strings.shareMenu}
           onAction={(key) => {
             if (key === 'open') openGuest();
-            else if (key === 'qr') setOpen({ kind: 'qr' });
+            else if (key === 'share') setOpen({ kind: 'share' });
           }}
         >
           <MenuItem id="open" icon="external-link">
             {strings.openNewTab}
           </MenuItem>
-          <MenuItem id="qr" icon="qr-code">
-            {strings.showQr}
-          </MenuItem>
+          {/* The one share sheet, with the link and its QR code (spec 0074, AC-7405); none with no place to link to. */}
+          {place === undefined ? null : (
+            <MenuItem id="share" icon="share">
+              {strings.share}
+            </MenuItem>
+          )}
         </Menu>
       }
     >
@@ -748,9 +751,9 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                 onClose={() => setOpen(undefined)}
               />
             ) : null}
-            {open?.kind === 'publish' || open?.kind === 'qr' ? (
+            {open?.kind === 'publish' || open?.kind === 'share' ? (
               <PublishDialog
-                startsOn={open.kind === 'qr' ? 'live' : 'review'}
+                startsOn={open.kind === 'share' ? 'live' : 'review'}
                 store={store}
                 slug={slug}
                 draft={draft}

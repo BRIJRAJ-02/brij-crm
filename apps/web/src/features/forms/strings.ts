@@ -209,10 +209,6 @@ export const strings = {
       : `Answers go to ${objectName} · ${made.length === 1 ? '1 new field' : `${String(made.length)} new fields`}: ${made.join(', ')}`,
   /** Opens where the live dialog's line is changed (Settings › CRM). */
   changeFiling: 'Change',
-  /** The live dialog's row to the Share tab's embeds. */
-  putOnSite: 'Put it on your site',
-  qrLabel: 'QR code for the form’s link',
-  qrDownloadFailed: 'The QR code didn’t download. Try again.',
   name: 'Name',
   /** An example of a name, never the name an unnamed form gets: Publish refuses a blank one. */
   namePlaceholder: 'Contact us',

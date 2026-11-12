@@ -80,7 +80,7 @@ describe('the live dialog after the first publish (AC-6, T44)', () => {
     await expect.element(page.getByRole('heading', { name: 'Apply is live' })).toBeVisible();
     expect(page.getByText('Your form is live').query()).toBeNull();
     // The link, its own name strong, with Copy link (the one primary), and its QR code.
-    await expect.element(page.getByRole('img', { name: 'QR code for the form’s link' })).toBeInTheDocument();
+    await expect.element(page.getByRole('img', { name: 'QR code for Apply' })).toBeInTheDocument();
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByText('apply', { exact: true })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();

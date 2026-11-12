@@ -20,6 +20,7 @@ import {
   PageColumn,
   PersonLine,
   QrCode,
+  saveFile,
   sharedStrings,
   Table,
   TopBar,
@@ -36,7 +37,6 @@ import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { AddPageDialog } from './AddPageDialog.tsx';
 import { CancelPageInvite, PageInviteDialog } from './PageInviteDialog.tsx';
 import { useLinkPagePlace } from './place.tsx';
-import { saveFile } from './qr-png.ts';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
 import { teamStrings as strings } from './team-strings.ts';
 

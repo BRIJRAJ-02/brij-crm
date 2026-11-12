@@ -28,8 +28,9 @@ import {
   EmptyState,
   Modal,
   PageColumn,
-  SegmentedControl,
+  saveFile,
   SectionBar,
+  SegmentedControl,
   Select,
   Skeleton,
   Stats,
@@ -43,7 +44,6 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { capturesHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { saveFile } from '../link-page/qr-png.ts';
 import { figure, insightsCsv, sourceWord, stepWord } from './format.ts';
 import { InsightsBody } from './InsightsBody.tsx';
 import { CUSTOM_MAX_DAYS, daysOf, type InsightsSearch } from './search.ts';

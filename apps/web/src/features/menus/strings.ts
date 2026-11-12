@@ -64,8 +64,6 @@ export const strings = {
   draft: 'Not published yet',
   upToDate: 'Guests see this menu',
   openGuest: 'Open guest menu',
-  copyLink: 'Copy link',
-  linkCopied: 'Link copied',
   emptyBlocker: 'Add an item to a menu before publishing.',
   unpricedBlocker: (name: string) => `Give ${name} a price, then publish.`,
   openDish: 'Open item',
@@ -210,7 +208,7 @@ export const strings = {
   reviewStep: 'Review',
   reviewPublish: 'Review and publish',
   more: 'More',
-  showQr: 'Show QR code',
+  share: 'Share',
   tabStructure: 'Structure',
   tabDishes: 'Items',
   tabOptions: 'Add-ons',
@@ -323,9 +321,12 @@ export const strings = {
   fixIt: 'Fix',
   publishNow: 'Publish',
   liveTitle: 'Your menu is live',
-  liveLine: 'Guests open it from this link or by scanning the code.',
-  qrLabel: (name: string) => `QR code for ${name}’s menu`,
-  done: 'Done',
+  /** The share sheet opened from the split's Share (spec 0074, AC-7405). */
+  shareTitle: 'Share your menu',
+  /** What the share sheet names the menu: the email's subject, the QR code's name and its file's. */
+  shareName: (place: string) => `${place} menu`,
+  /** Words before the link in Email and WhatsApp. */
+  shareInvite: 'Our menu:',
   nothingToPublish: 'Nothing new to publish',
   readyTitle: 'Ready to publish',
   goesLive: (menus: readonly { readonly name: string; readonly dishes: number }[]) =>

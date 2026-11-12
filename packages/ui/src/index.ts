@@ -444,6 +444,7 @@ export {
   type ReadyPanelOnward,
   type ReadyPanelProps,
   type ReadyPanelQrKind,
+  type ReadyPanelQrStyle,
 } from './modules/ReadyPanel/ReadyPanel.tsx';
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
 export { QrSheet, type QrSheetCard, type QrSheetLayout, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
@@ -778,4 +779,9 @@ export { TimeSelect, type TimeSelectProps } from './molecules/TimeSelect/TimeSel
 export { formatTime, timeOptions, type HourCycle, type TimeOption } from './molecules/TimeSelect/time-options.ts';
 // Batch 2: ShareSheet, the one share dialog, and saving a drawn QR code as a file beside QrCode.
 export { downloadQr, qrPng, qrSvg, saveFile, type QrFileKind } from './atoms/QrCode/qr-file.ts';
-export { ShareSheet, type ShareSheetProps } from './modules/ShareSheet/ShareSheet.tsx';
+export {
+  ShareColumn,
+  ShareSheet,
+  type ShareColumnProps,
+  type ShareSheetProps,
+} from './modules/ShareSheet/ShareSheet.tsx';

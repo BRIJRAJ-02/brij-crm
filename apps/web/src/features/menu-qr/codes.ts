@@ -1,10 +1,10 @@
 // Menu QR's files (spec 0065, H2): a table's address, the names its downloads are saved under, and every table's code
-// in one zip. The codes are drawn by the library's QrCode on the page and saved through the link page's `qr-png.ts`,
-// at 512 pixels (the checklabs rule). Nothing is sent anywhere: the zip is made in the browser.
+// in one zip. The codes are drawn by the library's QrCode on the page and saved through its `qrPng` and `qrSvg`, at
+// 512 pixels (the checklabs rule). Nothing is sent anywhere: the zip is made in the browser.
+import { qrPng, qrSvg } from '@crm/ui';
 import { menuTablePagePath } from '@crm/contracts/menu';
 import { writeZip, type ZipEntry } from '@crm/contracts/zip';
 import { publicBookingOrigin } from '../booking/links.ts';
-import { qrPng, qrSvg } from '../link-page/qr-png.ts';
 
 /** How many pixels a side a downloaded code is. */
 export const QR_FILE_SIZE = 512;

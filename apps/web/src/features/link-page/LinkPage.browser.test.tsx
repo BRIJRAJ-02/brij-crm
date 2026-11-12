@@ -212,6 +212,65 @@ describe('the bar on a phone (AC-1)', () => {
   });
 });
 
+describe('Share, on the one share sheet (spec 0074, AC-7404)', () => {
+  /** The header with Share, its Live state held here so a test can turn the page Private while Share is open. */
+  function Header({ onLive }: { readonly onLive: (setLive: (isLive: boolean) => void) => void }) {
+    const [isLive, setLive] = useState(true);
+    onLive(setLive);
+    return (
+      <TopBar title="Link page" icon="id-card">
+        <HeaderActions
+          data={
+            {
+              linkPage: {
+                load: () =>
+                  Promise.resolve({ walletLink: () => Promise.resolve({ url: 'https://wallet.example.com/pass' }) }),
+              },
+            } as unknown as DataLayer
+          }
+          live={{ isLive, setLive, goLive: () => undefined, switchRef: { current: null } }}
+          handle="ada"
+          workspaceName="Acme"
+          linkPage={linkPageStore}
+          slug="acme"
+          quickPicks={[]}
+          isEditing={false}
+          onEditing={() => undefined}
+        />
+      </TopBar>
+    );
+  }
+
+  it('keeps every way the old Share had: the line, Copy link, Download, Open page, the links, the style and Wallet', async () => {
+    let turn: (isLive: boolean) => void = () => undefined;
+    await render({}, () => <Header onLive={(set) => (turn = set)} />);
+    await userEvent.click(page.getByRole('button', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share your link page' });
+    await expect.element(sheet.getByText('Your link page in Acme.')).toBeVisible();
+    await expect.element(sheet.getByRole('img', { name: 'QR code for @ada' })).toBeInTheDocument();
+    await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
+    await expect.element(sheet.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
+    await expect.element(sheet.getByRole('link', { name: 'Open page' })).toBeVisible();
+    expect(sheet.getByRole('link', { name: 'Open page' }).element().getAttribute('href')).toMatch(/\/ada$/);
+    await expect.element(sheet.getByRole('button', { name: 'Share links' })).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: 'Style the code' })).toBeVisible();
+    await expect
+      .element(sheet.getByRole('link', { name: 'Add to Wallet' }))
+      .toHaveAttribute('href', 'https://wallet.example.com/pass');
+    // Turned Private while open: the sheet says so, offers Turn on Live, and the other ways go.
+    turn(false);
+    await expect.element(sheet.getByText('Private. Only you can open it.')).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: 'Turn on Live' })).toBeVisible();
+    expect(sheet.getByRole('button', { name: 'Share links' }).query()).toBeNull();
+    await userEvent.click(sheet.getByRole('button', { name: 'Turn on Live' }));
+    await expect.element(sheet.getByText('Your link page in Acme.')).toBeVisible();
+    // One dialog at a time: Share links closes the sheet before its own opens.
+    await userEvent.click(sheet.getByRole('button', { name: 'Share links' }));
+    await expect.poll(() => page.getByRole('dialog', { name: 'Share your link page' }).query()).toBeNull();
+    await expect.element(page.getByRole('dialog', { name: 'Links for each place' })).toBeVisible();
+  });
+});
+
 describe('the Add modal’s kinds (AC-9)', () => {
   it('is a grid of icons with a short name each, the line about each kind only a description', async () => {
     const onChange = vi.fn();

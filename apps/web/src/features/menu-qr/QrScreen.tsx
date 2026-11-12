@@ -26,6 +26,7 @@ import {
   Modal,
   PageColumn,
   QrCode,
+  saveFile,
   SectionBar,
   Select,
   Skeleton,
@@ -36,7 +37,6 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { saveFile } from '../link-page/qr-png.ts';
 import { useIsNarrow } from '../menus/narrow.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { qrPrintHref, type QrLook } from './look.ts';

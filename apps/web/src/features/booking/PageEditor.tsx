@@ -54,6 +54,7 @@ import {
   Select,
   SettingsRow,
   SettingsStack,
+  ShareColumn,
   Skeleton,
   Switch,
   Tooltip,
@@ -76,7 +77,6 @@ import { brandSettingsHref, objectSettingsHref, profileHref } from '../settings/
 import { PageAppearance } from './PageAppearance.tsx';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { managedStrings } from './managed-strings.ts';
-import { ShareBlock } from '../forms/ShareBlock.tsx';
 import { noVideoLinkReason } from './destination.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
@@ -2023,7 +2023,8 @@ export function PageEditor({
                     )}
                   </Card>
                   <Card title={strings.shareLinkSection}>
-                    <ShareBlock name={page.title} link={savedLink} />
+                    {/* The same column the share dialog draws (spec 0074, AC-7402), here in its card. */}
+                    <ShareColumn url={savedLink} name={page.title} />
                   </Card>
                   {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
                   {!isLocked && (

@@ -342,7 +342,10 @@ const PORT_PHASE_2 = [
   'timeOptions',
 ];
 
-/** The pinned list with spec 0073's additions, sorted as `Object.keys(ui).sort()` is. */
+/** Spec 0074 (port phase 3) batch 1's exports, in a block of their own for the same reason. */
+const PORT_PHASE_3 = ['ShareColumn'];
+
+/** The pinned list with spec 0073's and 0074's additions, sorted as `Object.keys(ui).sort()` is. */
 function withPortPhase2(names: readonly string[]): string[] {
-  return [...names, ...PORT_PHASE_2].sort();
+  return [...names, ...PORT_PHASE_2, ...PORT_PHASE_3].sort();
 }

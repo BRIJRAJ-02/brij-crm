@@ -4,7 +4,7 @@ import { expect, fn, screen, spyOn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
-import { ShareSheet, type ShareSheetProps } from './ShareSheet.tsx';
+import { ShareColumn, ShareSheet, type ShareSheetProps } from './ShareSheet.tsx';
 
 const ADDRESS = 'https://timefix.com/priya/discovery-call';
 
@@ -81,6 +81,28 @@ export const Default: Story = {
     await expect(done).not.toHaveAttribute('data-variant', 'primary');
     // Nothing that embeds was named, so there is no "Put it on your site" row.
     await expect(sheet.queryByRole('link', { name: 'Put it on your site' })).toBeNull();
+  },
+};
+
+/**
+ * The link page's code in the owner's saved style (spec 0061, AC-6124; spec 0074, AC-7403): the modules' colour and
+ * a framed label, drawn on the sheet's light tile as they are in what Download saves.
+ */
+export const Styled: Story = {
+  args: {
+    title: 'Share your link page',
+    description: 'Your link page in Acme.',
+    url: 'https://timefix.com/priya',
+    name: '@priya',
+    qrStyle: { colour: '#1d4ed8', frameLabel: 'Scan me' },
+  },
+  play: async () => {
+    const sheet = within(await openSheet());
+    const code = sheet.getByRole('img', { name: 'QR code for @priya' });
+    await expect(code.style.getPropertyValue('--qr-modules')).toBe('#1d4ed8');
+    await expect(code).toHaveAttribute('data-framed');
+    await expect(within(code).getByText('Scan me')).toBeInTheDocument();
+    await expect(sheet.getByText('Your link page in Acme.')).toBeInTheDocument();
   },
 };
 
@@ -200,4 +222,42 @@ export const RefusedVbscript: Story = {
   parameters: { crm: { screenshot: false } },
   args: { url: 'vbscript:msgbox(1)' },
   play: expectRefused,
+};
+
+/**
+ * ShareColumn: the sheet's ways to share on a page of its own, a Share tab's card (spec 0074, AC-7402). No dialog;
+ * the same code, link, ways and download, and "Put it on your site" as a routed row.
+ */
+export const Column: Story = {
+  render: () => (
+    <Stage>
+      <ShareColumn url={ADDRESS} name="Discovery call" embedHref="/w/acme/bookings/discovery-call/embed" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await expect(canvas.getByRole('img', { name: 'QR code for Discovery call' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
+    await expect(canvas.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Put it on your site' })).toHaveAttribute(
+      'href',
+      '/w/acme/bookings/discovery-call/embed',
+    );
+  },
+};
+
+/** ShareColumn refuses an address that could run script the same way the sheet does (AC-7318). */
+export const ColumnRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <ShareColumn url="javascript:alert(1)" name="Discovery call" extra={<Button>Offer specific times</Button>} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('This link can’t be shared, because it isn’t a web address.')).toBeInTheDocument();
+    await expect(canvas.queryByRole('img')).toBeNull();
+    await expect(canvas.queryByRole('button')).toBeNull();
+    await expect(canvas.queryByRole('link')).toBeNull();
+  },
 };

@@ -16,6 +16,7 @@ import {
   Field,
   InfoTip,
   Modal,
+  ShareColumn,
   SettingsStack,
   Switch,
   Table,
@@ -26,7 +27,6 @@ import { useState } from 'react';
 import { EMBED_TILES } from './embed-tiles.ts';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { firstRefusal } from './refusals.ts';
-import { ShareBlock } from './ShareBlock.tsx';
 import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
 
@@ -168,7 +168,8 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
       {/* Row 1 (T44, S4): the link, the same block as the live dialog: the link with Copy link, the ways to send it
           under it, and its QR code beside them with its download. */}
       <Card title={strings.linkTitle}>
-        <ShareBlock name={form.name} link={link} />
+        {/* The live dialog's ShareSheet draws this same column (spec 0074, AC-7402); here it sits in the card. */}
+        <ShareColumn url={link} name={form.name} />
       </Card>
       {/* Row 2 (b6): how it shows on a site, the made up site beside the choices showing the pick, and the snippet
           they write. One way to copy: the code block's own Copy. */}

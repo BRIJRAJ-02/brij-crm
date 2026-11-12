@@ -4,7 +4,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
-import { QrCode } from '../../atoms/QrCode/QrCode.tsx';
+import { QrCode, type QrCodeProps } from '../../atoms/QrCode/QrCode.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './ReadyPanel.module.css';
@@ -70,7 +70,15 @@ export interface ReadyPanelProps {
    * says what the link is for (ShareSheet's `invite`, spec 0073).
    */
   readonly invite?: string;
+  /**
+   * `share`: the code in a saved style (spec 0061, AC-6124: the module colour, a centre picture, a framed label), on
+   * screen and in what Download saves (ShareSheet's `qrStyle`, spec 0074). Left out, the plain code.
+   */
+  readonly qrStyle?: ReadyPanelQrStyle;
 }
+
+/** A QR code's saved style, as QrCode draws it: the modules' colour, a centre picture and a frame's label. */
+export type ReadyPanelQrStyle = Pick<QrCodeProps, 'colour' | 'picture' | 'frameLabel'>;
 
 /** The two images the QR code saves as. */
 export type ReadyPanelQrKind = 'png' | 'svg';
@@ -109,6 +117,7 @@ export function ReadyPanel({
   onDownloadQr,
   onward,
   invite,
+  qrStyle,
 }: ReadyPanelProps) {
   const isShare = variant === 'share';
   const titleId = useId();
@@ -232,7 +241,7 @@ export function ReadyPanel({
           {/* The code on a light tile of its own, its download right under it, so the code and its file are one thing. */}
           <div className={styles.code}>
             <div className={styles.tile} data-theme="light">
-              <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" ground="clear" />
+              <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" ground="clear" {...qrStyle} />
             </div>
             {onDownloadQr !== undefined && (
               <MenuTrigger>

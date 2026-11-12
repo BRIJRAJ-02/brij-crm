@@ -6,12 +6,11 @@
 // to share while the page is Private: then one line and Turn on Live (spec 0058, AC-23). Insights (spec 0061) sit
 // under the card once the page holds something.
 import type { LinkPageStore, ProfileItem } from '@crm/data';
-import { Button, ButtonGroup, Card, EmptyState, QrCode, SpotIllustration } from '@crm/ui';
+import { Button, ButtonGroup, Card, downloadQr, EmptyState, QrCode, SpotIllustration } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { Insights } from './Insights.tsx';
 import { drawnQrStyle, useQrStyle } from './ShareTools.tsx';
-import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
 import { strings } from './strings.ts';
 import { teamStrings } from './team-strings.ts';
@@ -75,8 +74,8 @@ export function LinkPageOverview({
     const svg = codeRef.current;
     if (svg === null || isSaving) return;
     setSaving(true);
-    qrPng(svg)
-      .then((png) => saveFile(png, `${handle}-link-page.png`))
+    // Saved as the share sheet saves it (spec 0074, AC-7402): the code as drawn, named after the handle.
+    downloadQr(svg, shareStrings.name(handle), 'png')
       .catch(() => toasts.toast({ tone: 'danger', message: shareStrings.downloadFailed }))
       .finally(() => setSaving(false));
   };

@@ -1,8 +1,8 @@
 // Team pages' QR codes (spec 0070, AC-7003): one page's code as PNG or SVG, and every page's as one zip, made in the
 // browser from the codes the library's QrCode drew (no request). Each code is the plain one, dark on light, and encodes
 // the page's address alone (`https://timefix.com/<handle>`), so it keeps working whatever the page's look becomes.
+import { qrPng, qrSvg } from '@crm/ui';
 import { writeZip, type ZipEntry } from '@crm/contracts/zip';
-import { qrPng, qrSvg } from './qr-png.ts';
 import { teamStrings } from './team-strings.ts';
 
 /** How many pixels a side a downloaded code is: the link page's own Download size. */

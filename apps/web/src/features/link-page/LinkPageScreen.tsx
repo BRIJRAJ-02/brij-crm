@@ -85,10 +85,14 @@ import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { TimefixLoginCard } from './TimefixLoginCard.tsx';
 import { LiveSwitch, useLinkPageLive, useWalletLink, type LinkPageLive } from './private-page.tsx';
-import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
+import { lazyShareSheet } from '../share/LazyShareSheet.tsx';
+import { shareStrings } from './share-strings.ts';
 import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
 import { teamStrings } from './team-strings.ts';
+
+/** The share sheet, loaded apart from this screen's first paint (spec 0074, AC-7419). */
+const { ShareSheet, usePreload: usePreloadSheet } = lazyShareSheet(() => import('../share/share-sheet.ts'));
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
@@ -331,9 +335,10 @@ export function LinkPageScreen({
 /**
  * The header's actions, the one place a link page is shared from (owner, 5 November 2026, after Linktree's bar): the
  * one Live or Private switch (spec 0058, AC-23), then, once Live, the page's address as a pill that copies it in one
- * press, and Share, which opens the one Share modal (the QR and Download, Open, Links for each place, Style the code
- * and Add to Wallet). Sharing never changes whether the page is live: the switch is the one place that does, and the
- * modal says when the page is private.
+ * press, and Share, which opens the library's one share sheet (spec 0074, AC-7404: the code in the saved style with
+ * Download, Copy link, Email, WhatsApp, More, then Open page, Links for each place, Style the code and Add to Wallet).
+ * Sharing never changes whether the page is live: the switch is the one place that does, and the sheet says when the
+ * page is private.
  */
 export function HeaderActions({
   data,
@@ -369,6 +374,7 @@ export function HeaderActions({
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
   const [isMarking, setMarking] = useState(false);
+  usePreloadSheet();
   const [isStyling, setStyling] = useState(false);
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   // The Wallet pass is read once Share has opened, not on every visit to the page. Inside a partner's frame it is
@@ -427,26 +433,64 @@ export function HeaderActions({
           {strings.doneEditing}
         </Button>
       )}
-      <ShareLinkPageModal
-        address={address}
-        handle={handle}
-        workspaceName={workspaceName}
-        isPublic={live.isLive}
-        onGoLive={() => live.setLive(true)}
-        qrStyle={qrStyle}
-        onShareLinks={() => {
-          // One dialog at a time: Share steps aside for the links, rather than stacking two scrims.
-          setSharing(false);
-          setMarking(true);
-        }}
-        onStyle={() => {
-          setSharing(false);
-          setStyling(true);
-        }}
-        // Offered once: in the bar inside a partner's frame, in Share everywhere else.
-        {...(wallet === undefined || hasWalletInBar ? {} : { wallet })}
+      <ShareSheet
+        title={shareStrings.title}
         isOpen={isSharing}
-        onClose={() => setSharing(false)}
+        onOpenChange={setSharing}
+        url={address}
+        // The handle names the page everywhere it is passed on: the email's subject, the code's name and its file.
+        name={shareStrings.name(handle)}
+        qrStyle={qrStyle}
+        // Whose page the code opens (spec 0056, AC-5617); a page gone private says so instead (spec 0058, AC-23).
+        {...(!live.isLive
+          ? { description: shareStrings.privateLine }
+          : workspaceName === undefined
+            ? {}
+            : { description: shareStrings.inWorkspace(workspaceName) })}
+        extra={
+          <>
+            {!live.isLive && (
+              // The Live switch itself is behind the sheet's scrim, so its on is offered here.
+              <Button variant="ghost" icon="globe" onPress={() => live.setLive(true)}>
+                {shareStrings.goLive}
+              </Button>
+            )}
+            <ButtonLink variant="ghost" href={address} isExternal icon="external-link">
+              {shareStrings.open}
+            </ButtonLink>
+            {live.isLive && (
+              <>
+                <Button
+                  variant="ghost"
+                  icon="link"
+                  onPress={() => {
+                    // One dialog at a time: Share steps aside for the links, rather than stacking two scrims.
+                    setSharing(false);
+                    setMarking(true);
+                  }}
+                >
+                  {reachStrings.shareLinksOpen}
+                </Button>
+                <Button
+                  variant="ghost"
+                  icon="palette"
+                  onPress={() => {
+                    setSharing(false);
+                    setStyling(true);
+                  }}
+                >
+                  {reachStrings.qrStyle}
+                </Button>
+                {/* Offered once: in the bar inside a partner's frame, in Share everywhere else. */}
+                {wallet !== undefined && !hasWalletInBar && (
+                  <ButtonLink variant="ghost" href={wallet} isExternal icon="wallet">
+                    {homeStrings.addToWallet}
+                  </ButtonLink>
+                )}
+              </>
+            )}
+          </>
+        }
       />
       <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
       <QrStyleModal

@@ -262,6 +262,24 @@ describe('the Menus editor', () => {
     await expect.element(review.getByRole('button', { name: 'Publish & go live' })).toBeDisabled();
   });
 
+  it('ends a first publish on the share sheet: "Your menu is live", with the link and its code (spec 0074, AC-7405)', async () => {
+    const { store, calls } = storeOf(DRAFT);
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
+    const review = page.getByRole('dialog', { name: 'Review and publish' });
+    await userEvent.click(review.getByRole('button', { name: 'Publish & go live' }));
+    await expect.poll(() => calls.includes('publish')).toBe(true);
+    const sheet = page.getByRole('dialog', { name: 'Your menu is live' });
+    await expect.element(sheet.getByRole('img', { name: 'QR code for Soho menu' })).toBeInTheDocument();
+    await expect
+      .element(sheet.getByRole('link', { name: 'WhatsApp' }))
+      .toHaveAttribute('href', expect.stringContaining(encodeURIComponent('Our menu:')));
+    await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
+  });
+
   it('publishes drafts from the split button at once, its chevron sharing, and keeps Discard and Delete in ⋯', async () => {
     await page.viewport(1280, 900);
     const live: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z' };
@@ -275,8 +293,16 @@ describe('the Menus editor', () => {
     await expect.poll(() => calls.includes('publish')).toBe(true);
     await userEvent.click(page.getByRole('button', { name: 'Share menu' }));
     await expect.element(page.getByRole('menuitem', { name: 'Open in new tab' })).toBeVisible();
-    await expect.element(page.getByRole('menuitem', { name: 'Show QR code' })).toBeVisible();
-    await userEvent.keyboard('{Escape}');
+    // Share opens the one share sheet (spec 0074, AC-7405): the link and its code, Open guest menu among its ways.
+    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share your menu' });
+    await expect.element(sheet.getByRole('img', { name: 'QR code for Soho menu' })).toBeInTheDocument();
+    await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    await expect
+      .element(sheet.getByRole('link', { name: 'Open guest menu' }))
+      .toHaveAttribute('href', expect.stringContaining('/m/AbCdEfGhIjKlMnOp'));
+    await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+    await expect.poll(() => document.querySelector('[role="dialog"]')).toBeNull();
     await userEvent.click(page.getByRole('button', { name: 'More', exact: true }));
     await expect.element(page.getByRole('menuitem', { name: 'Discard changes' })).toBeVisible();
     await expect.element(page.getByRole('menuitem', { name: 'Delete menu' })).toBeVisible();

@@ -17,6 +17,9 @@ import {
   FieldGroup,
   Modal,
   QrCode,
+  qrPng,
+  qrSvg,
+  saveFile,
   Separator,
   Skeleton,
   type AccentQuickPick,
@@ -24,7 +27,6 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { heldPicture, PictureField, type HeldPicture } from './block-extras.tsx';
-import { qrPng, qrSvg, saveFile } from './qr-png.ts';
 import { reachStrings as words } from './reach-strings.ts';
 
 /** The places a ready link is offered for (AC-6125): each one's `utm_source` and `utm_medium`. */

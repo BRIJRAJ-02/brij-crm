@@ -1,15 +1,20 @@
 // Brief
-// Purpose: Review and publish (checklabs' first publish sheet and its "You're live" QR dialog, in one): what still
-// keeps the menu from guests, each with Fix, then Publish & go live; once live, the link and its QR code to share
-// (also what the split Publish's Show QR code opens).
+// Purpose: Review and publish (checklabs' first publish sheet): what still keeps the menu from guests, each with Fix,
+// then Publish & go live; once live, the library's ShareSheet with the link and its QR code (spec 0074, AC-7405),
+// which the split Publish's Share opens too.
 // Main task: publish a menu guests can use, then share it.
 // Leaves out: a QR code per table (H2, the Menu QR app) and choosing only some changes (everything publishes at once).
 import type { MenuDraft, MenuPlace, MenuStore } from '@crm/data';
-import { Button, ButtonLink, Callout, CopyButton, Modal, QrCode, SetupChecklist } from '@crm/ui';
+import { Button, ButtonLink, Callout, Modal, SetupChecklist } from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { publicMenuUrl } from '../booking/links.ts';
+import { lazyShareSheet } from '../share/LazyShareSheet.tsx';
 import { goingLive, homelessMenus, unpricedDishes, type publishBlocker } from './preview.ts';
 import { strings } from './strings.ts';
+
+/** The share sheet, loaded apart from this screen's first paint (spec 0074, AC-7419). */
+const { ShareSheet, usePreload: usePreloadSheet } = lazyShareSheet(() => import('../share/share-sheet.ts'));
 
 /** Where a Fix takes the person. */
 export type PublishFix =
@@ -36,14 +41,17 @@ export function PublishDialog({
   readonly place?: MenuPlace;
   readonly hasHours: boolean;
   readonly blocker: ReturnType<typeof publishBlocker>;
-  /** `live` opens on the link and its code (Show QR code); `review` (the default) on the checks. */
+  /** `live` opens on the share sheet (Share); `review` (the default) on the checks. */
   readonly startsOn?: 'review' | 'live';
   readonly onClose: () => void;
   readonly onFix: (fix: PublishFix) => void;
 }) {
+  const { toasts } = useRouteContext({ from: '__root__' });
+  // The review stage loads the sheet's code while the person reads it, so the live sheet follows at once.
+  usePreloadSheet();
   const isLive = draft.publishedAt !== undefined;
-  // Show QR code, or a live menu with nothing new, opens on the link.
-  const [stage, setStage] = useState<'review' | 'live'>(
+  // Share, or a live menu with nothing new, opens on the share sheet; a publish just now says it is live.
+  const [stage, setStage] = useState<'review' | 'live' | 'published'>(
     (startsOn === 'live' && isLive) || (isLive && draft.changes === 0) ? 'live' : 'review',
   );
   const [isPublishing, setPublishing] = useState(false);
@@ -93,85 +101,86 @@ export function PublishDialog({
       setRefusal(refused.message);
       return;
     }
-    setStage('live');
+    // With no place there is no address to share: the publish says it in a toast instead (AC-7405).
+    if (link === undefined) {
+      toasts.toast({ tone: 'success', message: strings.liveTitle });
+      onClose();
+      return;
+    }
+    setStage('published');
   };
+
+  if (stage !== 'review') {
+    if (link === undefined || place === undefined) return null;
+    const name = strings.shareName(place.name);
+    return (
+      <ShareSheet
+        isOpen
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onClose();
+        }}
+        title={stage === 'published' ? strings.liveTitle : strings.shareTitle}
+        url={link}
+        name={name}
+        invite={strings.shareInvite}
+        extra={
+          <ButtonLink variant="ghost" href={link} isExternal icon="external-link">
+            {strings.openGuest}
+          </ButtonLink>
+        }
+      />
+    );
+  }
 
   return (
     <Modal
       variant="form"
-      title={stage === 'live' ? strings.liveTitle : strings.reviewTitle}
+      title={strings.reviewTitle}
       isOpen
       isBusy={isPublishing}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
       actions={
-        stage === 'live' ? (
-          <>
-            {link === undefined ? null : (
-              <ButtonLink href={link} isExternal icon="external-link">
-                {strings.openGuest}
-              </ButtonLink>
-            )}
-            <Button variant="primary" slot="close">
-              {strings.done}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button slot="close" isDisabled={isPublishing}>
-              {strings.keepEditing}
-            </Button>
-            <Button
-              variant="primary"
-              isPending={isPublishing}
-              isDisabled={blocker !== undefined || (isLive && draft.changes === 0)}
-              onPress={() => void publish()}
-            >
-              {isLive ? strings.publishNow : strings.publishGoLive}
-            </Button>
-          </>
-        )
+        <>
+          <Button slot="close" isDisabled={isPublishing}>
+            {strings.keepEditing}
+          </Button>
+          <Button
+            variant="primary"
+            isPending={isPublishing}
+            isDisabled={blocker !== undefined || (isLive && draft.changes === 0)}
+            onPress={() => void publish()}
+          >
+            {isLive ? strings.publishNow : strings.publishGoLive}
+          </Button>
+        </>
       }
     >
-      {stage === 'live' ? (
-        <>
-          {strings.liveLine}
-          {link === undefined ? null : (
-            <>
-              <Callout tone="info" actions={<CopyButton value={link} label={strings.copyLink} />}>
-                {link}
-              </Callout>
-              <QrCode value={link} label={strings.qrLabel(place?.name ?? '')} size="md" />
-            </>
-          )}
-        </>
-      ) : (
-        <>
-          {isReady ? strings.readyLine : strings.reviewLine}
-          {isReady ? (
-            // Every check passes: say what goes live, keeping the count of changes in view (UX review must-fix 4).
-            <Callout
-              tone="success"
-              title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
-            >
-              {strings.goesLive(live)}
-            </Callout>
-          ) : (
-            <SetupChecklist
-              title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
-              steps={checks}
-              onAction={(id) => {
-                if (id === 'hours') onFix({ kind: 'hours' });
-                else if (id === 'dishes') onFix({ kind: 'dishes' });
-                else if (id === 'prices' && unpriced[0] !== undefined) onFix({ kind: 'item', itemId: unpriced[0].id });
-                else if (id === 'places' && homeless[0] !== undefined) onFix({ kind: 'menu', menuId: homeless[0].id });
-              }}
-            />
-          )}
-          {refusal === undefined ? null : <Callout tone="danger">{refusal}</Callout>}
-        </>
-      )}
+      <>
+        {isReady ? strings.readyLine : strings.reviewLine}
+        {isReady ? (
+          // Every check passes: say what goes live, keeping the count of changes in view (UX review must-fix 4).
+          <Callout
+            tone="success"
+            title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
+          >
+            {strings.goesLive(live)}
+          </Callout>
+        ) : (
+          <SetupChecklist
+            title={isLive && draft.changes === 0 ? strings.nothingToPublish : strings.changes(draft.changes)}
+            steps={checks}
+            onAction={(id) => {
+              if (id === 'hours') onFix({ kind: 'hours' });
+              else if (id === 'dishes') onFix({ kind: 'dishes' });
+              else if (id === 'prices' && unpriced[0] !== undefined) onFix({ kind: 'item', itemId: unpriced[0].id });
+              else if (id === 'places' && homeless[0] !== undefined) onFix({ kind: 'menu', menuId: homeless[0].id });
+            }}
+          />
+        )}
+        {refusal === undefined ? null : <Callout tone="danger">{refusal}</Callout>}
+      </>
     </Modal>
   );
 }
