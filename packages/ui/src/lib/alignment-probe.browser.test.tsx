@@ -7,6 +7,7 @@ import { assertAligned, probeAlignment } from './alignment-probe.ts';
 function mount(html: string): HTMLElement {
   const host = document.createElement('div');
   host.id = 'fixture';
+  // eslint-disable-next-line no-restricted-syntax -- a test fixture built from the test's own literal markup, never user input
   host.innerHTML = html;
   document.body.append(host);
   return host;

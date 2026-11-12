@@ -22,6 +22,14 @@
     animation: words-in var(--duration-fast) var(--ease-in-out) var(--duration-quick) backwards;
   }
 
+  .root[data-align='end'] {
+    justify-items: end;
+  }
+
+  .root[data-align='center'] {
+    justify-items: center;
+  }
+
   @keyframes words-out {
     to {
       opacity: 0;
@@ -55,6 +63,27 @@
 
     .words[data-arriving] {
       animation: words-fade-in var(--duration-fast) var(--ease-in-out) backwards;
+    }
+  }
+
+  /* soft (spec 0073, AC-7310, transitions.dev's text swap soft): both values cross fade in one cell at once, with no
+     movement, so a figure recomputed in place never seems to jump. */
+  .root[data-variant='soft'] > .words[data-leaving] {
+    animation: words-fade-out var(--duration-quick) var(--ease-in-out) forwards;
+  }
+
+  .root[data-variant='soft'] > .words[data-arriving] {
+    animation: words-fade-in var(--duration-quick) var(--ease-in-out) backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* A soft swap is simply the new value. */
+    .root[data-variant='soft'] > .words[data-leaving] {
+      display: none;
+    }
+
+    .root[data-variant='soft'] > .words[data-arriving] {
+      animation: none;
     }
   }
 }

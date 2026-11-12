@@ -27,6 +27,10 @@ need it too. One part keeps every swap the same.
 - Screen readers read the current words only (the leaving ones are hidden); whoever shows it decides whether a change
   is announced.
 
+## Soft
+
+`variant="soft"` (spec 0073, AC-7310, the prototype's SoftText): both values cross fade in one cell at once over `duration-quick`, with no movement, for a value recomputed where it stands (a total after a period change, a price after a currency change, a relative time ticking over). `align="end"` keeps a right aligned figure on its edge, `center` a centred one. Reduced motion shows the new value at once. Why a variant: it is the same swap in one cell, timed differently, and one part keeps every word change in one place. The prototype's TextMorph maps to the default swap (spec 0073: fewer kinds of motion). Story: `Soft`.
+
 ## States
 
 Still (the first value), swapping, and reduced motion (a plain crossfade, no movement). No blur: the artifact has no blur token yet.

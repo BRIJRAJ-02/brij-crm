@@ -137,6 +137,13 @@ export interface ModalProps {
    * "I've saved these" is ticked); never for an ordinary form, which Esc should always be able to leave.
    */
   readonly isClosable?: boolean;
+  /**
+   * The form inside holds changes not yet saved (spec 0073, AC-7307: the prototype's Drawer guard). While true, a
+   * close asked by the close button, Esc, a `slot="close"` button or a click outside opens the house confirm,
+   * "Discard your unsaved changes?", and only Discard changes closes; Keep editing (or Esc) puts focus back in the
+   * form. Needs `isOpen` and `onOpenChange`, since it answers the close itself.
+   */
+  readonly isDirty?: boolean;
   /** For a Modal opened without a ModalTrigger. */
   readonly isOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
@@ -212,9 +219,19 @@ export function Modal({
   isDismissable = true,
   isBusy = false,
   isClosable = true,
+  isDirty = false,
   isOpen,
   onOpenChange,
 }: ModalProps) {
+  // A close asked while the form holds unsaved changes waits for the discard confirm's answer.
+  const [isAskingToDiscard, setAskingToDiscard] = useState(false);
+  const answerOpenChange =
+    onOpenChange === undefined
+      ? undefined
+      : (open: boolean) => {
+          if (!open && isDirty) setAskingToDiscard(true);
+          else onOpenChange(open);
+        };
   const { isFocusVisible } = useFocusVisible();
   // Toasts rise above this footer when they would cover it: a drawer's or a sheet's Save at the window's foot.
   const keepToastsOff = useToastClearance();
@@ -314,111 +331,136 @@ export function Modal({
   );
   usePressOnKey(foot);
   return (
-    <ModalOverlay
-      className={styles.scrim}
-      data-variant={variant}
-      data-alert={isAlert || undefined}
-      // A form holding input dims the page fully, as an alert does: it is waiting on an answer, not a glance.
-      data-holds-input={(!isDismissable && !isAlert) || undefined}
-      isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
-      isKeyboardDismissDisabled={isBusy || !isClosable}
-      data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
-      {...(isOpen === undefined ? {} : { isOpen })}
-      {...(onOpenChange === undefined ? {} : { onOpenChange })}
-    >
-      <AriaModal
-        className={styles.root}
+    <>
+      <ModalOverlay
+        className={styles.scrim}
         data-variant={variant}
-        data-wide={isWide && variant === 'window' ? '' : undefined}
-        data-aside={variant === 'window' && aside !== undefined ? '' : undefined}
+        data-alert={isAlert || undefined}
+        // A form holding input dims the page fully, as an alert does: it is waiting on an answer, not a glance.
+        data-holds-input={(!isDismissable && !isAlert) || undefined}
+        isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
+        isKeyboardDismissDisabled={isBusy || !isClosable}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
+        {...(isOpen === undefined ? {} : { isOpen })}
+        {...(answerOpenChange === undefined ? {} : { onOpenChange: answerOpenChange })}
       >
-        <Dialog
-          className={styles.dialog}
-          role={isAlert ? 'alertdialog' : 'dialog'}
-          {...(hasDescription
-            ? { 'aria-describedby': descriptionId }
-            : isAlert && hasBody
-              ? { 'aria-describedby': bodyId }
-              : {})}
+        <AriaModal
+          className={styles.root}
+          data-variant={variant}
+          data-wide={isWide && variant === 'window' ? '' : undefined}
+          data-aside={variant === 'window' && aside !== undefined ? '' : undefined}
+          data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
         >
-          {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
+          <Dialog
+            className={styles.dialog}
+            role={isAlert ? 'alertdialog' : 'dialog'}
+            {...(hasDescription
+              ? { 'aria-describedby': descriptionId }
+              : isAlert && hasBody
+                ? { 'aria-describedby': bodyId }
+                : {})}
+          >
+            {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
               contentinfo landmark beside the page's own. */}
-          {!isConfirm && (
-            <div className={styles.head}>
-              {isAlert ? (
-                <span className={styles.alert}>
-                  <Icon name="triangle-alert" size="md" />
-                </span>
-              ) : (
-                icon !== undefined && variant !== 'peek' && <Icon name={icon} size="sm" tone="muted" />
-              )}
-              {isTitleHidden ? (
-                <VisuallyHidden>
-                  <Heading slot="title">{title}</Heading>
-                </VisuallyHidden>
-              ) : (
-                <Heading slot="title" className={styles.title}>
-                  {title}
-                </Heading>
-              )}
-              {context !== undefined && <span className={styles.context}>{context}</span>}
-              {/* Every dialog but the palette and an alert has the close button in its title bar, unless it keeps the
-                person until they answer (isClosable false). */}
-              {variant !== 'palette' &&
-                !isAlert &&
-                (isClosable || status !== undefined || headerActions !== undefined) && (
-                  <span className={styles.close}>
-                    {status !== undefined && (
-                      <span className={styles.status} role="status" aria-live="polite">
-                        {status}
-                      </span>
-                    )}
-                    {headerActions}
-                    {isClosable &&
-                      (variant === 'sheet-card' || variant === 'sheet-side' ? (
-                        // A guest's sheet: round, filling its 36px disc, pressed across 44px.
-                        <Button
-                          slot="close"
-                          variant="ghost"
-                          size="lg"
-                          icon="x"
-                          label={strings.close}
-                          isRound
-                          touchTarget={TOUCH_TARGET}
-                          isDisabled={isBusy}
-                        />
-                      ) : (
-                        <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
-                      ))}
+            {!isConfirm && (
+              <div className={styles.head}>
+                {isAlert ? (
+                  <span className={styles.alert}>
+                    <Icon name="triangle-alert" size="md" />
                   </span>
+                ) : (
+                  icon !== undefined && variant !== 'peek' && <Icon name={icon} size="sm" tone="muted" />
                 )}
-            </div>
-          )}
-          {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
-          {/* A window's side pane sits beside the body (the template gallery's preview); without one, the body alone. */}
-          {variant === 'window' && aside !== undefined ? (
-            <div className={styles.panes}>
-              {body}
-              <div className={styles.aside}>
-                <PageEdge value={false}>{aside}</PageEdge>
+                {isTitleHidden ? (
+                  <VisuallyHidden>
+                    <Heading slot="title">{title}</Heading>
+                  </VisuallyHidden>
+                ) : (
+                  <Heading slot="title" className={styles.title}>
+                    {title}
+                  </Heading>
+                )}
+                {context !== undefined && <span className={styles.context}>{context}</span>}
+                {/* Every dialog but the palette and an alert has the close button in its title bar, unless it keeps the
+                person until they answer (isClosable false). */}
+                {variant !== 'palette' &&
+                  !isAlert &&
+                  (isClosable || status !== undefined || headerActions !== undefined) && (
+                    <span className={styles.close}>
+                      {status !== undefined && (
+                        <span className={styles.status} role="status" aria-live="polite">
+                          {status}
+                        </span>
+                      )}
+                      {headerActions}
+                      {isClosable &&
+                        (variant === 'sheet-card' || variant === 'sheet-side' ? (
+                          // A guest's sheet: round, filling its 36px disc, pressed across 44px.
+                          <Button
+                            slot="close"
+                            variant="ghost"
+                            size="lg"
+                            icon="x"
+                            label={strings.close}
+                            isRound
+                            touchTarget={TOUCH_TARGET}
+                            isDisabled={isBusy}
+                          />
+                        ) : (
+                          <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
+                        ))}
+                    </span>
+                  )}
               </div>
-            </div>
-          ) : (
-            body
-          )}
-          {actions !== undefined && (
-            <div className={styles.foot} ref={footRef}>
-              {footerStart !== undefined ? (
-                <div className={styles.footerStart}>{footerStart}</div>
-              ) : (
-                hint !== undefined && <p className={styles.hint}>{hint}</p>
-              )}
-              <FooterKeysContext value={footerKeys}>{actions}</FooterKeysContext>
-            </div>
-          )}
-        </Dialog>
-      </AriaModal>
-    </ModalOverlay>
+            )}
+            {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
+            {/* A window's side pane sits beside the body (the template gallery's preview); without one, the body alone. */}
+            {variant === 'window' && aside !== undefined ? (
+              <div className={styles.panes}>
+                {body}
+                <div className={styles.aside}>
+                  <PageEdge value={false}>{aside}</PageEdge>
+                </div>
+              </div>
+            ) : (
+              body
+            )}
+            {actions !== undefined && (
+              <div className={styles.foot} ref={footRef}>
+                {footerStart !== undefined ? (
+                  <div className={styles.footerStart}>{footerStart}</div>
+                ) : (
+                  hint !== undefined && <p className={styles.hint}>{hint}</p>
+                )}
+                <FooterKeysContext value={footerKeys}>{actions}</FooterKeysContext>
+              </div>
+            )}
+          </Dialog>
+        </AriaModal>
+      </ModalOverlay>
+      {isDirty && (
+        <Modal
+          title={strings.discardTitle}
+          variant="confirm"
+          tone="danger"
+          isOpen={isAskingToDiscard}
+          onOpenChange={setAskingToDiscard}
+          actions={
+            <>
+              <Button slot="close">{strings.keepEditing}</Button>
+              <Button
+                variant="danger-solid"
+                onPress={() => {
+                  setAskingToDiscard(false);
+                  onOpenChange?.(false);
+                }}
+              >
+                {strings.discardChanges}
+              </Button>
+            </>
+          }
+        />
+      )}
+    </>
   );
 }

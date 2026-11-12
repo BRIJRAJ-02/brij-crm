@@ -83,6 +83,10 @@ describe('screens preset (apps/web)', () => {
       'src/Styled.tsx': 'export function Styled() {\n  return <p className="title">Hi</p>;\n}\n',
       'src/Inline.tsx': "export function Inline() {\n  return <p style={{ '--gap': '1' }}>Hi</p>;\n}\n",
       'src/DefaultExport.tsx': 'export default function Screen() {\n  return <p>Hi</p>;\n}\n',
+      'src/RawHtml.tsx':
+        'export function RawHtml({ html }: { html: string }) {\n  return <p dangerouslySetInnerHTML={{ __html: html }} />;\n}\n',
+      'src/public/raw-html.ts':
+        'export function put(node: HTMLElement, html: string): void {\n  node.innerHTML = html;\n}\n',
       'src/no-extension.ts': "import { greet } from './clean';\nexport const g = greet;\n",
       'src/with-extension.ts': "import { greet } from './clean.ts';\nexport const g = greet;\n",
       'src/Store.ts': 'class Store {\n  readonly count = 0;\n}\nexport const store = new Store();\n',
@@ -192,6 +196,11 @@ describe('screens preset (apps/web)', () => {
       /through @crm\/ui\/public-form or @crm\/ui\/public-booking/,
     );
     expect(rulesFor(messages, 'src/public/fetches.ts')).toContain('no-restricted-globals');
+  });
+
+  it('refuses raw HTML in a screen and in the public bundle (spec 0073, AC-7317)', () => {
+    expect(messagesFor(messages, 'src/RawHtml.tsx').join()).toMatch(/never raw HTML/);
+    expect(messagesFor(messages, 'src/public/raw-html.ts').join()).toMatch(/never raw HTML/);
   });
 
   it('refuses a default export in screen code', () => {
@@ -540,6 +549,12 @@ describe('client preset (packages/data, packages/ui)', () => {
       'src/Indirect.tsx':
         "const look = { color: 'red' };\nexport function Indirect() {\n  return <div style={look} />;\n}\n",
       'src/driver.ts': "import pg from 'pg';\nexport const pool = pg;\n",
+      'src/RawHtml.tsx':
+        'export function RawHtml({ html }: { html: string }) {\n  return <p dangerouslySetInnerHTML={{ __html: html }} />;\n}\n',
+      'src/outer.ts': 'export function put(node: HTMLElement, html: string): void {\n  node.outerHTML = html;\n}\n',
+      'src/adjacent.ts':
+        "export function put(node: HTMLElement, html: string): void {\n  node.insertAdjacentHTML('beforeend', html);\n}\n",
+      'src/text.ts': 'export function put(node: HTMLElement, text: string): void {\n  node.textContent = text;\n}\n',
     });
     messages = await lintWorkspace(root, client({ root }));
   }, 60_000);
@@ -554,6 +569,18 @@ describe('client preset (packages/data, packages/ui)', () => {
 
   it('refuses an inline style passed in from a variable', () => {
     expect(messagesFor(messages, 'src/Indirect.tsx').join()).toMatch(/written as an object literal/);
+  });
+
+  it.each([
+    ['dangerouslySetInnerHTML', 'src/RawHtml.tsx'],
+    ['an outerHTML assignment', 'src/outer.ts'],
+    ['insertAdjacentHTML', 'src/adjacent.ts'],
+  ])('refuses %s in client code (spec 0073, AC-7317)', (_name, file) => {
+    expect(messagesFor(messages, file).join()).toMatch(/never raw HTML/);
+  });
+
+  it('lets client code set text', () => {
+    expect(rulesFor(messages, 'src/text.ts')).not.toContain('no-restricted-syntax');
   });
 
   it('refuses a database driver in client code', () => {

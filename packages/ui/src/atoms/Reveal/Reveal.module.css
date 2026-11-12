@@ -46,9 +46,50 @@
     }
   }
 
+  /* drop (spec 0073, AC-7311, the prototype's DropIn): the row's height opens from nothing while it rises
+     distance-medium, on the smooth out curve. No blur, so the app may use it. */
+  .drop {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: drop-open var(--duration-fast) var(--ease-smooth-out) both;
+  }
+
+  .dropInner {
+    min-block-size: 0;
+    animation: drop-rise var(--duration-fast) var(--ease-smooth-out) both;
+  }
+
+  .drop[data-opening] > .dropInner {
+    overflow: hidden;
+  }
+
+  .drop[data-still],
+  .drop[data-still] > .dropInner {
+    animation: none;
+  }
+
+  @keyframes drop-open {
+    from {
+      grid-template-rows: 0fr;
+    }
+  }
+
+  @keyframes drop-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--distance-medium);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .root {
+    .root,
+    .drop,
+    .dropInner {
       animation: none;
+    }
+
+    .drop[data-opening] > .dropInner {
+      overflow: visible;
     }
   }
 }

@@ -221,6 +221,23 @@ const syntax = {
       message: "Inline styles may only set CSS custom properties ('--name'). Raw values belong in tokens.",
     },
   ],
+  // Spec 0073, AC-7317: no untrusted HTML reaches the page. A part that must render HTML disables this on that line,
+  // names its sanitiser in the comment, and tests that a script, an event handler attribute and a javascript: link
+  // are removed.
+  htmlInjection: [
+    {
+      selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+      message: 'Render text, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      selector: 'AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML)$/]',
+      message: 'Set textContent, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      selector: "CallExpression > MemberExpression.callee[property.name='insertAdjacentHTML']",
+      message: 'Insert nodes, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+  ],
   screenStyling: {
     selector: 'JSXAttribute[name.name=/^(style|className)$/]',
     message: 'Screens are built only from library components. Styling lives in packages/ui; add a variant there.',
@@ -437,7 +454,13 @@ export function server({ root, databaseDriver = false, loadHarness = false, vend
  * }} options
  */
 export function client({ root, library = false, collaboration: allowCollaboration = false, vendorWrappers = [] }) {
-  const entries = [syntax.defaultExport, ...syntax.classes, ...syntax.extensions, ...syntax.inlineStyle];
+  const entries = [
+    syntax.defaultExport,
+    ...syntax.classes,
+    ...syntax.extensions,
+    ...syntax.inlineStyle,
+    ...syntax.htmlInjection,
+  ];
   return defineConfig(
     base(root, { uiLibraries: library, collaboration: library || allowCollaboration }),
     react,
@@ -499,7 +522,13 @@ export function screens({ root, vendorWrappers = [] }) {
         ],
       },
     },
-    restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
+    restrictSyntax([
+      syntax.defaultExport,
+      ...syntax.classes,
+      ...syntax.extensions,
+      syntax.screenStyling,
+      ...syntax.htmlInjection,
+    ]),
     // The public pages' bundle (specs 0023 and 0025, `src/public/**`): the hosted form and the booking pages draw
     // with the library through its public entries (`@crm/ui/public-form`, `@crm/ui/public-booking`), never the
     // whole of `@crm/ui`, so the CRM's field editors and the app shell stay out of a visitor's download.
@@ -529,7 +558,15 @@ export function screens({ root, vendorWrappers = [] }) {
     },
     {
       files: PUBLIC_BUNDLE,
-      rules: { 'no-restricted-syntax': ['error', syntax.defaultExport, ...syntax.classes, ...syntax.extensions] },
+      rules: {
+        'no-restricted-syntax': [
+          'error',
+          syntax.defaultExport,
+          ...syntax.classes,
+          ...syntax.extensions,
+          ...syntax.htmlInjection,
+        ],
+      },
     },
     // Files in public/ ship as is, and embed/ ships minified (the embed script): plain browser scripts, outside any tsconfig.
     { files: ['public/**/*.js', 'embed/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },

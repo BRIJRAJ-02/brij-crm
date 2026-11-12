@@ -972,3 +972,79 @@ export const AlertNoPressKey: Story = {
     await expect(within(dialog).getByRole('button', { name: 'Remove' })).not.toHaveAttribute('aria-keyshortcuts');
   },
 };
+
+/** A drawer holding typed changes (`isDirty`, spec 0073): Esc asks before throwing them away; Discard changes closes. */
+export const DirtyDrawer: Story = {
+  args: { onOpenChange: fn() },
+  render: function DirtyDrawer(args) {
+    const [isOpen, setOpen] = useState(true);
+    const [name, setName] = useState('Haircut');
+    return (
+      <Stage>
+        <Button onPress={() => setOpen(true)}>Edit service</Button>
+        <Modal
+          title="Edit service"
+          variant="drawer"
+          isOpen={isOpen}
+          isDirty={name !== 'Haircut'}
+          onOpenChange={(open) => {
+            setOpen(open);
+            args.onOpenChange?.(open);
+          }}
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary">Save</Button>
+            </>
+          }
+        >
+          <Field label="Name" value={name} onChange={setName} />
+        </Modal>
+      </Stage>
+    );
+  },
+  play: async ({ args, userEvent }) => {
+    const drawer = await openDialog();
+    const field = within(drawer as HTMLElement).getByRole('textbox', { name: 'Name' });
+    await userEvent.click(field);
+    await userEvent.keyboard(' and beard');
+    await userEvent.keyboard('{Escape}');
+    const ask = await waitFor(() => within(document.body).getByRole('alertdialog'));
+    await expect(ask).toHaveAccessibleName('Discard your unsaved changes?');
+    await expect(args.onOpenChange).not.toHaveBeenCalled();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    await waitFor(() => expect(field).toHaveFocus());
+    await userEvent.click(within(drawer as HTMLElement).getByRole('button', { name: 'Cancel' }));
+    const again = await waitFor(() => within(document.body).getByRole('alertdialog'));
+    await userEvent.click(within(again).getByRole('button', { name: 'Discard changes' }));
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  },
+};
+
+/** The same drawer with nothing changed: Esc closes it at once, with no question. */
+export const CleanDrawer: Story = {
+  args: { onOpenChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <Modal
+        title="Edit service"
+        variant="drawer"
+        isOpen
+        isDirty={false}
+        {...(args.onOpenChange === undefined ? {} : { onOpenChange: args.onOpenChange })}
+        actions={<Button slot="close">Done</Button>}
+      >
+        <Field label="Name" defaultValue="Haircut" />
+      </Modal>
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    await openDialog();
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+    await expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  },
+};

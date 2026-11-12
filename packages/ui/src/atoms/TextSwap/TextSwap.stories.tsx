@@ -55,3 +55,24 @@ export const InAButton: Story = {
     await expect(canvas.getByRole('button', { name: 'Published' })).toBeInTheDocument();
   },
 };
+
+/** `soft`: a figure recomputed in place cross fades where it stands, its end edge kept (a total after a new period). */
+export const Soft: Story = {
+  render: function Soft() {
+    const [isMonth, setMonth] = useState(false);
+    return (
+      <Stage>
+        <TextSwap variant="soft" align="end">
+          {isMonth ? '$48,210' : '$1,320'}
+        </TextSwap>
+        <Button onPress={() => setMonth((was) => !was)}>Change period</Button>
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Change period' }));
+    await expect(canvas.getByText('$48,210')).toBeInTheDocument();
+    const root = canvasElement.querySelector('[data-variant="soft"]');
+    await expect(root).toHaveAttribute('data-align', 'end');
+  },
+};

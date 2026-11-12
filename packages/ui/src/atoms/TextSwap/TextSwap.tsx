@@ -5,6 +5,15 @@ import styles from './TextSwap.module.css';
 export interface TextSwapProps {
   /** The words it shows ("Publish", then "Published"). A change plays the swap; the first value is simply there. */
   readonly children: string;
+  /**
+   * `rise` (the default): the old words rise out, then the new rise in, for a label that changes state (Publish to
+   * Published). `soft` (spec 0073, AC-7310, the prototype's SoftText): both cross fade in place at once with no
+   * movement, for a value recomputed where it stands (a total after a period change, a price after a currency
+   * change, a relative time ticking over).
+   */
+  readonly variant?: 'rise' | 'soft';
+  /** Which edge the words keep while the wider one sets the width: `end` for a right aligned figure. */
+  readonly align?: 'start' | 'end' | 'center';
 }
 
 /**
@@ -13,7 +22,7 @@ export interface TextSwapProps {
  * nothing beside them jumps mid swap. Screen readers read the current words only; reduced motion crossfades in place.
  * Inside a Button use the Button's `animateLabel`, which draws its label through this.
  */
-export function TextSwap({ children }: TextSwapProps) {
+export function TextSwap({ children, variant = 'rise', align = 'start' }: TextSwapProps) {
   // The words on show, the ones leaving (until their exit ends), and a count of swaps so each arrival mounts afresh.
   const [state, setState] = useState<{ readonly now: string; readonly gone?: string; readonly round: number }>({
     now: children,
@@ -31,7 +40,11 @@ export function TextSwap({ children }: TextSwapProps) {
     return () => globalThis.clearTimeout(timer);
   }, [state.gone, state.round]);
   return (
-    <span className={styles.root}>
+    <span
+      className={styles.root}
+      data-variant={variant === 'soft' ? 'soft' : undefined}
+      data-align={align === 'start' ? undefined : align}
+    >
       {state.gone === undefined ? null : (
         <span
           key={`gone-${String(state.round)}`}
