@@ -15,9 +15,9 @@ Ported from the design system artifact's Kbd card. Buttons, menu items and the c
 
 - Put it inside the control it triggers (Quick actions ⌘K, Cancel ESC, primary ⌘↵), after the label. Button does this for you through its `kbd` prop.
 - Use the symbols ⌘ ⇧ ⌥ ↵. Don't spell out "Cmd+Enter".
-- `tone`: `raised` (the default) has a hairline edge and the flat control shadow (`shadow-control`), for a shortcut on its own; `soft` is grey and flat, inside buttons and menu items; `onAccent` is edged in `on-accent-kbd` on a primary button, with its text on the accent itself; `onInverse` is edged in `border-inverse` (3.9:1) inside a Tooltip, its text `on-inverse` (17:1 light, 15:1 dark), for "Search ⌘K" (30 October 2026).
+- `tone`: `raised` (the default) has a hairline edge on the surface, for a shortcut on its own; `soft` is grey and flat, inside buttons and menu items; `onAccent` (inside an ink or red button) and `onInverse` (inside a Tooltip, "Search ⌘K") are clear, in the label's own colour, edged with 30% of that colour (spec 0072).
 - Inside a control, hide the caps from screen readers and give the control `aria-keyshortcuts` instead (`keyShortcuts()` in `shortcuts.ts` turns `⌘↵` into `Meta+Enter`). Button does both for you.
-- Its height and minimum width are `size-kbd` (16px).
+- Its height and minimum width are `space-20` (20, the prototype's keycap; 18 in the app); inside a tooltip 18.
 
 ## States
 
@@ -30,7 +30,7 @@ It is a label, not a control, so it takes no focus.
 ## Differences from the artifact
 
 - `tone` replaces the artifact's `soft` flag and the primary button's CSS override, so no other component styles its insides.
-- The `onAccent` cap is edged rather than filled: on-accent text on the `on-accent-kbd` fill measured 3.3:1, under the 4.5:1 rule; on the accent itself it holds 4.6:1.
+- The `onAccent` cap is edged rather than filled: its words sit on the button's own fill, which already holds them at 4.5:1 or more.
 - The text is `children: string`, one keycap. Several keycaps are several Kbds (Button's `kbd` takes a list).
 - Platform aware keys (⌘ on Mac, Ctrl elsewhere) arrive with the full Kbd in milestone 2.
 

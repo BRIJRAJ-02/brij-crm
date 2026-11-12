@@ -28,7 +28,7 @@
   /* Cards: a grid two wide down to a phone, each choice a bordered box the whole of which picks it. */
   .choices[data-variant='cards'] {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--size-menu), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--size-menu) + var(--space-32) + var(--space-8)), 1fr));
     gap: var(--space-8);
   }
 
@@ -157,8 +157,9 @@
     display: none;
   }
 
+  /* The edge is accent-text, as a checked box's is, so it reads on any surface in both themes. */
   .radio[data-selected] .circle {
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     background: var(--accent);
   }
 

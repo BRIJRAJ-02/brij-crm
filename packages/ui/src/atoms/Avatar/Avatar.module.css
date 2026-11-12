@@ -169,10 +169,10 @@
   }
 
   .stack > * {
-    outline: var(--border-width-focus) solid var(--surface);
+    outline: var(--border-width-thick) solid var(--surface);
   }
 
-  .root + :is(.root, .more) {
+  .stack > :not(:first-child) {
     margin-inline-start: calc(var(--avatar) * -0.22);
   }
 

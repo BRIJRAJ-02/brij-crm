@@ -52,3 +52,5 @@ Tab enters the group at the chosen choice; arrow keys move and choose; Tab leave
 Folded into the prototype's Checkbox (spec 0072): 18px circles with a 1.5px `control-border` edge; the chosen one fills with the accent and an 8px dot scales in over `--duration-quick`. A horizontal group sits 24px apart.
 
 **Differences from the prototype**: the card, letter and row variants (public forms, the guest menu) are the library's own and keep their look, with the outline focus ring.
+
+**Repeats from its replacer** (spec 0072, AC-4): the 18px control, its 1.5px edge and the checked fill, as Checkbox's box draws them; they leave with this export.

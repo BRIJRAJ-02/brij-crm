@@ -38,3 +38,5 @@ Tab reaches it; Enter follows it.
 Folded into the prototype's RecordChip (spec 0072): a website or address is the prototype's link chip, the same white chip with a hairline, the site's icon and the bare address in the text colour (it was a blue tinted chip).
 
 **Differences from the prototype**: the site's favicon (with its first letter while it loads) stands where the prototype draws a globe; `isFlat`, the refused state and a country flag are kept. Every address passes `safeHref`; one that opens a new tab carries `rel="noopener noreferrer"`.
+
+**Repeats from its replacer** (spec 0072, AC-4): the chip's shape, edge, hover wash and focus ring, as RecordChip draws them; they leave with this export.

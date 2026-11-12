@@ -42,6 +42,6 @@ Not in the artifact.
 
 ## Timefix prototype (spec 0072)
 
-Folded into the prototype's RecordChip (spec 0072): chips in a row that wraps, 6px apart. The hovered chip lifts 4px and its neighbours 2px, in CSS alone (sibling and `:has()` selectors), settling back on the strong bounce; the prototype sets a custom property per chip from a pointer handler, which would re-render every chip on each hover (spec 0072, AC-15). Reduced motion keeps them still.
+Folded into the prototype's RecordChip (spec 0072): chips in a row that wraps, 6px apart. A linked chip under the pointer lifts 4px and settles back on the strong bounce, in CSS alone; the prototype sets a custom property per chip from a pointer handler, which would re-render every chip on each hover (spec 0072, AC-15). The chip lifts inside its cell, so the pointer never slips off as it moves; a chip that opens nothing stays still. Reduced motion keeps them still.
 
-**Differences from the prototype**: no scale on hover (no scale token above 1). The prototype's `max` with a "+n" overflow is not in the library; the list shows every record it is given.
+**Differences from the prototype**: no scale on hover (no scale token above 1), and the neighbours don't follow: a following neighbour needs a selector three compounds deep, past the house limit of two. The prototype's `max` with a "+n" overflow is not in the library; the list shows every record it is given.

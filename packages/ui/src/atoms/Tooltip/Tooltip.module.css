@@ -69,7 +69,7 @@
   }
 
   .root[data-exiting] {
-    animation: tip-in var(--duration-micro) var(--ease-out) reverse forwards;
+    animation: tip-out var(--duration-micro) var(--ease-out) forwards;
   }
 
   /* Opened from the keyboard, it comes and goes at once: tabbing on never leaves it fading over the next control. */
@@ -84,8 +84,15 @@
     }
   }
 
+  @keyframes tip-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* Reduced motion keeps the fade and drops the rise. */
   @media (prefers-reduced-motion: reduce) {
-    .root {
+    .root[data-placement] {
       --tip-y: 0;
     }
   }

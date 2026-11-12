@@ -141,7 +141,7 @@
     padding-inline: var(--space-4);
   }
 
-  /* lg and sm are pressed past what is drawn: 2px all round (WCAG 2.5.8), wider under a finger for sm. */
+  /* lg and sm are pressed past what is drawn (WCAG 2.5.8): lg 2px all round, sm to 28px tall, wider under a finger. */
   .root:is([data-size='lg'], [data-size='sm']) {
     position: relative;
   }
@@ -151,6 +151,11 @@
     inset: calc(-1 * var(--space-2));
     border-radius: inherit;
     content: '';
+  }
+
+  /* sm reaches a 28px control's height, past 24 at either scale. */
+  .root[data-size='sm']::after {
+    inset: calc((var(--space-20) - var(--size-control-sm)) / 2);
   }
 
   @media (pointer: coarse) {
@@ -265,7 +270,9 @@
     color: var(--tag-orange-text);
   }
 
-  /* A picker among Fields (a question's answer type): the prototype's filled input, its value at the start. */
+  /* A picker among Fields (a question's answer type): a Field's box exactly, its value at the start. It keeps the
+     Field molecule's look (raised, a quiet edge) until Field moves to the prototype's filled input in tier 2, so the
+     picker never stands apart from the Fields beside it. */
   .root[data-variant='field'] {
     display: flex;
     inline-size: 100%;
@@ -273,9 +280,9 @@
     gap: var(--space-6);
     block-size: var(--size-control);
     padding-inline: var(--space-8);
-    border-color: transparent;
+    border-color: var(--border-subtle);
     border-radius: var(--radius-md);
-    background: var(--surface-subtle);
+    background: var(--surface-raised);
     box-shadow: none;
     font: var(--text-body);
   }
@@ -299,20 +306,28 @@
     text-overflow: ellipsis;
   }
 
-  /* Its menu open: white with the accent edge and ring a Field wears while typed in. */
+  /* Its menu open: the accent edge and ring a Field wears while typed in. */
   .root[data-variant='field'][aria-expanded='true'] {
-    border-color: var(--accent);
-    background: var(--surface);
+    border-color: var(--accent-text);
+    background: var(--surface-raised);
     outline: var(--border-width-focus) solid var(--accent-border);
   }
 
+  /* Disabled (a question whose type can't change), it reads as a read only Field: filled, no edge, full strength. */
   .root[data-variant='field'][data-disabled] {
+    border-color: transparent;
+    background: var(--surface-subtle);
     opacity: 1;
   }
 
   /* A trigger whose menu or panel is open stays pressed. */
   .root[data-expanded]:not([data-variant='primary'], [data-variant='danger'], [data-variant='danger-solid']),
-  .root[aria-expanded='true']:not([data-variant='primary'], [data-variant='field'], [data-variant='danger-solid']) {
+  .root[aria-expanded='true']:not(
+      [data-variant='primary'],
+      [data-variant='field'],
+      [data-variant='danger'],
+      [data-variant='danger-solid']
+    ) {
     background: var(--surface-selected);
     color: var(--text);
   }
@@ -324,7 +339,7 @@
 
   /* Selected (a ToggleButton held down): blue marks the selection. */
   .root[data-selected] {
-    border-color: var(--accent-border);
+    border-color: var(--accent-text);
     background: var(--accent-soft);
     box-shadow: none;
     color: var(--accent-text);
@@ -390,10 +405,25 @@
       background: var(--tag-orange-bg);
     }
 
-    .root[data-variant='field']:not([aria-expanded='true'])[data-hovered] {
-      border-color: transparent;
-      background: var(--surface-hover);
+    .root[data-variant='field']:not([aria-expanded='true'], [data-disabled])[data-hovered] {
+      border-color: var(--control-border);
+      background: var(--surface-raised);
     }
+  }
+
+  /* Pressed, the colour deepens and the size never changes (no press scale in the app). */
+  .root[data-pressed]:not(
+      [data-disabled],
+      [data-variant='primary'],
+      [data-variant='danger-solid'],
+      [data-variant='value'],
+      [data-variant='warning']
+    ) {
+    background: var(--surface-selected);
+  }
+
+  .root[data-variant='primary'][data-pressed] {
+    background: var(--primary-hover);
   }
 
   /* The prototype's focus ring: 2px outside, on every variant. */

@@ -27,7 +27,7 @@ Reasoning, the options compared, the open calls the prototype leaves and the evi
 - **AC-1**: Every part in *The parts list* has the prototype's look: sizes, spacing, radius, colours, borders, shadows, type and motion read from its `<Name>.css` and README, expressed with tokens only (see *How a prototype value becomes a token*). A side by side shot of the part's story and the prototype's demo at the same state, light and dark, shows no difference larger than the rounding rules of 0071 allow.
 - **AC-2**: Every state in the prototype README's **States** and **Interaction** sections has a story, and the story asserts behaviour (role, name, attribute, focus, announced text), never a pixel or a class name. A README state with no story is a missed state.
 - **AC-3**: Every prop, export, variant and behaviour the library part had at the base commit (`f81623f0c`) still exists and still works: `src/index.test.ts` passes unchanged except for additions, every existing story's assertions still pass or were rewritten to test the same behaviour, and no file under `apps/` changes in phase 1 except where a call site needs a new required prop (none is planned).
-- **AC-4**: A library part the prototype folds into another (*Folded parts*) keeps its export and props, takes its replacer's look, and shares its replacer's CSS (a CSS module `composes`, or rendering the replacer) instead of keeping a second copy of the same rule.
+- **AC-4**: A library part the prototype folds into another (*Folded parts*) keeps its export and props and takes its replacer's look, its rules written from the replacer's. Where it can render the replacer without changing its props, it does, and keeps no CSS of its own. Its remaining copy of the replacer's rules is listed in its README and is deleted with the folded export in the screen phase that moves its last caller (rationale, decision 14). _(Changed during the tier 1 build, 12 Nov: the first draft asked for `composes` across folders, which the house rule "one component owns its styles" forbids.)_
 - **AC-5**: Each part's README gains the prototype README's missing content (use it for, don't use it for, the consumer provides, states, interaction) in the library's own prop names, and a short **Differences from the prototype** list naming every kept library behaviour the prototype lacks and every prop name that differs.
 - **AC-6**: The house rules hold on every part: no press scale in the app (`--scale-press` is 1; public pages set their own), no blur in app motion, hover only under `(hover: hover) and (pointer: fine)`, reduced motion keeps fades and drops movement, focus is the prototype's outline ring (`--border-width-focus` solid `--focus-ring`, 2px offset) on `[data-focus-visible]`, and the legacy tokens 0071 marked "Phase 1" are no longer used by the parts this phase ports.
 - **AC-7**: `design-system-guardian` reports nothing open on each tier before that tier is reported done.
@@ -146,7 +146,7 @@ The library keeps its prop names in phase 1 (AC-3). The screen phases translate 
 
 ### Folded parts
 
-A folded part keeps its export, its props and its stories. Its CSS module shrinks to what is truly its own and takes the shared rules from its replacer's module through `composes` (CSS modules, already allowed by Stylelint), or the component renders its replacer. Its README says "Takes its look from X (spec 0072)". Deleting the export is not this phase's job: the screen phase that moves its last caller deletes it.
+A folded part keeps its export, its props and its stories. Where it can render its replacer, it does; otherwise its CSS module keeps its own rules, written from the replacer's, and its README lists the overlap. Its README says "Takes its look from X (spec 0072)". Deleting the export is not this phase's job: the screen phase that moves its last caller deletes it.
 
 ### Screenshot baselines
 
@@ -172,7 +172,7 @@ A folded part keeps its export, its props and its stories. Its CSS module shrink
 ### Key invariants
 
 - No export, prop or behaviour disappears in phase 1.
-- One CSS rule set per look: a folded part never keeps a copy of its replacer's rules.
+- One look per family: a folded part draws its replacer's look, and its repeated rules leave with its export.
 - Tokens only; no `zoom`, no press scale in the app, no blur in app motion.
 - No baseline is written outside CI's pinned image.
 - A tier lands only with its three gates green.
@@ -184,7 +184,7 @@ No data and no permissions. The library takes data through props and makes no ne
 ### Critical test scenarios
 
 - A Button story at each variant and size, tabbed to: the outline ring shows and the label is its name; pressed, nothing scales → **AC-1**, **AC-2**, **AC-6**
-- A Badge story renders through Tag's shared rules: its module has no rule Tag's already has → **AC-4**
+- A folded part's README lists the rules it repeats from its replacer, and its story shows the replacer's look → **AC-4**
 - `src/index.test.ts` passes with no export removed → **AC-3**
 - `scripts/part-cost.ts` on the base and the tier's tip: total at least 30% lower → **AC-8**
 - `pnpm size` before and after: no line grows → **AC-9**

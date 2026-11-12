@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Badge } from './Badge.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Atoms/Badge',
@@ -82,12 +83,14 @@ export const Pills: Story = {
     const chip = canvas.getByText('Vegan').parentElement;
     const allergen = canvas.getByText('Milk').parentElement;
     await expect(chip === null ? '' : getComputedStyle(chip).borderTopLeftRadius).not.toBe('0px');
-    // The allergen chip (the prototype's default tag) stands taller than the mark beside it (its table tag).
-    await expect(
-      allergen === null || chip === null
-        ? 0
-        : allergen.getBoundingClientRect().height - chip.getBoundingClientRect().height,
-    ).toBeGreaterThan(0);
+    // The allergen chip is the prototype's default tag (size-control-sm less space-2), the mark its table tag
+    // (space-20 and space-2), at the document's scale.
+    await expect(Math.round(allergen?.getBoundingClientRect().height ?? 0)).toBe(
+      tokenLength('size-control-sm') - tokenLength('space-2'),
+    );
+    await expect(Math.round(chip?.getBoundingClientRect().height ?? 0)).toBe(
+      tokenLength('space-20') + tokenLength('space-2'),
+    );
   },
 };
 

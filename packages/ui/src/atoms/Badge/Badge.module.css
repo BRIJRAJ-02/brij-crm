@@ -116,10 +116,11 @@
     --dot: var(--dot-purple);
   }
 
-  /* Counts that ask for attention (unread): the prototype's accent count, blue words on the blue tint. */
+  /* Counts that ask for attention (unread): the prototype's accent count, blue words on the blue tint. The accent's own
+     tint and words, so a page that sets its brand as the accent (the guest menu) colours it too. */
   .root[data-tone='accent'] {
-    background: var(--tag-blue-bg);
-    color: var(--tag-blue-text);
+    background: var(--accent-soft);
+    color: var(--accent-text);
   }
 
   /* A label in the text colour on the neutral fill (a guest page's tags). */

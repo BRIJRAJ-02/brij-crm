@@ -41,3 +41,4 @@ Takes its look from the prototype's Tag at its table size (`sm`): 22px (`space-2
 - No `size` prop yet: every library tag is a value in a cell, a card or a field, which the prototype draws at `sm`. The prototype's `md` (26) and `pill` (30) are owed to the screen phase that first needs them, as Badge's `chip-lg` already draws the 26.
 - No `status` shapes or `icon`: a status value is a StatusDot, through the field set.
 - Archived keeps a dashed `border-strong` edge, since the prototype has no archived look.
+- The "+N" chip's focus ring sits 1px out, as the prototype's pressable tag's does, rather than 2px: a 2px gap would touch the next tag in a row.

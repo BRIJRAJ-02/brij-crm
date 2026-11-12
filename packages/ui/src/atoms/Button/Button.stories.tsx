@@ -342,7 +342,7 @@ export const FieldVariant: Story = {
   },
 };
 
-/** The field variant focused from the keyboard: a Field's accent edge and halo. */
+/** The field variant focused from the keyboard: the outline focus ring every button wears. */
 export const FieldFocused: Story = {
   render: () => <FieldStack />,
   play: async ({ canvas, userEvent }) => {
@@ -790,8 +790,16 @@ export const Disclosure: Story = {
       <div id="cancel-panel" role="region" aria-label="Cancel" />
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('button', { name: 'Guests (2)' })).toHaveAttribute('aria-expanded', 'true');
+    // The open danger disclosure keeps its red words on the red tint.
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--danger)';
+    canvasElement.append(probe);
+    await expect(getComputedStyle(canvas.getByRole('button', { name: 'Cancel booking' })).color).toBe(
+      getComputedStyle(probe).color,
+    );
+    probe.remove();
     await expect(canvas.getByRole('button', { name: 'Move to another time' })).toHaveAttribute(
       'aria-expanded',
       'false',

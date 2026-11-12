@@ -53,8 +53,9 @@
     transition: clip-path var(--duration-medium) var(--ease-smooth-out) var(--duration-stagger);
   }
 
+  /* The edge is accent-text, which holds 3.5:1 on selected rows and raised surfaces in dark too. */
   .root:is([data-selected], [data-indeterminate]) .box {
-    border-color: var(--accent);
+    border-color: var(--accent-text);
     background: var(--accent);
   }
 

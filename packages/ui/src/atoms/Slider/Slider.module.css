@@ -99,10 +99,18 @@
     transition-timing-function: var(--ease-out);
   }
 
-  .thumb:is([data-hovered], [data-dragging], [data-focus-visible]) .bubble {
+  .thumb:is([data-dragging], [data-focus-visible]) .bubble {
     opacity: 1;
     translate: -50% 0;
     scale: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .thumb[data-hovered] .bubble {
+      opacity: 1;
+      translate: -50% 0;
+      scale: 1;
+    }
   }
 
   /* The track fades; the label and value stay readable, so a screen still says what the setting is. */
@@ -110,10 +118,16 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* Reduced motion keeps the bubble's fade and drops its rise. */
   @media (prefers-reduced-motion: reduce) {
-    .thumb,
-    .bubble {
+    .thumb {
       transition: none;
+    }
+
+    .bubble {
+      translate: -50% 0;
+      scale: 1;
+      transition-property: opacity;
     }
   }
 

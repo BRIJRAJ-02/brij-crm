@@ -81,7 +81,7 @@
     --popover-text-inset: calc(var(--popover-inset) + var(--popover-item-inline));
     --popover-panel-inset: var(--space-8);
     /* The avatar scale, after the prototype's Avatar (spec 0072): 20 inline, 28 in rows, 36 in lists, 44 heading a
-       record; the larger public sizes keep their full size values (a booking page's host, a link page's own face). */
+       record; the larger public sizes are 72 and 96 at full size (a booking page's host, a link page's own face), from scaled tokens. */
     --avatar-xs: var(--size-icon);
     --avatar-sm: var(--space-20);
     --avatar-md: var(--size-avatar);

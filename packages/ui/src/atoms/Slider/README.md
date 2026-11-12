@@ -26,7 +26,7 @@ New (4 November 2026, spec 0068 AC-6809). The cropper's zoom needed a control th
 
 ## States
 
-Rest, dragging, focus (the knob takes the focus halo), disabled (the track fades; the label and value stay readable). Forced colours draw the rail, fill and knob in system colours.
+Rest, hover and dragging (the value bubble shows), focus (the thumb takes the outline ring and shows the bubble), disabled (the track fades; the label and value stay readable). Forced colours draw the rail, fill and knob in system colours.
 
 ## Keyboard
 
@@ -40,4 +40,4 @@ The artifact has no Slider card yet; this is the code first version, published w
 
 Takes its look from the prototype's Slider: a 4px `surface-selected` rail with the accent fill, a 20px white thumb with `shadow-sm`, and a value bubble (`surface-inverse`, label type, tabular figures) that rises over the thumb on hover, drag or keyboard focus (transitions.dev 17: `--duration-quick`, `--ease-out`, from 4px lower and `--scale-small`) and leaves at once. The label and value sit in a row above in `body-sm-strong`.
 
-**Differences from the prototype**: the thumb's edge is `control-border` (the prototype's `border-strong` falls under 3:1 against the surface), darkening to `text-secondary` on hover and the accent while dragged. The bubble is hidden from screen readers; the thumb's own input says the value. Ranges, ticks and marks are owed to the screen phase that needs them.
+**Differences from the prototype**: the thumb's edge is `control-border` (the prototype's `border-strong` falls under 3:1 against the surface), darkening to `text-secondary` on hover and the accent while dragged. The bubble is hidden from screen readers; the thumb's own input says the value. Under reduced motion it fades without rising. Ranges, ticks and marks are owed to the screen phase that needs them.

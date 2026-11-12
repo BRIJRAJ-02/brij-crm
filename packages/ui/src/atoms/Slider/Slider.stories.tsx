@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, userEvent } from 'storybook/test';
+import { expect, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Slider, type SliderProps } from './Slider.tsx';
 
@@ -44,6 +44,23 @@ export const Default: Story = {
     await expect(slider).toHaveAttribute('aria-valuetext', '151%');
     await userEvent.keyboard('{End}');
     await expect(slider).toHaveAttribute('aria-valuetext', '400%');
+  },
+};
+
+/** The value bubble over the thumb (the prototype's), shown while the thumb has keyboard focus, hidden from screen
+ * readers since the thumb's input already says the value. */
+export const ValueBubble: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Held label="Notice" start={24} minValue={0} maxValue={48} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('slider', { name: 'Notice' })).toHaveFocus();
+    const bubble = canvasElement.querySelector('output[aria-hidden="true"]');
+    await expect(bubble).toHaveTextContent('24');
+    await waitFor(() => expect(bubble === null ? '' : getComputedStyle(bubble).opacity).toBe('1'));
   },
 };
 
