@@ -28,7 +28,9 @@
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    margin-block-end: calc(-1 * var(--space-4));
+    /* Pulls the rows up under their names, but only by space-2: a Role name's InfoTip overhangs its line, and its
+       24px target needs 12px from its centre to the role picker below (WCAG 2.5.8), which space-4 broke at app scale. */
+    margin-block-end: calc(-1 * var(--space-2));
   }
 
   .row {

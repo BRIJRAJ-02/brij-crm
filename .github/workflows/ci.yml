@@ -575,7 +575,21 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # A change that moves most screenshots (a token or type scale change, a port phase) pushes a commit with
+      # [reshoot] in its message, on a branch other than main: the compare is skipped, since nearly every story
+      # failing it (three tries each) outruns the job's time (run 43252806849), and the baselines are rendered
+      # at once. The job then fails on purpose, so a reshoot run never reads as a passed compare.
+      - id: mode
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ] && printf '%s' "$MESSAGE" | grep -qF '[reshoot]'; then
+            echo "reshoot=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reshoot=false" >> "$GITHUB_OUTPUT"
+          fi
       - id: visual
+        if: steps.mode.outputs.reshoot != 'true'
         run: pnpm test:visual
       - name: Keep the screenshot diffs
         if: failure()
@@ -589,13 +603,18 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
       # artifact, copy it over packages/ui/__screenshots__, and commit only the
       # stories the change meant to move.
       - name: Render the new baselines
-        if: failure() && steps.visual.outcome == 'failure'
+        if: (failure() && steps.visual.outcome == 'failure') || steps.mode.outputs.reshoot == 'true'
         run: pnpm test:visual --update
       - name: Keep the new baselines
-        if: failure() && steps.visual.outcome == 'failure'
+        if: (failure() && steps.visual.outcome == 'failure') || steps.mode.outputs.reshoot == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: screenshot-baselines
           path: packages/ui/__screenshots__/
           retention-days: 7
+      - name: Fail a reshoot run, which compared nothing
+        if: steps.mode.outputs.reshoot == 'true'
+        run: |
+          echo "::error::[reshoot] rendered the baselines without comparing them. Download screenshot-baselines, review the changes, commit them, and push without [reshoot]."
+          exit 1
           if-no-files-found: ignore

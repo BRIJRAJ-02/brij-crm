@@ -39,6 +39,7 @@
   .composer {
     position: sticky;
     inset-block-end: max(var(--space-12), env(safe-area-inset-bottom));
+    flex: none;
     block-size: calc(var(--size-toolbar) + var(--space-24));
   }
 }
