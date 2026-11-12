@@ -27,15 +27,15 @@ Reasoning, the options compared, the open calls the prototype leaves and the evi
 - **AC-1**: Every part in *The parts list* has the prototype's look: sizes, spacing, radius, colours, borders, shadows, type and motion read from its `<Name>.css` and README, expressed with tokens only (see *How a prototype value becomes a token*). A side by side shot of the part's story and the prototype's demo at the same state, light and dark, shows no difference larger than the rounding rules of 0071 allow.
 - **AC-2**: Every state in the prototype README's **States** and **Interaction** sections has a story, and the story asserts behaviour (role, name, attribute, focus, announced text), never a pixel or a class name. A README state with no story is a missed state.
 - **AC-3**: Every prop, export, variant and behaviour the library part had at the base commit (`f81623f0c`) still exists and still works: `src/index.test.ts` passes unchanged except for additions, every existing story's assertions still pass or were rewritten to test the same behaviour, and no file under `apps/` changes in phase 1 except where a call site needs a new required prop (none is planned).
-- **AC-4**: A library part the prototype folds into another (*Folded parts*) keeps its export and props and takes its replacer's look, its rules written from the replacer's. Where it can render the replacer without changing its props, it does, and keeps no CSS of its own. Its remaining copy of the replacer's rules is listed in its README and is deleted with the folded export in the screen phase that moves its last caller (rationale, decision 14). _(Changed during the tier 1 build, 12 Nov: the first draft asked for `composes` across folders, which the house rule "one component owns its styles" forbids.)_
+- **AC-4**: A library part the prototype folds into another (*Folded parts*) keeps its export and props and takes its replacer's look, its rules written from the replacer's. Where it can render the replacer without changing its props, it does, and keeps no CSS of its own. Its remaining copy of the replacer's rules is listed in its README and is deleted with the folded export in the screen phase that moves its last caller (rationale, decision 14). _(Changed during the tier 1 build, 12 Nov: the first draft asked for `composes` across folders, which the house rule "one component owns its styles" forbids. Accepted by the owner and the coordinator, 12 Nov.)_
 - **AC-5**: Each part's README gains the prototype README's missing content (use it for, don't use it for, the consumer provides, states, interaction) in the library's own prop names, and a short **Differences from the prototype** list naming every kept library behaviour the prototype lacks and every prop name that differs.
 - **AC-6**: The house rules hold on every part: no press scale in the app (`--scale-press` is 1; public pages set their own), no blur in app motion, hover only under `(hover: hover) and (pointer: fine)`, reduced motion keeps fades and drops movement, focus is the prototype's outline ring (`--border-width-focus` solid `--focus-ring`, 2px offset) on `[data-focus-visible]`, and the legacy tokens 0071 marked "Phase 1" are no longer used by the parts this phase ports.
 - **AC-7**: `design-system-guardian` reports nothing open on each tier before that tier is reported done.
 
 *Gate 1: load time*
-- **AC-8**: For each tier, the summed cost of the folders it touches (each CSS module minified by Lightning CSS and gzipped, plus each non test, non story TS or TSX file transformed and minified by Oxc and gzipped, measured by `packages/ui/scripts/part-cost.ts --tier <n> --against f81623f0c`) is at least 30% lower than on the base commit. The before and after table is recorded in rationale.md per tier.
-- **AC-9**: No line of `pnpm size` grows against the base commit, and the total gzipped CSS and JavaScript of `apps/web/dist/assets` does not grow.
-- **AC-10**: After each tier, every `apps/web/.size-limit.js` budget this phase moved is lowered to the new measurement rounded up to the next 0.1 kB, with a comment naming this spec and the date.
+- **AC-8**: Load time is measured per phase, on real pages (the owner, 12 Nov, replacing the first draft's 30% cut per tier, which tier 1 showed atoms cannot meet while keeping every behaviour). No line of `pnpm size` grows against the phase's base beyond content-hash noise (±20 B: a changed chunk renames the imports of every chunk that loads it). Each tier records its pages' `pnpm size` lines before and after in rationale.md. The real cuts are measured where duplicates fold away (tiers 2 and 3, each folded part's saving reported) and in the screen phases 4 to 9. `packages/ui/scripts/part-cost.ts` stays as reporting (the per folder table), not a gate.
+- **AC-9**: _(Folded into AC-8, 12 Nov: the totals of `apps/web/dist/assets` are reported beside the page lines, not gated, since every route chunk moves by content-hash noise.)_
+- **AC-10**: After each tier, every `apps/web/.size-limit.js` budget this phase moved is set to the new measurement plus 0.5 kB of headroom, with a comment naming this spec and the date. _(Changed 12 Nov: the first draft's "rounded up to the next 0.1 kB" left as little as 0.01 kB, which CI's hash noise turns red.)_
 
 *Gate 2: security*
 - **AC-11**: No part renders HTML from a string: `dangerouslySetInnerHTML`, `innerHTML` and `outerHTML` appear nowhere in `packages/ui/src` outside tests.
@@ -84,8 +84,8 @@ Every library part keeps its name, props and behaviour; its CSS and motion are r
 
 | Batch | Part | Folded parts |
 |---|---|---|
-| 2a Fields and pickers | Field, Select, PhoneField, CodeInput, DatePicker, ChoiceChips, SegmentedControl, IconPicker, FileDrop | FieldLabel, FieldError (atoms), FieldGroup, Form into Field; CurrencyPicker, CountryPicker into Select (CountryPicker also PhoneField's dialing list); DateNav into DatePicker; FileItem, FileIcon (atom) into FileDrop |
-| 2b Overlays and navigation | Menu, Popover, Tabs, Breadcrumbs, Pagination, Disclosure, Steps | InfoTip into Popover; SectionTabs into Tabs; Stepper into Steps |
+| 2a Fields and pickers | Field, Select, PhoneField, CodeInput, DatePicker, ChoiceChips, SegmentedControl, IconPicker, FileDrop | FieldLabel, FieldError (atoms), FieldGroup, Form into Field; CurrencyPicker, CountryPicker into Select (CountryPicker also PhoneField's dialing list); DateNav into DatePicker; FileItem, FileIcon (atom) into FileDrop. Owed to phase 2 by Field: a tabular digits option (`font-variant-numeric: tabular-nums`) NumberField can pass, and `aria-keyshortcuts` passed through to the input for SearchField (phase 2's thin wrappers use both after merge) |
+| 2b Overlays and navigation | Menu, Popover, Tabs, Breadcrumbs, Pagination, Disclosure, Steps | InfoTip into Popover; SectionTabs into Tabs; Stepper into Steps. Tabs also fixes the selected `pills` label's contrast in WebKit (axe read white text on `surface-subtle`, because the fill is the absolutely positioned indicator): the chosen pill holds AA in every engine and keeps its slide |
 | 2c Feedback and layout | Callout, Card, EmptyState, DescriptionList, FloatingBar, Sentence, SocialLinks | Stats, RecordStats, TileGrid into Card; SpotIllustration into EmptyState; AttributeList (module) into DescriptionList; BulkActionBar, SaveBar, PublishBar, VisitorBar (modules) into FloatingBar; SocialLinksEditor (module) into SocialLinks |
 
 **Tier 3: modules (36 parts, 23 folded, 59 folders)**
@@ -115,7 +115,7 @@ For each part, in this order:
 3. **Port the look.** Rewrite the CSS module from the prototype's rules on the library's data attributes. Keep every library variant; restyle each in the prototype's language (a library variant the prototype lacks takes the nearest prototype variant's look, and the README says which).
 4. **Keep the behaviour.** Props, keyboard, announcements, `strings.ts` copy, `safeHref`, focus moves, `data-pressable` and cursor rules stay. Behaviour only the prototype has is added only when it needs no new prop; anything needing a new prop is listed in the README's differences as owed to the screen phase that needs it.
 5. **States.** Every README state gets a story (an existing one where it fits); `play` functions assert role, name, `data-*` state, focus and announcements.
-6. **Done** when: the CSS has tokens only and passes Stylelint; the stories pass in Chromium (locally) and in all three engines (CI); the README is updated (AC-5); the part's cost is measured (AC-8); `design-system-guardian` has nothing open on the tier.
+6. **Done** when: the CSS has tokens only and passes Stylelint; the stories pass in Chromium (locally) and in all three engines (CI); the README is updated (AC-5); the part's cost is reported (AC-8); `design-system-guardian` has nothing open on the tier.
 
 ### How a prototype value becomes a token
 
@@ -166,7 +166,7 @@ A folded part keeps its export, its props and its stories. Where it can render i
 | Folder to tier and batch | the parts list | `meta.json` `replaces` (rationale.md, *Evidence*) |
 | Cost before and after | bytes | `scripts/part-cost.ts` on `f81623f0c` and on the tier's last commit |
 | First load numbers | `pnpm size` lines | the built app on `f81623f0c` and after |
-| New size budgets | `.size-limit.js` | the after measurement rounded up to 0.1 kB |
+| New size budgets | `.size-limit.js` | the after measurement plus 0.5 kB |
 | New baselines | PNGs | CI's `screenshot-baselines` artifact from the landing tree |
 
 ### Key invariants
@@ -186,8 +186,7 @@ No data and no permissions. The library takes data through props and makes no ne
 - A Button story at each variant and size, tabbed to: the outline ring shows and the label is its name; pressed, nothing scales → **AC-1**, **AC-2**, **AC-6**
 - A folded part's README lists the rules it repeats from its replacer, and its story shows the replacer's look → **AC-4**
 - `src/index.test.ts` passes with no export removed → **AC-3**
-- `scripts/part-cost.ts` on the base and the tier's tip: total at least 30% lower → **AC-8**
-- `pnpm size` before and after: no line grows → **AC-9**
+- `pnpm size` on the phase's base and the tier's tip: no line grows beyond ±20 B, each folded part's saving reported; `scripts/part-cost.ts` prints the per folder table → **AC-8**
 - A Link, Button, RecordChip and LinkChip story with `href="javascript:alert(1)"` renders plain text with no `href` → **AC-12**
 - A RecordChipList hovered with React's profiler: no component renders → **AC-15**
 - `grep` for `key={i}` and `key={index}` in the tier's folders finds only commented static lists → **AC-16**
@@ -196,7 +195,7 @@ No data and no permissions. The library takes data through props and makes no ne
 
 Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look, stories, README, cost, size, security, guardian), then the rest of its tier, then the next tier.
 
-1. `packages/ui/scripts/part-cost.ts` (the cost table, base and after, as JSON and a printed table) and the base measurement on `f81623f0c`, satisfies **AC-8**, **AC-9**
+1. `packages/ui/scripts/part-cost.ts` (the cost table, base and after, as JSON and a printed table) and the base measurement on `f81623f0c`, satisfies **AC-8** (reporting)
 2. Tier 1, batch 1a: Button, Icon (+ProviderMark), Kbd, Link, Code, Tooltip, satisfies **AC-1** to **AC-6**, **AC-11** to **AC-13**
 3. Tier 1, batch 1b: Tag (+Badge, StatusDot), Avatar (+PersonLine), RecordChip (+LinkChip, Mention, Variable, RecordChipList), QrCode, satisfies **AC-1** to **AC-6**, **AC-12**, **AC-15**, **AC-16**
 4. Tier 1, batch 1c: Checkbox (+Radio, Switch), Slider, DragHandle, satisfies **AC-1** to **AC-6**
@@ -216,7 +215,7 @@ Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look
 - Library prop names differ from the prototype's until a later rename (the map above carries the difference).
 - Folded parts keep thin exports until their screens move, so the public surface is the same size for now.
 - Every screen in the app changes look three times (once per tier) before its own phase restyles its layout.
-- Lowering budgets to the measurement leaves no room: a later part that grows the first load must say why.
+- Budgets sit 0.5 kB over the measurement: room for hash noise, not for growth; a later part that grows the first load must say why.
 
 **Neutral**:
 - Baselines move by the hundreds per tier, through CI only.

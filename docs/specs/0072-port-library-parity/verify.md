@@ -8,9 +8,9 @@ _Steps derived from spec 0072 AC-1 to AC-17. `/check verify` runs these per tier
 - [ ] Hover a RecordChipList with React DevTools' "highlight updates" on → nothing re-renders → AC-15
 
 ## Commands (per tier)
-- [ ] `node packages/ui/scripts/part-cost.ts --tier <n> --against f81623f0c` → the tier's CSS plus JS total is at least 30% under the base → AC-8
-- [ ] `pnpm size` on the tier's tip → no line above the base table in rationale.md; total `dist/assets` CSS and JS not above the base → AC-9
-- [ ] `apps/web/.size-limit.js` → every budget this phase moved equals its new measurement rounded up to 0.1 kB, with a 0072 comment → AC-10
+- [ ] `pnpm size` on the phase's base and on the tier's tip → no line grows by more than 20 B; the before and after table is in rationale.md, with each folded part's saving → AC-8
+- [ ] `node packages/ui/scripts/part-cost.ts --tier <n> --against <base>` → the per folder table is printed (reporting, not a gate) → AC-8
+- [ ] `apps/web/.size-limit.js` → every budget this phase moved equals its new measurement plus 0.5 kB, with a 0072 comment → AC-10
 - [ ] `grep -rnE "dangerouslySetInnerHTML|innerHTML|outerHTML" packages/ui/src --include=*.tsx --include=*.ts | grep -v test` → nothing → AC-11
 - [ ] `grep -rn "_blank" packages/ui/src --include=*.tsx` → every hit sits beside `noopener noreferrer`; the tier's link stories with `javascript:` hrefs pass → AC-12
 - [ ] `grep -rnE "(sk|pk)_(live|test)_[A-Za-z0-9]{8,}|tfx_live_[A-Za-z0-9]{8,}" packages/ui/src` → nothing → AC-13
