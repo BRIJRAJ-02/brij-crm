@@ -90,6 +90,70 @@ function said(canvasElement: HTMLElement): string {
   return canvasElement.querySelector('[role="status"]:not(:empty)')?.textContent ?? '';
 }
 
+/** Waits for `count` frames to be drawn. */
+async function frames(count: number): Promise<void> {
+  for (let drawn = 0; drawn < count; drawn += 1) {
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+    });
+  }
+}
+
+/** Waits `ms` on the page's clock. */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** The conversation's scroller, and how far its end is below what shows. */
+function conversationOf(canvasElement: HTMLElement) {
+  const scroller = canvasElement.querySelector<HTMLElement>('[role="region"][aria-label="Conversation"]');
+  if (scroller === null) throw new Error('no conversation');
+  return { scroller, belowView: () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight };
+}
+
+/**
+ * Counts what React draws, by name, while `during` runs. React's development build marks the components it renders
+ * on the Performance panel's Components track (React 19.2 and later): through `console.timeStamp(name, …)`, or,
+ * when the props it was drawn with changed, `performance.measure('\u200b' + name, …)`. A component React skips is
+ * never marked; one drawn too quickly for the clock to time may go unmarked, so a count is a floor of the real
+ * renders, safe for "at most" checks.
+ */
+async function countRenders(during: () => Promise<void>): Promise<ReadonlyMap<string, number>> {
+  /* eslint-disable no-console -- it listens to React's own marks, passing each one on unchanged, and puts it back */
+  const counts = new Map<string, number>();
+  const count = (label: unknown) => {
+    if (typeof label === 'string') {
+      const name = label.replace(/^\u200b/u, '');
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  };
+  const stampOwn = Object.getOwnPropertyDescriptor(console, 'timeStamp');
+  const measureOwn = Object.getOwnPropertyDescriptor(performance, 'measure');
+  const stamp = console.timeStamp.bind(console);
+  const measure = performance.measure.bind(performance);
+  console.timeStamp = (label?: string, ...rest: unknown[]) => {
+    count(label);
+    (stamp as (...args: unknown[]) => void)(label, ...rest);
+  };
+  performance.measure = (name: string, ...rest: unknown[]) => {
+    count(name);
+    return (measure as (...args: unknown[]) => PerformanceMeasure)(name, ...rest);
+  };
+  try {
+    await during();
+  } finally {
+    // Back as they were: the console's own method, and the page's measure from its prototype.
+    if (stampOwn === undefined) Reflect.deleteProperty(console, 'timeStamp');
+    else Object.defineProperty(console, 'timeStamp', stampOwn);
+    if (measureOwn === undefined) Reflect.deleteProperty(performance, 'measure');
+    else Object.defineProperty(performance, 'measure', measureOwn);
+  }
+  /* eslint-enable no-console */
+  return counts;
+}
+
 /**
  * Before the first question: the start line, the suggestions as chips, the prompt with how to use it, and Ask off
  * until something is typed. The conversation scrolls from the keyboard.
@@ -209,8 +273,9 @@ export const Stopped: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Stop' }));
     const signal = mockOf(args.onAsk).mock.calls[0]?.[1];
     await expect(signal?.aborted).toBe(true);
-    // What arrives after Stop is never drawn.
+    // What arrives after Stop is never drawn, however many frames later.
     answer.push('and Maria Bell signs.');
+    await frames(3);
     await expect(answerOf(canvasElement)).toHaveTextContent('Priya Raman is the champion, Stopped.');
     await expect(answerOf(canvasElement)).not.toHaveTextContent('Maria Bell');
     await expect(canvas.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
@@ -266,8 +331,9 @@ export const TextOnly: Story = {
 };
 
 /**
- * A long stream (spec 0073, gate 3): 2,000 pieces arriving faster than the screen paints are drawn a frame at a time,
- * and the answer's nodes stay a handful of spans plus one text node per closed block, never one per word or piece.
+ * A long stream (spec 0073, gate 3): 2,000 pieces arriving in a hundred bursts, several between two frames, are drawn
+ * at most once a frame; each closed block is drawn once, never again as the answer grows; and the answer's nodes
+ * stay one text node per closed block, never one per word or piece.
  */
 export const LongStream: Story = {
   parameters: { crm: { screenshot: false } },
@@ -281,15 +347,112 @@ export const LongStream: Story = {
     mockOf(args.onAsk).mockImplementation(() => answer.pieces);
     await userEvent.click(canvas.getByRole('button', { name: 'Summarise this company' }));
     const piece = 'the depot pilot moves to Leeds next quarter, ';
-    answer.push(...Array.from({ length: 2000 }, () => piece));
-    answer.end();
-    await waitFor(() => expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'false'), { timeout: 8000 });
+    let drawnFrames = 0;
+    let answerDraws = 0;
+    // Each time the conversation's DOM changes is one draw of it: a new piece replaces the fading one.
+    const draws = new MutationObserver(() => {
+      answerDraws += 1;
+    });
+    const renders = await countRenders(async () => {
+      draws.observe(conversationOf(canvasElement).scroller, { childList: true, subtree: true, characterData: true });
+      let isCounting = true;
+      const tick = () => {
+        if (!isCounting) return;
+        drawnFrames += 1;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      // A burst every few milliseconds: about four between two frames.
+      for (let burst = 0; burst < 100; burst += 1) {
+        answer.push(...Array.from({ length: 20 }, () => piece));
+        await wait(0);
+      }
+      answer.end();
+      await waitFor(() => expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'false'), { timeout: 8000 });
+      isCounting = false;
+      draws.disconnect();
+    });
     const region = answerOf(canvasElement);
     await expect(region.textContent.length).toBe(piece.length * 2000);
     // About 90 kB of text: one text node per closed block (at most a thousand characters each), the open block, and
     // no element per word or per piece.
     await expect(region.querySelectorAll('*').length).toBe(0);
     await expect(region.childNodes.length).toBeLessThanOrEqual(Math.ceil((piece.length * 2000) / 900) + 2);
+    // Once a frame: a hundred bursts arrived, and the answer was drawn no more often than frames went by (three to
+    // spare: the thinking line giving way to the first words, the last piece, and the settle as it ends).
+    await expect(answerDraws).toBeGreaterThan(1);
+    await expect(answerDraws).toBeLessThanOrEqual(drawnFrames + 3);
+    // React's marks were there to count (React may leave out a mark for a draw too quick to time, never add one).
+    await expect([...renders.values()].reduce((sum, drawn) => sum + drawn, 0)).toBeGreaterThan(0);
+    // Each closed block drawn at most once, as it closed: never again while the rest of the answer arrived.
+    await expect(renders.get('Block') ?? 0).toBeLessThanOrEqual(region.childNodes.length);
+  },
+};
+
+/**
+ * Stop, then a new question at once: the stopped answer's stream, which ignores its signal and sends one more
+ * piece, ends without touching the new answer's frame, so the new words show while the new answer pauses.
+ */
+export const AskedAgainAfterStop: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const first = channel();
+    const second = channel();
+    mockOf(args.onAsk)
+      .mockImplementationOnce(() => first.pieces)
+      .mockImplementationOnce(() => second.pieces);
+    await userEvent.click(canvas.getByRole('button', { name: 'Who should I talk to next?' }));
+    first.push('Priya Raman is the champion, ');
+    await waitFor(() => expect(answerOf(canvasElement)).toHaveTextContent('Priya Raman is the champion,'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Stop' }));
+    await userEvent.keyboard('Who signs?{Enter}');
+    await expect(args.onAsk).toHaveBeenCalledTimes(2);
+    // The new answer's words, then the stopped stream's late piece, in one go: the new words wait for a frame, and
+    // the old stream ends before that frame comes.
+    second.push('Maria Bell signs.');
+    first.push('and Maria Bell signs.');
+    // The new answer then pauses: its words show anyway, in its own frame.
+    await waitFor(() => expect(answerOf(canvasElement)).toHaveTextContent('Maria Bell signs.'), { timeout: 1000 });
+    await expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'true');
+    await expect(answerOf(canvasElement)).not.toHaveTextContent('Priya');
+  },
+};
+
+/**
+ * A long answer handed over whole fills the panel and keeps following it: each step adds several lines at once,
+ * and the newest stay in view to the end. Scrolled up to read, the next answer is left where the person put it.
+ */
+export const FollowsLongAnswer: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="dialog" height="grid">
+      <AIAssist {...args} />
+    </Stage>
+  ),
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const long = Array.from({ length: 3000 }, (_, at) => `word${String(at)}`).join(' ');
+    mockOf(args.onAsk).mockImplementationOnce(() => Promise.resolve(long));
+    const { scroller, belowView } = conversationOf(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Summarise this company' }));
+    await waitFor(() => expect(answerOf(canvasElement)).toHaveAttribute('aria-busy', 'false'), { timeout: 8000 });
+    await frames(2);
+    await expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight * 3);
+    await expect(belowView()).toBeLessThan(48);
+    // A streamed answer, read from the top while it arrives: it stays where the person scrolled.
+    const answer = channel();
+    mockOf(args.onAsk).mockImplementationOnce(() => answer.pieces);
+    await userEvent.click(canvas.getByRole('button', { name: 'New question' }));
+    await userEvent.keyboard('What changed this week?{Enter}');
+    answer.push(long);
+    await waitFor(() => expect(answerOf(canvasElement)).toHaveTextContent('word2999'));
+    await frames(2);
+    await expect(belowView()).toBeLessThan(48);
+    scroller.scrollTop = 0;
+    await frames(2);
+    answer.push(` ${long}`);
+    await frames(3);
+    await expect(scroller.scrollTop).toBe(0);
+    answer.end();
   },
 };
 
