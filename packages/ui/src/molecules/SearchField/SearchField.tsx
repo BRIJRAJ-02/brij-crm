@@ -23,7 +23,8 @@ export interface SearchFieldProps {
   readonly onChange?: (value: string) => void;
   /**
    * The query to search or filter by: `debounceMs` after typing stops, and at once on Enter and on clear. The same
-   * query twice in a row is sent once.
+   * query twice in a row is sent once. A controlled `value` the parent changes itself counts as applied by the
+   * parent, so the next query typed is compared with it, not with the last one sent.
    */
   readonly onSearch?: (query: string) => void;
   /** How long typing must pause before `onSearch`. Defaults to `SEARCH_DEBOUNCE_MS`. */
@@ -90,9 +91,26 @@ export function SearchField({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The last query `onSearch` was given, so a pause after Enter, or a clear of an empty field, sends nothing twice.
   const sent = useRef(text);
+  // The last text the field itself reported, and whether a report is in this render (the parent echoing it, or
+  // reshaping it, as it does in its `onChange`). A controlled `value` that is neither was set by the parent (a
+  // Clear filters button, a route change), which has applied it itself: it becomes the query sent, so typing the
+  // old query again sends it again.
+  const reported = useRef(text);
+  const isReporting = useRef(false);
+  // What the field holds now, for a pause that ends after the parent changed it: the pause sends what is shown.
+  const latest = useRef(text);
   const search = useRef(onSearch);
   useEffect(() => {
     search.current = onSearch;
+    latest.current = text;
+  });
+  useEffect(() => {
+    if (value === undefined) return;
+    if (!isReporting.current && value !== reported.current) sent.current = value;
+    reported.current = value;
+  }, [value]);
+  useEffect(() => {
+    isReporting.current = false;
   });
 
   const sendNow = (query: string) => {
@@ -122,15 +140,19 @@ export function SearchField({
   }, [shortcut, isDisabled]);
 
   const change = (next: string) => {
+    reported.current = next;
+    isReporting.current = true;
     setOwn(next);
     onChange?.(next);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      sendNow(next);
+      sendNow(latest.current);
     }, debounceMs);
   };
 
   const clear = () => {
+    reported.current = '';
+    isReporting.current = true;
     setOwn('');
     onChange?.('');
     sendNow('');

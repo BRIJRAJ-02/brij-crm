@@ -13,7 +13,7 @@ A thin wrapper, not a new design. Field's `search` variant already draws the rou
 <SearchField label="Search" size="sm" shortcut="/" value={text} onChange={setText} onSearch={filter} />
 ```
 
-- `onSearch` gets the query 150 ms (`SEARCH_DEBOUNCE_MS`, spec 0014's pause) after typing stops, at once on Enter and on clear, and never the same query twice in a row. Filter or search on it, never on `onChange`, so a long list does its work once per pause (spec 0073, AC-7322). A record search through `@crm/data` debounces again on its own; that is harmless.
+- `onSearch` gets the query 150 ms (`SEARCH_DEBOUNCE_MS`, spec 0014's pause) after typing stops, at once on Enter and on clear, and never the same query twice in a row. Filter or search on it, never on `onChange`, so a long list does its work once per pause (spec 0073, AC-7322). A record search through `@crm/data` debounces again on its own; that is harmless. When a controlled parent changes `value` itself (a Clear filters button, a route change), the field takes that text as already applied: typing the old query again sends it again, and a pause still running sends what the field now shows, never the text it held before.
 - `onChange` is every key, for showing what is typed (a controlled field).
 - `shortcut`: `⌘K` (Ctrl+K answers it too, and the keycap reads Ctrl+K off a Mac) or a single key such as `/`, which never fires while another field has focus. Leave `⌘K` to the command palette where one is mounted.
 - `onSubmit` is Enter, after `onSearch` has had the query.
