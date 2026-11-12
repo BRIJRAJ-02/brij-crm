@@ -87,7 +87,7 @@ Verified as able to fail: `ai.test.ts` (an `export … from './modules/AIAssist/
 - `verify.md` line 7: "`from` 9:00 → the list starts at 9:15 AM". `from` is inclusive in the code, README and story (`from: 9 * 60 + 15`), so the step as written fails.
 
 ## Nits
-- ⚪ `apps/web/embed/v1.js:555`, `MARKS[attr]` also returns inherited keys (`constructor`, `toString`), so the "only the marks we draw" claim isn't strict. Harmless (they stringify to text with no markup, and the host page is trusted anyway), but `Object.hasOwn(MARKS, key)` makes the disable comment exactly true.
+- ⚪ `apps/web/embed/v1.js:555`, `MARKS[attr]` also returns inherited keys (`constructor`, `toString`), so the "only the marks we draw" claim isn't strict. Harmless (they stringify to text with no markup, and the host page is trusted anyway), but `Object.hasOwn(MARKS, key)` makes the disable comment exactly true. **Accepted, size cap** (coordinator, 12 Nov 2026): the script is 2 bytes under its 6.5 kB cap, the attribute is the site owner's, and the worst case is junk text.
 - ⚪ `packages/ui/src/molecules/Modal/Modal.tsx:459`, inside a ModalTrigger the confirm's Dialog also takes DialogTrigger's `DialogContext` (RAC `private/Dialog.mjs` provides `overlayProps` with the dialog `id`), so while both are open two dialogs share one `id`. Medium confidence; wrapping the confirm in a cleared `DialogContext` avoids it.
 - ⚪ `packages/ui/src/atoms/RemoteCursor/RemoteCursor.module.css`, the pointer anchors at `inset-inline-start` but moves by a physical `x`, so in a right to left page it lands mirrored.
 - ⚪ `packages/ui/src/modules/AIAssist/stream.ts:38-41`, a space exactly at `limit` makes a block of `limit + 1` characters; the doc says "at most".
@@ -104,3 +104,16 @@ Verified as able to fail: `ai.test.ts` (an `export … from './modules/AIAssist/
 
 ## Test coverage
 Pure logic (`stream.ts`, `number.ts`, `time-options.ts`, `share-url.ts`, `qrFileName`, the `@crm/ui/ai` reach) is unit tested, and each part has play tests. The gaps are the locale cases above (no plain `number` round trip in a comma decimal language, no native digits), controlled SearchField reset, Modal `isDirty` changing while the confirm is open, and the motion and batching checks listed under "Checks that would pass with the code removed".
+
+## Resolution (12 Nov 2026, on `feat/port-2`)
+
+- 🔴 NumberField parser: fixed. A point is a group mark only where the language groups with one and it could be a group; the language's own digits are read. `number.test.ts` (round trip over eleven languages and three modes) and the `German` and `Bengali` stories failed before the fix.
+- 🟠 Native digits: fixed with the above (`bn-IN`, `mr-IN`, `ar-EG`, `fa`, `ne`).
+- 🟠 SearchField stale guard: fixed. `ControlledReset` and `ResetMidPause` failed before.
+- 🟡 Currency rounding: fixed (`roundToShown`); the `Currency` story failed before.
+- 🟡 Modal confirm state: all three cases fixed, plus the two dialogs sharing one id (real: the confirm took DialogTrigger's id); `DirtyAskWithdrawn`, `DirtyClosedByCaller`, `DirtySaveInTrigger` and `DirtyInTrigger` failed before. README line corrected.
+- 🟡 AIAssist frame and follow: fixed; `AskedAgainAfterStop` and `FollowsLongAnswer` failed before.
+- 🟡 Raw HTML rule: every listed bypass refused, each with a config test that failed before.
+- 🟡 Checks that could not fail: each was made able to fail and was failed once by breaking the code.
+- 🟡 Spec gaps: AC-7302, AC-7317, AC-7318 (link page half moved to phase 3), AC-7321 (phase 5), row 23, the batch 2 line and `verify.md` line 7 amended.
+- ⚪ Embed `Object.hasOwn`: accepted, size cap (above). The other nits (RemoteCursor in right to left, the block limit's off by one, iOS `inputMode`, size room) are left for their phases.
