@@ -171,8 +171,8 @@ function QuestionSlot({ question: q, index, value, onChange, error, attempt, lar
 }
 
 /** What was sent, read back: each answered question's title over its answer. */
-export function SentAnswers({ questions, answers, booking }: { readonly questions: ReadonlyArray<FormQuestion>; readonly answers: FormAnswers; readonly booking?: BookingSource }) {
-  const rows = questions.map((q) => ({ q, text: answerText(q, answers[q.id], booking) })).filter((r) => r.text !== '');
+export function SentAnswers({ questions, answers, booking, lang = 'en' }: { readonly questions: ReadonlyArray<FormQuestion>; readonly answers: FormAnswers; readonly booking?: BookingSource; /** Reads the answers back in the form's language; what was sent stays as it is. */ readonly lang?: FormLang }) {
+  const rows = questions.map((q) => ({ q, text: answerText(q, answers[q.id], booking, lang) })).filter((r) => r.text !== '');
   if (rows.length === 0) return null;
   return (
     <dl className="tf-hform__sent">
@@ -422,7 +422,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const ending = endings.find((e) => e.id === ended);
   const done = (
     <Thanks show={sent} title={recall(ending?.title ?? thanks.title) ?? ''} line={recall(ending ? ending.line : thanks.line)} action={ending ? ending.action : thanks.action}>
-      <SentAnswers questions={questions} answers={answers} booking={booking} />
+      <SentAnswers questions={questions} answers={answers} booking={booking} lang={lang} />
     </Thanks>
   );
   const submitButton = (onPress: (() => void) | undefined, isPending: boolean, type?: 'submit') => (onEdit?.submitLabel

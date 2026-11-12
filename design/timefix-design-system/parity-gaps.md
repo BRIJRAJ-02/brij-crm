@@ -141,4 +141,5 @@ Wave E notes: Webhooks sits under Settings › Developer (the real app parks it 
 - [x] Menu look carries to business and reservation pages and their popups; link page and form popups wear their look.
 - [x] Insights seeded 180 days (realistic deltas); table QR item says "View menu"; a double-click edit no longer opens the record panel.
 
-Still English: PhoneField's country picker, Country question names, the thank-you's answer readback; "Powered by Timefix" stays English on purpose.
+- [x] Computed attributes change kind (formula, lookup, rollup) after creation, the owner's call: the ask sits in the attribute dialog (no dialog on a dialog), every value is worked out again, unfit view parts are named and dropped, Undo restores them; an open table sets aside stale unsaved view changes with Undo.
+- [x] Phone country picker, Country names and the thank-you readback follow the form's language (Intl.DisplayNames); stored values stay canonical. "Powered by Timefix" stays English on purpose.

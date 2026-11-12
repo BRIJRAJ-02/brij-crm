@@ -12,7 +12,7 @@ import {
   useFilter,
   type Key,
 } from 'react-aria-components';
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { FieldBox, FieldDescription, FieldErrorText, FieldLabel, useShake, type FieldSize } from '../Field/Field.tsx';
@@ -90,14 +90,29 @@ export interface PhoneFieldProps {
   readonly size?: FieldSize;
   readonly name?: string;
   readonly className?: string;
+  /** Says the country names in this locale (Intl.DisplayNames, "España" for es-ES); the dial codes stay. Left out, the list's own names. */
+  readonly locale?: string;
+  /** The picker's own words in the page's language: the chip's name, the search's name and placeholder, and the empty line. */
+  readonly words?: Partial<PhoneWords>;
 }
+
+/** The country picker's words; English unless `words` says otherwise. */
+export interface PhoneWords { readonly countryCode: string; readonly searchCountries: string; readonly countryOrCode: string; readonly noCountry: string }
+const ENGLISH: PhoneWords = { countryCode: 'Country code', searchCountries: 'Search countries', countryOrCode: 'Country or code', noCountry: 'No country matches.' };
+/** A country's name in a locale, falling back to the list's own name. */
+const nameIn = (c: PhoneCountry, locale: string | undefined): string => {
+  if (!locale) return c.name;
+  try { return new Intl.DisplayNames([locale], { type: 'region' }).of(c.code) ?? c.name; } catch { return c.name; }
+};
 
 /**
  * A phone number: a country code chip ("+91") joined to the number. The chip opens a searchable list of
  * countries (by name, ISO code or "+91"); the number groups itself for the country as it is typed, and a pasted
  * "+44 …" switches the country to match.
  */
-export function PhoneField({ label, aside, description, errorMessage, value, defaultValue, onChange, countries = PHONE_COUNTRIES, isRequired, isInvalid, isDisabled, size = 'md', name, className }: PhoneFieldProps) {
+export function PhoneField({ label, aside, description, errorMessage, value, defaultValue, onChange, countries: given = PHONE_COUNTRIES, isRequired, isInvalid, isDisabled, size = 'md', name, className, locale, words }: PhoneFieldProps) {
+  const w = { ...ENGLISH, ...words };
+  const countries = useMemo(() => (locale ? given.map((c) => ({ ...c, name: nameIn(c, locale) })) : given), [given, locale]);
   const [own, setOwn] = useState<PhoneValue>(defaultValue ?? { country: countries[0]?.code ?? 'US', national: '' });
   const current = value ?? own;
   const country = countries.find((c) => c.code === current.country) ?? countries[0];
@@ -146,7 +161,7 @@ export function PhoneField({ label, aside, description, errorMessage, value, def
       <FieldLabel aside={aside}>{label}</FieldLabel>
       <FieldBox ref={ref} className="tf-phone__box">
         <Select
-          aria-label="Country code"
+          aria-label={w.countryCode}
           selectedKey={current.country}
           onSelectionChange={(k: Key | null) => { if (k !== null) { change({ ...current, country: String(k) }); focusNumber(); } }}
           isDisabled={isDisabled}
@@ -158,11 +173,11 @@ export function PhoneField({ label, aside, description, errorMessage, value, def
           </Button>
           <Popover className="tf-phone__pop tf-overlay" placement="bottom start" offset={6}>
             <Autocomplete filter={contains}>
-              <AriaSearchField aria-label="Search countries" className="tf-phone__search" autoFocus>
+              <AriaSearchField aria-label={w.searchCountries} className="tf-phone__search" autoFocus>
                 <Search size={14} strokeWidth={1.75} aria-hidden="true" />
-                <SearchInput className="tf-phone__search-input" placeholder="Country or code" />
+                <SearchInput className="tf-phone__search-input" placeholder={w.countryOrCode} />
               </AriaSearchField>
-              <ListBox className="tf-phone__list" items={countries} renderEmptyState={() => <p className="tf-phone__empty">No country matches.</p>}>
+              <ListBox className="tf-phone__list" items={countries} renderEmptyState={() => <p className="tf-phone__empty">{w.noCountry}</p>}>
                 {(c) => (
                   <ListBoxItem id={c.code} textValue={`${c.name} +${c.dial} ${c.code}`} className="tf-phone__item">
                     <span className="tf-phone__name">{c.name}</span>

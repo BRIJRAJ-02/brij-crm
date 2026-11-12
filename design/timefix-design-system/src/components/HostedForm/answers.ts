@@ -54,6 +54,28 @@ export const QUESTION_GROUPS: ReadonlyArray<{ readonly title: string; readonly k
 /** Countries a Country question offers, nearest markets first. */
 export const COUNTRIES: ReadonlyArray<string> = ['India', 'United Arab Emirates', 'United Kingdom', 'United States', 'Singapore', 'Australia', 'Canada', 'Germany', 'France', 'Netherlands', 'Saudi Arabia', 'Qatar', 'Sri Lanka', 'Nepal', 'Bangladesh', 'Japan', 'Spain', 'Italy', 'Ireland', 'New Zealand', 'South Africa', 'Kenya', 'Brazil', 'Mexico'];
 
+/** Each listed country's ISO code, so its name can be said in the form's language. */
+const COUNTRY_CODES: Readonly<Record<string, string>> = {
+  India: 'IN', 'United Arab Emirates': 'AE', 'United Kingdom': 'GB', 'United States': 'US', Singapore: 'SG', Australia: 'AU', Canada: 'CA', Germany: 'DE', France: 'FR', Netherlands: 'NL',
+  'Saudi Arabia': 'SA', Qatar: 'QA', 'Sri Lanka': 'LK', Nepal: 'NP', Bangladesh: 'BD', Japan: 'JP', Spain: 'ES', Italy: 'IT', Ireland: 'IE', 'New Zealand': 'NZ', 'South Africa': 'ZA', Kenya: 'KE', Brazil: 'BR', Mexico: 'MX',
+};
+/** A region's name in a locale (Intl.DisplayNames), or undefined when the browser has none. */
+export function regionName(code: string, locale: string): string | undefined {
+  try { return new Intl.DisplayNames([locale], { type: 'region' }).of(code); } catch { return undefined; }
+}
+/** A listed country's name in the form's language; the English name is the answer that is sent and stored. Other words stay as written. */
+export function countryName(name: string, lang: FormLang): string {
+  const code = COUNTRY_CODES[name];
+  return lang === 'en' || !code ? name : regionName(code, LOCALE[lang]) ?? name;
+}
+/** The Country question's choices: English keeps nearest markets first; other languages sort by the translated name with that locale's collator. */
+export function countryChoices(lang: FormLang): ReadonlyArray<{ readonly id: string; readonly label: string }> {
+  const list = COUNTRIES.map((c) => ({ id: c, label: countryName(c, lang) }));
+  if (lang === 'en') return list;
+  const collator = new Intl.Collator(LOCALE[lang]);
+  return [...list].sort((a, b) => collator.compare(a.label, b.label));
+}
+
 /** One question of a form. `options` feeds choice, multi, dropdown and ranking. */
 export interface FormQuestion {
   readonly id: string;
@@ -201,6 +223,10 @@ export interface GuestWords {
   readonly day: string; readonly openTimes: (day: string) => string; readonly noTimes: string;
   readonly finishLater: string; readonly saving: string; readonly saveFailed: string; readonly saved: string; readonly copyLink: string; readonly copied: string; readonly copyFailed: (link: string) => string;
   readonly sendFailed: string; readonly thanksLine: string; readonly progress: string; readonly required: string;
+  /** The phone's country list: the chip's name, the search's name and placeholder, and the empty line. */
+  readonly countryCode: string; readonly searchCountries: string; readonly countryOrCode: string; readonly noCountry: string;
+  /** The sent answers read back: a signature, and a score out of its most. */
+  readonly signed: string; readonly signedAs: (name: string) => string; readonly outOf: (n: number, most: number) => string;
 }
 /** The guest's words around the questions, in every language the form language select offers. The owner's own words stay as written. */
 export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
@@ -216,6 +242,8 @@ export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
     day: 'Day', openTimes: (d) => `Open times on ${d}`, noTimes: 'No times left on this day.',
     finishLater: 'Finish later', saving: 'Saving…', saveFailed: 'Couldn’t save. Try again', saved: 'Saved. Your answers wait for you.', copyLink: 'Copy link', copied: 'Copied', copyFailed: (l) => `Copy didn’t work. Select this link and copy it: ${l}`,
     sendFailed: 'We couldn’t send that. Check your connection and try again.', thanksLine: 'Your answers are in. You can close this page.', progress: 'Progress', required: 'required',
+    countryCode: 'Country code', searchCountries: 'Search countries', countryOrCode: 'Country or code', noCountry: 'No country matches.',
+    signed: 'Signed', signedAs: (n) => `Signed as ${n}`, outOf: (n, m) => `${n} of ${m}`,
   },
   hi: {
     typeAnswer: 'अपना जवाब लिखें', newLine: 'नई लाइन के लिए Shift + Enter', phone: 'फ़ोन नंबर', aNumber: 'कोई संख्या', range: (a, b) => `${a} से ${b}`,
@@ -229,6 +257,8 @@ export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
     day: 'दिन', openTimes: (d) => `${d} को खाली समय`, noTimes: 'इस दिन कोई समय नहीं बचा।',
     finishLater: 'बाद में पूरा करें', saving: 'सहेज रहे हैं…', saveFailed: 'सहेजा नहीं जा सका। फिर कोशिश करें', saved: 'सहेज लिया। आपके जवाब आपका इंतज़ार करेंगे।', copyLink: 'लिंक कॉपी करें', copied: 'कॉपी हो गया', copyFailed: (l) => `कॉपी नहीं हुआ। यह लिंक चुनकर कॉपी करें: ${l}`,
     sendFailed: 'हम इसे भेज नहीं पाए। अपना कनेक्शन जाँचें और फिर कोशिश करें।', thanksLine: 'आपके जवाब मिल गए। अब आप यह पेज बंद कर सकते हैं।', progress: 'प्रगति', required: 'ज़रूरी',
+    countryCode: 'देश का कोड', searchCountries: 'देश खोजें', countryOrCode: 'देश या कोड', noCountry: 'कोई देश नहीं मिला।',
+    signed: 'हस्ताक्षर किए', signedAs: (n) => `${n} के नाम से हस्ताक्षर`, outOf: (n, m) => `${m} में से ${n}`,
   },
   es: {
     typeAnswer: 'Escribe tu respuesta', newLine: 'Mayús + Intro para una línea nueva', phone: 'Número de teléfono', aNumber: 'Un número', range: (a, b) => `${a} a ${b}`,
@@ -242,6 +272,8 @@ export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
     day: 'Día', openTimes: (d) => `Horas libres el ${d}`, noTimes: 'No quedan horas este día.',
     finishLater: 'Terminar más tarde', saving: 'Guardando…', saveFailed: 'No se pudo guardar. Inténtalo de nuevo', saved: 'Guardado. Tus respuestas te esperan.', copyLink: 'Copiar enlace', copied: 'Copiado', copyFailed: (l) => `No se pudo copiar. Selecciona este enlace y cópialo: ${l}`,
     sendFailed: 'No pudimos enviarlo. Revisa tu conexión e inténtalo de nuevo.', thanksLine: 'Tus respuestas han llegado. Ya puedes cerrar esta página.', progress: 'Progreso', required: 'obligatoria',
+    countryCode: 'Prefijo del país', searchCountries: 'Buscar países', countryOrCode: 'País o prefijo', noCountry: 'Ningún país coincide.',
+    signed: 'Firmado', signedAs: (n) => `Firmado como ${n}`, outOf: (n, m) => `${n} de ${m}`,
   },
   fr: {
     typeAnswer: 'Saisissez votre réponse', newLine: 'Maj + Entrée pour une nouvelle ligne', phone: 'Numéro de téléphone', aNumber: 'Un nombre', range: (a, b) => `${a} à ${b}`,
@@ -255,6 +287,8 @@ export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
     day: 'Jour', openTimes: (d) => `Horaires libres le ${d}`, noTimes: 'Plus aucun horaire ce jour-là.',
     finishLater: 'Finir plus tard', saving: 'Enregistrement…', saveFailed: 'Échec de l’enregistrement. Réessayez', saved: 'Enregistré. Vos réponses vous attendent.', copyLink: 'Copier le lien', copied: 'Copié', copyFailed: (l) => `La copie n’a pas marché. Sélectionnez ce lien et copiez-le : ${l}`,
     sendFailed: 'Nous n’avons pas pu l’envoyer. Vérifiez votre connexion et réessayez.', thanksLine: 'Vos réponses sont arrivées. Vous pouvez fermer cette page.', progress: 'Progression', required: 'obligatoire',
+    countryCode: 'Indicatif du pays', searchCountries: 'Rechercher un pays', countryOrCode: 'Pays ou indicatif', noCountry: 'Aucun pays ne correspond.',
+    signed: 'Signé', signedAs: (n) => `Signé au nom de ${n}`, outOf: (n, m) => `${n} sur ${m}`,
   },
   de: {
     typeAnswer: 'Deine Antwort', newLine: 'Umschalt + Enter für eine neue Zeile', phone: 'Telefonnummer', aNumber: 'Eine Zahl', range: (a, b) => `${a} bis ${b}`,
@@ -268,6 +302,8 @@ export const GUEST_WORDS: Readonly<Record<FormLang, GuestWords>> = {
     day: 'Tag', openTimes: (d) => `Freie Zeiten am ${d}`, noTimes: 'An diesem Tag sind keine Zeiten mehr frei.',
     finishLater: 'Später fertig machen', saving: 'Wird gespeichert…', saveFailed: 'Speichern fehlgeschlagen. Nochmal versuchen', saved: 'Gespeichert. Deine Antworten warten auf dich.', copyLink: 'Link kopieren', copied: 'Kopiert', copyFailed: (l) => `Kopieren hat nicht geklappt. Markiere diesen Link und kopiere ihn: ${l}`,
     sendFailed: 'Wir konnten das nicht senden. Prüfe deine Verbindung und versuche es nochmal.', thanksLine: 'Deine Antworten sind da. Du kannst diese Seite schließen.', progress: 'Fortschritt', required: 'Pflichtfeld',
+    countryCode: 'Ländervorwahl', searchCountries: 'Länder suchen', countryOrCode: 'Land oder Vorwahl', noCountry: 'Kein Land passt.',
+    signed: 'Unterschrieben', signedAs: (n) => `Unterschrieben als ${n}`, outOf: (n, m) => `${n} von ${m}`,
   },
 };
 /** A language's locale, for dates and the pickers' month and day names. */
@@ -317,27 +353,34 @@ export function checkAnswer(q: FormQuestion, v: AnswerValue | undefined, lang: F
   return undefined;
 }
 
-const timeLabel = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, h ?? 0, m ?? 0)); };
+const timeLabel = (hhmm: string, lang: FormLang = 'en') => { const [h, m] = hhmm.split(':').map(Number); return new Intl.DateTimeFormat(LOCALE[lang], { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, h ?? 0, m ?? 0)); };
 const dateLabel = (iso: string, lang: FormLang = 'en') => new Intl.DateTimeFormat(LOCALE[lang], { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00`));
+const minutesLabel = (mins: number, lang: FormLang) => timeLabel(`${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`, lang);
 
-/** An answer read back as one line for the sent answers and the builder's results. */
-export function answerText(q: FormQuestion, v: AnswerValue | undefined, booking?: BookingSource): string {
+/** An answer read back as one line for the sent answers and the builder's results, in the form's language (English when left out).
+ *  Only the reading is translated: the answer itself (Yes, No, "Other: …", a country's English name) is sent and stored as it is. */
+export function answerText(q: FormQuestion, v: AnswerValue | undefined, booking?: BookingSource, lang: FormLang = 'en'): string {
+  const g = GUEST_WORDS[lang];
   if (q.kind === 'ranking') return (isList(v) ? v : q.options ?? []).map((o, i) => `${i + 1}. ${o}`).join('  ');
   if (v === undefined) return '';
-  if (q.kind === 'signature' && isText(v)) return v.startsWith('data:') ? 'Signed' : v ? `Signed as ${v}` : '';
-  if (q.kind === 'rating' && typeof v === 'number') return `${v} of 5`;
-  if (q.kind === 'scale' && typeof v === 'number') return `${v} of ${q.max ?? 10}`;
-  if ((q.kind === 'checkbox' || q.kind === 'consent') && isText(v)) return v ? 'Yes' : '';
-  if (q.kind === 'time' && isText(v)) return v ? timeLabel(v) : '';
-  if (q.kind === 'datetime' && isText(v)) return v.includes('T') ? `${dateLabel(v.slice(0, 10))}, ${timeLabel(v.slice(11, 16))}` : '';
+  if (q.kind === 'signature' && isText(v)) return v.startsWith('data:') ? g.signed : v ? g.signedAs(v) : '';
+  if (q.kind === 'rating' && typeof v === 'number') return g.outOf(v, 5);
+  if (q.kind === 'scale' && typeof v === 'number') return g.outOf(v, q.max ?? 10);
+  if ((q.kind === 'checkbox' || q.kind === 'consent') && isText(v)) return v ? g.yes : '';
+  if (q.kind === 'yesno' && isText(v)) return v === 'Yes' ? g.yes : v === 'No' ? g.no : v.trim();
+  if (q.kind === 'country' && isText(v)) return countryName(v.trim(), lang);
+  if (q.kind === 'time' && isText(v)) return v ? timeLabel(v, lang) : '';
+  if (q.kind === 'datetime' && isText(v)) return v.includes('T') ? `${dateLabel(v.slice(0, 10), lang)}, ${timeLabel(v.slice(11, 16), lang)}` : '';
   if (q.kind === 'statement') return '';
-  if (q.kind === 'date' && isText(v)) return v ? dateLabel(v) : '';
+  if (q.kind === 'date' && isText(v)) return v ? dateLabel(v, lang) : '';
+  const other = (x: string) => (x.startsWith(OTHER_PREFIX.trim()) ? `${g.other}: ${x.replace(/^Other:?\s?/, '')}` : x);
+  if ((q.kind === 'choice' || q.kind === 'multi') && isText(v)) return other(v.trim());
   if (isText(v)) return v.trim();
-  if (typeof v === 'number') return String(v);
+  if (typeof v === 'number') return lang === 'en' ? String(v) : v.toLocaleString(LOCALE[lang]);
   if (isPhone(v)) return v.national ? phoneToString(v, PHONE_COUNTRIES) : '';
   if (isAddress(v)) return [v.street, v.apartment, v.city, v.postcode, v.country].map((s) => s.trim()).filter(Boolean).join(', ');
-  if (isBooking(v)) return `${dateLabel(v.date)}, ${formatClockRange(v.minutes, v.minutes + (booking?.durationMinutes ?? 30))}`;
+  if (isBooking(v)) { const end = v.minutes + (booking?.durationMinutes ?? 30); return `${dateLabel(v.date, lang)}, ${lang === 'en' ? formatClockRange(v.minutes, end) : `${minutesLabel(v.minutes, lang)} – ${minutesLabel(end, lang)}`}`; }
   if (isFiles(v)) return v.map((f) => f.name).join(', ');
-  if (isList(v)) return v.join(', ');
+  if (isList(v)) return (q.kind === 'multi' ? v.map(other) : v).join(', ');
   return '';
 }

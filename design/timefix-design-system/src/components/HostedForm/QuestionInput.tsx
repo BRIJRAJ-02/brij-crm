@@ -18,7 +18,7 @@ import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { TimeField } from '../TimeField/TimeField.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import {
-  COUNTRIES, GUEST_WORDS, OTHER_PREFIX, dayBound, isAddress, isBooking, isFiles, isList, isPhone, isText, localeOf,
+  COUNTRIES, GUEST_WORDS, countryChoices, OTHER_PREFIX, dayBound, isAddress, isBooking, isFiles, isList, isPhone, isText, localeOf,
   type AddressValue, type AnswerValue, type BookingSource, type FileAnswer, type FormLang, type FormQuestion, type GuestWords,
 } from './answers.ts';
 
@@ -58,7 +58,7 @@ export function QuestionInput(props: QuestionInputProps) {
     case 'long':
       return <TextArea size="lg" rows={3} aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? g.typeAnswer} isInvalid={isInvalid} description={g.newLine} />;
     case 'phone':
-      return <PhoneField size="lg" label={g.phone} value={isPhone(value) ? value : undefined} onChange={onChange} isInvalid={isInvalid} />;
+      return <PhoneField size="lg" label={g.phone} value={isPhone(value) ? value : undefined} onChange={onChange} isInvalid={isInvalid} locale={props.lang && props.lang !== 'en' ? localeOf(props.lang) : undefined} words={{ countryCode: g.countryCode, searchCountries: g.searchCountries, countryOrCode: g.countryOrCode, noCountry: g.noCountry }} />;
     case 'choice':
     case 'multi':
       return <ChoiceCards {...props} />;
@@ -85,7 +85,7 @@ export function QuestionInput(props: QuestionInputProps) {
     case 'yesno':
       return <ChoiceCards {...props} question={{ ...q, kind: 'choice', options: ['Yes', 'No'] }} />;
     case 'country':
-      return <Dropdown {...props} question={{ ...q, options: q.options?.length ? q.options : COUNTRIES }} />;
+      return q.options?.length ? <Dropdown {...props} /> : <Dropdown {...props} question={{ ...q, options: COUNTRIES }} choices={countryChoices(props.lang ?? 'en')} />;
     case 'checkbox':
     case 'consent':
       return <TickBox label={q.defaultValue || (q.kind === 'consent' ? (q.consentKind === 'marketing' ? g.news : g.agree) : g.yes)} checked={text === 'Yes'} onChange={(on) => onChange(on ? 'Yes' : '')} labelId={labelId} isInvalid={isInvalid} />;
@@ -168,9 +168,9 @@ function ChoiceCards({ question: q, value, onChange, labelId, isInvalid, onPicke
 }
 
 /** A long list in a 44px filled trigger that opens the shared Popover (05 menu dropdown); stays pressed while open. */
-function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked, lang }: QuestionInputProps) {
+function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked, lang, choices }: QuestionInputProps & { /** Each answer with the words shown for it (the Country list in the form's language); the id is what is sent. */ readonly choices?: ReadonlyArray<{ readonly id: string; readonly label: string }> }) {
   const g = GUEST_WORDS[lang ?? 'en'];
-  const items = (q.options ?? []).map((o) => ({ id: o }));
+  const items = choices ?? (q.options ?? []).map((o) => ({ id: o, label: o }));
   return (
     <Select aria-labelledby={labelId} selectedKey={isText(value) && value ? value : null} isInvalid={isInvalid}
       onSelectionChange={(k: Key | null) => { if (k !== null) { onChange(String(k)); onPicked?.(); } }} className="tf-hq__select">
@@ -181,8 +181,8 @@ function Dropdown({ question: q, value, onChange, labelId, isInvalid, onPicked, 
       <Popover width="trigger" className="tf-hq__pop">
         <ListBox items={items} className="tf-hq__options">
           {(it) => (
-            <ListBoxItem id={it.id} textValue={it.id} className="tf-hq__option">
-              <span>{it.id}</span>
+            <ListBoxItem id={it.id} textValue={it.label} className="tf-hq__option">
+              <span>{it.label}</span>
               <svg className="tf-hq__tick" width={16} height={16} viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength={1} /></svg>
             </ListBoxItem>
           )}

@@ -21,7 +21,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
-import { newId, type AppAction, type AppState, type ImportJob, type ObjectId, type ObjectSchema } from './data.ts';
+import { newId, type AppAction, type AppState, type ImportJob, type ObjectId, type ObjectSchema, type SavedView } from './data.ts';
 import { computedValues, formulaAttributes, liveAttributes, ownFields, recordsOf, relationsOf, schemaOf, valuesOf, wordsOf } from './model.tsx';
 import { automationsUsing } from './automations.tsx';
 import { undoImport } from './importer.tsx';
@@ -64,6 +64,30 @@ export function usageOf(state: AppState, object: ObjectId, id: string): Readonly
   return [...views, ...forms, ...reports, ...automationsUsing(state, object, id)];
 }
 
+type ComputedKind = 'formula' | 'lookup' | 'rollup';
+/** What a computed rule gives: a lookup shows text, a formula or rollup works out a number. */
+const resultTypeOf = (kind: ComputedKind): 'text' | 'number' => (kind === 'lookup' ? 'text' : 'number');
+/** The saved views that lean on an attribute in a way that only fits its old result type (filters, sorts, the board's total, footer sums),
+ *  and the views with those dropped. Said in the confirm when a computed attribute's result type changes. */
+export function unfitUses(state: AppState, object: ObjectId, id: string): { readonly lines: ReadonlyArray<string>; readonly views: ReadonlyArray<SavedView> } {
+  const lines: Array<string> = [];
+  const views = (state.views[object] ?? []).map((v) => {
+    const filters = v.filters.filter((f) => f.field !== id);
+    const groups = (v.groups ?? []).map((g) => ({ ...g, rules: g.rules.filter((f) => f.field !== id) })).filter((g) => g.rules.length > 0);
+    const sorts = v.sorts.filter((x) => x.field !== id);
+    const filtersGone = v.filters.length - filters.length + (v.groups ?? []).reduce((n, g) => n + g.rules.length, 0) - groups.reduce((n, g) => n + g.rules.length, 0);
+    const sortsGone = v.sorts.length - sorts.length;
+    const sumGone = v.boardSum === id;
+    const calcGone = v.calcs?.[id] !== undefined && v.calcs[id] !== 'none' && v.calcs[id] !== 'count' && v.calcs[id] !== 'empty' && v.calcs[id] !== 'filled';
+    const parts = [filtersGone > 0 ? (filtersGone === 1 ? 'its filter' : `${filtersGone} filters`) : '', sortsGone > 0 ? 'its sort' : '', sumGone ? 'the board total' : '', calcGone ? 'the footer total' : ''].filter(Boolean);
+    if (parts.length === 0) return v;
+    lines.push(`View “${v.name}”: ${parts.join(', ')}`);
+    const calcs = calcGone && v.calcs ? Object.fromEntries(Object.entries(v.calcs).filter(([k]) => k !== id)) : v.calcs;
+    return { ...v, filters, groups: v.groups ? groups : undefined, sorts, boardSum: sumGone ? undefined : v.boardSum, calcs };
+  });
+  return { lines, views };
+}
+
 /** Settings › Objects: drag to reorder, open one for its attributes, configuration and access. */
 export function ObjectsList({ state, dispatch, onOpen, onNew }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onOpen: (id: string) => void; readonly onNew: () => void }) {
   const { toast } = useToast();
@@ -88,6 +112,7 @@ export function ObjectsList({ state, dispatch, onOpen, onNew }: { readonly state
 
 /** One object's attributes, with the extra kinds and the archive warning. */
 export function ObjectAttributes({ state, dispatch, o }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly o: ObjectSchema }) {
+  const { toast } = useToast();
   const [special, setSpecial] = useState<{ readonly kind: 'formula' | 'lookup' | 'rollup' | 'relationship'; readonly attribute?: SchemaAttribute }>();
   const put = (attributes: ReadonlyArray<SchemaAttribute>) => dispatch({ type: 'object/set', object: { ...o, attributes } });
   const used = o.attributes.filter((a) => !a.archived).length; const limit = limitOf(state, 'attributes', used);
@@ -98,7 +123,16 @@ export function ObjectAttributes({ state, dispatch, o }: { readonly state: AppSt
         onChange={put} usageOf={(id) => usageOf(state, o.id, id)} pluralOf={(id) => schemaOf(state, id)?.many ?? 'Records'}
         onNewSpecial={(kind) => setSpecial({ kind })} onEditSpecial={(a) => setSpecial({ kind: a.relation ? 'relationship' : a.computed?.kind ?? 'formula', attribute: a })} />
       {special && special.kind !== 'relationship' && <ComputedDialog state={state} o={o} kind={special.kind} attribute={special.attribute} onClose={() => setSpecial(undefined)}
-        onSave={(a) => { put(special.attribute ? o.attributes.map((x) => (x.id === a.id ? a : x)) : [...o.attributes, a]); setSpecial(undefined); }}
+        onSave={(a, views) => {
+          const was = special.attribute; const before = o.attributes; const viewsBefore = state.views[o.id] ?? [];
+          put(was ? o.attributes.map((x) => (x.id === a.id ? a : x)) : [...o.attributes, a]); setSpecial(undefined);
+          if (views) dispatch({ type: 'views/set', object: o.id, views });
+          // A kind switch works every record's value out again (they are never typed); Undo puts the old rule and the dropped view parts back.
+          if (was?.computed && a.computed && was.computed.kind !== a.computed.kind) {
+            const n = recordsOf(state, o.id).length;
+            toast({ message: `${a.name} is a ${a.computed.kind} now · ${n} ${n === 1 ? 'value' : 'values'} worked out again`, tone: 'success', action: { label: 'Undo', onAction: () => { put(before); if (views) dispatch({ type: 'views/set', object: o.id, views: viewsBefore }); } } });
+          }
+        }}
         onArchive={special.attribute ? () => { put(o.attributes.map((x) => (x.id === special.attribute?.id ? { ...x, archived: true } : x))); setSpecial(undefined); } : undefined} />}
       {special?.kind === 'relationship' && <RelationshipDialog state={state} o={o} attribute={special.attribute} onClose={() => setSpecial(undefined)}
         onSave={(a) => { put(special.attribute ? o.attributes.map((x) => (x.id === a.id ? a : x)) : [...o.attributes, a]); setSpecial(undefined); }} />}
@@ -106,9 +140,12 @@ export function ObjectAttributes({ state, dispatch, o }: { readonly state: AppSt
   );
 }
 
-/** A formula, lookup or rollup: its name and rule, with a preview on one of the object's records. */
-function ComputedDialog({ state, o, kind, attribute, onClose, onSave, onArchive }: { readonly state: AppState; readonly o: ObjectSchema; readonly kind: 'formula' | 'lookup' | 'rollup'; readonly attribute?: SchemaAttribute; readonly onClose: () => void; readonly onSave: (a: SchemaAttribute) => void; readonly onArchive?: () => void }) {
+/** A formula, lookup or rollup: its name and rule, with a preview on one of the object's records. An existing one can switch to another of
+ *  the three kinds (the owner's call; the real app asks for a new attribute): every record's value is worked out again, and a switch that
+ *  changes the result type asks first, naming the view filters and sorts that no longer fit and are dropped (Undo in the toast). */
+function ComputedDialog({ state, o, kind: startKind, attribute, onClose, onSave, onArchive }: { readonly state: AppState; readonly o: ObjectSchema; readonly kind: ComputedKind; readonly attribute?: SchemaAttribute; readonly onClose: () => void; readonly onSave: (a: SchemaAttribute, views?: ReadonlyArray<SavedView>) => void; readonly onArchive?: () => void }) {
   const c = attribute?.computed;
+  const [kind, setKind] = useState<ComputedKind>(startKind);
   const [name, setName] = useState(attribute?.name ?? '');
   const [source, setSource] = useState(c?.kind === 'formula' ? c.source : '');
   const rels = relationsOf(state, o.id);
@@ -119,19 +156,36 @@ function ComputedDialog({ state, o, kind, attribute, onClose, onSave, onArchive 
   const [fn, setFn] = useState<'count' | 'sum' | 'avg' | 'min' | 'max'>(c?.kind === 'rollup' ? c.fn : 'count');
   const [sampleId, setSampleId] = useState(recordsOf(state, o.id)[0]?.id ?? '');
   const sample = recordsOf(state, o.id).find((r) => r.id === sampleId);
+  const numbers = theirFields.filter((f) => ['number', 'currency', 'percent', 'rating'].includes(f.type));
+  // Switching kind keeps what carries over: the relationship and field between lookup and rollup, the formula's words if it comes back.
+  const switchTo = (next: ComputedKind) => {
+    setKind(next);
+    if (next !== 'formula' && !via && rels[0]) setVia(rels[0].id);
+    if (next === 'rollup' && field && !numbers.some((f) => f.id === field)) { setFn('count'); setField(''); }
+  };
   const rule = kind === 'formula' ? { kind, source } as const : kind === 'lookup' ? { kind, via, field } as const : { kind, via, field, fn } as const;
-  const draft: SchemaAttribute = { id: attribute?.id ?? newId('attr'), name: name.trim(), type: kind === 'lookup' ? 'text' : 'number', computed: rule };
+  const draft: SchemaAttribute = { id: attribute?.id ?? newId('attr'), name: name.trim(), type: resultTypeOf(kind), computed: rule };
   // The preview: the attribute worked out for one record, as if it were saved.
   const preview = sample ? computedValues({ ...state, objects: state.objects.map((x) => (x.id === o.id ? { ...x, attributes: [...x.attributes.filter((y) => y.id !== draft.id), draft] } : x)) }, o.id, sample, valuesOf(state, o.id, sample, 2))[draft.id] : undefined;
-  const numbers = theirFields.filter((f) => ['number', 'currency', 'percent', 'rating'].includes(f.type));
   const ready = name.trim() !== '' && (kind === 'formula' ? source.trim() !== '' : via !== '' && (kind === 'rollup' && fn === 'count' ? true : field !== ''));
   const title = kind === 'formula' ? 'Formula' : kind === 'lookup' ? 'Lookup' : 'Rollup';
+  const switched = c !== undefined && c.kind !== kind;
+  const typeChanged = c !== undefined && resultTypeOf(c.kind) !== resultTypeOf(kind);
+  const unfit = attribute && typeChanged ? unfitUses(state, o.id, attribute.id) : undefined;
+  const n = recordsOf(state, o.id).length;
+  const save = () => onSave(draft, unfit && unfit.lines.length > 0 ? unfit.views : undefined);
   return (
     <Dialog isOpen size="wide" onOpenChange={(v) => { if (!v) onClose(); }} title={attribute ? attribute.name : `New ${title.toLowerCase()}`} description={kind === 'formula' ? 'Works out a number from this record’s fields. Type @ for a field.' : kind === 'lookup' ? 'Shows a value from a linked record.' : 'Counts or adds up linked records.'}
-      actions={<>{onArchive && <Button variant="ghost" onPress={onArchive}>Archive</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!ready} onPress={() => onSave(draft)}>{attribute ? 'Save' : `Create ${title.toLowerCase()}`}</Button></>}>
+      actions={<>{onArchive && <Button variant="ghost" onPress={onArchive}>Archive</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!ready} onPress={save}>{attribute ? (switched ? `Make it a ${kind}` : 'Save') : `Create ${title.toLowerCase()}`}</Button></>}>
       <div className="tf-rec__form">
-        <TextField label="Name" value={name} onChange={setName} autoFocus={!attribute} placeholder={kind === 'formula' ? 'Weighted value' : kind === 'lookup' ? 'Company industry' : 'Open deals'} />
-        {attribute && <span className="tf-rec__muted">{`It stays a ${title.toLowerCase()}: for ${kind === 'formula' ? 'a lookup or rollup' : kind === 'lookup' ? 'a formula or rollup' : 'a formula or lookup'}, or a different result type, create a new attribute.`}</span>}
+        {attribute ? (
+          <div className="tf-bkf__pair">
+            <TextField label="Name" value={name} onChange={setName} placeholder={kind === 'formula' ? 'Weighted value' : kind === 'lookup' ? 'Company industry' : 'Open deals'} />
+            <Select label="Kind" value={kind} onChange={(v) => { if (v) switchTo(v as ComputedKind); }} items={[{ id: 'formula', label: 'Formula', description: 'A number from this record' }, { id: 'lookup', label: 'Lookup', description: 'Text from a linked record' }, { id: 'rollup', label: 'Rollup', description: 'A number from linked records' }]} />
+          </div>
+        ) : <TextField label="Name" value={name} onChange={setName} autoFocus placeholder={kind === 'formula' ? 'Weighted value' : kind === 'lookup' ? 'Company industry' : 'Open deals'} />}
+        {switched && <Callout tone="warning">{`All ${n} ${n === 1 ? o.one.toLowerCase() : o.many.toLowerCase()} get this value worked out again${typeChanged ? `, and it gives ${resultTypeOf(kind) === 'text' ? 'text' : 'a number'} now` : ''}. Views, filters and sorts on it keep working only if the result type stays the same.`}
+          {unfit && unfit.lines.length > 0 && <><br />These go when you save (Undo brings them back):<ul className="tf-set__uses">{unfit.lines.map((l) => <li key={l}>{l}</li>)}</ul></>}</Callout>}
         {kind === 'formula' ? (
           <FormulaEditor label="Formula" value={source} onChange={setSource} attributes={formulaAttributes(state, o.id)} sample={{ name: sample?.name ?? 'A record', values: Object.fromEntries(Object.entries(sample ? valuesOf(state, o.id, sample, 2) : {}).filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, Number(v)])) }} />
         ) : (

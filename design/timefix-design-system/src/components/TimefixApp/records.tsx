@@ -134,13 +134,28 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   }) : rows;
   useEffect(() => { onExportReady?.(() => { void exportCsv(); }); }); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // This screen's own view writes; anything else that changes the saved view (an attribute's kind change, its Undo) is from elsewhere.
+  const ownWrite = useRef(false);
+  const setViews = (next: ReadonlyArray<SavedView>) => { ownWrite.current = true; dispatch({ type: 'views/set', object, views: next }); };
+  // When the saved view changes from elsewhere, unsaved changes built on the old one would show stale sorts and filters: drop them, with Undo.
+  const savedKey = saved ? JSON.stringify([saved.id, saved.sorts, saved.filters, saved.groups]) : '';
+  const lastSaved = useRef(savedKey);
+  useEffect(() => {
+    if (lastSaved.current === savedKey) return;
+    const sameView = lastSaved.current.startsWith(JSON.stringify([saved?.id]).slice(0, -1));
+    lastSaved.current = savedKey;
+    if (ownWrite.current) { ownWrite.current = false; return; }
+    if (!draft || !sameView) return;
+    const kept = draft; setDraft(undefined);
+    toast({ message: `${kept.name} changed elsewhere, so its unsaved changes were set aside`, action: { label: 'Undo', onAction: () => setDraft(kept) } });
+  }, [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!view) return null;
   // A guest sees only what's shared with them; nothing is yet in the prototype.
   if (state.previewRole === 'Guest') return <div className="tf-app__empty"><EmptyState icon={<Users size={20} strokeWidth={1.75} />} title={`No ${def.many} shared with you`} description={`As a guest you see only lists and records someone shares with you. Ask an admin of ${state.prefs.workspace.name} to share one.`} /></div>;
   const edit = (patch: Partial<SavedView>) => { setDraft({ ...view, ...patch }); if (patch.filters || patch.groups) setSelected(new Set()); };
   /** Can this person save changes over the view? Locked views and admin-only views can't be. */
   const canSave = (v: SavedView) => !v.locked && (v.access !== 'admins' || isAdmin(state));
-  const setViews = (next: ReadonlyArray<SavedView>) => dispatch({ type: 'views/set', object, views: next });
+
   // The header's column menu (Attio): sort, filter by it, hide it with Undo, or change the field in Settings.
   const columnAction = (id: string, a: ColumnAction) => {
     if (a === 'ascending' || a === 'descending') { edit({ sorts: [{ field: id, direction: a }] }); return; }

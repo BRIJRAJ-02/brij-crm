@@ -164,7 +164,7 @@ await t('2 form language: answer checks speak Spanish', async () => {
   await need(form.getByText(/Ese correo parece incompleto/), 'Spanish email check'); await shot('22-spanish-email');
   await p.getByRole('button', { name: 'Discard' }).first().click().catch(() => undefined); await p.waitForTimeout(300); if (await dialog().count()) { await dialog().getByRole('button').last().click(); await p.waitForTimeout(300); }
 });
-await t('5 computed kinds: a formula stays a formula, said in one line', async () => {
+await t('5 computed kinds: a formula offers its kind to change', async () => {
   await nav('Settings'); await p.waitForTimeout(400); await nav('Objects'); await p.waitForTimeout(400);
   await p.getByRole('button', { name: /^Deals/ }).first().click(); await p.waitForTimeout(400);
   await p.getByRole('button', { name: 'More kinds' }).click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Formula/ }).click(); await p.waitForTimeout(400);
@@ -172,7 +172,9 @@ await t('5 computed kinds: a formula stays a formula, said in one line', async (
   const ed = dialog().locator('[contenteditable=true], textarea, input').nth(1); await ed.click(); await p.keyboard.type('2 * 3'); await p.waitForTimeout(300);
   await dialog().getByRole('button', { name: 'Create formula' }).click(); await p.waitForTimeout(500);
   await p.getByRole('row', { name: /Double amount/ }).or(p.getByRole('listitem', { name: /Double amount/ })).first().click(); await p.waitForTimeout(500);
-  await need(dialog().getByText(/It stays a formula: for a lookup or rollup, or a different result type, create a new attribute\./), 'kind note'); await shot('23-formula-kind'); await esc();
+  // The owner's call (13 Nov): a formula can switch kind; the old "It stays a formula" line is gone (wH walks the switch).
+  await need(dialog().getByRole('button', { name: /Kind/ }), 'kind select'); if (await dialog().getByText(/It stays a formula/).count()) throw new Error('old kind note still shown');
+  await shot('23-formula-kind'); await esc();
 });
 await t('6 won and lost by outcome: a second won stage counts on Home, a lost outcome asks why', async () => {
   const openTotal = async () => { await back(); await nav('Home'); await p.waitForTimeout(900); return (await main().locator('.tf-stat').filter({ hasText: 'Open pipeline' }).textContent()) ?? ''; };

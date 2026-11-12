@@ -2,7 +2,7 @@ PhoneField takes a phone number with its country: a code chip ("+91") joined to 
 
 **Use it for**: a person's phone on a record, a guest's number on a booking page or form, SMS reminders. **Don't use it for** picking a country for an address (that is a Select of countries without codes) or for numbers that are not phones.
 
-**The consumer provides**: `label`, `value`/`onChange` (`{ country: 'IN', national: '9876543210' }`, digits only) or `defaultValue`, `countries` (defaults to the common list; each has a dial code and a grouping pattern), `description`, `errorMessage`, `isInvalid`, `isRequired`, `isDisabled`, `size` (`md` 36, `lg` 44 on guest pages), `name`. `phoneToString` gives "+91 98765 43210".
+**The consumer provides**: `label`, `value`/`onChange` (`{ country: 'IN', national: '9876543210' }`, digits only) or `defaultValue`, `countries` (defaults to the common list; each has a dial code and a grouping pattern), `description`, `errorMessage`, `isInvalid`, `isRequired`, `isDisabled`, `size` (`md` 36, `lg` 44 on guest pages), `name`, and for a page in another language `locale` (country names said in it through Intl.DisplayNames, dial codes kept; a hosted form passes its language's) and `words` (the chip's name, the search's name and placeholder "Country or code", and "No country matches."). `phoneToString` gives "+91 98765 43210".
 
 **States**: rest, hover, focus (accent edge on the whole box), list open (chip stays pressed), invalid, disabled.
 
