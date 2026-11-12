@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
@@ -1042,7 +1042,136 @@ export const DirtyInTrigger: Story = {
     await userEvent.click(within(dialog as HTMLElement).getByRole('button', { name: 'Cancel' }));
     const ask = await waitFor(() => within(document.body).getByRole('alertdialog'));
     await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    // Two dialogs, two ids: the confirm doesn't take the trigger's id for the dialog it opened.
+    await expect(ask.id).not.toBe((dialog as HTMLElement).id);
+    await expect(ask).toHaveAccessibleName('Discard your unsaved changes?');
     await userEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull());
+  },
+};
+
+/**
+ * Save inside a ModalTrigger, written the natural way: one `slot="close"` button whose handler saves (clearing
+ * `isDirty`). The close and the save land together, so it closes without asking to discard what was just saved.
+ */
+export const DirtySaveInTrigger: Story = {
+  args: { onOpenChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: function DirtySaveInTrigger(args) {
+    const [note, setNote] = useState('Call back Friday');
+    const [saved, setSaved] = useState('Call back Friday');
+    return (
+      <Stage>
+        <ModalTrigger>
+          <Button>Edit note</Button>
+          <Modal
+            title="Edit note"
+            variant="form"
+            isDirty={note !== saved}
+            actions={
+              <Button
+                slot="close"
+                variant="primary"
+                onPress={() => {
+                  setSaved(note);
+                  args.onOpenChange?.(false);
+                }}
+              >
+                Save
+              </Button>
+            }
+          >
+            <Field label="Note" value={note} onChange={setNote} />
+          </Modal>
+        </ModalTrigger>
+      </Stage>
+    );
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit note' }));
+    const dialog = (await openDialog()) as HTMLElement;
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'Note' }));
+    await userEvent.keyboard(', changed');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    await expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  },
+};
+
+/**
+ * A drawer whose `isDirty` and open state the story moves from outside, as an autosave and a screen's own close do.
+ * They come in as window events, since the confirm holds the page inert.
+ */
+function DrawerMovedFromOutside() {
+  const [isOpen, setOpen] = useState(true);
+  const [isDirty, setDirty] = useState(true);
+  useEffect(() => {
+    const autosave = () => {
+      setDirty(false);
+    };
+    const edit = () => {
+      setDirty(true);
+    };
+    const close = () => {
+      setOpen(false);
+    };
+    window.addEventListener('story-autosave', autosave);
+    window.addEventListener('story-edit', edit);
+    window.addEventListener('story-close', close);
+    return () => {
+      window.removeEventListener('story-autosave', autosave);
+      window.removeEventListener('story-edit', edit);
+      window.removeEventListener('story-close', close);
+    };
+  }, []);
+  return (
+    <Stage>
+      <Modal
+        title="Edit service"
+        variant="drawer"
+        isOpen={isOpen}
+        isDirty={isDirty}
+        onOpenChange={setOpen}
+        actions={<Button slot="close">Cancel</Button>}
+      >
+        <Field label="Name" defaultValue="Haircut and beard" />
+      </Modal>
+    </Stage>
+  );
+}
+
+/**
+ * An autosave that clears `isDirty` while the confirm is open takes the confirm away, and it never pops up again by
+ * itself when the form changes later: nobody asked to close.
+ */
+export const DirtyAskWithdrawn: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <DrawerMovedFromOutside />,
+  play: async ({ userEvent }) => {
+    await openDialog();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => within(document.body).getByRole('alertdialog'));
+    window.dispatchEvent(new Event('story-autosave'));
+    await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    window.dispatchEvent(new Event('story-edit'));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    await expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  },
+};
+
+/** The screen closing the drawer itself while the confirm is open closes the confirm with it. */
+export const DirtyClosedByCaller: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <DrawerMovedFromOutside />,
+  play: async ({ userEvent }) => {
+    await openDialog();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => within(document.body).getByRole('alertdialog'));
+    window.dispatchEvent(new Event('story-close'));
     await waitFor(() => expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull());
   },
 };
