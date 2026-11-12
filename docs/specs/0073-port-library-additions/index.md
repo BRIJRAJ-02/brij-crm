@@ -2,7 +2,8 @@
 
 **Date**: 2026-11-12
 **Status**: In Progress
-**Batch 1**: built (b) parts on `feat/port-2`, 12 Nov 2026; batches 2 and 3 to come
+**Batch 1**: built (b) parts on `feat/port-2`, 12 Nov 2026
+**Batches 2 and 3**: ShareSheet and AIAssist built on `feat/port-2`, 12 Nov 2026 (as built and open items below)
 **Builds on**: [0071 Port phase 0, tokens](../0071-port-tokens/index.md) (token names, the app scale, motion rules), [0003 Component library](../0003-component-library/index.md) (reuse, then variant, then new)
 
 ## Summary
@@ -111,7 +112,9 @@ Totals: 19 (a), 6 (b), 2 (c). A phase in brackets means nothing is built here; t
 
 - **Batch 1** (this lane): the six (b) rows, AC-7304 to AC-7312, plus the gate measurements.
 - **Batch 2**: ShareSheet (phase 3 puts it behind every Share button and first publish). Its own lazy chunk; `safeHref` on the URL; `downloadQr` beside QrCode.
+  - As built: ShareSheet is Modal `form` around ReadyPanel's existing `share` column (the layout the owner approved on 5 November and the forms' live dialog already draws), not a new composition of Field `copy`, CopyButton and QrCode, which would have been a second share layout. It adds no CSS. ReadyPanel gains `invite`. It is exported from `@crm/ui` rather than a subpath: tree shaking already keeps it in the chunk of the screen that opens it, and `apps/web/build.test.ts` holds it out of every first load.
 - **Batch 3**: AIAssist (phase 5, Ask AI on records). Lazy subpath `@crm/ui/ai`; text only rendering; `onAsk` from the screen.
+  - As built: AIAssist has no frame or header of its own; the screen hosts it in a Panel (title "Ask AI", the sparkle as `leading`, "about <record>" as `subtitle`, Close). AITag is Tag's `tone="ai"`; AIMark is `Icon name="sparkles" tone="ai"`.
 
 ### Where the batch 1 code lives
 
@@ -125,6 +128,28 @@ Totals: 19 (a), 6 (b), 2 (c). A phase in brackets means nothing is built here; t
 | `packages/ui/src/atoms/RemoteCursor/` | `variant="pointer"` |
 | `packages/ui/src/atoms/TextSwap/` | `variant="soft"`, `align` |
 | `packages/ui/src/atoms/Reveal/` | `variant="drop"`, `animate` |
+
+### Where the batch 2 and 3 code lives
+
+| Path | Owns |
+|---|---|
+| `packages/ui/src/modules/ShareSheet/` | `ShareSheet`, `shareableUrl` (the address gate, unit tested per scheme), README, stories, strings. No stylesheet |
+| `packages/ui/src/modules/ReadyPanel/` | `invite` (words before the link in Email and WhatsApp) |
+| `packages/ui/src/atoms/QrCode/qr-file.ts` | `downloadQr`, `qrPng`, `qrSvg`, `saveFile` (moved from `apps/web` link page's `qr-png.ts`, which now re-exports them) |
+| `packages/ui/src/ai.ts`, `src/ai.test.ts` | `@crm/ui/ai`, and the proof that the main and public entries never reach it |
+| `packages/ui/src/modules/AIAssist/` | `AIAssist`, the internal ThinkingLine and StreamText, `stream.ts` (the block cutting and reveal pace, pure, unit tested), its stylesheet, README, stories, strings |
+| `packages/ui/src/atoms/Tag/` | `tone="ai"` |
+| `apps/web/build.test.ts` | ShareSheet and Ask AI never in `index.html`, `book.html` or `form.html`'s first load; `ai` among the heavy entries |
+
+### Open items (after batches 2 and 3)
+
+- **Screenshots**: no baselines exist for ShareSheet, AIAssist, Tag's `ai` tone, or batch 1's parts. They need `pnpm test:visual --update` in the pinned image (Docker), with the baseline folder diffed, before the visual job can hold them. Not run in this lane (no Docker on the shared laptop).
+- **Firefox and WebKit**: the new stories ran in Chromium only. WebKit should be watched for the status line's shimmer (`background-clip: text` over TextSwap's moving words).
+- **The build test holds trivially until a screen adopts them**: neither ShareSheet nor AIAssist is in any chunk yet. It was made to fail once by importing both into `main.tsx`. Phase 3 (ShareSheet behind Share) and phase 5 (Ask AI) make it load bearing.
+- **One bubble part**: AIAssist's question uses BookingChat's bubble tokens; a shared bubble part is owed when phase 3 touches BookingChat.
+- **One reading pace**: AIAssist reveals at 50 ms a step and swaps status steps every 2 s (constants in its file); BookingChat writes at 40 ms a word (`--stream-step`). One named pace is owed.
+- **Enter or ⌘Enter**: AIAssist asks on Enter (a chat prompt), CommentComposer sends on ⌘Enter (a composed message). Worth a `ux-interaction-reviewer` look when phase 5 puts Ask AI on records.
+- **Swaps owed to later phases (AC-7316)**: the forms' `ShareBlock` and live dialog, the link page's Share modal, and the booking and menu Copy link buttons move onto ShareSheet in phase 3; `apps/web` link page's `qr-png.ts` re-export goes once its screens use `downloadQr`.
 
 ### Not ported from the prototype (and why)
 

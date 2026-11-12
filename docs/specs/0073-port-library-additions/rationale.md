@@ -140,3 +140,31 @@ The per chunk gzip sizes (750 JavaScript chunks) are kept with the batch's measu
 The first load's 80 byte drop is build to build variation, not a saving: no first load file changed. The first loads still hold the same library parts (`index.html` Kbd; `book.html` Avatar and Kbd; `form.html` Field, Select and Kbd), so none of the batch's code or CSS reaches a first load.
 
 Per chunk (715 JavaScript chunks, gzipped): two grew by 100 bytes or more, none by 1 kB. The shared `Modal` chunk grew 235 B (3,507 to 3,742: the `isDirty` guard and its confirm) and the `Reveal` chunk 232 B (209 to 441: the `drop` variant). All chunks together grew 533 B. SearchField, NumberField, TimeSelect and PresenceGroup are in no chunk yet, since no screen imports them; their cost lands with the phase that adopts them, which AC-7316 measures.
+
+### Measurements after batches 2 and 3 (88cd7b490, `pnpm size`, gzipped)
+
+| Line | Before batch 2 (2bce699ff) | After batch 2 (0e28fbf4e) | After batch 3 and the review (88cd7b490) | Budget |
+|---|---|---|---|---|
+| First load JavaScript | 296.56 kB | 296.6 kB | 296.61 kB | 297 kB (kept) |
+| First load CSS | 7.86 kB | 7.86 kB | 7.86 kB | 8.3 kB (kept) |
+| Hosted form JavaScript | 205.91 kB | 205.91 kB | 205.9 kB | 206.4 kB (kept) |
+| Hosted form CSS | 18.57 kB | 18.57 kB | 18.57 kB | 18.8 kB (kept) |
+| Form step layouts, lazy | 5.74 kB | 5.74 kB | 5.74 kB | 6.2 kB (kept) |
+| Form signature and ranking, lazy | 6.25 kB | 6.25 kB | 6.25 kB | 6.7 kB (kept) |
+| Booking page JavaScript | 188.9 kB | 188.9 kB | 188.89 kB | 189.4 kB (kept) |
+| Booking page CSS | 19.37 kB | 19.37 kB | 19.37 kB | 19.5 kB (kept) |
+| Media, picture and gallery, next times, notice sheet | 1.14, 1.67, 1.37 kB, 463 B | the same | the same | kept |
+
+Every line sits within 0.5 kB of its budget, so none is tightened. The first load JavaScript's 50 byte rise is not code: no first load module changed (the entry chunk carries none of ShareSheet's, AIAssist's, Tag's or ReadyPanel's code or words), and the entry's map of 618 lazy chunk file names re-hashed, with one renamed (`qr-png` to `qr-file`). Batch 1 measured the same kind of drift the other way (296.64 to 296.56).
+
+Per chunk (865 JavaScript and CSS entries, gzipped, keys with their hashes stripped): none grew by 100 bytes or more. The QR helpers' 944 B chunk is the same bytes under its new name; Tag's chunk grew 65 B of JavaScript and 18 B of CSS (the `ai` tone); all chunks together shrank 28 B. ShareSheet and AIAssist are in no chunk yet, since no screen imports them; their cost lands with phases 3 and 5.
+
+### Calls made while building batches 2 and 3
+
+1. **ShareSheet on ReadyPanel's share column.** The mapping said "Modal, Field `copy`, CopyButton, QrCode and Button". ReadyPanel's `share` variant already composes those, in the layout the owner approved on 5 November 2026, and the forms' live dialog already draws it in a Modal. Building the share layout again from its parts would have been a second look for one moment; reuse came first. The design system review agreed (12 November 2026).
+2. **ShareSheet stays on the main entry.** A subpath of its own would only matter if a first load reached it; tree shaking keeps it with the screen that opens it, and the build test holds that. QrCode and `uqr` already travel this way.
+3. **The address gate is stricter than `safeHref`.** A share goes to another device, so only absolute `http:` and `https:` pass; a path, `mailto:` or `tel:` is refused with `javascript:`, `data:` and `vbscript:`. A refused address draws one danger line and Done, and no QR code, copy, link or footer.
+4. **AIAssist frameless.** The review found its own card and header duplicated Panel (whose README names the assistant) and Card, so the frame, title and Close are the host's; New question moved into the answer's row.
+5. **AIAssist's answer accepts a stream.** `onAsk` may return a promise of the whole text (revealed two words a step, within 60 steps) or an async iterable of pieces (drawn once a frame), with an abort signal for Stop. A real model streams; the prototype's promise only fits a demo.
+6. **Screen reader announcements.** The prototype made the streaming answer a polite live region. One always present status region says "Working on an answer", "Answer ready" or "Stopped." instead, since a region that is busy then idle is not announced reliably and reading every piece would talk over itself.
+7. **A check that could not fail.** `apps/web/build.test.ts`'s link page check looked for `ws-LinkPage-`; `uiVite()` writes class names in kebab case (`ws-link-page-root`), so it never matched anything. It now looks for `ws-link-page-` and still passes.
