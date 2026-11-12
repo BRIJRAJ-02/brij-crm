@@ -555,6 +555,33 @@ describe('client preset (packages/data, packages/ui)', () => {
       'src/adjacent.ts':
         "export function put(node: HTMLElement, html: string): void {\n  node.insertAdjacentHTML('beforeend', html);\n}\n",
       'src/text.ts': 'export function put(node: HTMLElement, text: string): void {\n  node.textContent = text;\n}\n',
+      // The review's bypasses (12 November 2026), each its own file so each must be refused on its own.
+      'src/computed.ts':
+        "export function put(node: HTMLElement, html: string): void {\n  node['innerHTML'] = html;\n}\n",
+      'src/assign.ts':
+        'export function put(node: HTMLElement, innerHTML: string): void {\n  Object.assign(node, { innerHTML });\n}\n',
+      'src/reflect.ts':
+        "export function put(node: HTMLElement, html: string): void {\n  Reflect.set(node, 'innerHTML', html);\n}\n",
+      'src/define.ts':
+        "export function put(node: HTMLElement, html: string): void {\n  Object.defineProperty(node, 'outerHTML', { value: html });\n}\n",
+      'src/unsafe.ts':
+        'export function put(node: Element, html: string): void {\n  (node as Element & { setHTMLUnsafe(html: string): void }).setHTMLUnsafe(html);\n}\n',
+      'src/fragment.ts':
+        'export function put(range: Range, html: string): DocumentFragment {\n  return range.createContextualFragment(html);\n}\n',
+      'src/write.ts': 'export function put(html: string): void {\n  document.write(html);\n}\n',
+      'src/writeln.ts':
+        'export function put(frame: HTMLIFrameElement, html: string): void {\n  frame.contentDocument?.writeln(html);\n}\n',
+      'src/SrcDoc.tsx':
+        'export function SrcDoc({ html }: { html: string }) {\n  return <iframe title="Preview" srcDoc={html} />;\n}\n',
+      'src/frame-srcdoc.ts':
+        'export function put(frame: HTMLIFrameElement, html: string): void {\n  frame.srcdoc = html;\n}\n',
+      'src/CreateElement.tsx':
+        "import { createElement } from 'react';\nexport function Raw({ html }: { html: string }) {\n  return createElement('p', { dangerouslySetInnerHTML: { __html: html } });\n}\n",
+      'src/Spread.tsx':
+        'export function Raw({ html }: { html: string }) {\n  return <p {...{ dangerouslySetInnerHTML: { __html: html } }} />;\n}\n',
+      // Reading the HTML, and an ordinary write to a stream, are not raw HTML.
+      'src/reads.ts':
+        'export function read(node: HTMLElement, out: WritableStreamDefaultWriter<string>): string {\n  const { innerHTML } = node;\n  void out.write(innerHTML);\n  return node.innerHTML;\n}\n',
     });
     messages = await lintWorkspace(root, client({ root }));
   }, 60_000);
@@ -575,12 +602,28 @@ describe('client preset (packages/data, packages/ui)', () => {
     ['dangerouslySetInnerHTML', 'src/RawHtml.tsx'],
     ['an outerHTML assignment', 'src/outer.ts'],
     ['insertAdjacentHTML', 'src/adjacent.ts'],
+    ['an innerHTML assignment through a computed key', 'src/computed.ts'],
+    ['Object.assign with an innerHTML key', 'src/assign.ts'],
+    ['Reflect.set of innerHTML', 'src/reflect.ts'],
+    ['Object.defineProperty of outerHTML', 'src/define.ts'],
+    ['setHTMLUnsafe', 'src/unsafe.ts'],
+    ['createContextualFragment', 'src/fragment.ts'],
+    ['document.write', 'src/write.ts'],
+    ['a frame document’s writeln', 'src/writeln.ts'],
+    ['the srcDoc attribute', 'src/SrcDoc.tsx'],
+    ['a srcdoc assignment', 'src/frame-srcdoc.ts'],
+    ['dangerouslySetInnerHTML in createElement’s props', 'src/CreateElement.tsx'],
+    ['dangerouslySetInnerHTML in a spread object', 'src/Spread.tsx'],
   ])('refuses %s in client code (spec 0073, AC-7317)', (_name, file) => {
     expect(messagesFor(messages, file).join()).toMatch(/never raw HTML/);
   });
 
   it('lets client code set text', () => {
     expect(rulesFor(messages, 'src/text.ts')).not.toContain('no-restricted-syntax');
+  });
+
+  it('lets client code read HTML and write to a stream', () => {
+    expect(messagesFor(messages, 'src/reads.ts').join()).not.toMatch(/never raw HTML/);
   });
 
   it('refuses a database driver in client code', () => {

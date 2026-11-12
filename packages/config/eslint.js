@@ -230,11 +230,42 @@ const syntax = {
       message: 'Render text, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
     },
     {
-      selector: 'AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML)$/]',
+      selector: 'JSXAttribute[name.name=/^(srcDoc|srcdoc)$/]',
+      message: 'Render text, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      selector: 'AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML|srcdoc)$/]',
       message: 'Set textContent, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
     },
     {
-      selector: "CallExpression > MemberExpression.callee[property.name='insertAdjacentHTML']",
+      // The same written as a computed key: el['innerHTML'] = html.
+      selector:
+        'AssignmentExpression > MemberExpression.left[computed=true][property.value=/^(innerHTML|outerHTML|srcdoc)$/]',
+      message: 'Set textContent, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      // An object that sets raw HTML when it is handed on: Object.assign(el, { innerHTML }), React's props as
+      // createElement(tag, { dangerouslySetInnerHTML }) or a JSX spread of such an object.
+      selector:
+        'ObjectExpression > Property[key.name=/^(innerHTML|outerHTML|srcdoc|srcDoc|dangerouslySetInnerHTML)$/], ' +
+        'ObjectExpression > Property[key.value=/^(innerHTML|outerHTML|srcdoc|srcDoc|dangerouslySetInnerHTML)$/]',
+      message: 'Set text, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      // Reflect.set(el, 'innerHTML', html), and Object.defineProperty or Reflect.defineProperty doing the same.
+      selector:
+        'CallExpression[callee.object.name=/^(Reflect|Object)$/][callee.property.name=/^(set|defineProperty)$/][arguments.1.value=/^(innerHTML|outerHTML|srcdoc)$/]',
+      message: 'Set textContent, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      selector:
+        'CallExpression > MemberExpression.callee[property.name=/^(insertAdjacentHTML|setHTMLUnsafe|parseHTMLUnsafe|createContextualFragment)$/]',
+      message: 'Insert nodes, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
+    },
+    {
+      // document.write and writeln, on the page's document or a frame's.
+      selector:
+        'CallExpression > MemberExpression.callee[property.name=/^(write|writeln)$/]:matches([object.name=/^(document|doc)$/], [object.property.name=/^(document|contentDocument|ownerDocument)$/])',
       message: 'Insert nodes, or HTML through a sanitiser with a test (spec 0073, AC-7317); never raw HTML.',
     },
   ],
