@@ -100,6 +100,11 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 }
 
 export default [
+  // 12 November 2026, spec 0073 (port phase 2, AC-7313): every line tightened to its measurement plus at most 0.5 kB,
+  // as the owner asked ("cut it a lot"); lines already within 0.5 kB of their measurement stay. Measured after batch 1
+  // on feat/port-2: first load 296.56 kB and 7.86 kB, hosted form 205.91 kB, step layouts 5.74 kB, signature and
+  // ranking 6.25 kB, booking page 188.9 kB. A port phase that needs more room raises a line in its own spec, with
+  // the measurement.
   // 300 kB from 2 November 2026 (the owner, "raise it to 300"): the CRM UI pass (follows, sample data, Excel import
   // and export) took the first load to 252.34 kB, and the cars behind it add a little more. Room for those, not a
   // licence to grow: keep trimming toward the old line.
@@ -107,8 +112,8 @@ export default [
   // their addresses are read up front by the command menu, and a contact card gained its second and third email,
   // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
   // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '300 kB', gzip: true, running: false },
-  { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '297 kB', gzip: true, running: false },
+  { name: 'First load CSS (gzipped)', path: inDist(css), limit: '8.3 kB', gzip: true, running: false },
   // 223 kB from 26 October 2026: forms take files (spec 0023's uploads). The question's drop area brings React
   // Aria's drag and drop code, which took the form to 245.52 kB, 24.52 kB over. That is not what a form without a
   // file question should pay, so `FileQuestion` now loads on its own behind a Skeleton (`Question.tsx`), which
@@ -119,7 +124,7 @@ export default [
   // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
   // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.4 kB', gzip: true, running: false },
   // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
@@ -132,7 +137,7 @@ export default [
   {
     name: 'Form step layouts, lazy (gzipped)',
     path: inDist([...steps.js, ...steps.css]),
-    limit: '10 kB',
+    limit: '6.2 kB',
     gzip: true,
     running: false,
   },
@@ -141,11 +146,11 @@ export default [
   {
     name: 'Form signature and ranking, lazy (gzipped)',
     path: inDist([...batchTwo.js, ...batchTwo.css]),
-    limit: '14 kB',
+    limit: '6.7 kB',
     gzip: true,
     running: false,
   },
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '189.4 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).

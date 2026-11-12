@@ -77,7 +77,9 @@ Option 2 is the house order (reuse, then variant, then new) applied part by part
 6. **The pointer's arrow.** Options: a Lucide `mouse-pointer-2` icon (about 90 bytes on every page's icon registry, per `packages/ui/AGENTS.md`), or a CSS shape. Pick the CSS shape (`clip-path` polygon, sized by tokens), so the first load does not grow.
 7. **SoftText's width easing.** The prototype measures both widths in a layout effect and animates `width`. Pick the CSS only crossfade in one grid cell (the wider value holds the width while they cross, then it settles), the same technique TextSwap already uses, so it costs no layout reads.
 8. **The HTML gate.** No file in `apps/` or `packages/` sets `dangerouslySetInnerHTML` today, and no sanitiser exists. Options: add DOMPurify now, or refuse HTML injection by lint and add a sanitiser only when a part truly needs HTML. Pick the lint rule now (refusing `dangerouslySetInnerHTML`, assignments to `innerHTML` and `outerHTML`, and `insertAdjacentHTML`), and DOMPurify through the vendor wrapper rule the day a part needs it, with its test. RichTextEditor renders through its Tiptap schema and HostedForm renders text, so neither needs one.
-9. **Budgets.** Tighten every line to the measurement plus at most 0.5 kB, as the owner asked ("cut it a lot"). Lines that already sit within 0.5 kB stay where they are.
+9. **NumberField's step buttons.** The prototype shows them by default. Pick off by default, on with `showSteppers`: about fifty numeric fields in the app are settings typed once, the buttons cannot leave the tab order without a Button prop phase 1 owns, so on by default would add two tab stops to each. Stepper stays the guest pages' boxless count.
+10. **Reduced motion.** The prototype stops everything under reduced motion. The house rule keeps fades and drops movement, so TextSwap `soft` keeps its cross fade, Reveal `drop` keeps a fade with no height or rise, and the idle pointer keeps its fade (the design system review, 12 Nov).
+11. **Budgets.** Tighten every line to the measurement plus at most 0.5 kB, as the owner asked ("cut it a lot"). Lines that already sit within 0.5 kB stay where they are.
 
 ## Gaps in the (a) parts, by the phase that closes them
 
@@ -121,6 +123,20 @@ Which library parts sit in each first load (by their `ws-<component>` class name
 
 The per chunk gzip sizes (750 JavaScript chunks) are kept with the batch's measurements, and the batch commit names any chunk that grew by more than 1 kB (AC-7315).
 
-### Measurements after batch 1
+### Measurements after batch 1 (a1d94486f, `pnpm size`, gzipped)
 
-Filled in by the batch 1 commit.
+| Line | Base | After batch 1 | New budget |
+|---|---|---|---|
+| First load JavaScript | 296.64 kB | 296.56 kB | 297 kB (was 300) |
+| First load CSS | 7.86 kB | 7.86 kB | 8.3 kB (was 40) |
+| Hosted form JavaScript | 205.91 kB | 205.91 kB | 206.4 kB (was 223) |
+| Hosted form CSS | 18.57 kB | 18.57 kB | 18.8 kB (kept, within 0.5 kB) |
+| Form step layouts, lazy | 5.75 kB | 5.74 kB | 6.2 kB (was 10) |
+| Form signature and ranking, lazy | 6.25 kB | 6.25 kB | 6.7 kB (was 14) |
+| Booking page JavaScript | 188.89 kB | 188.9 kB | 189.4 kB (was 230) |
+| Booking page CSS | 19.37 kB | 19.37 kB | 19.5 kB (kept) |
+| Media, picture and gallery, next times, notice sheet | 1.14, 1.67, 1.37 kB, 463 B | 1.14, 1.67, 1.37 kB, 463 B | kept (each within 0.5 kB) |
+
+The first load's 80 byte drop is build to build variation, not a saving: no first load file changed. The first loads still hold the same library parts (`index.html` Kbd; `book.html` Avatar and Kbd; `form.html` Field, Select and Kbd), so none of the batch's code or CSS reaches a first load.
+
+Per chunk (715 JavaScript chunks, gzipped): two grew by 100 bytes or more, none by 1 kB. The shared `Modal` chunk grew 235 B (3,507 to 3,742: the `isDirty` guard and its confirm) and the `Reveal` chunk 232 B (209 to 441: the `drop` variant). All chunks together grew 533 B. SearchField, NumberField, TimeSelect and PresenceGroup are in no chunk yet, since no screen imports them; their cost lands with the phase that adopts them, which AC-7316 measures.
