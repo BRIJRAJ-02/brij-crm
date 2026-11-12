@@ -173,16 +173,21 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveTitle('Sign in or sign up · Timefix');
   // A one field page puts focus in its field on the first load too.
   await expect(page.getByLabel('Email')).toBeFocused();
-  // One narrow column for the form (spec 0036): at most 400 px, and 16 px from each edge on a phone. On a wide
-  // screen the split card puts the sketch beside it, so the field's column is measured, not the whole card.
+  // One narrow column for the form (spec 0036): at most 400 px, and a space-16 gutter from each edge on a phone.
+  // Sign in draws at app scale (spec 0071), so the gutter is read from the token, not assumed to be 16 px. On a
+  // wide screen the split card puts the sketch beside it, so the field's column is measured, not the whole card.
   const card = page.getByRole('main');
   const signInBox = await card.boundingBox();
   const fieldBox = await page.getByLabel('Email').boundingBox();
+  const gutter = await page.evaluate(() =>
+    Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-16')),
+  );
+  expect(gutter).toBeGreaterThan(0);
   expect(signInBox !== null && fieldBox !== null).toBe(true);
   if (signInBox !== null && fieldBox !== null) {
     expect(fieldBox.width).toBeLessThanOrEqual(400);
-    expect(fieldBox.x).toBeGreaterThanOrEqual(16);
-    expect(signInBox.x).toBeGreaterThanOrEqual(16);
+    expect(fieldBox.x).toBeGreaterThanOrEqual(gutter);
+    expect(signInBox.x).toBeGreaterThanOrEqual(gutter);
   }
   await checkScreen(page, '1-sign-in');
 
