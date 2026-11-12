@@ -2,6 +2,7 @@
 
 **Date**: 2026-11-12
 **Status**: In Progress
+**Batch 1**: built on `feat/port-3`, 12 Nov 2026 (as built, measurements and open items below)
 **Builds on**: [0073 Port phase 2, library additions](../0073-port-library-additions/index.md) (ShareSheet, `shareableUrl`, `downloadQr`, the three gates), [0071 Port phase 0, tokens](../0071-port-tokens/index.md) (the app scale, no zoom, motion tokens), [0068 Professional pages and Publish](../0068-professional-pages-publish/index.md) (PublishBar and the publish data), spec 0072 (phase 1, on `feat/port-1`: restyles the 72 shared parts)
 
 ## Summary
@@ -26,9 +27,9 @@ The mapping evidence, the options and the picks: [rationale.md](rationale.md).
 
 Share and publish
 - **AC-7401**: Every dialog in `apps/web` whose job is to hand out a public address (the forms' live dialog, the link page's Share, the menu's live link and QR) is ShareSheet. No screen draws its own QR code beside a Copy link button inside a Modal.
-- **AC-7402**: The forms' Share tab draws its link row from ReadyPanel's `share` column directly; `ShareBlock.tsx` is deleted. Saving a QR code anywhere in `apps/web` goes through `downloadQr` or the library's `qrPng`, `qrSvg` and `saveFile`; `apps/web/src/features/link-page/qr-png.ts` is deleted and nothing imports it.
+- **AC-7402**: The forms' and the booking page's Share tabs draw their link row with `ShareColumn` (ShareSheet's body, exported beside it, so a tab and the sheet never drift); `ShareBlock.tsx` is deleted. Saving a QR code anywhere in `apps/web` goes through `downloadQr` or the library's `qrPng`, `qrSvg` and `saveFile`; `apps/web/src/features/link-page/qr-png.ts` is deleted and nothing imports it.
 - **AC-7403**: ShareSheet takes `qrStyle` (the link page's saved colour, centre picture and frame label, spec 0061 AC-6124) and draws the code in it, on screen and in what Download saves. ReadyPanel takes the same `qrStyle` for its `share` column. Both are additive props; neither part's look changes.
-- **AC-7404**: The link page's Share keeps every way it has today: the code in the owner's saved style, Copy link, Download, Open page, Links for each place, Style the code, Add to Wallet (when read), and the workspace's name line. A page that turns Private while Share is open says so in the sheet's line and offers Turn on Live, and its extra ways hide.
+- **AC-7404**: The link page's Share keeps every way it has today: the code in the owner's saved style, Copy link, Download, Open page, Links for each place, Style the code, Add to Wallet (when read), and the workspace's name line. A page that turns Private while Share is open says so at the sheet's foot with Turn on Live beside it ("Private. Only you can open it. · Turn on Live", the forms' footer pattern), and its extra ways other than Open page hide.
 - **AC-7405**: A menu's publish ends on ShareSheet titled "Your menu is live", with Open guest menu among its ways. The split button's "Show QR code" becomes "Share" and opens the same sheet titled "Share your menu". With no place to link to, the publish says it with a toast and Share is not offered.
 - **AC-7406** (batch 2): Every public thing that has an editor or a card has one Share button that opens ShareSheet: booking pages (with Offer specific times, One time link and Add to link page as its own ways), the workspace link, team pages, the business page. One press Copy link buttons stay where they are today (owner, 5 November 2026: the address copies in one press).
 - **AC-7407** (batch 3): Every editor of a published thing heads with PublishBar: the link page (today), Settings › Brand (today), forms, menus and the business page, replacing `EditorStatus` and each screen's own publish buttons there. A booking page keeps its one step save (owner, 9 November 2026: no draft waits), drawn as PublishBar where Publish saves and publishes at once. A first publish ends on ShareSheet titled "<name> is live"; later publishes say Published in the bar.
@@ -37,6 +38,7 @@ Share and publish
 Guest looks on popups (batch 4)
 - **AC-7409**: Every popup opened on a guest page (Popover, Menu, Select, ComboBox, DatePicker, Tooltip, Modal in every variant) is portalled inside that page's themed root, so it wears the page's theme, template, font, corners and colours. The hosted form, the link page, the booking page and the booking manage page gain it; the menu, business and reservation pages keep theirs.
 - **AC-7410**: A popup in the app (not on a guest page) is unchanged: it portals to `document.body` and wears the app's theme.
+- **AC-7426**: A guest page's popups carry `--size-topbar: var(--size-bar)` (spec 0071's legacy `size-bar`, 46px, which the guest pages' own bars use; MenuList's root already sets it), so a guest sheet's or dialog's header is the height of the page's bars, never the app's `size-topbar`. A story measures a sheet's header against the page's bar on the menu, link and booking pages.
 
 Record panel (batch 5)
 - **AC-7411**: The record panel floats over the right of the content area at its full height, below the top bar, inset by the content's own padding, never pushing the table or board. Its width is `size-panel`; it enters over `duration-slow` and leaves over `duration-medium` on `ease-smooth-out`, and reduced motion keeps only the fade.
@@ -95,7 +97,7 @@ Gate 3: scalability
 | Exists | `GuestLook` (`modules/GuestLook/`) and `MenuList` wrap their page in `UNSAFE_PortalProvider` whose container is a div inside the themed root, so every React Aria overlay opened inside portals there and inherits the page's tokens. The menu, business and reservation pages use it |
 | Gap | The hosted form (`public-form` FormGround: theme, corners, template and page variables on its root), the link page (`LinkPage` root: theme, font, shape, ground, fill, hue, template), the booking page and the manage page (`BookingFrame`: template and Night or Studio theme) portal popups to `document.body`, so Select, the phone country picker, the gated link notice, the gallery viewer, Tooltips, the visitor bar's menu, add to calendar, Share and the change Modals open in the app's light theme |
 | Prototype | `LookContext` re-applies the look's `data-theme` and style on each Popover and Dialog root. It misses Drawer and Tooltip |
-| Change | Not LookContext: the real app's portal host is the better mechanism (CSS variables and `data-*` selectors cascade into the popup with no copying, and every overlay, Tooltip and sheet included, follows). One small library helper, `PopupHost` (the PortalProvider plus its host div, from GuestLook), used by GuestLook, MenuList, FormGround, LinkPage and BookingFrame |
+| Change | Not LookContext: the real app's portal host is the better mechanism (CSS variables and `data-*` selectors cascade into the popup with no copying, and every overlay, Tooltip and sheet included, follows). One small library helper, `PopupHost` (the PortalProvider plus its host div, from GuestLook), used by GuestLook, MenuList, FormGround, LinkPage and BookingFrame; its host div also sets `--size-topbar: var(--size-bar)` (AC-7426, the coordinator's note of 12 Nov: phase 0's legacy `size-bar` is what the guest pages' bars use) |
 | Touches | `packages/ui`: GuestLook, MenuList, public-form FormParts, LinkPage, public-booking BookingFrame. `apps/web`: none (the pages already render those roots). Budgets: JavaScript only, no CSS, on `book.html` and `form.html` |
 
 ### Item 3: PublishBar and ShareSheet everywhere (batches 1 to 3)
@@ -105,8 +107,8 @@ Share surfaces today, and what each becomes:
 | Screen | Today | Becomes | Batch |
 |---|---|---|---|
 | Forms, after the first publish | `ReadyDialog` (`forms/PublishDialog.tsx`): Modal around `ShareBlock` (ReadyPanel `share`), footer filing line | ShareSheet: title "<form> is live", `embedHref` to the Share tab, `footer` the filing line with Change | 1 |
-| Forms › Share tab, link row | `ShareBlock` inline | ReadyPanel `share` with `downloadQr`; `ShareBlock.tsx` deleted | 1 |
-| Link page › Share | `ShareLinkPageModal`: Modal, QrCode `fill` in the saved style, Callout when private, Field `copy`, More row, Open page and Download in the footer | ShareSheet with `qrStyle`; workspace line as `description`; Open page, Links for each place, Style the code and Add to Wallet in `extra`; private: the private line and Turn on Live | 1 |
+| Forms › Share tab and booking page › Share tab, link row | `ShareBlock` inline (the booking page imported the forms' one) | `ShareColumn`; `ShareBlock.tsx` deleted | 1 |
+| Link page › Share | `ShareLinkPageModal`: Modal, QrCode `fill` in the saved style, Callout when private, Field `copy`, More row, Open page and Download in the footer | ShareSheet with `qrStyle`; workspace line as `description`; Open page, Links for each place, Style the code and Add to Wallet in `extra`; private: the private line and Turn on Live in `footer`; loaded apart (`features/share`) | 1 |
 | Link page › overview card, Download | `qrPng` and `saveFile` from `qr-png.ts` | `downloadQr` | 1 |
 | Menus › Publish, then live; Show QR code | `PublishDialog` live stage: Callout with the link and CopyButton, QrCode `md`, Open guest menu, Done | ShareSheet ("Your menu is live" after a publish, "Share your menu" from Share), Open guest menu in `extra` | 1 |
 | Insights, team pages, Menu QR, Table drawer | Import `saveFile`, `qrPng`, `qrSvg` from `qr-png.ts` | Import them from `@crm/ui` | 1 |
@@ -131,7 +133,7 @@ Kept as they are (not share dialogs): Insights' named, revocable share links (th
 1. **ShareSheet behind every share dialog that exists** (this lane): AC-7401 to AC-7405, AC-7417 to AC-7421, AC-7423. Smallest risk: the part exists and three hand made dialogs go.
 2. **A Share button where there is none**: AC-7406, with the same gates.
 3. **PublishBar on every editor**: AC-7407, AC-7408; each editor's change list read from the data it already holds.
-4. **Guest looks on popups**: AC-7409, AC-7410.
+4. **Guest looks on popups**: AC-7409, AC-7410, AC-7426.
 5. **The record panel**: AC-7411 to AC-7413, AC-7425.
 6. **The drag wrapper**, after phase 1 merges: AC-7414 to AC-7416, AC-7422, AC-7424.
 
@@ -146,18 +148,54 @@ Kept as they are (not share dialogs): Insights' named, revocable share links (th
 
 | Path | Owns |
 |---|---|
-| `packages/ui/src/modules/ShareSheet/` | `qrStyle` (and its README and a story) |
+| `packages/ui/src/modules/ShareSheet/` | `qrStyle`, `ShareColumn` (the sheet's body for a Share tab), their README sections and stories (`Styled`, `Column`, `ColumnRefused`) |
 | `packages/ui/src/modules/ReadyPanel/` | `qrStyle` for the `share` column's code |
 | `apps/web/src/features/forms/PublishDialog.tsx` | ReadyDialog on ShareSheet |
-| `apps/web/src/features/forms/ShareTab.tsx` | the link row on ReadyPanel; `ShareBlock.tsx` deleted |
+| `apps/web/src/features/forms/ShareTab.tsx`, `booking/PageEditor.tsx` | the link row on ShareColumn; `ShareBlock.tsx` deleted |
+| `apps/web/src/features/share/` | `lazyShareSheet(load)`: the sheet loaded apart for the link page and Menus, mounted once first opened, preloaded when idle |
 | `apps/web/src/features/link-page/LinkPageScreen.tsx` | Share on ShareSheet; `ShareLinkPageModal.tsx` deleted |
-| `apps/web/src/features/menus/PublishDialog.tsx`, `MenusScreen.tsx` | the live stage on ShareSheet, Share in the split's menu |
+| `apps/web/src/features/menus/PublishDialog.tsx`, `MenusScreen.tsx` | the review Modal and ShareSheet side by side (one exits as the other enters), Share in the split's menu, the sheet preloaded when the screen is idle |
 | `apps/web/src/features/link-page/qr-png.ts` | deleted; its importers use `@crm/ui` |
+
+### Batch 1 as built
+
+- **ShareColumn instead of ReadyPanel directly** (AC-7402): a Share tab composing ReadyPanel would have repeated the address gate (`shareableUrl` is not exported), the download and its failure toast and the words, which is what `ShareBlock` was. The booking page's Share tab used the forms' `ShareBlock` too (it said "QR code for the form's link" on a booking page); both tabs now draw ShareColumn and name the code after the thing.
+- **Loaded apart** (AC-7419): drawn statically, ShareSheet grew the link page route by 2.4 kB of JavaScript and 1.5 kB of CSS and the menus route by 3.5 kB and 1.5 kB. Loaded apart (`features/share`, the screen passing its own `import()` so it joins the route's existing preload list), the link page route grows 0.3 kB of JavaScript and no CSS, and the menus route shrinks 4.4 kB and 0.4 kB. The forms and booking editors draw ShareColumn on their Share tab, so they load it statically.
+- **Menus**: the review Modal and the sheet are mounted side by side (`isOpen` by stage), so after a publish one exits as the other enters with no frame of bare page between them; with no place, a publish says it in a toast and the dialog closes; a place gone while the sheet is open closes it.
+- **Link page**: "Private. Only you can open it. · Turn on Live" sits in the sheet's footer (the forms' "Answers go to People · Change" pattern), not in the row of ways to share; the Wallet pass is offered only for an `https:` address.
+- **Names**: the link page's code saves as `<handle>-qr.png` (was `<handle>-link-page.png`), from the sheet and the overview card alike; the email subject is `@handle`.
+
+Measurements (gzip; the route lines are each route component's static closure past the first load):
+
+| Line | Before (48d2373ad) | After batch 1 | Change |
+|---|---|---|---|
+| First load JavaScript | 296.61 kB | 296.63 kB | +20 B (no first load module changed; the entry's map of lazy chunk names, within the ±20 B allowance) |
+| First load CSS, hosted form JS and CSS, booking page JS and CSS, the lazy form and booking chunks | 7.86, 205.9, 18.57, 188.89, 19.37 kB; 5.74, 6.25, 1.14, 1.67, 1.37 kB, 463 B | the same | 0 |
+| Link page route (`w.$slug.link-page`) | 466,946 B JS, 62,600 B CSS | 467,265, 62,600 | +319 B JS |
+| Link page in a partner's frame (`embed.$clientId.link-page`) | 462,450, 60,868 | 462,774, 60,868 | +324 B JS |
+| Profile settings (draws the link page loader) | 471,712, 63,760 | 472,036, 63,760 | +324 B JS |
+| Menus (`w.$slug.menus`) | 331,543, 50,544 | 327,115, 50,119 | −4,428 B JS, −425 B CSS |
+| Form editor (`captures_.forms.$formId`) | 485,242, 59,266 | 486,098, 59,671 | +856 B JS, +405 B CSS |
+| Booking page editor (`captures_.links.$pageId`) | 448,947, 58,471 | 449,847, 58,876 | +900 B JS, +405 B CSS |
+| Insights; Menu QR and its print sheet | 297,196; 248,063; 246,679 | 297,303; 248,124; 246,739 | +107, +61, +60 B JS (the QR helpers now come from `@crm/ui`'s chunk) |
+
+The form and booking editors grow because ShareColumn draws a refused address with Callout (the address gate the old `ShareBlock` lacked) and its chunk carries ShareSheet; no route lost any behaviour for it.
+
+The share code itself (source, gzip -9, files wholly about sharing plus the share blocks inside mixed files): 6,343 B before (`ShareBlock.tsx`, the forms `PublishDialog.tsx`, `ShareLinkPageModal.tsx`, `share-strings.ts`, `qr-png.ts`, the menus live stage, the link page's call site), 4,712 B after (the forms `PublishDialog.tsx`, `share-strings.ts`, `features/share/`, the menus sheet and its wiring, the link page's call site): **25.7% less, short of the 30% target** (AC-7418). Raw, 14,258 to 10,407 B (27% less). The difference is the lazy loader (978 B) and the review's fixes (the side by side dialogs, the stranded close, the footer); without the loader the share code would be about 40% less, but the link page and menus routes would carry 2.4 and 3.5 kB more. The load gate's route numbers were weighed as the stronger of the two.
+
+### Open after batch 1
+
+- **The QR code's size** on the link page's Share went from filling the dialog (the owner's Share design, 25 October 2026, "large enough to scan across a table") to ShareSheet's `sm` (the prototype's look, which wins on looks per the handover). The design system and UX reviews both flagged it. If the owner wants the big code back, it is a `qrSize` on ReadyPanel's `share` tile, which is phase 1's file: after phase 1 merges.
+- **Download** is now ShareSheet's ghost Download with PNG and SVG (two presses) instead of the link page's one press primary PNG; Copy link is the sheet's primary.
+- **Focus after a menu's first publish**: Done returns focus to the page body, since the Publish button is replaced by the split button as the menu goes live. It was the same before; a ref to the split's main button would fix it.
+- **Closing mid download**: the old link page modal held itself open while saving; the sheet can close while a centre picture is read, which could save the code without its fills. Narrow; ReadyPanel's busy state would need to reach the Modal.
+- **A failed chunk load** reaches the app's `vite:preloadError` guard, as Bookings' lazy parts do.
+- Screenshots for `Styled`, `Column` and the rest of ShareSheet's stories need `pnpm test:visual --update` in the pinned image.
 
 ## Build plan
 
 1. ShareSheet and ReadyPanel `qrStyle`, with a story, satisfies **AC-7403**
-2. Forms: ReadyDialog on ShareSheet, the Share tab on ReadyPanel, `ShareBlock.tsx` deleted, satisfies **AC-7401**, **AC-7402**
+2. Forms: ReadyDialog on ShareSheet, the forms' and booking page's Share tabs on ShareColumn, `ShareBlock.tsx` deleted, satisfies **AC-7401**, **AC-7402**
 3. Link page: Share on ShareSheet, the overview's Download on `downloadQr`, `ShareLinkPageModal.tsx` deleted, satisfies **AC-7401**, **AC-7404**
 4. Menus: the live stage and Share on ShareSheet, satisfies **AC-7401**, **AC-7405**
 5. `qr-png.ts` deleted, its importers on `@crm/ui`, satisfies **AC-7402**
