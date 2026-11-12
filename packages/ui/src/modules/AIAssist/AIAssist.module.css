@@ -1,0 +1,206 @@
+/* AIAssist: Ask AI as a card. The header (the violet sparkle, the only place the `ai` colour shows, the heading and
+   what it is about), a body that scrolls (the start line and its suggestions, or the question and its answer), and
+   the prompt at the foot. Motion is the app's: rises of a distance token and fades, no blur and no press scale;
+   under reduced motion only the fades stay. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    max-block-size: 100%;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-sm);
+    color: var(--text);
+    font: var(--text-body);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block: var(--space-12) var(--space-8);
+    padding-inline: var(--space-16) var(--space-12);
+  }
+
+  .title {
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .context {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .body {
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+    padding-block: var(--space-8) var(--space-16);
+    padding-inline: var(--space-16);
+  }
+
+  .start {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  /* The start line rises out, then the suggestions follow it a stagger apart (transitions.dev's texts reveal). */
+  .headline {
+    margin: 0;
+    font: var(--text-body-lg-strong);
+    animation: rise var(--duration-very-slow) var(--ease-smooth-out) backwards;
+  }
+
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .suggestion {
+    display: inline-flex;
+    animation: rise var(--duration-very-slow) var(--ease-smooth-out) backwards;
+    animation-delay: calc(var(--duration-stagger) * (var(--suggestion, 0) + 1));
+  }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .question {
+    align-self: flex-end;
+    max-inline-size: 85%;
+    margin: 0;
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* A light passing across the status words (transitions.dev's shimmer text): the words' own colour, a lighter band
+     sweeping through. Under reduced motion the band holds still. */
+  .shimmer {
+    background-image: linear-gradient(90deg, var(--text-secondary) 35%, var(--text) 50%, var(--text-secondary) 65%);
+    background-size: 300% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: sweep var(--duration-pulse) var(--ease-linear) infinite;
+  }
+
+  /* Line breaks in an answer are kept; a long word or address wraps rather than widening the card. */
+  .answer {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  /* Only the newest piece fades in; everything before it is settled text. */
+  .fresh {
+    animation: fade var(--duration-medium) var(--ease-smooth-out) backwards;
+  }
+
+  .stopped {
+    margin-inline-start: var(--space-4);
+    color: var(--text-tertiary);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    animation: rise var(--duration-fast) var(--ease-smooth-out) backwards;
+  }
+
+  .prompt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    padding-block: 0 var(--space-12);
+    padding-inline: var(--space-12);
+  }
+
+  .promptFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+  }
+
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--text-tertiary);
+    font: var(--text-caption);
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--distance-medium);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes sweep {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: 0 0;
+    }
+  }
+
+  /* Reduced motion keeps the fades and drops the movement: the rises become fades, the band holds still. */
+  @media (prefers-reduced-motion: reduce) {
+    .headline,
+    .suggestion,
+    .actions {
+      animation-name: fade;
+    }
+
+    .shimmer {
+      animation: none;
+      background-image: none;
+      color: var(--text-secondary);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+
+    .shimmer {
+      background-image: none;
+      color: CanvasText;
+    }
+  }
+}

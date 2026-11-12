@@ -2,7 +2,8 @@
 // layer order survives Vite's @import inlining (AC-5, AC-12), and the fonts are
 // same origin files under /assets/, never data: URIs the CSP would refuse (AC-11).
 // It also checks the first load (spec 0003, AC-18): the heavy library entries
-// (grid, editor, charts, schema map) never sit in index.html's static graph.
+// (grid, editor, charts, schema map, Ask AI) never sit in index.html's static graph, and ShareSheet and Ask AI
+// never reach any page's first load (spec 0073, AC-7314).
 import { isBuiltin } from 'node:module';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -213,7 +214,7 @@ describe('the first load', () => {
     }
   });
 
-  const HEAVY_ENTRY = /packages\/ui\/src\/(grid|editor|charts|schema-map)\.ts$/;
+  const HEAVY_ENTRY = /packages\/ui\/src\/(grid|editor|charts|schema-map|ai)\.ts$/;
 
   it('starts from index.html and follows only static imports', () => {
     const { chunks, js } = firstLoad(manifest);
@@ -244,10 +245,34 @@ describe('the first load', () => {
     expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(51);
   });
 
-  it('never loads the grid, editor, charts or schema map chunk up front', () => {
+  it('never loads the grid, editor, charts, schema map or Ask AI chunk up front', () => {
     const { chunks } = firstLoad(manifest);
     const heavy = chunks.filter((key) => HEAVY_ENTRY.test(manifest[key]?.src ?? key));
     expect(heavy).toEqual([]);
+  });
+
+  // Spec 0073 (AC-7314): ShareSheet (with QrCode and uqr) and Ask AI (`@crm/ui/ai`) load with the screens that open
+  // them, never in the app's, the booking page's or the hosted form's first load. Rolldown merges modules into chunks,
+  // so this looks for what only they carry: Ask AI's class names (`ws-ai-assist-`, as `uiVite()` writes them, in
+  // kebab case) and status words, and ShareSheet's refusal line (it has no stylesheet of its own). Until a screen
+  // adopts one (phases 3 and 5) neither ships at all, so this holds trivially; it was made to fail once by importing
+  // both into main.tsx (12 November 2026).
+  it('never loads ShareSheet or Ask AI in any page’s first load', () => {
+    const markers = [
+      'ws-ai-assist-',
+      'Working on an answer',
+      'This link can’t be shared, because it isn’t a web address.',
+    ];
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    for (const entry of ['index.html', 'book.html', 'form.html']) {
+      const { js, css: sheets } = firstLoad(manifest, entry);
+      const upFront = [...js, ...sheets].map(read);
+      for (const marker of markers)
+        expect(
+          upFront.filter((text) => text.includes(marker)),
+          `${entry}: ${marker}`,
+        ).toEqual([]);
+    }
   });
 
   // Bulk changes and the Trash (spec 0022) load with the screens that use them. Rolldown merges modules into
@@ -322,8 +347,10 @@ describe('the first load', () => {
     const { chunks, js, css: sheets } = firstLoad(manifest, 'book.html');
     const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
     expect(chunks.filter((key) => /ProfilePage|link-page/.test(key))).toEqual([]);
-    expect(js.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
-    expect(sheets.filter((file) => read(file).includes('ws-LinkPage-'))).toEqual([]);
+    // Class names are kebab case (`ws-link-page-root`): this looked for `ws-LinkPage-` until 12 November 2026, which
+    // no build writes, so it could not fail.
+    expect(js.filter((file) => read(file).includes('ws-link-page-'))).toEqual([]);
+    expect(sheets.filter((file) => read(file).includes('ws-link-page-'))).toEqual([]);
     const profile = Object.keys(manifest).find((key) => key.endsWith('public/booking/ProfilePage.tsx'));
     expect(profile).toBeDefined();
     expect(manifest['book.html']?.dynamicImports ?? []).toContain(profile);

@@ -1,5 +1,5 @@
 // What the artifact's window.Workspace holds: the library's public surface and
-// its heavy entries (the grid and the charts),
+// its heavy entries (the grid, the charts and Ask AI),
 // plus the pieces previews draw with (Stage, FieldSurfaces, the icon registry and
 // the editor's scoped icon set with its IconScope, a frozen clock, and
 // CheckboxMark, which stays off the public entry since screens draw a checkbox
@@ -12,6 +12,7 @@ import '../../src/styles/cursors.css';
 export * from '../../src/index.ts';
 export * from '../../src/grid.ts';
 export * from '../../src/charts.ts';
+export * from '../../src/ai.ts';
 export { CheckboxMark } from '../../src/atoms/Checkbox/Checkbox.tsx';
 export { icons } from '../../src/atoms/Icon/icons.ts';
 export { editorIcons } from '../../src/atoms/Icon/editor-icons.ts';

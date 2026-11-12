@@ -46,6 +46,32 @@ export const Archived: Story = {
   },
 };
 
+/** The `ai` tone: a fact AI found, on the surface with the violet sparkle, said as "filled by AI" (spec 0073). */
+export const Ai: Story = {
+  render: () => (
+    <Stage>
+      <Tag tone="ai">AI enriched</Tag>
+      <Tag tone="ai">Series B</Tag>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const tag = canvas.getByText('Series B').parentElement;
+    await expect(tag).toHaveAttribute('data-tone', 'ai');
+    await expect(tag).toHaveTextContent('Series B (filled by AI)');
+    // The sparkle is the only violet: the words keep the text colour, the chip the surface.
+    const sparkle = tag?.querySelector('svg');
+    await expect(sparkle).not.toBeNull();
+    const ai = getComputedStyle(document.documentElement).getPropertyValue('--ai').trim();
+    const probe = document.createElement('span');
+    probe.style.color = ai;
+    document.body.append(probe);
+    const violet = getComputedStyle(probe).color;
+    probe.remove();
+    await expect(getComputedStyle(sparkle as Element).color).toBe(violet);
+    await expect(getComputedStyle(tag as Element).color).not.toBe(violet);
+  },
+};
+
 /** A long label is cut with an ellipsis inside a narrow slot. */
 export const Long: Story = {
   render: () => (

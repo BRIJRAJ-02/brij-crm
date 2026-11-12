@@ -1,5 +1,6 @@
 import { Button as AriaButton, DialogTrigger } from 'react-aria-components';
 import type { Hue } from '../../hue.ts';
+import { Icon } from '../Icon/Icon.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { strings } from './strings.ts';
@@ -13,15 +14,29 @@ export interface TagProps {
   readonly hue?: Hue;
   /** An archived option, still on old values: it shows muted, with "archived" for screen readers. */
   readonly isArchived?: boolean;
+  /**
+   * `ai` marks a fact AI found, waiting to be trusted or edited ("AI enriched", "Series B"): the surface with a
+   * hairline and the violet sparkle before the words, said as "filled by AI" to screen readers (spec 0073, the
+   * prototype's AITag). It takes the place of `hue`; the `ai` colour shows only on the sparkle.
+   */
+  readonly tone?: 'ai';
 }
 
 /** One select option as a coloured tag, the same in a cell, a panel, a card and a filter. */
-export function Tag({ children, hue = 'gray', isArchived = false }: TagProps) {
+export function Tag({ children, hue = 'gray', isArchived = false, tone }: TagProps) {
+  const isAi = tone === 'ai';
   return (
-    <span className={styles.root} data-hue={isArchived ? 'gray' : hue} data-archived={isArchived || undefined}>
+    <span
+      className={styles.root}
+      data-hue={isArchived ? 'gray' : hue}
+      data-archived={isArchived || undefined}
+      data-tone={tone}
+    >
+      {isAi && <Icon name="sparkles" size="xs" tone="ai" />}
       <span className={styles.label} data-truncated="">
         {children}
       </span>
+      {isAi && <VisuallyHidden> {strings.filledByAi}</VisuallyHidden>}
       {isArchived && <VisuallyHidden> {strings.archived}</VisuallyHidden>}
     </span>
   );
