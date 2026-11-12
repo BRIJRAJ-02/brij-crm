@@ -41,6 +41,8 @@ export interface SearchFieldProps {
   /** `md` (the default) on its own; `sm` in a toolbar. */
   readonly size?: 'md' | 'sm';
   readonly isDisabled?: boolean;
+  /** Why it is off, said as its tooltip. */
+  readonly disabledReason?: string;
   /** Takes focus as it mounts: a search at the top of a list that just opened. */
   readonly autoFocus?: boolean;
 }
@@ -78,6 +80,7 @@ export function SearchField({
   shortcut,
   size = 'md',
   isDisabled = false,
+  disabledReason,
   autoFocus = false,
 }: SearchFieldProps) {
   const [own, setOwn] = useState(defaultValue);
@@ -149,6 +152,7 @@ export function SearchField({
       value={text}
       onChange={change}
       isDisabled={isDisabled}
+      {...(disabledReason === undefined ? {} : { disabledReason })}
       // The caller's choice, handed to Field, which focuses as React Aria expects (a list's search as it opens).
       // eslint-disable-next-line jsx-a11y-x/no-autofocus
       autoFocus={autoFocus}

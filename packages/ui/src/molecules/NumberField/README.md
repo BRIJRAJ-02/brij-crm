@@ -19,6 +19,9 @@ A thin wrapper over Field, not a new design. About fifty numeric Fields in the a
 - `mode`: `number`, `currency` (the currency's narrow symbol in front, two decimals; the workspace's currency when `currency` is left out) or `percent` (held to 0 to 100, "%" after). `unit` puts a word after the value.
 - A text that isn't a number goes back to the last good value when the field is left; a number past a limit is held at the limit.
 - `showSteppers` is off by default: the app's numbers are mostly settings typed once, and the prototype's always on buttons added two tab stops to every one. Turn them on for a small count changed one at a time. For a guest's count with no box at all, use Stepper.
+- Controlled when `value` is passed at all (`undefined` is an empty box); leave the prop out and give `defaultValue` for a field that keeps its own.
+- A step from the keyboard or a step button is said politely (a hidden live region), since a screen reader says nothing when ↑ changes a plain text box. Typed values are not said: the person typed them.
+- `disabledReason` and `readOnlyReason` say why it is off, as Field's do.
 - Don't use it for an id, a phone number or a code: those are text.
 
 ## States
@@ -32,3 +35,5 @@ Empty, a value, focused (Field's accent edge), invalid (`error`), disabled, read
 ## Differences from the artifact
 
 The prototype pops each changed digit in on commit; that needs markup inside Field's box, which phase 1 is restyling, so it waits for phase 3 (spec 0073). Steppers default to off (above).
+
+**Owed to phase 1 (Field):** AC-7305's tabular digits. Field's input sets no `font-variant-numeric`, and this wrapper has no CSS of its own, so a `data-numeric` input state on Field (`tabular-nums`) lands with phase 1's Field restyle; until then the digits are the face's own, which in Geist are close to even.

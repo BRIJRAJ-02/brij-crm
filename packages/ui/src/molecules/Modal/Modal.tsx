@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
+import { use, useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
-import { Dialog, DialogTrigger, Heading, Modal as AriaModal, ModalOverlay } from 'react-aria-components';
+import {
+  Dialog,
+  DialogTrigger,
+  Heading,
+  Modal as AriaModal,
+  ModalOverlay,
+  OverlayTriggerStateContext,
+} from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { FOOTER_PRESS_ATTRIBUTE, FooterKeysContext, type FooterKeys } from '../../atoms/Button/footer-keys.ts';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -141,7 +148,8 @@ export interface ModalProps {
    * The form inside holds changes not yet saved (spec 0073, AC-7307: the prototype's Drawer guard). While true, a
    * close asked by the close button, Esc, a `slot="close"` button or a click outside opens the house confirm,
    * "Discard your unsaved changes?", and only Discard changes closes; Keep editing (or Esc) puts focus back in the
-   * form. Needs `isOpen` and `onOpenChange`, since it answers the close itself.
+   * form. It works controlled (`isOpen` and `onOpenChange`) or inside a ModalTrigger, whose open state it then
+   * answers itself. Leave it out on a Modal that holds no form.
    */
   readonly isDirty?: boolean;
   /** For a Modal opened without a ModalTrigger. */
@@ -219,18 +227,28 @@ export function Modal({
   isDismissable = true,
   isBusy = false,
   isClosable = true,
-  isDirty = false,
+  isDirty,
   isOpen,
   onOpenChange,
 }: ModalProps) {
   // A close asked while the form holds unsaved changes waits for the discard confirm's answer.
   const [isAskingToDiscard, setAskingToDiscard] = useState(false);
+  // Inside a ModalTrigger the trigger's state would close the overlay without asking, so a guarded Modal takes that
+  // state over: it shows what the trigger says and answers every close itself.
+  const triggerState = use(OverlayTriggerStateContext);
+  const isGuarded = isDirty !== undefined;
+  const viaTrigger = isGuarded && isOpen === undefined && triggerState !== null ? triggerState : undefined;
+  const shownOpen = viaTrigger === undefined ? isOpen : viaTrigger.isOpen;
+  const changeOpen = (open: boolean) => {
+    if (viaTrigger === undefined) onOpenChange?.(open);
+    else viaTrigger.setOpen(open);
+  };
   const answerOpenChange =
-    onOpenChange === undefined
+    !isGuarded && onOpenChange === undefined
       ? undefined
       : (open: boolean) => {
-          if (!open && isDirty) setAskingToDiscard(true);
-          else onOpenChange(open);
+          if (!open && isDirty === true) setAskingToDiscard(true);
+          else changeOpen(open);
         };
   const { isFocusVisible } = useFocusVisible();
   // Toasts rise above this footer when they would cover it: a drawer's or a sheet's Save at the window's foot.
@@ -341,7 +359,7 @@ export function Modal({
         isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
         isKeyboardDismissDisabled={isBusy || !isClosable}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
-        {...(isOpen === undefined ? {} : { isOpen })}
+        {...(shownOpen === undefined ? {} : { isOpen: shownOpen })}
         {...(answerOpenChange === undefined ? {} : { onOpenChange: answerOpenChange })}
       >
         <AriaModal
@@ -438,7 +456,7 @@ export function Modal({
           </Dialog>
         </AriaModal>
       </ModalOverlay>
-      {isDirty && (
+      {isDirty === true && (
         <Modal
           title={strings.discardTitle}
           variant="confirm"
@@ -452,7 +470,7 @@ export function Modal({
                 variant="danger-solid"
                 onPress={() => {
                   setAskingToDiscard(false);
-                  onOpenChange?.(false);
+                  changeOpen(false);
                 }}
               >
                 {strings.discardChanges}

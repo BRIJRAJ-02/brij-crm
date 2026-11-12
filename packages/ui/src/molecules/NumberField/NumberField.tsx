@@ -4,6 +4,7 @@
 // number field is expected to have.
 import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Field } from '../Field/Field.tsx';
 import { clampNumber, currencySymbol, formatNumber, parseNumber, stepNumber, type NumberFieldMode } from './number.ts';
@@ -14,7 +15,7 @@ export interface NumberFieldProps {
   readonly label: string;
   /** Keeps the label for screen readers only, where the row around it says what the number is. */
   readonly isLabelHidden?: boolean;
-  /** The number, for a controlled field; leave it out (or `undefined`) and the field keeps its own. */
+  /** The number, for a controlled field (`undefined` is an empty box); leave the prop out and the field keeps its own. */
   readonly value?: number | undefined;
   readonly defaultValue?: number;
   /** A committed value: on leaving the field, on Enter, on a step key or a step button. Never on each key typed. */
@@ -38,6 +39,8 @@ export interface NumberFieldProps {
   readonly error?: string;
   readonly isRequired?: boolean;
   readonly isDisabled?: boolean;
+  /** Why it is off, said as its tooltip. */
+  readonly disabledReason?: string;
   readonly isReadOnly?: boolean;
   readonly readOnlyReason?: string;
   readonly name?: string;
@@ -50,38 +53,42 @@ export interface NumberFieldProps {
  * Typing is free; the value is read in the person's language and written back neatly when they leave the field or
  * press Enter, and a text that isn't a number goes back to the last good value. Built on Field.
  */
-export function NumberField({
-  label,
-  isLabelHidden = false,
-  value,
-  defaultValue,
-  onChange,
-  minValue = Number.NEGATIVE_INFINITY,
-  maxValue = Number.POSITIVE_INFINITY,
-  step = 1,
-  mode = 'number',
-  currency,
-  unit,
-  maximumFractionDigits,
-  showSteppers = false,
-  placeholder,
-  hint,
-  error,
-  isRequired = false,
-  isDisabled = false,
-  isReadOnly = false,
-  readOnlyReason,
-  name,
-  size = 'md',
-  autoFocus = false,
-}: NumberFieldProps) {
+export function NumberField(props: NumberFieldProps) {
+  const {
+    label,
+    isLabelHidden = false,
+    value,
+    defaultValue,
+    onChange,
+    minValue = Number.NEGATIVE_INFINITY,
+    maxValue = Number.POSITIVE_INFINITY,
+    step = 1,
+    mode = 'number',
+    currency,
+    unit,
+    maximumFractionDigits,
+    showSteppers = false,
+    placeholder,
+    hint,
+    error,
+    isRequired = false,
+    isDisabled = false,
+    isReadOnly = false,
+    readOnlyReason,
+    name,
+    size = 'md',
+    autoFocus = false,
+    disabledReason,
+  } = props;
   const settings = useFormatSettings();
   const { locale } = settings;
   const min = mode === 'percent' ? Math.max(0, minValue) : minValue;
   const max = mode === 'percent' ? Math.min(100, maxValue) : maxValue;
   const [own, setOwn] = useState<number | undefined>(defaultValue);
-  // A value given wins; without one the field keeps its own, which every commit updates too.
-  const current = value ?? own;
+  // Controlled when the caller passes `value` at all (even `undefined`, an empty box); otherwise the field keeps its own.
+  const current = Object.hasOwn(props, 'value') ? value : own;
+  // A step's new value, said politely: a screen reader hears nothing else when ↑ changes a plain text box.
+  const [stepped, setStepped] = useState('');
   const write = (number: number | undefined) =>
     number === undefined ? '' : formatNumber(number, locale, mode, step, maximumFractionDigits);
   // What the box shows while someone types; undefined shows the value, written neatly.
@@ -111,8 +118,13 @@ export function NumberField({
     return Number.isFinite(min) ? min : 0;
   };
 
+  const commitStep = (next: number) => {
+    commit(next);
+    setStepped(write(next));
+  };
+
   const move = (steps: number) => {
-    commit(stepNumber(base(), step, steps, min, max));
+    commitStep(stepNumber(base(), step, steps, min, max));
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -133,14 +145,14 @@ export function NumberField({
       ...(Number.isFinite(min)
         ? {
             Home: () => {
-              commit(min);
+              commitStep(min);
             },
           }
         : {}),
       ...(Number.isFinite(max)
         ? {
             End: () => {
-              commit(max);
+              commitStep(max);
             },
           }
         : {}),
@@ -152,7 +164,7 @@ export function NumberField({
   };
 
   const prefix = mode === 'currency' ? currencySymbol(currency ?? settings.currency ?? 'USD', locale) : undefined;
-  const after = mode === 'percent' ? '%' : unit;
+  const after = mode === 'percent' ? strings.percent : unit;
   const isLocked = isDisabled || isReadOnly;
   const steppers = showSteppers ? (
     <>
@@ -188,31 +200,37 @@ export function NumberField({
       </>
     );
   return (
-    <Field
-      label={label}
-      isLabelHidden={isLabelHidden}
-      value={draft ?? write(current)}
-      onChange={setDraft}
-      onBlur={settle}
-      onSubmit={settle}
-      onKeyDown={onKeyDown}
-      inputMode={mode === 'currency' || step % 1 !== 0 || maximumFractionDigits !== undefined ? 'decimal' : 'numeric'}
-      autoComplete="off"
-      size={size}
-      isRequired={isRequired}
-      isDisabled={isDisabled}
-      isReadOnly={isReadOnly}
-      // The caller's choice, handed to Field, which focuses as React Aria expects (a list's search as it opens).
-      // eslint-disable-next-line jsx-a11y-x/no-autofocus
-      autoFocus={autoFocus}
-      ref={input}
-      {...(prefix === undefined ? {} : { prefix })}
-      {...(suffix === undefined ? {} : { suffix })}
-      {...(placeholder === undefined ? {} : { placeholder })}
-      {...(hint === undefined ? {} : { hint })}
-      {...(error === undefined ? {} : { error })}
-      {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
-      {...(name === undefined ? {} : { name })}
-    />
+    <>
+      <Field
+        label={label}
+        isLabelHidden={isLabelHidden}
+        value={draft ?? write(current)}
+        onChange={setDraft}
+        onBlur={settle}
+        onSubmit={settle}
+        onKeyDown={onKeyDown}
+        inputMode={mode === 'currency' || step % 1 !== 0 || maximumFractionDigits !== undefined ? 'decimal' : 'numeric'}
+        autoComplete="off"
+        size={size}
+        isRequired={isRequired}
+        isDisabled={isDisabled}
+        isReadOnly={isReadOnly}
+        // The caller's choice, handed to Field, which focuses as React Aria expects (a list's search as it opens).
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        autoFocus={autoFocus}
+        ref={input}
+        {...(prefix === undefined ? {} : { prefix })}
+        {...(suffix === undefined ? {} : { suffix })}
+        {...(placeholder === undefined ? {} : { placeholder })}
+        {...(hint === undefined ? {} : { hint })}
+        {...(error === undefined ? {} : { error })}
+        {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
+        {...(name === undefined ? {} : { name })}
+        {...(disabledReason === undefined ? {} : { disabledReason })}
+      />
+      <VisuallyHidden isInline>
+        <output aria-live="polite">{stepped}</output>
+      </VisuallyHidden>
+    </>
   );
 }

@@ -89,6 +89,29 @@ export const Shortcut: Story = {
   },
 };
 
+/** `⌘K` also answers Ctrl+K; with nothing typed, Esc is left to whatever holds the field. */
+export const CommandShortcut: Story = {
+  args: { label: 'Search everything', shortcut: '⌘K' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <SearchField {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const field = canvas.getByRole('searchbox', { name: 'Search everything' });
+    await userEvent.keyboard('{Control>}k{/Control}');
+    await expect(field).toHaveFocus();
+    let reachedHolder = false;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') reachedHolder = true;
+    };
+    canvasElement.addEventListener('keydown', onKeyDown);
+    await userEvent.keyboard('{Escape}');
+    canvasElement.removeEventListener('keydown', onKeyDown);
+    await expect(reachedHolder).toBe(true);
+  },
+};
+
 /** Controlled, small, in a toolbar: what is typed shows at once through `onChange`. */
 export const Controlled: Story = {
   render: function Controlled(args) {

@@ -28,6 +28,8 @@ export const Count: Story = {
     await userEvent.keyboard('{ArrowUp}');
     await expect(field).toHaveValue('5');
     await expect(args.onChange).toHaveBeenLastCalledWith(5);
+    // The step is said politely: a plain text box says nothing when ↑ changes it.
+    await expect(canvas.getByRole('status')).toHaveTextContent('5');
     await userEvent.keyboard('{End}');
     await expect(field).toHaveValue('20');
     await userEvent.keyboard('{PageDown}');

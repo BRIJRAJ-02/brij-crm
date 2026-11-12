@@ -75,15 +75,5 @@
   .root[data-variant='soft'] > .words[data-arriving] {
     animation: words-fade-in var(--duration-quick) var(--ease-in-out) backwards;
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    /* A soft swap is simply the new value. */
-    .root[data-variant='soft'] > .words[data-leaving] {
-      display: none;
-    }
-
-    .root[data-variant='soft'] > .words[data-arriving] {
-      animation: none;
-    }
-  }
+  /* It has no movement, so reduced motion keeps its cross fade as it is. */
 }

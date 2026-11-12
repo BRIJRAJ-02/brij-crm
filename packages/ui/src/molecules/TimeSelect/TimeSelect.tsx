@@ -1,9 +1,10 @@
-// TimeSelect (spec 0073, AC-7306): the prototype's TimeSelect as a thin wrapper over Select's `time` variant, so a
+// TimeSelect (spec 0073, AC-7306): the prototype's TimeSelect as a thin wrapper over Select's `time` variant (SelectBase:
+// a time never wears a dot or a badge, so it skips their faces), so a
 // time of day picked from a list looks and works like every other Select (Enter opens, arrows move, typing jumps)
 // and adds no CSS. A typed exact time stays Field's `temporal={{ type: 'time' }}`.
 import { useMemo } from 'react';
 import { useFormatSettings } from '../../provider/context.ts';
-import { Select } from '../Select/SelectWithFaces.tsx';
+import { SelectBase } from '../Select/Select.tsx';
 import { timeOptions, type HourCycle } from './time-options.ts';
 import { strings } from './strings.ts';
 
@@ -30,6 +31,8 @@ export interface TimeSelectProps {
   readonly isRequired?: boolean;
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
+  /** Why it can't be changed, said under it while it is read only ("Set by the team"). */
+  readonly readOnlyReason?: string;
   readonly size?: 'md' | 'sm';
 }
 
@@ -49,6 +52,7 @@ export function TimeSelect({
   isRequired = false,
   isDisabled = false,
   isReadOnly = false,
+  readOnlyReason,
   size = 'md',
 }: TimeSelectProps) {
   const { locale } = useFormatSettings();
@@ -57,7 +61,7 @@ export function TimeSelect({
     [locale, step, from, to, hourCycle],
   );
   return (
-    <Select
+    <SelectBase
       label={label}
       isLabelHidden={isLabelHidden}
       variant="time"
@@ -72,6 +76,7 @@ export function TimeSelect({
       {...(onChange === undefined ? {} : { onChange })}
       {...(hint === undefined ? {} : { hint })}
       {...(error === undefined ? {} : { error })}
+      {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
     />
   );
 }

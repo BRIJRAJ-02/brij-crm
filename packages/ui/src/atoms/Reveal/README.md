@@ -16,7 +16,7 @@ The entrance (the default) is for public pages only, around a page's own words a
 
 ## Drop
 
-`variant="drop"` (spec 0073, AC-7311, the prototype's DropIn) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens, so a focus ring inside it is never cut once it is in; under reduced motion it is simply there. Why a variant: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one variant lets them share it as they are ported. Story: `Drop`.
+`variant="drop"` (spec 0073, AC-7311, the prototype's DropIn) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens, so a focus ring inside it is never cut once it is in; under reduced motion it only fades in, with no height opening and no rise (reduced motion keeps fades). `animate` defaults to `true` as the prototype's DropIn does, so pass `animate={false}` for every row a list draws on load. Why a variant: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one variant lets them share it as they are ported. Story: `Drop`.
 
 ```tsx
 {rows.map((row) => (

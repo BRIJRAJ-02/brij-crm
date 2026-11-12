@@ -74,6 +74,19 @@ export const Controlled: Story = {
   },
 };
 
+/** Read only, with the reason under it. */
+export const ReadOnly: Story = {
+  args: { label: 'Opens', defaultValue: '09:00', isReadOnly: true, readOnlyReason: 'Set by the venue' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <TimeSelect {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Set by the venue')).toBeInTheDocument();
+  },
+};
+
 /** Invalid and disabled. */
 export const States: Story = {
   render: (args) => (

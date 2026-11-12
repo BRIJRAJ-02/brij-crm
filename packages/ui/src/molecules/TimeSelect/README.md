@@ -16,6 +16,8 @@ A thin wrapper over Select's `time` variant, so a time works like every other Se
 - Values are `HH:MM` on a 24 hour clock; `null` is none chosen.
 - `step` (15 by default, as Cal.com lists them), `from` and `to` in minutes from midnight: an end time starts after its start.
 - `hourCycle` 12 or 24; left out, the reader's language decides.
+- `timeOptions({ locale, step, hourCycle, from, to })` lists the times; `formatTime(value, locale, hourCycle)` writes one (`HH:MM` in, "9:30 AM" out). Both are pure.
+- `readOnlyReason` says why it can't be changed.
 
 ## States
 

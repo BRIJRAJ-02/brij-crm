@@ -81,11 +81,21 @@
     }
   }
 
+  @keyframes drop-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* Reduced motion keeps the fade and drops the movement: no height opening, no rise. */
   @media (prefers-reduced-motion: reduce) {
     .root,
-    .drop,
-    .dropInner {
+    .drop {
       animation: none;
+    }
+
+    .dropInner {
+      animation-name: drop-fade;
     }
 
     .drop[data-opening] > .dropInner {

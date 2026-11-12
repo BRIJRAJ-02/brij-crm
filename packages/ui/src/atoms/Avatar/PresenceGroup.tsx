@@ -42,7 +42,7 @@ function PresenceItem({ person, size }: { readonly person: PresencePerson; reado
       ref={ref}
       className={styles.item}
       role="img"
-      aria-label={person.name}
+      aria-label={strings.person(person.name, person.status === 'idle')}
       // A tooltip's trigger must be reachable by keyboard (WCAG 1.4.13): the avatar is a tab stop so its tooltip,
       // what the person is doing, can be read without a pointer.
       // eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
@@ -65,7 +65,7 @@ function PresenceItem({ person, size }: { readonly person: PresencePerson; reado
 
 /**
  * Who else is here: overlapping avatars with a live status dot each, named in a tooltip, then "+n". Each avatar is a
- * tab stop; the hovered or focused one lifts a little and its neighbours less. It draws at most `max` people however
+ * tab stop named with its status in words; the hovered or focused one lifts a little and its neighbours less. It draws at most `max` people however
  * many are here, and its name says at most `max` names, so a crowd of a thousand costs what four do.
  */
 export function PresenceGroup({ people, max = 4, size = 'sm' }: PresenceGroupProps) {
@@ -86,10 +86,7 @@ export function PresenceGroup({ people, max = 4, size = 'sm' }: PresenceGroupPro
         <Tooltip
           key={person.id}
           placement="bottom"
-          content={strings.tooltip(
-            person.name,
-            person.activity ?? (person.status === 'active' ? strings.hereNow : strings.away),
-          )}
+          content={strings.tooltip(person.name, person.activity, person.status === 'idle')}
         >
           <PresenceItem person={person} size={size} />
         </Tooltip>

@@ -1023,6 +1023,30 @@ export const DirtyDrawer: Story = {
   },
 };
 
+/** Guarded inside a ModalTrigger: the trigger's own close asks too, and Discard changes closes it. */
+export const DirtyInTrigger: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <ModalTrigger>
+        <Button>Edit note</Button>
+        <Modal title="Edit note" variant="form" isDirty actions={<Button slot="close">Cancel</Button>}>
+          <Field label="Note" defaultValue="Call back Friday, changed" />
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit note' }));
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog as HTMLElement).getByRole('button', { name: 'Cancel' }));
+    const ask = await waitFor(() => within(document.body).getByRole('alertdialog'));
+    await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull());
+  },
+};
+
 /** The same drawer with nothing changed: Esc closes it at once, with no question. */
 export const CleanDrawer: Story = {
   args: { onOpenChange: fn() },

@@ -1,10 +1,12 @@
 /** PresenceGroup's built in copy (spec 0073, AC-7308). */
 export const presenceStrings = {
-  /** What a person is doing when the screen says nothing more. */
-  hereNow: 'Here now',
-  away: 'Away',
-  /** One avatar's tooltip: the person and what they are doing. */
-  tooltip: (name: string, activity: string) => `${name} · ${activity}`,
+  /** One avatar's name: the person and their status in words, so status never rests on the dot's colour alone. */
+  person: (name: string, isIdle: boolean) => `${name}, ${isIdle ? 'away' : 'here now'}`,
+  /** One avatar's tooltip: the person, what they are doing, and Away when idle ("Maya Ross · Editing Pricing · Away"). */
+  tooltip: (name: string, activity: string | undefined, isIdle: boolean) =>
+    [name, activity ?? (isIdle ? 'Away' : 'Here now'), ...(activity !== undefined && isIdle ? ['Away'] : [])].join(
+      ' · ',
+    ),
   /** "+n" for the people past the avatars drawn. */
   more: (count: number) => `+${String(count)}`,
   /**

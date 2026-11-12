@@ -24,7 +24,8 @@ Ported from the artifact's RemoteCursor card. Live notes (#27) show each collabo
 ```
 
 - Each new point glides from the last over `duration-quick` on `ease-smooth-out`, so updates every 100 to 150 ms read as motion. It moves by `translate` only, so a stream of points costs no layout (AC-7324).
-- `isIdle` folds the name away and dims the arrow. Reduced motion jumps to each point.
+- `isIdle` folds the name away and dims the arrow. Reduced motion jumps to each point and keeps the idle fade.
+- The arrow does not mirror in right to left text (a pointer's tip is where the pointer is, in either direction).
 - The arrow is a shape cut by `clip-path`, not a Lucide icon, so the icon registry every page carries does not grow.
 - Draw only people the access door lets the viewer see (the screen's job). The caret (the default) is unchanged.
 

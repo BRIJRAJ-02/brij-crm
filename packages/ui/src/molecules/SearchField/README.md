@@ -27,6 +27,8 @@ Empty (placeholder, and the keycap when there is a shortcut), focused (the keyca
 
 Typing searches. Esc clears and keeps focus; with nothing typed, Esc is left to whatever holds the field (a popover closes). Enter searches at once. The shortcut focuses and selects the field. Tab reaches the clear button after the field.
 
+**Owed to phase 1 (Field):** the shortcut is shown as a keycap but not yet stated to screen readers. Field has no `aria-keyshortcuts` passthrough; a one line prop lands with phase 1's Field restyle, and SearchField then passes the shortcut through `keyShortcuts()`.
+
 ## Differences from the artifact
 
 The prototype's clear plays a dissolve (the text falls away with a glow under each word). It needs markup inside Field's box, which phase 1 is restyling, so it is left for phase 3 (spec 0073). The prototype's `md` and `sm` heights are Field's.

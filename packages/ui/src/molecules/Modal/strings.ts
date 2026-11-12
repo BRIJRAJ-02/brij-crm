@@ -1,3 +1,5 @@
+import { strings as shared } from '../../lib/strings.ts';
+
 /** Modal's built in copy. */
 export const strings = {
   close: 'Close',
@@ -6,8 +8,8 @@ export const strings = {
   /** The keycap the footer's submit shows: Enter, or ⌘Enter while the dialog holds a long text or an editor. */
   submitKey: '↵',
   submitLongKey: '⌘↵',
-  /** The confirm a dirty form asks before it closes (`isDirty`): SaveBar's words, so the app asks one way. */
-  discardTitle: 'Discard your unsaved changes?',
-  keepEditing: 'Keep editing',
-  discardChanges: 'Discard changes',
+  /** The confirm a dirty form asks before it closes (`isDirty`): the shared words SaveBar asks with too. */
+  discardTitle: shared.discardTitle,
+  keepEditing: shared.keepEditing,
+  discardChanges: shared.discardChanges,
 } as const;

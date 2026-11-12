@@ -9,6 +9,7 @@ function fewPeople(): readonly PresencePerson[] {
     { id: 'p1', name: 'Maya Ross', status: 'active', activity: 'Editing Pricing' },
     { id: 'p2', name: 'Jonas Berg', status: 'active' },
     { id: 'p3', name: 'Ana Lima', status: 'idle' },
+    { id: 'p4', name: 'Raj Mehta', status: 'idle', activity: 'Reading Notes' },
   ];
 }
 
@@ -30,7 +31,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Three people: each avatar is a tab stop, and its tooltip says what they are doing. */
+/** Four people: each avatar is a tab stop named with its status, and its tooltip says what they are doing. */
 export const Few: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -40,16 +41,25 @@ export const Few: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     await expect(
-      canvas.getByRole('group', { name: '3 here: Maya Ross, Jonas Berg, and Ana Lima' }),
+      canvas.getByRole('group', { name: '4 here: Maya Ross, Jonas Berg, Ana Lima, and Raj Mehta' }),
     ).toBeInTheDocument();
     await userEvent.tab();
-    await expect(canvas.getByRole('img', { name: 'Maya Ross' })).toHaveFocus();
+    const maya = canvas.getByRole('img', { name: 'Maya Ross, here now' });
+    await expect(maya).toHaveFocus();
+    // The focused avatar lifts.
+    await waitFor(() => expect(getComputedStyle(maya).translate).not.toBe('none'));
     const tooltip = await waitFor(() => within(document.body).getByRole('tooltip'));
     await expect(tooltip).toHaveTextContent('Maya Ross · Editing Pricing');
     await userEvent.tab();
     await waitFor(() => expect(within(document.body).getByRole('tooltip')).toHaveTextContent('Jonas Berg · Here now'));
     await userEvent.tab();
     await waitFor(() => expect(within(document.body).getByRole('tooltip')).toHaveTextContent('Ana Lima · Away'));
+    // Idle with an activity still says Away in words, and its name says so too.
+    await userEvent.tab();
+    await expect(canvas.getByRole('img', { name: 'Raj Mehta, away' })).toHaveFocus();
+    await waitFor(() =>
+      expect(within(document.body).getByRole('tooltip')).toHaveTextContent('Raj Mehta · Reading Notes · Away'),
+    );
   },
 };
 

@@ -145,11 +145,18 @@
     opacity: var(--opacity-busy);
   }
 
+  /* Reduced motion jumps to each point and keeps the idle fade, without the pill's shrink. */
   @media (prefers-reduced-motion: reduce) {
-    .pointer,
-    .arrow,
-    .pill {
+    .pointer {
       transition: none;
+    }
+
+    .pill {
+      transition: opacity var(--duration-quick) var(--ease-out);
+    }
+
+    .pointer[data-idle] .pill {
+      scale: none;
     }
   }
 
