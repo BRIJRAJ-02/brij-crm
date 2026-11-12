@@ -1,7 +1,7 @@
 # 0002. Design tokens from the design system artifact
 
 **Date**: 2026-10-01
-**Status**: Accepted
+**Status**: Accepted (amended by [0071](../0071-port-tokens/index.md): token source, values, names, fonts and motion)
 
 ## Summary
 
