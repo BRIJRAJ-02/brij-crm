@@ -360,7 +360,8 @@
     border-block-end: none;
   }
 
-  /* A ring's width of room at the ends, so the first and last pill's focus ring isn't cut by the scroller. A page
+  /* A ring's width of room at the ends and above and below, so a pill's focus ring (on its edge) isn't cut by the
+     scroller. A page
      that runs the row to the window's edges sets --pills-inset to its gutter, so the pills start in line with its
      words and scroll out to the edge (the guest menu). */
   .bar[data-variant='pills'] .list {
@@ -403,8 +404,8 @@
       scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
-  /* Moved by the keyboard, the indicator jumps (below), and the chosen tab's colour and fill come at once with it. */
-  .list[data-instant] .tab[data-selected] {
+  /* Moved by the keyboard, the indicator jumps (below), and every tab's colour and fill change at once with it. */
+  .list[data-instant] .tab {
     transition: none;
   }
 
@@ -432,8 +433,9 @@
     }
   }
 
+  /* On the pill's edge, not outside it: the scroller clips anything past the list's thin padding. */
   .bar[data-variant='pills'] .tab[data-focus-visible] {
-    outline-offset: var(--border-width-focus);
+    outline-offset: 0;
   }
 
   .bar[data-variant='pills'] .label {

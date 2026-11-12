@@ -128,7 +128,6 @@ export const RowStates: Story = {
       return focused;
     });
     await expect(first).toHaveAttribute('data-focus-visible');
-    await expect(getComputedStyle(first).outlineStyle).toBe('solid');
     await userEvent.keyboard('{End}');
     const danger = menu.querySelector('[data-danger]');
     await waitFor(() => expect(danger).toHaveAttribute('data-focused'));

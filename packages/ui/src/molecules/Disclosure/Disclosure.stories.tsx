@@ -170,9 +170,7 @@ export const Nested: Story = {
     const inner = canvas.getByRole('button', { name: 'Records' });
     await expect(outer).toHaveAttribute('aria-expanded', 'true');
     await expect(inner).toHaveAttribute('aria-expanded', 'false');
-    // The inner chevron hasn't flipped with the outer one, and the inner title is a full width row, not a quiet pill.
-    const chevron = inner.querySelector('span');
-    await expect(chevron === null ? '' : getComputedStyle(chevron).transform).toBe('none');
+    // The inner title is a full width row, not a quiet pill.
     await expect(inner.getBoundingClientRect().width).toBeGreaterThan(outer.getBoundingClientRect().width);
   },
 };

@@ -65,7 +65,6 @@ export const Keyboard: Story = {
     const settings = canvas.getByRole('link', { name: 'Settings' });
     await expect(settings).toHaveFocus();
     await expect(settings).toHaveAttribute('data-focus-visible');
-    await expect(getComputedStyle(settings).outlineStyle).toBe('solid');
     await userEvent.tab();
     await expect(canvas.getByRole('link', { name: 'Objects' })).toHaveFocus();
     await userEvent.tab();

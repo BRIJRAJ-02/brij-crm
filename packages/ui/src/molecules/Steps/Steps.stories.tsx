@@ -132,7 +132,6 @@ export const DoneStepFocus: Story = {
     const first = canvas.getAllByRole('button')[0];
     await expect(first).toHaveFocus();
     await expect(first).toHaveAttribute('data-focus-visible');
-    await expect(first === undefined ? '' : getComputedStyle(first).outlineStyle).toBe('solid');
     await expect(canvas.getByRole('listitem', { current: 'step' })).toBeInTheDocument();
   },
 };

@@ -54,7 +54,7 @@ Enter, Space or the arrow keys open it from the trigger. Up and Down move; Home 
 
 ## Differences from the artifact
 
-- `width` takes `menu` or `trigger`, not a number; the 240px comes from tokens (`size-sidebar` less `space-20`) until a `size-menu` token exists.
+- `width` takes `menu` or `trigger`, not a number; the width is the `size-menu` token.
 - `searchPlaceholder` and `searchId` become `search`; `checked` becomes the menu's selection; `active` is React Aria's focus; `submenu` comes from `SubmenuTrigger`; `danger` is `isDanger`.
 - Exit animations and keyboard instant opening are new.
 

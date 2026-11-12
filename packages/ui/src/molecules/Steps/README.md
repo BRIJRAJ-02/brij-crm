@@ -51,4 +51,4 @@ Takes its look from the prototype's Steps: `space-24` rings a hairline and a hal
 - The tick appears with the disc; the prototype's drawn tick (transitions.dev 10) is owed to the phase that brings the shared success check (phase 2's SuccessCheck).
 - A pressed done step washes instead of underlining its label (the prototype's).
 - Kept beyond the prototype: `failed`, the `count` variant, and the horizontal row that turns into the column under 480px.
-- Stepper is folded into this part: it takes the prototype's step look for its own control and lists what it repeats.
+- Stepper is named in the prototype's `replaces` only: it is a quantity control (− n +), not a step indicator, so it keeps its own look (see its README).

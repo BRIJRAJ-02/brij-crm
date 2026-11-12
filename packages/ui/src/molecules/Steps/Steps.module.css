@@ -74,12 +74,11 @@
     color: var(--danger);
   }
 
-  /* A done step that goes back (onStepPress): the marker and label as one button, its label underlined on hover. */
   /* A done step that goes back (onStepPress): the marker and label as one pill button that washes under the pointer. */
   .press {
     display: inherit;
     align-items: inherit;
-    gap: var(--space-8);
+    gap: inherit;
     margin: 0;
     padding: 0 var(--space-8) 0 0;
     border: 0;
