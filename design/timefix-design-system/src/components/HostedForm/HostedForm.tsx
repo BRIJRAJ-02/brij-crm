@@ -83,6 +83,8 @@ export interface HostedFormProps {
   readonly lang?: FormLang;
   /** Square corners on the card, choices and buttons. */
   readonly corners?: 'rounded' | 'square';
+  /** The page sits framed on another surface (a guest view inside the app): its ground gets the large rounded corners. */
+  readonly isFramed?: boolean;
   /** In the builder's preview: the headline, the line under it and the last button are edited in place. */
   readonly onEdit?: { readonly title?: (v: string) => void; readonly description?: (v: string) => void; readonly submitLabel?: (v: string) => void };
 }
@@ -242,11 +244,19 @@ function InPlace({ value, onChange, label, className, placeholder }: { readonly 
 }
 
 /**
+ * The quiet "Powered by Timefix" link under a hosted form, also under other pages Timefix hosts (a shared Insights page).
+ * `align="center"` centres it in a column that stretches its children; left out, its parent places it (a form centres it).
+ */
+export function PoweredByFoot({ align }: { readonly align?: 'center' }) {
+  return <a className={cx('tf-hform__foot', align === 'center' && 'tf-hform__foot--center')} href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>;
+}
+
+/**
  * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), every question on one
  * card, or steps (a page per group). Required answers and emails are checked; a refused step shakes. Ends on a thank you (or one of
  * the form's endings) with the sent answers.
  */
-export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel, prefill = {}, brand, onReach, look, thanks: thanksIn, endings = [], endingFor, lang = 'en', corners = 'rounded', onEdit }: HostedFormProps) {
+export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel, prefill = {}, brand, onReach, look, thanks: thanksIn, endings = [], endingFor, lang = 'en', corners = 'rounded', onEdit, isFramed = false }: HostedFormProps) {
   const w = WORDS[lang];
   const submitWords = submitLabel ?? w.submit;
   const thanks = thanksIn ?? { title: w.thanks, line: 'Your answers are in. You can close this page.' };
@@ -489,7 +499,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   );
 
   return (
-    <div className={look ? 'tf-hform tf-hform--look' : 'tf-hform'} data-corners={corners === 'square' ? 'square' : undefined} {...(look ? guestLookProps(look) : {})}>
+    <div className={cx('tf-hform', look && 'tf-hform--look', isFramed && 'tf-hform--framed')} data-corners={corners === 'square' ? 'square' : undefined} {...(look ? guestLookProps(look) : {})}>
       <div className="tf-hform__card">
         {brand && <div className="tf-hform__brand">
           <span className="tf-hform__cover" aria-hidden="true" />
@@ -498,7 +508,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
         </div>}
         {mode === 'one' ? oneAtATime : mode === 'steps' ? steps : onePage}
       </div>
-      <a className="tf-hform__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
+      <PoweredByFoot />
     </div>
   );
 }

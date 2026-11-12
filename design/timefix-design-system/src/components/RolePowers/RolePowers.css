@@ -33,3 +33,6 @@
   .tf-powers__row { transition: none; }
   .tf-powers__col--new { animation: none; }
 }
+
+/* A power only built-in roles hold: a quiet lock in place of the checkbox. */
+.tf-powers__never { display: inline-grid; place-items: center; width: var(--space-20); height: var(--space-20); border-radius: var(--radius-xs); color: var(--text-tertiary); }

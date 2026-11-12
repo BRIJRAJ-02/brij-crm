@@ -11,11 +11,11 @@ import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import './RolePowers.css';
 
 /** One thing a role may do ("Delete records"). */
-export interface Power { readonly id: string; readonly label: string; readonly description?: string }
+export interface Power { readonly id: string; readonly label: string; readonly description?: string; /** Only built-in roles hold it: custom roles' cells are off and locked. */ readonly isBuiltInOnly?: boolean }
 /** A group of powers shown as one fold ("Records", "Scheduling"). */
 export interface PowerArea { readonly id: string; readonly title: string; readonly description?: string; readonly powers: ReadonlyArray<Power> }
 /** A role as a column. `isLocked` (Owner) holds every power and cannot change; `isCustom` roles can be deleted. */
-export interface RoleColumn { readonly id: string; readonly name: string; readonly isLocked?: boolean; readonly isCustom?: boolean }
+export interface RoleColumn { readonly id: string; readonly name: string; readonly isLocked?: boolean; readonly isCustom?: boolean; /** Built in: shows what it holds, read only. */ readonly isFixed?: boolean }
 /** Which powers each role holds, by role id. */
 export type Grants = Readonly<Record<string, ReadonlyArray<string>>>;
 
@@ -34,10 +34,12 @@ export interface RolePowersProps {
   readonly defaultExpanded?: ReadonlyArray<string>;
   /** Read only for people who cannot manage roles. */
   readonly isReadOnly?: boolean;
+  /** The line under the table, in place of the Owner note. */
+  readonly note?: string;
 }
 
 /** What each role may do: roles as columns, powers grouped into folds as rows, a checkbox per cell. Owner's column is locked on; custom roles add a column. */
-export function RolePowers({ areas, roles, grants, onChange, onAddRole, onDeleteRole, defaultExpanded, isReadOnly = false }: RolePowersProps) {
+export function RolePowers({ areas, roles, grants, onChange, onAddRole, onDeleteRole, defaultExpanded, isReadOnly = false, note = 'Owners can always do everything, so their column can’t change.' }: RolePowersProps) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [from, setFrom] = useState<string>(roles.find((r) => !r.isLocked)?.id ?? '');
@@ -91,8 +93,9 @@ export function RolePowers({ areas, roles, grants, onChange, onAddRole, onDelete
                       </span>
                       {roles.map((r) => (
                         <span key={r.id} className={cx('tf-powers__cell', r.isLocked && 'tf-powers__cell--locked', fresh.has(r.id) && 'tf-powers__col--new')}>
-                          <Checkbox aria-label={`${r.name}: ${p.label}${r.isLocked ? ' (always on)' : ''}`} isSelected={holds(r, p.id)}
-                            isReadOnly={r.isLocked === true || isReadOnly} onChange={(v) => onChange?.(r.id, p.id, v)} />
+                          {p.isBuiltInOnly && r.isCustom ? <span className="tf-powers__never" role="img" aria-label={`${r.name}: ${p.label}, only built in roles can do this`}><Lock size={12} strokeWidth={1.75} aria-hidden="true" /></span>
+                            : <Checkbox aria-label={`${r.name}: ${p.label}${r.isLocked ? ' (always on)' : r.isFixed ? ' (built in)' : ''}`} isSelected={holds(r, p.id)}
+                            isReadOnly={r.isLocked === true || r.isFixed === true || isReadOnly} onChange={(v) => onChange?.(r.id, p.id, v)} />}
                         </span>
                       ))}
                     </div>
@@ -103,7 +106,7 @@ export function RolePowers({ areas, roles, grants, onChange, onAddRole, onDelete
           </DisclosureGroup>
         </div>
       </div>
-      <p className="tf-powers__note"><Lock size={12} strokeWidth={1.75} aria-hidden="true" /> Owners can always do everything, so their column can't change.</p>
+      <p className="tf-powers__note"><Lock size={12} strokeWidth={1.75} aria-hidden="true" /> {note}</p>
 
       <Dialog isOpen={adding} onOpenChange={close} title="New custom role" description="It starts with the powers of the role you pick; change any of them after."
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={name.trim() === ''} onPress={create}>Create role</Button></>}>

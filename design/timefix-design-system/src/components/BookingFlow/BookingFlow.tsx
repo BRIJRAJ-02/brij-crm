@@ -195,10 +195,24 @@ function TimeZoneSelect({ zones, value, onChange }: { readonly zones: ReadonlyAr
 
 const CLOCKS = [{ id: '12', label: '12h' }, { id: '24', label: '24h' }] as const;
 
-/** The Timefix card at the foot of the rail: who made the page, and an invitation to make one. One link, so one tab stop. */
-export function BrandCard({ className }: { readonly className?: string }) {
+/** The done mark of a guest flow: a filled check in a soft ring that draws in once (an X for a cancelled booking). Every guest flow's last step uses it. */
+export function DoneMark({ isCancelled = false }: { readonly isCancelled?: boolean }) {
   return (
-    <a className={cx('tf-booking__brand', className)} href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">
+    <span className="tf-booking__celebrate" aria-hidden="true">
+      <span className="tf-booking__ring" />
+      <span className="tf-booking__check">
+        {isCancelled
+          ? <X size={28} strokeWidth={2.25} />
+          : <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" pathLength={1} /></svg>}
+      </span>
+    </span>
+  );
+}
+
+/** The Timefix card at the foot of the rail: who made the page, and an invitation to make one. One link, so one tab stop. `variant="solo"` is the pill that stands alone under a page with no rail. */
+export function BrandCard({ className, variant = 'rail' }: { readonly className?: string; readonly variant?: 'rail' | 'solo' }) {
+  return (
+    <a className={cx('tf-booking__brand', variant === 'solo' && 'tf-booking__brand--solo', className)} href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">
       <span className="tf-booking__brand-mark"><LogoMark size={28} /></span>
       <span className="tf-booking__brand-text">
         <span className="tf-booking__brand-by">Powered by <strong>Timefix</strong></span>
@@ -511,14 +525,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, tim
     <div className={cx('tf-booking__done', after === 'cancelled' && 'tf-booking__done--cancelled')}>
       {step === 'done' && (
         <>
-          <span className="tf-booking__celebrate" aria-hidden="true">
-            <span className="tf-booking__ring" />
-            <span className="tf-booking__check">
-              {after === 'cancelled'
-                ? <X size={28} strokeWidth={2.25} />
-                : <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" pathLength={1} /></svg>}
-            </span>
-          </span>
+          <DoneMark isCancelled={after === 'cancelled'} />
           <div className="tf-booking__reveal" key={after}>
             <h2 className="tf-booking__reveal-line tf-booking__done-title" tabIndex={-1} data-autofocus>
               {after === 'cancelled' ? 'Booking cancelled' : after === 'moved' ? `Moved. See you then` : `You’re booked with ${firstName}`}

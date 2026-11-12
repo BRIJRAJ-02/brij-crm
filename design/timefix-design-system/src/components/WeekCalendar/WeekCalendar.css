@@ -15,6 +15,15 @@
 .tf-week__dayhead--today .tf-week__date { font-weight: 500; }
 
 .tf-week__scroll { max-height: var(--tf-week-scroll, calc(var(--tf-week-hour) * 8.5)); overflow-y: auto; overscroll-behavior: contain; }
+/* fillHeight: the week takes its parent's height and the hours scroll in what is left; a phone keeps a tall box while the page scrolls. */
+.tf-week--fill { flex: 1; min-height: calc(var(--size-row) * 6); }
+.tf-week--fill > .tf-week__scroll { flex: 1; min-height: 0; max-height: none; }
+@media (max-width: 40rem) { .tf-week--fill { min-height: 70dvh; } }
+/* narrowScroll: under 34rem each day keeps a readable width and the grid scrolls sideways. */
+.tf-week--swipe { container: tf-week / inline-size; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+@container tf-week (max-width: 34rem) {
+  .tf-week--swipe > .tf-week__head, .tf-week--swipe > .tf-week__scroll { min-width: calc(var(--tf-week-gutter) + var(--tf-week-days) * var(--space-48) * 2); }
+}
 .tf-week__body { position: relative; display: grid; grid-template-columns: var(--tf-week-cols); height: calc(var(--tf-week-hour) * var(--tf-week-hours)); }
 .tf-week__gutter { position: relative; }
 .tf-week__hour { position: absolute; right: var(--space-8); top: calc(var(--tf-week-hour) * var(--tf-at)); transform: translateY(-50%); font: 500 11px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }

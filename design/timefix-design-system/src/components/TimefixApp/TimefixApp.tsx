@@ -36,6 +36,8 @@ import { ImportScreen } from './importer.tsx';
 import { DuplicatesScreen } from './duplicates.tsx';
 import { LostReasonDialog } from './deals.tsx';
 import { PartnerFrame } from './embed.tsx';
+import { AdminArea } from './admin.tsx';
+import { PUBLIC_PAGES, PublicScreen, type PublicKind } from './public.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -100,7 +102,10 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [partner, setPartner] = useState(false);
   /** The demo of a shared Insights link, as the person it was sent to sees it. */
   const [sharedInsights, setSharedInsights] = useState(false);
-  const searchButton = <Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
+  /** The super admin area, and a public page (status, email preferences, unsubscribe, partner connect), from the Demo menu. */
+  const [admin, setAdmin] = useState(false);
+  const [publicPage, setPublicPage] = useState<PublicKind>();
+  const searchButton = <Button size="sm" variant="ghost" collapse="phone" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
   const [help, setHelp] = useState(false);
   const [newList, setNewList] = useState(false);
   const [newObject, setNewObject] = useState(false);
@@ -406,8 +411,12 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   return (
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
-      <div ref={shellRef} className="tf-app__keep" inert={door !== undefined || undefined}>
-      <BookingsFlow showDemoMenu demoItems={[{ id: 'partner', label: 'Your link page in a partner’s app', description: 'The embedded frame: its start screen, then the page' }, { id: 'insights', label: 'A shared Insights link', description: 'What someone you sent the numbers to sees' }]} onDemo={(id) => { if (id === 'partner') setPartner(true); else if (id === 'insights') setSharedInsights(true); }} onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} onCopyPage={(p) => setCopying({ kind: 'booking', page: p })} incoming={incoming} openGuest={bookGuest} switchWorkspace={switchWs}
+      <div ref={shellRef} className="tf-app__keep" inert={door !== undefined || admin || publicPage !== undefined || undefined}>
+      <BookingsFlow showDemoMenu demoItems={[{ id: 'partner', label: 'Your link page in a partner’s app', description: 'The embedded frame: its start screen, then the page' }, { id: 'insights', label: 'A shared Insights link', description: 'What someone you sent the numbers to sees' },
+          ...PUBLIC_PAGES.map((x) => ({ id: `pub:${x.id}`, label: x.label, description: x.description })), { id: 'admin', label: 'Super admin', description: 'The operators’ area: users, booking pages, website, partners' },
+          { id: 'limits', label: state.prefs.tightLimits ? 'Back to the usual plan limits' : 'A workspace at its plan limits', description: 'Lowers the limits to what’s used, to show the at-limit states' }]}
+        onDemo={(id) => { if (id === 'partner') setPartner(true); else if (id === 'insights') setSharedInsights(true); else if (id === 'admin') setAdmin(true); else if (id.startsWith('pub:')) setPublicPage(id.slice(4) as PublicKind);
+          else if (id === 'limits') { rawDispatch({ type: 'prefs/update', fn: (q) => ({ tightLimits: !q.tightLimits }) }); toast({ message: state.prefs.tightLimits ? 'Usual plan limits are back' : 'Plan limits lowered to what’s used' }); } }} onSearch={() => setSearch(true)} appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} onCopyPage={(p) => setCopying({ kind: 'booking', page: p })} incoming={incoming} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
           if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
@@ -436,10 +445,13 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onRestore={() => { dispatch({ type: 'history/add', text: `${state.me} restored ${state.prefs.workspace.name}` }); toast({ message: `${state.prefs.workspace.name} is back. Everyone has access again.`, tone: 'success' }); }}
         onJoin={() => { const iv = state.prefs.invites[0]; if (!iv) return; rawDispatch({ type: 'member/set', member: { id: newId('u'), name: iv.email.split('@')[0]?.replace(/^./, (c) => c.toUpperCase()) ?? iv.email, email: iv.email, role: iv.role === 'guest' ? 'Guest' : 'Member', title: '' }, note: `${iv.email} accepted the invitation` }); rawDispatch({ type: 'prefs/update', fn: (q) => ({ invites: q.invites.filter((x) => x.id !== iv.id) }) }); toast({ message: `${iv.email} joined ${state.prefs.workspace.name}`, tone: 'success' }); }}
         onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
-        onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
+        onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date(), by: state.me, expires: new Date(Date.now() + 7 * 86_400_000) }))], ...(v.photo ? { photo: v.photo } : {}) }, note: `${state.me} set up ${v.workspace}` });
+          if (v.name && v.name !== state.me) dispatch({ type: 'me/rename', name: v.name }); if (v.handle) dispatch({ type: 'link/handle', handle: v.handle });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); setAssembling((n) => n + 1); }} />}
       {copying && <CopyToWorkspace subject={copySubject(copying)} current={ws} onClose={() => setCopying(undefined)} onCopy={(to, name) => copyTo(copying, to, name)} onCopyLook={(to, target) => copyLook(copying, to, target)} />}
       {sharedInsights && <SharedInsights state={state} bookings={bookings} onClose={() => setSharedInsights(false)} />}
+      {admin && <AdminArea state={state} dispatch={rawDispatch} onClose={() => setAdmin(false)} onSecurity={() => { setAdmin(false); openSettings('security'); }} />}
+      {publicPage && <PublicScreen kind={publicPage} state={state} dispatch={rawDispatch} onClose={() => setPublicPage(undefined)} />}
       {partner && <PartnerFrame state={state} dispatch={dispatch} handle={handleFor(state, bookings)} bookings={bookings} onClose={() => setPartner(false)} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={[...here, ...commands]} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}
         placeholder="Search records, views, notes, or type a command…" />

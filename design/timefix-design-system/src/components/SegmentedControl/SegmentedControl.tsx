@@ -1,5 +1,5 @@
 import { ToggleButtonGroup, ToggleButton, type Key } from 'react-aria-components';
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import { useSlidingIndicator } from '../Tabs/useSlidingIndicator.ts';
@@ -31,11 +31,15 @@ export interface SegmentedControlProps {
   readonly isDisabled?: boolean;
 }
 
+/** Lets a toolbar stretch the control inside it to the full row, segments sharing the width, when its container is under 34rem. */
+export const SegmentedFillContext = createContext<'narrow' | undefined>(undefined);
+
 /** Two to five mutually exclusive choices of how to see the same thing (Table, Board, Calendar; 12h, 24h). A pill slides to the chosen one. */
 export function SegmentedControl({ items, selectedKey, defaultSelectedKey, onSelectionChange, size = 'md', variant = 'default', isFullWidth = false, isDisabled, ...rest }: SegmentedControlProps) {
   const [inner, setInner] = useState<string>(defaultSelectedKey ?? items[0]?.id ?? '');
   const key = selectedKey ?? inner;
   const ref = useSlidingIndicator(key);
+  const fill = useContext(SegmentedFillContext);
   const change = (keys: Set<Key>) => {
     const k = [...keys][0];
     if (k === undefined) return;
@@ -43,7 +47,7 @@ export function SegmentedControl({ items, selectedKey, defaultSelectedKey, onSel
     onSelectionChange?.(String(k));
   };
   return (
-    <div ref={ref} className={cx('tf-seg', `tf-seg--${size}`, `tf-seg--${variant}`, isFullWidth && 'tf-seg--full')}>
+    <div ref={ref} className={cx('tf-seg', `tf-seg--${size}`, `tf-seg--${variant}`, isFullWidth && 'tf-seg--full', fill && `tf-seg--fill-${fill}`)}>
       <span className="tf-seg__pill" aria-hidden="true" />
       <ToggleButtonGroup
         aria-label={rest['aria-label']}

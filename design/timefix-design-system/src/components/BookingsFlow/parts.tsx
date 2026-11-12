@@ -11,7 +11,8 @@ import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
-import { Button, IconButton } from '../Button/Button.tsx';
+import { Button, ButtonCollapseContext, IconButton } from '../Button/Button.tsx';
+import { SegmentedFillContext } from '../SegmentedControl/SegmentedControl.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
 import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
@@ -225,10 +226,10 @@ export function SettingRow({ title, description, children }: { readonly title: s
 export function TabToolbar({ start, count, action }: { readonly start?: ReactNode; readonly count?: ReactNode; readonly action?: ReactNode }) {
   return (
     <div className="tf-bkf__toolbar">
-      {start}
+      <SegmentedFillContext.Provider value="narrow">{start}</SegmentedFillContext.Provider>
       {count !== undefined && <span className="tf-bkf__toolbar-count tf-num">{count}</span>}
       <span className="tf-bkf__spacer" />
-      {action}
+      <ButtonCollapseContext.Provider value={{ below: 'narrow', only: 'primary' }}>{action}</ButtonCollapseContext.Provider>
     </div>
   );
 }

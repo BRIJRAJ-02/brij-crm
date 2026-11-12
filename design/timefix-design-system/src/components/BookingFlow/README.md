@@ -9,3 +9,5 @@ BookingFlow is the public booking card a guest opens once, usually on a phone: p
 **Interaction**: arrows move through the month, Page Up and Page Down change month, Enter picks. The month slides 8px the way the arrows went; the steps slide side by side (transitions.dev page side-by-side) while the card eases to the new height (card resize). Presses ease to 0.97. The time zone row opens the shared Menu; the pick ticks, then it closes 120ms later. 12h/24h is a sliding segmented pill. The booked moment runs the success check (rotate, fade, bob, draw), then the texts reveal with a 40ms stagger. Focus follows each step.
 
 **Replaces**: BookingFrame, MonthTiles, SlotList, BookingDetails, BookingReceipt and the public-booking page parts.
+
+**Also exported**: `BrandCard` (`variant="solo"` is the pill that stands alone under a page with no rail) and `DoneMark` (the filled check in a soft ring that draws in once, an X with `isCancelled`), so every guest flow ends the same way without copying their classes.

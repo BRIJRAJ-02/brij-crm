@@ -6,6 +6,7 @@
 }
 .tf-seg--sm { --tf-seg-h: var(--size-control-sm); }
 .tf-seg--full { display: flex; }
+@container (max-width: 34rem) { .tf-seg--fill-narrow { display: flex; } .tf-seg--fill-narrow .tf-seg__item { flex: 1; } }
 .tf-seg__group { display: flex; gap: var(--space-2); flex: 1; }
 .tf-seg__item {
   position: relative; z-index: 1; flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-6);

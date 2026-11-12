@@ -6,7 +6,7 @@ const tag = kind.toLowerCase().slice(0, 4);
 const shot = (n) => p.screenshot({ path: `${out}su-${tag}-${theme}-${w}-${n}.png` });
 await t('sign in', async () => { await p.keyboard.press('Meta+k'); await p.keyboard.type('Sign in'); await p.waitForTimeout(250); await p.keyboard.press('Enter'); await p.waitForTimeout(700); await shot('01-signin'); });
 await t('code', async () => { await p.getByRole('textbox', { name: 'Email' }).fill('maya.rao@lumen.studio'); await p.getByRole('button', { name: 'Continue with email' }).click(); await p.waitForTimeout(700); await shot('02-code'); await p.keyboard.type('123456'); await p.waitForTimeout(1400); });
-await t('kind', async () => { await shot('03-kind'); await p.getByRole('radio', { name: new RegExp(kind) }).click(); await p.waitForTimeout(300); await shot('03b-kind'); await p.getByRole('button', { name: 'Continue' }).click(); await p.waitForTimeout(700); });
+await t('kind', async () => { await shot('03-kind'); await p.getByRole('radio', { name: new RegExp(kind) }).click({ force: true }); await p.waitForTimeout(300); await shot('03b-kind'); await p.getByRole('button', { name: 'Continue' }).click(); await p.waitForTimeout(700); });
 await t('setup', async () => { let n = 4; for (;;) { if (n === 4) await p.keyboard.type('Lumen Studio'); await p.waitForTimeout(700); await shot(String(n).padStart(2, '0'));
   if (await p.getByRole('button', { name: 'Add another' }).count()) { const fin = p.getByRole('button', { name: /Finish setup/ }); const y0 = (await fin.boundingBox())?.y ?? 0; const ys = [];
     await p.getByRole('button', { name: 'Add another' }).click(); for (let i = 0; i < 8; i++) { await p.waitForTimeout(40); ys.push(Math.round((await fin.boundingBox())?.y ?? 0)); }

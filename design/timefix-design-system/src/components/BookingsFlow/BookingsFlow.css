@@ -89,20 +89,6 @@
 .tf-bkf__ok-word { display: inline-flex; align-items: center; gap: var(--space-4); color: var(--success); font: 500 12px/16px var(--font-sans); }
 
 /* Where: compact tiles, icon well and label, 52px; the chosen one takes an accent edge and a check badge. */
-.tf-bkf-tiles { display: flex; flex-direction: column; gap: var(--space-8); }
-.tf-bkf-tiles__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-8); }
-.tf-bkf-tile { position: relative; display: flex; align-items: center; gap: var(--space-12); height: calc(var(--size-control-lg) + var(--space-8)); padding: 0 var(--space-12) 0 var(--space-8);
-  border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); cursor: pointer; outline: none;
-  transition: border-color var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
-.tf-bkf-tile[data-hovered] { border-color: var(--border-strong); background: var(--surface-hover); }
-.tf-bkf-tile[data-selected] { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--accent); }
-.tf-bkf-tile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-bkf-tile__icon { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
-.tf-bkf-tile[data-selected] .tf-bkf-tile__icon { background: var(--accent-soft); color: var(--accent-text); }
-.tf-bkf-tile__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/20px var(--font-sans); }
-.tf-bkf-tile__badge { position: absolute; top: var(--space-6); right: var(--space-6); display: grid; place-items: center; width: var(--space-16); height: var(--space-16); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent);
-  opacity: 0; transform: scale(var(--scale-medium)); transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-bounce); }
-.tf-bkf-tile[data-selected] .tf-bkf-tile__badge { opacity: 1; transform: none; }
 
 /* When: one grouped row; Change opens the hours inside it. */
 .tf-bkf-when { display: flex; flex-direction: column; padding: var(--space-12); border-radius: var(--radius-lg); background: var(--surface-subtle); }
@@ -432,7 +418,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tf-bkf__reveal, .tf-bkf__reveal-clip, .tf-bkf__swapicon > svg, .tf-bkf__scaled, .tf-bkf__slide.is-resizing, .tf-bkf__slide-page, .tf-bkf__pagerow, .tf-bkf__pagerow-inner,
-  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event { transition: none; }
+  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event { transition: none; }
   .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, .tf-bkf__guest-card, .tf-bkf-try__dest { animation: none; }
 }
 
@@ -504,24 +490,12 @@
 @media (max-width: 40rem) {
   .tf-bkf__body { padding: 0 var(--space-16); }
   .tf-bkf__panel { padding-top: var(--space-16); padding-bottom: var(--space-24); }
-  .tf-bkf .tf-topbar__title { overflow: hidden; }
-  .tf-bkf .tf-crumbs__item:not(:last-child), .tf-bkf .tf-crumbs__sep { display: none; }
-  /* Top bar buttons go icon-only; their names stay for screen readers. */
-  .tf-bkf .tf-topbar__actions .tf-btn:not(.tf-btn--icon) .tf-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .tf-bkf .tf-topbar__actions .tf-btn:not(.tf-btn--icon) { padding-inline: var(--space-8); }
 }
 @container tf-bkf-panel (max-width: 34rem) {
   .tf-bkf__toolbar { gap: var(--space-8); }
   .tf-bkf__toolbar > .tf-seg { flex: 1 0 100%; }
-  .tf-bkf__toolbar > .tf-seg .tf-seg__item { flex: 1; justify-content: center; }
   .tf-bkf__toolbar > .tf-bkf__whose, .tf-bkf__toolbar > .tf-bkf__inline-select { flex: 1 1 0; width: auto; min-width: 0; }
   .tf-bkf__toolbar > .tf-bkf__spacer { display: none; }
-  /* New meeting and other end actions shrink to their icon. */
-  .tf-bkf__toolbar > .tf-btn--primary .tf-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .tf-bkf__toolbar > .tf-btn--primary { flex: none; width: var(--size-control); padding: 0; justify-content: center; }
-  /* Week: each day keeps a readable width; the grid scrolls sideways under the fixed hour labels. */
-  .tf-bkf__meetings .tf-week { overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
-  .tf-bkf__meetings .tf-week__head, .tf-bkf__meetings .tf-week__scroll { min-width: calc(var(--size-control-lg) + var(--space-8) + var(--tf-week-days) * var(--space-48) * 2); }
   /* Routing outcome: the kind on its own line, the choices under it. */
   .tf-bkf-flow__then { flex-wrap: wrap; }
   .tf-bkf-flow__then > .tf-bkf-flow__kind { flex: 1 0 100%; width: auto; }
@@ -547,19 +521,19 @@
 .tf-bkf__topalert { padding: var(--space-12) var(--space-24) 0; }
 @media (max-width: 40rem) { .tf-bkf__topalert { padding: var(--space-12) var(--space-16) 0; } }
 
-/* Week and Team day fill the page: the panel stops scrolling, the calendar takes what's left and scrolls its own hours. */
+/* Week and Team day fill the page: the panel stops scrolling, the calendar takes what's left and scrolls its own hours (the week by WeekCalendar's fillHeight). */
 .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='day']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-16); }
 .tf-bkf__meetings[data-view='week'], .tf-bkf__meetings[data-view='day'], .tf-bkf__meetings[data-view='team'] { flex: 1; min-height: 0; }
 .tf-bkf__meetings:is([data-view='week'], [data-view='day'], [data-view='team']) > .tf-bkf-meetbody { flex: 1; min-height: 0; }
 .tf-bkf__meetings:is([data-view='week'], [data-view='day'], [data-view='team']) .tf-bkf-meetbody__main { min-height: 0; }
 .tf-bkf-meetbody__main > .tf-bkf__calfill { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { display: flex; flex-direction: column; flex: 1; min-height: calc(var(--size-row) * 6); }
-.tf-bkf__calfill .tf-week__scroll, .tf-bkf__calfill .tf-bkf-team__scroll { flex: 1; min-height: 0; max-height: none; }
+.tf-bkf__calfill > .tf-bkf-team { display: flex; flex-direction: column; flex: 1; min-height: calc(var(--size-row) * 6); }
+.tf-bkf__calfill .tf-bkf-team__scroll { flex: 1; min-height: 0; max-height: none; }
 .tf-bkf__calfill .tf-bkf-team__head { flex: none; }
 /* Phone: the page scrolls again; the calendar keeps a tall, readable box. */
 @media (max-width: 40rem) {
   .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='day']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { overflow-y: auto; }
-  .tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { min-height: 70dvh; }
+  .tf-bkf__calfill > .tf-bkf-team { min-height: 70dvh; }
 }
 @container tf-bkf-panel (max-width: 34rem) {
   /* Team day has no filter, so the view switch and New meeting share one row. */
@@ -689,7 +663,7 @@
   .tf-bkf-res[data-stage='request'] .tf-bkf-res__decide { grid-column: 2 / -1; grid-row: 3; justify-content: flex-start; }
   .tf-bkf-res[data-stage='request'] .tf-bkf-res__party { grid-column: 3 / -1; }
   .tf-bkf__toolbar > .tf-bkf-res__actions { flex: 1 0 100%; }
-  .tf-bkf-res__actions > .tf-btn { flex: 1; justify-content: center; }
+  .tf-bkf-res__actions > .tf-btn { flex: 1; }
 }
 .tf-bkf-venue-phone { color: var(--text); font: 600 15px/22px var(--font-sans); user-select: all; }
 .tf-bkf-venue-preview { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-24); background: var(--surface); }

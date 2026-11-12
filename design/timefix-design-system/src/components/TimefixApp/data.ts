@@ -6,7 +6,9 @@ import type { SchemaAttribute } from '../AttributeSettings/AttributeSettings.tsx
 
 /** Someone in the workspace. */
 import type { GuestLookValue } from '../GuestLook/GuestLook.tsx';
-export interface Member { readonly id: string; readonly name: string; readonly email: string; readonly role: 'Owner' | 'Admin' | 'Member' | 'Guest'; readonly title: string }
+export interface Member { readonly id: string; readonly name: string; readonly email: string; readonly role: 'Owner' | 'Admin' | 'Member' | 'Guest'; readonly title: string;
+  /** A custom role they hold instead of Member (Settings › Roles). */ readonly customRole?: string;
+  /** Two factor set up; their calendar's state; when they joined. */ readonly twoFactor?: boolean; readonly calendar?: 'connected' | 'reconnect' | 'none'; readonly joined?: Date }
 /** The three objects every workspace starts with. */
 export type BuiltIn = 'people' | 'companies' | 'deals';
 /** The kinds of record the workspace keeps: the three built in, or an owner-made object's id. */
@@ -216,7 +218,11 @@ export interface ObjectSchema { readonly id: string; readonly one: string; reado
   /** Configuration: the name the API uses, its colour, the attribute that names a record, and whether it's archived (out of the sidebar). */
   readonly apiName?: string; readonly colour?: string; readonly recordName?: string; readonly archived?: boolean;
   /** Access: what each role may do with these records. */
-  readonly access?: Readonly<Record<string, 'edit' | 'view' | 'none'>> }
+  readonly access?: Readonly<Record<string, 'edit' | 'view' | 'none'>>;
+  /** Which records each role or team sees (all, their own, their team's); teams given access; fields hidden or read only per role or team. */
+  readonly records?: Readonly<Record<string, 'all' | 'own' | 'team'>>; readonly teamAccess?: Readonly<Record<string, 'edit' | 'view'>>;
+  readonly fields?: Readonly<Record<string, Readonly<Record<string, 'read' | 'hidden'>>>>;
+  /** Its icon (an IconPicker name). */ readonly icon?: string }
 
 /** A deleted record, kept 30 days so it can come back. */
 export interface TrashItem { readonly id: string; readonly object: ObjectId; /** Set when a merge removed it: the record it went into. */ readonly mergedInto?: string; readonly record: AnyRecord; readonly at: Date; readonly by: string }
@@ -263,17 +269,18 @@ export interface Prefs {
   readonly workspace: { readonly name: string; readonly slug: string; readonly currency: string; readonly country: string; readonly colour: string; readonly logo?: string;
     /** The workspace's own time zone (bookings, digests); people can set their own in Preferences. */ readonly zone?: string;
     /** How long form answers are kept: forever, or 12 or 24 months. */ readonly retention?: string;
-    /** Brand: the colour on dark pages, and the look guests see. */ readonly colourDark?: string; readonly template?: string };
-  readonly theme: 'system' | 'light' | 'dark'; readonly timeZone: string; readonly dateFormat: string; readonly weekStart: 'mon' | 'sun' | 'sat'; readonly startPage: string;
+    /** Brand: the colour on dark pages, and the look guests see. */ readonly colourDark?: string; readonly template?: string;
+    /** What guest pages wear by default: the look, accent, face and light or dark (Settings › Brand). */ readonly look?: GuestLookValue };
+  readonly theme: 'system' | 'light' | 'dark'; readonly timeZone: string; readonly dateFormat: string; readonly weekStart: 'auto' | 'mon' | 'sun' | 'sat'; readonly startPage: string;
   readonly showPhoto: boolean; readonly notify: Readonly<Record<string, boolean>>;
-  readonly twoFactor: boolean; readonly devices: ReadonlyArray<{ readonly id: string; readonly what: string; readonly where: string; readonly current?: boolean }>;
+  readonly twoFactor: boolean; readonly devices: ReadonlyArray<{ readonly id: string; readonly what: string; readonly where: string; readonly current?: boolean; /** Sessions of the same browser, grouped. */ readonly sessions?: number }>;
   readonly apps: Readonly<Record<'menu' | 'seating' | 'appointments', boolean>>;
   readonly rules: Readonly<Record<'require2fa' | 'google' | 'inviteLink' | 'domainJoin', boolean>>;
   readonly grants: Readonly<Record<string, ReadonlyArray<string>>>;
   readonly teams: ReadonlyArray<{ readonly id: string; readonly name: string; readonly members: ReadonlyArray<string>; /** Records the team sees, per object: all, their own, or the team's. */ readonly access?: Readonly<Record<string, 'all' | 'own' | 'team'>> }>;
-  readonly invites: ReadonlyArray<{ readonly id: string; readonly email: string; readonly role: string; readonly at: Date }>;
+  readonly invites: ReadonlyArray<{ readonly id: string; readonly email: string; readonly role: string; readonly at: Date; /** Who sent it, and when its link stops working. */ readonly by?: string; readonly expires?: Date }>;
   readonly joinRequests: ReadonlyArray<{ readonly id: string; readonly name: string; readonly email: string }>;
-  readonly apiKeys: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scope: 'read' | 'write'; readonly last4: string; readonly at: Date }>;
+  readonly apiKeys: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scope: 'read' | 'write'; readonly last4: string; readonly at: Date; readonly used?: Date }>;
   readonly sidebarHidden: ReadonlyArray<string>;
   /** Home sections someone turned off in Preferences: today, tasks, numbers, link, team, reports. */
   readonly homeHidden?: ReadonlyArray<string>;
@@ -295,7 +302,7 @@ export interface Prefs {
   readonly addFromMeetings?: boolean;
   readonly lastSync?: Date;
   /** Roles the workspace made beyond Owner, Admin, Member and Guest; new people get the default one. */
-  readonly roles?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  readonly roles?: ReadonlyArray<CustomRole>;
   readonly defaultRole?: string;
   /** How long a sign-in lasts before asking again, in days. */
   readonly sessionDays?: string;
@@ -305,7 +312,32 @@ export interface Prefs {
   readonly jobs?: ReadonlyArray<ImportJob>;
   /** How likely a deal in each stage is to close (%), for weighted amounts and the forecast; unset stages use the defaults. */
   readonly winChance?: Readonly<Record<string, number>>;
+  /** Webhook endpoints (at most 10), each with its events, secret hint and delivery log. */
+  readonly webhooks?: ReadonlyArray<Webhook>;
+  /** Bulk changes running in the background (Imports and exports › Background jobs). */
+  readonly bulkJobs?: ReadonlyArray<BulkJob>;
+  /** Whether Google is linked (photo sync, sign in). */
+  readonly googleLinked?: boolean;
+  /** Emails from this workspace: New form submissions and Mentions (per workspace). */
+  readonly emailPrefs?: Readonly<Record<string, Readonly<Record<'forms' | 'mentions', boolean>>>>;
+  /** When an owner last signed everyone out. */
+  readonly signedOutAllAt?: Date;
+  /** When you last confirmed it's you; sensitive changes ask again after 10 minutes. */
+  readonly stepUpAt?: number;
+  /** Super admin: when the operator last confirmed with a code (every 12 hours), and the partners registered on the platform. */
+  readonly adminAt?: number; readonly adminPartners?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly client: string; readonly hint: string; readonly at: Date }>;
+  /** Prototype only: plan limits lowered to what the workspace already uses, to show the at-limit states. */
+  readonly tightLimits?: boolean;
 }
+
+/** A role the workspace made: its name, what it's for, read-only data, and how far it sees and manages scheduling. */
+export interface CustomRole { readonly id: string; readonly name: string; readonly description?: string; readonly readOnly?: boolean; readonly see?: 'own' | 'team' | 'all'; readonly manage?: 'own' | 'team' | 'all' }
+/** One webhook endpoint. */
+export interface Webhook { readonly id: string; readonly name: string; readonly url: string; readonly events: ReadonlyArray<string>; readonly on: boolean; readonly failing?: boolean; readonly hint: string; readonly oldUntil?: Date; readonly at: Date;
+  readonly log: ReadonlyArray<{ readonly id: string; readonly event: string; readonly status: 'waiting' | 'delivered' | 'failed' | 'gave-up'; readonly code?: number; readonly ms?: number; readonly attempt: number; readonly at: Date; readonly why?: string }> }
+/** A bulk change that runs in the background: counted first, then waits for Review, then runs in batches. */
+export interface BulkJob { readonly id: string; readonly kind: 'delete' | 'edit' | 'restore' | 'purge'; readonly object: ObjectId; readonly total: number; readonly done: number; readonly by: string; readonly at: Date;
+  readonly status: 'preparing' | 'confirm' | 'running' | 'cancelling' | 'done' | 'cancelled' | 'failed'; readonly refused?: number; readonly finished?: Date; readonly what?: string }
 
 /** An import or export in Settings › Imports and exports. Imports keep their rows, errors and what Undo needs for 7 days. */
 export interface ImportJob { readonly id: string; readonly kind: 'import' | 'export'; readonly what: string; readonly rows: number; readonly by: string; readonly at: Date; readonly file?: string; readonly name?: string;
@@ -620,10 +652,10 @@ const dayAt = (now: Date, days: number, h = 9, m = 0) => new Date(now.getFullYea
 /** Northwind: a small sales team selling to software companies, with a quarter's worth of records. */
 export function northwindCrm(now = new Date()): AppState {
   const members: Member[] = [
-    { id: 'u-priya', name: 'Priya Raman', email: 'priya@northwind.com', role: 'Owner', title: 'Head of sales' },
-    { id: 'u-sam', name: 'Sam Kim', email: 'sam@northwind.com', role: 'Admin', title: 'Account executive' },
-    { id: 'u-jo', name: 'Jo Mendes', email: 'jo@northwind.com', role: 'Member', title: 'Account executive' },
-    { id: 'u-ava', name: 'Ava Chen', email: 'ava@northwind.com', role: 'Member', title: 'Sales development' },
+    { id: 'u-priya', name: 'Priya Raman', email: 'priya@northwind.com', role: 'Owner', title: 'Head of sales', calendar: 'connected', joined: dayAt(now, -400, 9) },
+    { id: 'u-sam', name: 'Sam Kim', email: 'sam@northwind.com', role: 'Admin', title: 'Account executive', twoFactor: true, calendar: 'connected', joined: dayAt(now, -380, 9) },
+    { id: 'u-jo', name: 'Jo Mendes', email: 'jo@northwind.com', role: 'Member', title: 'Account executive', twoFactor: true, calendar: 'reconnect', joined: dayAt(now, -200, 9) },
+    { id: 'u-ava', name: 'Ava Chen', email: 'ava@northwind.com', role: 'Member', title: 'Sales development', calendar: 'none', joined: dayAt(now, -60, 9) },
   ];
   const c = (id: string, name: string, domain: string, industry: string, size: string, city: string, owner: string, ago: number): Company => ({ id, name, domain, industry, size, city, owner, created: dayAt(now, -ago) });
   const companies: Company[] = [
@@ -767,7 +799,7 @@ export function northwindCrm(now = new Date()): AppState {
       workspace: { name: 'Northwind', slug: 'northwind', currency: 'inr', country: 'in', colour: 'teal' },
       theme: 'system', timeZone: 'ist', dateFormat: 'dmy', weekStart: 'mon', startPage: 'home', showPhoto: true,
       notify: { mention: true, task: true, booking: true, form: false, digest: true }, twoFactor: false,
-      devices: [{ id: 'dv1', what: 'MacBook Pro · Chrome', where: 'Mumbai', current: true }, { id: 'dv2', what: 'iPhone · Safari', where: 'Mumbai · 2h ago' }, { id: 'dv3', what: 'Windows · Edge', where: 'Pune · 3d ago' }],
+      devices: [{ id: 'dv1', what: 'MacBook Pro · Chrome', where: 'Mumbai', current: true }, { id: 'dv2', what: 'iPhone · Safari', where: 'Mumbai · 2h ago', sessions: 2 }, { id: 'dv3', what: 'Windows · Edge', where: 'Pune · 3d ago' }, { id: 'dv4', what: 'iPad · Safari', where: 'Delhi · 5d ago' }, { id: 'dv5', what: 'MacBook Air · Firefox', where: 'Bengaluru · 8d ago', sessions: 3 }, { id: 'dv6', what: 'Android · Chrome', where: 'Mumbai · 12d ago' }],
       signIns: [
         { id: 'si1', who: 'Priya Raman', what: 'MacBook Pro · Chrome', where: 'Mumbai', at: dayAt(now, 0, 9), ok: true },
         { id: 'si2', who: 'Sam Kim', what: 'MacBook Air · Safari', where: 'Bengaluru', at: dayAt(now, 0, 8), ok: true },
@@ -777,14 +809,17 @@ export function northwindCrm(now = new Date()): AppState {
         { id: 'si6', who: 'Priya Raman', what: 'Windows · Edge', where: 'Pune', at: dayAt(now, -3, 14), ok: true },
         { id: 'si7', who: 'Ava Chen', what: 'iPad · Safari', where: 'Delhi', at: dayAt(now, -5, 11), ok: true },
       ],
-      backupLeft: 6, teammatesSee: 'busy', addFromMeetings: true, sessionDays: '30', schedSee: 'teams',
+      backupLeft: 10, teammatesSee: 'busy', addFromMeetings: true, sessionDays: '30', schedSee: 'teams',
       jobs: [{ id: 'jb1', kind: 'import', what: 'People from old-crm.csv', rows: 214, by: 'Sam Kim', at: dayAt(now, -9, 16), name: 'old-crm.csv' }],
       apps: { menu: true, seating: true, appointments: true }, rules: { require2fa: false, google: true, inviteLink: false, domainJoin: true },
       grants: { owner: ['records.edit', 'schema', 'members', 'bookings'], admin: ['records.edit', 'schema', 'members', 'bookings'], member: ['records.edit', 'bookings'], guest: [] },
       teams: [{ id: 'tm1', name: 'Sales', members: ['Priya Raman', 'Sam Kim', 'Jo Mendes'] }, { id: 'tm2', name: 'Customer success', members: ['Ava Chen'] }],
-      invites: [{ id: 'iv1', email: 'rahul@northwind.com', role: 'member', at: dayAt(now, -1, 10) }],
+      invites: [{ id: 'iv1', email: 'rahul@northwind.com', role: 'member', at: dayAt(now, -1, 10), by: 'Sam Kim', expires: dayAt(now, 6, 10) }],
       joinRequests: [{ id: 'jr1', name: 'Meera Iyer', email: 'meera@northwind.com' }],
-      apiKeys: [], sidebarHidden: [],
+      apiKeys: [{ id: 'key1', name: 'Website sync', scope: 'read', last4: '9f2c', at: dayAt(now, -40, 11), used: dayAt(now, 0, 7) }], sidebarHidden: [],
+      webhooks: [{ id: 'wh1', name: 'Zapier', url: 'https://hooks.zapier.com/hooks/catch/1840/bk2', events: ['booking.created', 'booking.cancelled'], on: true, hint: 'q7Lm', at: dayAt(now, -20, 10),
+        log: [{ id: 'dl1', event: 'booking.created', status: 'delivered', code: 200, ms: 182, attempt: 1, at: dayAt(now, 0, 9) }, { id: 'dl2', event: 'booking.cancelled', status: 'failed', code: 500, ms: 412, attempt: 2, at: dayAt(now, -1, 16), why: 'The server refused it.' }, { id: 'dl3', event: 'booking.created', status: 'delivered', code: 200, ms: 201, attempt: 1, at: dayAt(now, -2, 11) }] }],
+      bulkJobs: [{ id: 'bj1', kind: 'edit', object: 'people', total: 1240, done: 1240, by: 'Sam Kim', at: dayAt(now, -3, 15), finished: dayAt(now, -3, 15), status: 'done', refused: 3, what: 'Set Lifecycle to Customer' }],
     } };
 }
 

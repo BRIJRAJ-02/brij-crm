@@ -56,4 +56,14 @@
 .tf-settings__field-prefix { padding-left: var(--space-12); color: var(--text-tertiary); white-space: nowrap; }
 .tf-settings__field-input { flex: 1; min-width: 0; height: 100%; padding: 0 var(--space-12); border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
 .tf-settings__field-prefix + .tf-settings__field-input { padding-left: 0; }
+/* The app's sidebar holds the nav: the page drops its side padding and sits in the app's gutter. */
+.tf-settings--flush > .tf-settings__content { padding-inline: 0; }
+/* Master and detail under 640px: the nav or the page, full width, on the page's own scroll. */
+.tf-settings--panes { container: tf-settings / inline-size; }
+@container tf-settings (max-width: 640px) {
+  .tf-settings--panes > * { flex: 1; min-width: 0; }
+  .tf-settings--panes .tf-settings__nav { width: auto; padding: var(--space-16) 0; border-right: 0; }
+  .tf-settings--panes > .tf-settings__content { padding: var(--space-8) 0 var(--space-32); overflow: visible; }
+  .tf-settings--panes[data-pane='nav'] > .tf-settings__content, .tf-settings--panes[data-pane='content'] > :not(.tf-settings__content) { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { .tf-settings__link, .tf-settings__field-box { transition: none; } }

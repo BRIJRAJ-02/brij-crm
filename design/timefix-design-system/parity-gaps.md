@@ -18,14 +18,14 @@ Real app paths: R = apps/web/src/features. Prototype paths: P = tfds/src/compone
 - [x] Create sheet (BF/create.tsx:183, BookingsFlow.css:85-103) is a hand-made modal: use Dialog (add a divider-footer variant if needed)
 - [x] Sign-in door (TimefixApp/auth.tsx:58) is a hand-made modal with no focus trap: full-screen Dialog size at --z-modal
 - [x] Three link styles (.tf-rec__link, .tf-bkf__textbtn, Link): one Link with onPress
-- [ ] Choice tiles copied (.tf-bkf-tile, .tf-door__choice, .tf-forms__tpl): TileGrid (+ compact variant)
+- [x] Choice tiles copied (.tf-bkf-tile, .tf-door__choice, .tf-forms__tpl): TileGrid (+ compact variant)
 - [x] Section cards differ (.tf-bkf-card radius-xl, .tf-you__card): Card / SettingsSection
 - [x] Team day events: second event design with a coloured stripe and hand-made chip; also .tf-bkf-svc::before, .tf-bkf-profile__dot stripes
 - [x] Hand-drawn bar charts (forms.tsx:401,440, insights.tsx:149,172): BarList / Meter
 - [x] Empty / no-match states in four styles: EmptyState size="sm" and NoResults
 - [x] Toolbars two sizes (records small vs you/availability/menu medium); availability saved hours in a SegmentedControl -> Select
-- [ ] Hand copies: .tf-bkf-guestmode__back pill -> Button secondary sm; Settings › Brand redraws a booking page -> GuestLook
-- [ ] Screen CSS reaching into library parts: BookingsFlow.css:536-547 (.tf-btn__label, .tf-seg__item), TimefixApp.css:108-112 (.tf-qbuilder), :352 (.tf-hform--look), BookingsFlow.css:652 hides the service Switch below 46rem
+- [x] Hand copies: .tf-bkf-guestmode__back pill -> Button secondary sm; Settings › Brand redraws a booking page -> GuestLook
+- [x] Screen CSS reaching into library parts: BookingsFlow.css:536-547 (.tf-btn__label, .tf-seg__item), TimefixApp.css:108-112 (.tf-qbuilder), :352 (.tf-hform--look), BookingsFlow.css:652 hides the service Switch below 46rem
 - [x] Raw values: z-index 40/2/30/1, opacity .7/.8/.85/.4, 1px borders/shadows, 56px logo, bare font-size, color: var(--surface) on danger/brand fills
 - [x] :hover without (hover: hover) guard (TimefixApp.css:52,100,123,208,239,259,329; BookingsFlow.css:178,224,632,677,697,746,817,852)
 - Note for the port: the prototype's token set (tokens.json v2) has 53 tokens packages/tokens lacks; sync through the artifact before porting
@@ -105,25 +105,27 @@ Wave D1 notes: form language translates the form's own words only (answer-check 
 Wave D2 notes: every drag list goes through src/lib/drag.ts (dnd-kit, zoom-safe); Business, Services and Staff and shifts are full Settings screens; the menu design offers Geist and Geist Mono only (no serif token); business and reservation pages don't take the menu look yet.
 
 ## Wave E: settings, auth, admin
-- [ ] Webhooks screen (endpoint, events, secret shown once, rotate, test, on/off, delivery log + resend, delete, limit 10)
-- [ ] Super admin: gate (2FA + code every 12h), Overview, Users (+ one user), Booking pages, Website, Partners
-- [ ] Partner connect (OAuth) page; status page; one-click unsubscribe; email prefs expired state
-- [ ] Usage meters and plan limits (Objects/Attributes at limit)
-- [ ] Sign in: rate-limit waits, sign-up closed, Google errors, signed-out reasons; two-factor expired + different email; Opening / Still opening / Can't open screens
-- [ ] Welcome: your name + photo step, link-page handle step, free-address suggestions, calendar result messages
-- [ ] Invite: your name for new person, masked sent-to, page-only invite; Join: list of workspaces for @domain, none state
-- [ ] Email preferences per workspace (New form submissions, Mentions, always-sent note)
-- [ ] Profile: claim/change handle, Google photo sync
-- [ ] Security: step-up check before sensitive changes, copy setup key, download codes, show more, session counts
-- [ ] Calendars: per-calendar options inside each account, account limit, "Add people from meetings" admins only
-- [ ] Preferences: "Same as the workspace" time zone, "Automatic" date format
-- [ ] Members: search, bulk role change, 2FA/calendar/scheduling columns, "What can X do", invited by/expires, works in, guest-demotion impact
-- [ ] Roles: ~33 powers, description, read-only data access, scheduling reach, People tab, move people on delete, Viewer template, impact confirm
-- [ ] Sign-in rules: need it yourself first, count without 2FA, No limit, last done, step-up; drop the extra Google sign-in switch
-- [ ] Object Access: team rows, which records (all/own/team), field-level hide/lock, Preview as, impact chips
-- [ ] Objects list: reorder, icon picker, copy object ID, standard/custom column
-- [ ] Jobs: bulk jobs with progress, Review, cancel, summary, only yours for members
-- [ ] API keys: last used, API reference link, Undo on revoke
-- [ ] General: address suggestions, copy address, export-first note, confirm before shortening retention
-- [ ] Teams: warning that scheduling access is lost on delete
-- [ ] History: sign-ins move to Account (as the real app)
+- [x] Webhooks screen (endpoint, events, secret shown once, rotate, test, on/off, delivery log + resend, delete, limit 10)
+- [x] Super admin: gate (2FA + code every 12h), Overview, Users (+ one user), Booking pages, Website, Partners
+- [x] Partner connect (OAuth) page; status page; one-click unsubscribe; email prefs expired state
+- [x] Usage meters and plan limits (Objects/Attributes at limit)
+- [x] Sign in: rate-limit waits, sign-up closed, Google errors, signed-out reasons; two-factor expired + different email; Opening / Still opening / Can't open screens
+- [x] Welcome: your name + photo step, link-page handle step, free-address suggestions, calendar result messages
+- [x] Invite: your name for new person, masked sent-to, page-only invite; Join: list of workspaces for @domain, none state
+- [x] Email preferences per workspace (New form submissions, Mentions, always-sent note)
+- [x] Profile: claim/change handle, Google photo sync
+- [x] Security: step-up check before sensitive changes, copy setup key, download codes, show more, session counts
+- [x] Calendars: per-calendar options inside each account, account limit, "Add people from meetings" admins only
+- [x] Preferences: "Same as the workspace" time zone, "Automatic" date format
+- [x] Members: search, bulk role change, 2FA/calendar/scheduling columns, "What can X do", invited by/expires, works in, guest-demotion impact
+- [x] Roles: ~33 powers, description, read-only data access, scheduling reach, People tab, move people on delete, Viewer template, impact confirm
+- [x] Sign-in rules: need it yourself first, count without 2FA, No limit, last done, step-up; drop the extra Google sign-in switch
+- [x] Object Access: team rows, which records (all/own/team), field-level hide/lock, Preview as, impact chips
+- [x] Objects list: reorder, icon picker, copy object ID, standard/custom column
+- [x] Jobs: bulk jobs with progress, Review, cancel, summary, only yours for members
+- [x] API keys: last used, API reference link, Undo on revoke
+- [x] General: address suggestions, copy address, export-first note, confirm before shortening retention
+- [x] Teams: warning that scheduling access is lost on delete
+- [x] History: sign-ins move to Account (as the real app)
+
+Wave E notes: Webhooks sits under Settings › Developer (the real app parks it out of the nav); the real app has 36 role powers; there is no plans UI in the real app, so "ask for more room" opens an email dialog; public pages and Super admin are in the Demo menu. House rules: no screen CSS reaches into a library part (SettingsLayout narrowPane/contentInset, WeekCalendar fillHeight/narrowScroll, HostedFormPreview showBar, PoweredByFoot, BrandCard variant, DoneMark, WeekPopActions, TileGrid compact); Breadcrumbs and AppShell carry their own phone rules.

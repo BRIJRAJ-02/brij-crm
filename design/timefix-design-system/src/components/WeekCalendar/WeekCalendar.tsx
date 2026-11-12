@@ -56,6 +56,13 @@ export interface WeekCalendarProps {
   readonly scrollHeight?: string;
   /** What an event's popover shows under its title and time, in place of Join and Reschedule (a block's Remove, a calendar event's About). Return undefined for the default. */
   readonly eventDetails?: (event: WeekEvent, close: () => void) => ReactNode | undefined;
+  /**
+   * Fills its parent's height (the parent is a flex column): the hours area takes what is left and scrolls on its own, with no 8.5 hour cap.
+   * It keeps at least six rows, and on a phone (under 640px) a tall, readable 70% of the screen while the page scrolls.
+   */
+  readonly fillHeight?: boolean;
+  /** Under 544px wide, each day keeps a readable width (96px) and the grid scrolls sideways; wider, the days share the width as usual. */
+  readonly narrowScroll?: boolean;
 }
 
 const STEP = 15;
@@ -96,7 +103,7 @@ interface Moving {
 interface Pressing { readonly id: string; readonly mode: 'move' | 'resize'; readonly x: number; readonly y: number; readonly origin: WeekSelection; readonly started: boolean }
 
 /** The team week: hour gutter, day headers, now-line, tinted events with a popover, hatched busy time, drag to select, and events that move and resize. */
-export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, selectionMenu, onJoin, onReschedule, onEventChange, scrollHeight, eventDetails }: WeekCalendarProps) {
+export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, selectionMenu, onJoin, onReschedule, onEventChange, scrollHeight, eventDetails, fillHeight = false, narrowScroll = false }: WeekCalendarProps) {
   const selRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const hours = endHour - startHour;
@@ -250,7 +257,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
   };
 
   return (
-    <div className="tf-week" style={{ '--tf-week-days': days.length, '--tf-week-hours': hours } as React.CSSProperties}>
+    <div className={cx('tf-week', fillHeight && 'tf-week--fill', narrowScroll && 'tf-week--swipe')} style={{ '--tf-week-days': days.length, '--tf-week-hours': hours } as React.CSSProperties}>
       <div className="tf-week__head" role="presentation">
         <span className="tf-week__corner" />
         {days.map((d) => (
@@ -376,4 +383,9 @@ function EventFace({ ev, start, end, conflict, hour12, showRange = false }: { re
       {conflict && <span className="tf-week__conflict"><AlertTriangle size={12} strokeWidth={2} aria-hidden />{!short && 'Conflict'}</span>}
     </>
   );
+}
+
+/** The row of actions at the foot of an event's popover on the week (Remove, Release, Open). */
+export function WeekPopActions({ children }: { readonly children: ReactNode }) {
+  return <div className="tf-week__pop-actions">{children}</div>;
 }

@@ -2,11 +2,14 @@
 // asking to join by company email, a deleted workspace, and email preferences. Each ends back in the app or says what happens next.
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../Link/Link.tsx';
-import { ArrowLeft, Building2, MailCheck, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Building2, Clock, MailCheck, RotateCcw } from 'lucide-react';
 import { AuthLayout, AuthHeading, AuthFooterLink } from '../AuthLayout/AuthLayout.tsx';
 import { SignInForm } from '../SignInForm/SignInForm.tsx';
 import { CodeInput } from '../CodeInput/CodeInput.tsx';
-import { Onboarding, nameFromEmail, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
+import { Onboarding, nameFromEmail, type CalendarResult, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
+import { Callout } from '../Callout/Callout.tsx';
+import { Tag } from '../Tag/Tag.tsx';
+import { Skeleton, Spinner } from '../Motion/Motion.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -17,13 +20,23 @@ import { TextField } from '../Field/Field.tsx';
 /** The three kinds of business, as the first run asks. */
 
 /** Which door. */
-export type Door = 'signin' | 'twofactor' | 'welcome' | 'invite' | 'join' | 'deleted' | 'email' | 'expired' | 'setup2fa' | 'invite-wrong' | 'invite-used';
+export type Door = 'signin' | 'twofactor' | 'welcome' | 'invite' | 'join' | 'deleted' | 'email' | 'expired' | 'setup2fa' | 'invite-wrong' | 'invite-used'
+  | 'signin-limit' | 'signin-closed' | 'google-error' | 'signed-out' | 'twofactor-expired' | 'opening' | 'invite-page' | 'join-none';
 /** The doors as ⌘K lists them. */
 export const DOORS: ReadonlyArray<{ readonly id: Door; readonly label: string }> = [
   { id: 'signin', label: 'Sign in' }, { id: 'twofactor', label: 'Two factor at sign in' }, { id: 'welcome', label: 'First run (welcome)' }, { id: 'invite', label: 'Accept an invitation' },
   { id: 'join', label: 'Ask to join by email domain' }, { id: 'deleted', label: 'A deleted workspace' }, { id: 'email', label: 'Email preferences (no sign in)' },
   { id: 'expired', label: 'Session ran out' }, { id: 'setup2fa', label: 'Two factor required by the workspace' }, { id: 'invite-wrong', label: 'Invitation for another email' }, { id: 'invite-used', label: 'Invitation already used' },
+  { id: 'signin-limit', label: 'Sign in: too many codes (wait)' }, { id: 'signin-closed', label: 'Sign in: sign up closed' }, { id: 'google-error', label: 'Sign in: Google errors' }, { id: 'signed-out', label: 'Signed out (why)' },
+  { id: 'twofactor-expired', label: 'Two factor: sign in expired' }, { id: 'opening', label: 'Opening Timefix' }, { id: 'invite-page', label: 'Invitation to manage a link page' }, { id: 'join-none', label: 'Join: no workspaces for your email' },
 ];
+/** Why Google sign in failed, and why someone was signed out: the prototype footer switches between them. */
+const GOOGLE_ERRORS = { cancelled: 'Google sign in was cancelled. Try again, or use your email.', unverified: 'Google hasn’t verified that email. Use your email instead.', closed: 'No account for that Google email, and sign up isn’t open yet.', other: 'Couldn’t sign in with Google. Try again, or use your email.' } as const;
+const SIGNED_OUT = { ended: 'You were signed out. Sign in again to carry on.', elsewhere: 'You were signed out from another device. Sign in again to carry on.', removed: 'You were removed from the workspace. Sign in to open your other workspaces.', unsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.', deleted: 'Your account was deleted.' } as const;
+/** "a***@example.com": the first letter, then stars, then the domain. */
+export const maskEmail = (e: string) => { const at = e.indexOf('@'); return at < 1 ? '***' : `${e[0]}***${e.slice(at)}`; };
+/** "ada.lovelace@x.com" → "Ada Lovelace". */
+const nameOf = (e: string) => e.split('@')[0]?.split(/[._-]+/).filter(Boolean).map((w) => w[0]?.toUpperCase() + w.slice(1)).join(' ') ?? e;
 
 /** Who the doors are about: the workspace and the signed-in person, from the app's data. */
 export interface DoorContext {
@@ -49,13 +62,20 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
     return () => { before?.focus(); };
   }, [door]); // eslint-disable-line react-hooks/exhaustive-deps
   const back = <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={onDone}>Back to the app</Button>;
+  const [why, setWhy] = useState<string>('cancelled');
+  /** First run's calendar connect, for the demo: Google connects; Outlook first says access wasn't given, then fails, then connects. */
+  const outlookTries = useRef(0);
+  const connectDemo = (c: 'google' | 'outlook') => new Promise<CalendarResult>((r) => { window.setTimeout(() => { if (c === 'google') r('connected'); else { outlookTries.current += 1; r(outlookTries.current === 1 ? 'denied' : outlookTries.current === 2 ? 'failed' : 'connected'); } }, 800); });
+  useEffect(() => { setWhy(door === 'signed-out' ? 'ended' : 'cancelled'); }, [door]);
   // After the code: someone new sets up their own workspace; a workspace that asks for two factor gets it set up first; otherwise straight in.
   const signedIn = (email?: string) => {
     if (email && ctx.memberEmails && !ctx.memberEmails.includes(email.trim().toLowerCase())) { setSigner(email.trim().toLowerCase()); onDoor('welcome'); return; }
     if (ctx.twoFactor) onDoor('twofactor'); else if (ctx.require2fa) onDoor('setup2fa'); else onDone();
   };
   // First run: one flow in the split screen, from what you book to You're live, under the name of whoever just signed in.
-  if (door === 'welcome') return <FullScreenDialog aria-label="Set up your workspace" onOpenChange={(o) => { if (!o) onDone(); }}><div ref={ref} tabIndex={-1} className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={signer ?? ctx.email} owner={signer ? nameFromEmail(signer) : ctx.name} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { if (v.kind === 'team') onFinish?.(v); onFormat?.(v.kind); onDone(); }} onSignOut={() => onDoor('signin')} /></div></FullScreenDialog>;
+  if (door === 'welcome') return <FullScreenDialog aria-label="Set up your workspace" onOpenChange={(o) => { if (!o) onDone(); }}><div ref={ref} tabIndex={-1} className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Onboarding account={signer ?? ctx.email} owner={signer ? nameFromEmail(signer) : ctx.name} connectCalendar={connectDemo} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo'].includes(slug)), 400); })} onFinish={(v) => { if (v.kind === 'team') onFinish?.(v); onFormat?.(v.kind); onDone(); }} onSignOut={() => onDoor('signin')} /></div></FullScreenDialog>;
+  if (door === 'opening') return <FullScreenDialog aria-label="Opening Timefix" onOpenChange={(o) => { if (!o) onDone(); }}><div ref={ref} tabIndex={-1} className="tf-door tf-door--full"><div className="tf-door__back">{back}</div><Opening onOpen={onDone} /></div></FullScreenDialog>;
+  const proto = (items: Readonly<Record<string, string>>, labels: Readonly<Record<string, string>>) => <span className="tf-rec__muted">Prototype: {Object.keys(items).map((k, n) => <span key={k}>{n > 0 && ' · '}{k === why ? <strong>{labels[k]}</strong> : <AuthFooterLink onPress={() => setWhy(k)}>{labels[k] ?? k}</AuthFooterLink>}</span>)}</span>;
   return (
     <FullScreenDialog aria-label={DOORS.find((d) => d.id === door)?.label ?? 'Timefix'} onOpenChange={(o) => { if (!o) onDone(); }}>
     <div ref={ref} tabIndex={-1} className="tf-door">
@@ -67,7 +87,19 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
             onVerify={(_e, code) => (code === '123456' ? undefined : 'That code isn’t right. It’s 123456 in this prototype.')} onSignedIn={signedIn} />
         </AuthLayout>
       )}
-      {door === 'twofactor' && <TwoFactor email={ctx.email} onDone={onDone} />}
+      {(door === 'signin-limit' || door === 'signin-closed' || door === 'google-error' || door === 'signed-out') && (
+        <AuthLayout aria-label="Sign in" footer={door === 'google-error' ? proto(GOOGLE_ERRORS, { cancelled: 'Cancelled', unverified: 'Not verified', closed: 'Sign up closed', other: 'Other' })
+          : door === 'signed-out' ? proto(SIGNED_OUT, { ended: 'Ran out', elsewhere: 'Elsewhere', removed: 'Removed', unsaved: 'Unsaved change', deleted: 'Account deleted' })
+          : <span className="tf-rec__muted">{door === 'signin-limit' ? 'Prototype: Continue waits for the countdown; any email.' : `Prototype: ${ctx.email} signs in; any other email is refused.`}</span>}>
+          <SignInForm key={`${door}-${why}`} workspace={ctx.workspace} defaultEmail={door === 'signin-limit' ? ctx.email : ''} onGoogle={() => signedIn()}
+            notice={door === 'google-error' ? GOOGLE_ERRORS[why as keyof typeof GOOGLE_ERRORS] : door === 'signed-out' ? SIGNED_OUT[why as keyof typeof SIGNED_OUT] : undefined}
+            noticeTone={door === 'signed-out' ? (why === 'deleted' ? 'success' : 'info') : 'danger'}
+            onSendCode={(email) => (door === 'signin-limit' ? { message: 'Too many codes sent to this email. Try again in {time}.', retryIn: 45 } : door === 'signin-closed' && !(ctx.memberEmails ?? []).includes(email.trim().toLowerCase()) ? 'There’s no account for this email, and sign up isn’t open yet. Check the address.' : undefined)}
+            onVerify={(_e, code) => (code === '123456' ? undefined : 'That code isn’t right. Try again.')} onSignedIn={() => signedIn()} />
+        </AuthLayout>
+      )}
+      {door === 'twofactor' && <TwoFactor email={ctx.email} onDone={onDone} onOtherEmail={() => onDoor('signin')} />}
+      {door === 'twofactor-expired' && <TwoFactor email={ctx.email} onDone={onDone} expired onOtherEmail={() => onDoor('signin')} />}
       {door === 'setup2fa' && <SetUpTwoFactor workspace={ctx.workspace} email={ctx.email} onDone={() => { onTwoFactorOn?.(); onDone(); }} onSignOut={() => onDoor('signin')} />}
       {(door === 'invite-wrong' || door === 'invite-used') && (
         <AuthLayout aria-label="Invitation">
@@ -84,17 +116,9 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
           </div>
         </AuthLayout>
       )}
-      {door === 'invite' && (
-        <AuthLayout aria-label="Invitation">
-          <div className="tf-door__card">
-            <Avatar name={ctx.workspace} size={56} shape="square" />
-            <AuthHeading title={`Join ${ctx.workspace}`} description="Sam Kim invited you as a Member. You’ll see the team’s records, pages and bookings." />
-            <Button variant="primary" size="lg" onPress={() => { onJoin?.(); onDone(); }}>Join workspace</Button>
-            <span className="tf-rec__muted">Signed in as rahul@{ctx.slug}.com · <Link onPress={() => onDoor('signin')}>Not you?</Link></span>
-          </div>
-        </AuthLayout>
-      )}
-      {door === 'join' && <JoinRequest workspace={ctx.workspace} slug={ctx.slug} onAsk={onAskJoin} onDone={onDone} onOwn={() => onDoor('welcome')} />}
+      {door === 'invite' && <InviteCard workspace={ctx.workspace} slug={ctx.slug} onJoin={() => { onJoin?.(); onDone(); }} onOther={() => onDoor('signin')} />}
+      {door === 'invite-page' && <PageInviteCard workspace={ctx.workspace} slug={ctx.slug} onSignIn={() => onDoor('signin')} />}
+      {(door === 'join' || door === 'join-none') && <JoinRequest workspace={ctx.workspace} slug={door === 'join-none' ? 'gmail' : ctx.slug} none={door === 'join-none'} onAsk={onAskJoin} onDone={onDone} onOwn={() => onDoor('welcome')} />}
       {door === 'deleted' && <Deleted workspace={ctx.workspace} onRestore={() => { onRestore?.(); onDone(); }} onSignOut={() => onDoor('signin')} />}
       {door === 'email' && <EmailPrefs email={ctx.email} />}
     </div>
@@ -103,8 +127,17 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
 }
 
 const BACKUP = /^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i;
-function TwoFactor({ onDone, email }: { readonly onDone: () => void; readonly email: string }) {
+function TwoFactor({ onDone, email, expired = false, onOtherEmail }: { readonly onDone: () => void; readonly email: string; readonly expired?: boolean; readonly onOtherEmail: () => void }) {
   const [backup, setBackup] = useState(false);
+  if (expired) return (
+    <AuthLayout aria-label="Two factor" account={email}>
+      <div className="tf-door__card tf-door__card--left">
+        <AuthHeading title="Two factor sign in" />
+        <Callout tone="danger">This sign in has expired. Sign in again.</Callout>
+        <Button variant="primary" size="lg" onPress={onOtherEmail}>Sign in again</Button>
+      </div>
+    </AuthLayout>
+  );
   const [bad, setBad] = useState(false);
   const [code, setCode] = useState('');
   return (
@@ -115,29 +148,89 @@ function TwoFactor({ onDone, email }: { readonly onDone: () => void; readonly em
           : <CodeInput label="Six-digit code" autoFocus isInvalid={bad} errorMessage={bad ? 'That code didn’t match. Try the newest one.' : undefined} onChange={() => setBad(false)} onComplete={(v) => { if (v === '123456') onDone(); else setBad(true); }} description="Prototype: 123456" />}
         <Checkbox defaultSelected>Remember this device for 30 days</Checkbox>
         {backup && <Button variant="primary" size="lg" isDisabled={!BACKUP.test(code.trim())} onPress={() => { if (code.trim().replace('-', '') === '4F7Q29KD') onDone(); else setBad(true); }}>Continue</Button>}
-        <Link onPress={() => { setBackup(!backup); setBad(false); setCode(''); }}>{backup ? 'Use the app instead' : 'Use a backup code'}</Link>
+        <Link onPress={() => { setBackup(!backup); setBad(false); setCode(''); }}>{backup ? 'Use your authenticator app' : 'Use a backup code'}</Link>
+        <Link onPress={onOtherEmail}>Use a different email</Link>
       </div>
     </AuthLayout>
   );
 }
 
-function JoinRequest({ onDone, onOwn, workspace, slug, onAsk }: { readonly onAsk?: () => void; readonly onDone: () => void; readonly onOwn: () => void; readonly workspace: string; readonly slug: string }) {
-  const [sent, setSent] = useState(false);
+/** Join: the workspaces for your email's domain, each with Ask to join; none for a public domain. */
+function JoinRequest({ onDone, onOwn, workspace, slug, onAsk, none = false }: { readonly onAsk?: () => void; readonly onDone: () => void; readonly onOwn: () => void; readonly workspace: string; readonly slug: string; readonly none?: boolean }) {
+  const [sent, setSent] = useState<ReadonlyArray<string>>([]);
+  const list = none ? [] : [{ name: workspace, people: 5 }, { name: `${workspace} Support`, people: 2 }];
+  const asked = list.find((w) => sent.includes(w.name));
   return (
-    <AuthLayout aria-label="Join by email">
+    <AuthLayout aria-label="Join by email" footer={list.length > 0 ? <AuthFooterLink onPress={onOwn}>Create a workspace</AuthFooterLink> : undefined}>
+      <div className="tf-door__card tf-door__card--left">
+        <AuthHeading title="Join your team" description={none ? `None for @${slug}.com. Ask for an invite.` : `Workspaces for @${slug}.com`} />
+        {asked && <Callout tone="info" title={`Asked to join ${asked.name}.`}>An owner or admin will answer. You’ll get an email once you’re in.</Callout>}
+        {none ? <Button variant="primary" size="lg" onPress={onOwn}>Create a workspace</Button>
+          : <ul className="tf-set__list tf-set__list--center">{list.map((w) => <li key={w.name}><span className="tf-door__ws"><Avatar name={w.name} size={36} shape="square" /><span className="tf-set__stack"><strong>{w.name}</strong><span className="tf-rec__muted tf-num">{w.people} people</span></span></span>
+            {sent.includes(w.name) ? <Tag size="sm" status="waiting">Request sent</Tag> : <Button size="sm" variant="secondary" aria-label={`Ask to join ${w.name}`} onPress={() => { if (w.name === workspace) onAsk?.(); setSent([...sent, w.name]); }}>Ask to join</Button>}</li>)}</ul>}
+        {list.length > 0 && <Button variant="ghost" onPress={onDone}>Done</Button>}
+      </div>
+    </AuthLayout>
+  );
+}
+
+/** An invitation: who sent it, the masked address it went to, and your name for someone new. */
+function InviteCard({ workspace, slug, onJoin, onOther }: { readonly workspace: string; readonly slug: string; readonly onJoin: () => void; readonly onOther: () => void }) {
+  const email = `rahul.mehta@${slug}.com`;
+  const [name, setName] = useState(nameOf(email));
+  return (
+    <AuthLayout aria-label="Invitation">
       <div className="tf-door__card">
-        {sent ? <>
-          <span className="tf-door__icon"><MailCheck size={24} strokeWidth={1.75} /></span>
-          <AuthHeading title="Request sent" description={`An owner or admin at ${workspace} will say yes or no. We’ll email you either way.`} />
-          <Button variant="secondary" onPress={onDone}>Done</Button>
+        <Avatar name={workspace} size={56} shape="square" />
+        <AuthHeading title={`Join ${workspace}`} description={`Sam Kim invited you as a Member. Sent to ${maskEmail(email)}.`} />
+        <div className="tf-door__wide"><TextField label="Your name" value={name} onChange={setName} maxLength={80} description="Shown to your team." isInvalid={!name.trim()} errorMessage="Enter your name." /></div>
+        <Button variant="primary" size="lg" isDisabled={!name.trim()} onPress={onJoin}>Join workspace</Button>
+        <span className="tf-rec__muted">Signed in as {email} · <Link onPress={onOther}>Use another address</Link></span>
+      </div>
+    </AuthLayout>
+  );
+}
+
+/** A page-only invitation: someone may manage one link page without joining the workspace. Setting up the login needs no sign in first. */
+function PageInviteCard({ workspace, slug, onSignIn }: { readonly workspace: string; readonly slug: string; readonly onSignIn: () => void }) {
+  const [state, setState] = useState<'ask' | 'busy' | 'done'>('ask');
+  const email = `maya@${slug}.com`;
+  return (
+    <AuthLayout aria-label="Manage your page">
+      <div className="tf-door__card">
+        <span className="tf-door__icon"><MailCheck size={24} strokeWidth={1.75} /></span>
+        {state === 'done' ? <>
+          <AuthHeading title="Your login is ready" description={`Sign in with ${maskEmail(email)} to manage your page.`} />
+          <Button variant="primary" size="lg" onPress={onSignIn}>Sign in</Button>
         </> : <>
-          <Avatar name={workspace} size={56} shape="square" />
-          <AuthHeading title={`${workspace} is on Timefix`} description={`People with an @${slug}.com email can ask to join. Owners see your request and decide.`} />
-          <Button variant="primary" size="lg" onPress={() => { onAsk?.(); setSent(true); }}>Ask to join</Button>
-          <Button variant="ghost" onPress={onOwn}>Make my own workspace instead</Button>
+          <AuthHeading title="Manage your page" description={`Sam Kim invited you to manage your link page, timefix.com/maya, in ${workspace}. Sent to ${maskEmail(email)}.`} />
+          <Button variant="primary" size="lg" isPending={state === 'busy'} onPress={() => { setState('busy'); window.setTimeout(() => setState('done'), 700); }}>{state === 'busy' ? 'Setting up…' : 'Set up my login'}</Button>
+          <span className="tf-rec__muted">You only reach your own page, not the rest of {workspace}.</span>
         </>}
       </div>
     </AuthLayout>
+  );
+}
+
+/** Opening Timefix: the app's outline while it checks who you are; after 5 seconds Still opening with Try again; a failed check says Can't open. */
+function Opening({ onOpen }: { readonly onOpen: () => void }) {
+  const [phase, setPhase] = useState<'opening' | 'slow' | 'failed'>('opening');
+  const [tries, setTries] = useState(0);
+  useEffect(() => { if (phase !== 'opening') return; const t = window.setTimeout(() => setPhase(tries === 0 ? 'slow' : 'failed'), tries === 0 ? 5000 : 1200); return () => window.clearTimeout(t); }, [phase, tries]);
+  const retry = () => { if (phase === 'failed') { onOpen(); return; } setTries((n) => n + 1); setPhase('opening'); };
+  return (
+    <div className="tf-door__opening" aria-busy={phase === 'opening'}>
+      <div className="tf-door__ghost" aria-hidden="true">
+        <div className="tf-door__ghostside">{[60, 40, 50, 45, 55].map((w, n) => <Skeleton key={n} width={`${w}%`} height={14} />)}</div>
+        <div className="tf-door__ghostmain"><Skeleton width="30%" height={20} />{[90, 80, 85, 70].map((w, n) => <Skeleton key={n} width={`${w}%`} height={12} />)}</div>
+      </div>
+      <div className="tf-door__openmsg" role="status">
+        {phase === 'opening' ? <><Spinner size={20} label="Opening Timefix" /><strong>Opening Timefix</strong></>
+          : phase === 'slow' ? <><span className="tf-door__icon"><Clock size={20} strokeWidth={1.75} /></span><AuthHeading title="Still opening Timefix" description="This is taking longer than usual. Check your connection, or try again." /><Button variant="primary" onPress={retry}>Try again</Button></>
+          : <><AuthHeading title="Can’t open Timefix" /><Callout tone="danger">Check your connection, then try again.</Callout><Button variant="primary" onPress={retry}>Try again</Button></>}
+        {phase !== 'opening' && <span className="tf-rec__muted">{phase === 'slow' ? 'Prototype: Try again fails once, then opens.' : 'Prototype: Try again opens the app.'}</span>}
+      </div>
+    </div>
   );
 }
 

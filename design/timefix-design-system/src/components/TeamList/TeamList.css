@@ -12,23 +12,20 @@
 .tf-team__row--washed, .tf-team__row--washed:hover { background: var(--accent-soft); transition-duration: var(--duration-fast), var(--duration-fast), var(--duration-quick); } }
 .tf-team__row--leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 .tf-team__clip { min-height: 0; overflow: hidden; }
-.tf-team__line {
-  display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-control) * 4) calc(var(--size-control) * 2.5) calc(var(--size-control) * 2.5) var(--size-control-sm);
-  align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16);
-}
-.tf-team__person { display: flex; min-width: 0; }
-.tf-team__seen { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
-.tf-team__menu { display: grid; place-items: center; }
+.tf-team__line { display: flex; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16); }
+.tf-team__check { display: grid; flex: none; place-items: center; width: var(--size-control-sm); margin-left: calc(var(--space-8) * -1); }
+.tf-team__person { display: flex; flex: 1 1 0; min-width: 0; }
+.tf-team__role { flex: none; width: calc(var(--size-control) * 4); }
+.tf-team__details { display: flex; flex: none; gap: var(--space-4); width: calc(var(--size-control) * 5.5); }
+.tf-team__status { flex: none; width: calc(var(--size-control) * 2.5); }
+.tf-team__seen { flex: none; width: calc(var(--size-control) * 2.5); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-team__menu { display: grid; flex: none; place-items: center; width: var(--size-control-sm); }
+.tf-team__foot { margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 
-/* Narrow: last seen leaves, then the status tag. */
-@container (max-width: 640px) {
-  .tf-team__line { grid-template-columns: minmax(0, 1fr) calc(var(--size-control) * 3.5) calc(var(--size-control) * 2.5) var(--size-control-sm); }
-  .tf-team__seen { display: none; }
-}
-@container (max-width: 480px) {
-  .tf-team__line { grid-template-columns: minmax(0, 1fr) calc(var(--size-control) * 3.5) var(--size-control-sm); }
-  .tf-team__status { display: none; }
-}
+/* Narrow: the details leave first, then last seen, then the status tag. */
+@container (max-width: 860px) { .tf-team__details { display: none; } }
+@container (max-width: 640px) { .tf-team__seen { display: none; } .tf-team__role { width: calc(var(--size-control) * 3.5); } }
+@container (max-width: 480px) { .tf-team__status { display: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   .tf-team__row { transition: none; }

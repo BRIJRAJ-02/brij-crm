@@ -9,3 +9,5 @@ Breadcrumbs show where a page sits: its parents as grey links and the current pa
 **Interaction**: each parent is a tab stop; Enter follows it. The "…" button opens a menu of the hidden pages that grows from the button (transitions.dev 05, menu dropdown: 250ms in to full scale from .97, 150ms out to .99); arrows move through it, Esc closes it and returns focus.
 
 **Replaces**: Breadcrumbs.
+
+**Phone**: under 40rem only the current page shows; the earlier steps and separators fold away, so the title never pushes the top bar's actions off screen.

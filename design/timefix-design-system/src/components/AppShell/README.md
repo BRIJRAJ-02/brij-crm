@@ -11,3 +11,5 @@ The app shell is the frame of every signed-in page: the sidebar on the grey canv
 **Replaces**: AppShell, Toolbar, PreviewLayout, AsideLayout.
 
 On a phone, toasts rise above the tab bar, and above a floating bar too when one is up (`--tf-toast-lift`).
+
+**Phone**: under 40rem the top bar's title clips (overflow hidden) so its actions stay on screen.

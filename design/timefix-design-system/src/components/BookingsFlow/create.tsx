@@ -1,8 +1,9 @@
 // Steps 2 and 3: the Create sheet (name, length, where, when; nothing else), then "Your page is live".
-import { Radio as AriaRadio, RadioGroup as AriaRadioGroup, Label, Button as AriaButton } from 'react-aria-components';
+import { Button as AriaButton } from 'react-aria-components';
+import { TileGrid } from '../Card/Card.tsx';
 import { Link } from '../Link/Link.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { CalendarDays, Check, Code2, LayoutList, Mail, MapPin, MapPinned, Phone, Play, Video, Webcam } from 'lucide-react';
+import { CalendarDays, Code2, LayoutList, Mail, MapPin, MapPinned, Phone, Play, Video, Webcam } from 'lucide-react';
 import { Select } from '../Select/Select.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { NumberField } from '../NumberField/NumberField.tsx';
@@ -22,23 +23,8 @@ const PLACE_ICON: Readonly<Record<PlaceKind, typeof Video>> = { meet: Video, zoo
 
 /** Where: four compact tiles in a 2 × 2 grid (icon well and label; the chosen one gets an accent edge and a check badge). */
 export function PlaceTiles({ value, onChange }: { readonly value: PlaceKind; readonly onChange: (k: PlaceKind) => void }) {
-  return (
-    <AriaRadioGroup value={value} onChange={(v) => onChange(v as PlaceKind)} className="tf-bkf-tiles" orientation="horizontal">
-      <Label className="tf-bkf__label">Where</Label>
-      <div className="tf-bkf-tiles__grid">
-        {PLACE_ORDER.map((k) => {
-          const Icon = PLACE_ICON[k];
-          return (
-            <AriaRadio key={k} value={k} className="tf-bkf-tile">
-              <span className="tf-bkf-tile__icon" aria-hidden="true"><Icon {...i16} /></span>
-              <span className="tf-bkf-tile__label">{k === 'in-person' ? 'In person' : PLACES[k].label}</span>
-              <span className="tf-bkf-tile__badge" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
-            </AriaRadio>
-          );
-        })}
-      </div>
-    </AriaRadioGroup>
-  );
+  return <TileGrid label="Where" variant="compact" columns={2} value={value} onChange={(v) => onChange(v as PlaceKind)}
+    items={PLACE_ORDER.map((k) => { const Icon = PLACE_ICON[k]; return { id: k, title: k === 'in-person' ? 'In person' : PLACES[k].label, icon: <Icon {...i16} /> }; })} />;
 }
 
 /** Props for CreateSheet. */

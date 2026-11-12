@@ -2,7 +2,7 @@ RolePowers shows what each role may do: roles as columns, powers grouped into fo
 
 **Use it for**: Settings › Roles, where an admin reads and changes what Admin, Member and custom roles can do. **Don't use it for**: one person's access (show their role) or a role picker (Select with described options).
 
-**The consumer provides**: `areas` (folds of powers, each with a label and optional grey line), `roles` (`isLocked` for Owner, `isCustom` for deletable roles), `grants` (power ids per role), `onChange(roleId, powerId, isHeld)`, `onAddRole(name, fromRoleId)` to show "Custom role", `onDeleteRole`, `defaultExpanded`, `isReadOnly`.
+**The consumer provides**: `areas` (folds of powers, each with a label and optional grey line), `roles` (`isLocked` for Owner, `isCustom` for deletable roles), `grants` (power ids per role), `onChange(roleId, powerId, isHeld)`, `onAddRole(name, fromRoleId)` to show "Custom role", `onDeleteRole`, `defaultExpanded`, `isReadOnly`. A role's `isFixed` shows a built-in role's powers read only; a power's `isBuiltInOnly` puts a quiet lock in custom roles' cells; `note` replaces the line under the table.
 
 **States**: folds open or closed, Owner locked on (quieter, a lock in its header and "(always on)" read aloud), a new custom column, read only.
 

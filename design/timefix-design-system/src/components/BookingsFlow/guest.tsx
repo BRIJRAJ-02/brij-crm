@@ -94,7 +94,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
 
 /** "Powered by Timefix" under the guest pages Timefix draws itself (BookingFlow and the chat carry their own). */
 function PoweredBy() {
-  return <div className="tf-bkf__powered-row"><BrandCard className="tf-booking__brand--solo" /></div>;
+  return <div className="tf-bkf__powered-row"><BrandCard variant="solo" /></div>;
 }
 /** A guest card centred on the page, with the foot. */
 function GuestCard({ children, align = 'center' }: { readonly children: ReactNode; readonly align?: 'center' | 'start' }) {

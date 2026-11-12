@@ -2,7 +2,7 @@
 // Every setting the app has is listed here. Scheduling and Business pages sum up what's set and open the full page in Bookings, where it's used.
 // Ending actions (delete account, delete workspace, remove member, disconnect) ask first in a dialog.
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppWindow, ArrowRightLeft, Bell, Building2, CalendarClock, CalendarDays, Clock, Code2, Database, Eye, FileDown, History, KeyRound, LayoutGrid, ListChecks, Palette, Repeat, Scissors, Shield, SlidersHorizontal, Split, Store, Trash2, User, UserCog, Users, UtensilsCrossed, Workflow } from 'lucide-react';
+import { AppWindow, ArrowRightLeft, Bell, Building2, CalendarClock, CalendarDays, Clock, Code2, Database, Eye, FileDown, History, KeyRound, LayoutGrid, ListChecks, Palette, Repeat, Scissors, Shield, SlidersHorizontal, Split, Store, Trash2, User, UserCog, Users, UtensilsCrossed, Webhook, Workflow } from 'lucide-react';
 import { SettingsLayout, SettingsNav, SettingsSection, type SettingsNavGroup } from '../SettingsLayout/SettingsLayout.tsx';
 import { BusinessScreen } from './business.tsx';
 import { ServicesScreen, StaffScreen } from './services.tsx';
@@ -26,37 +26,44 @@ import { CalendarConnections, type CalendarProvider } from '../CalendarConnectio
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
 import { Callout } from '../Callout/Callout.tsx';
+import { InfoTip } from '../Popover/Popover.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
+import { CodeBlock, CopyButton } from '../Code/Code.tsx';
 import type { BookingsAction, BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { ListSettings } from './lists.tsx';
+import { GuestLook, type GuestLookValue } from '../GuestLook/GuestLook.tsx';
 import { STARTER, handleFor } from './grow.tsx';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { newId, type AppAction, type AppState, type Member, type ObjectId, type ObjectSchema, type Prefs, LISTS_ON } from './data.ts';
-import { JobsPage, ObjectAttributes, ObjectsList, StageRules, TrashPage } from './datasettings.tsx';
+import { JobsPage, LIMITS, ObjectAttributes, ObjectIcon, ObjectsList, StageRules, TrashPage, limitOf } from './datasettings.tsx';
+import { Meter } from '../Progress/Progress.tsx';
 import { AutomationsPage } from './automations.tsx';
 import { AccessGrants, RoundRobinPage, RoutingOverview } from './scheduling.tsx';
 import type { Door } from './auth.tsx';
 import { RenameDialog } from './records.tsx';
 import { HOME_SECTIONS } from './home.tsx';
+import { ApiKeysPage, BackgroundJobs, WebhooksPage } from './devtools.tsx';
+import { GooglePhoto, HandleField, SecurityPage, WorkspaceEmails } from './account.tsx';
+import { BulkRoleBar, CapabilitiesDialog, ObjectAccess, RoleChangeDialog, RolesPage, SignInRulesPage, memberRows, moveTo, poss, roleIdOf, roleName as nameOfRole, roleOptions, teamScheduling } from './people.tsx';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
-type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'brand' | 'members' | 'roles' | 'apps' | 'history' | 'jobs'
-  | 'availability' | 'roundrobin' | 'routing' | 'schedaccess' | 'business' | 'services' | 'staff' | 'tables' | 'menu' | 'objects' | 'lists' | 'trash' | 'developer' | 'automations';
+type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'brand' | 'members' | 'roles' | 'signin' | 'apps' | 'history' | 'jobs'
+  | 'availability' | 'roundrobin' | 'routing' | 'schedaccess' | 'business' | 'services' | 'staff' | 'tables' | 'menu' | 'objects' | 'lists' | 'trash' | 'developer' | 'webhooks' | 'automations';
 type NavItem = { readonly id: Page; readonly label: string; readonly icon: ReactNode; readonly words?: string };
 /** The settings tree for this workspace: Business shows only for a salon or a restaurant. The app's sidebar draws it while Settings is open. */
 export const groupsFor = (kind: 'team' | 'salon' | 'restaurant'): ReadonlyArray<Omit<SettingsNavGroup, 'items'> & { readonly items: ReadonlyArray<NavItem> }> => [
   { title: 'Account', items: [{ id: 'profile', label: 'Profile', icon: <User {...i16} />, words: 'name photo handle bio social links public delete account' }, { id: 'preferences', label: 'Preferences', icon: <SlidersHorizontal {...i16} />, words: 'theme dark time zone date format week start page home sidebar' },
     { id: 'notifications', label: 'Notifications', icon: <Bell {...i16} />, words: 'email digest mentions replies' }, { id: 'security', label: 'Sign in and security', icon: <Shield {...i16} />, words: 'two factor 2fa backup codes devices sessions activity' }, { id: 'calendars', label: 'Calendars', icon: <CalendarDays {...i16} />, words: 'google outlook icloud connect conflicts sync colour' }] },
   { title: 'Workspace', items: [{ id: 'general', label: 'General', icon: <Building2 {...i16} />, words: 'name address web currency country time zone retention delete workspace' }, { id: 'brand', label: 'Brand', icon: <Palette {...i16} />, words: 'logo colour dark template look preview' },
-    { id: 'members', label: 'Members and teams', icon: <Users {...i16} />, words: 'invite people roles teams domain link access' }, { id: 'roles', label: 'Roles and access', icon: <KeyRound {...i16} />, words: 'permissions custom roles sign in rules require two factor session' },
+    { id: 'members', label: 'Members and teams', icon: <Users {...i16} />, words: 'invite people roles teams domain link access' }, { id: 'roles', label: 'Roles and access', icon: <KeyRound {...i16} />, words: 'permissions custom roles powers compare viewer' }, { id: 'signin', label: 'Sign in rules', icon: <Shield {...i16} />, words: 'require two factor session length sign out everyone' },
     { id: 'apps', label: 'Apps and connections', icon: <AppWindow {...i16} />, words: 'menu table seating appointments connected partner' }, { id: 'history', label: 'History', icon: <History {...i16} />, words: 'audit changes sign-ins' }, { id: 'jobs', label: 'Imports and exports', icon: <FileDown {...i16} />, words: 'csv download background jobs' }] },
   { title: 'Scheduling', items: [{ id: 'availability', label: kind === 'team' ? 'Availability' : 'Opening hours', icon: <Clock {...i16} />, words: 'hours schedules time off limits' }, ...(kind === 'team' ? [{ id: 'roundrobin' as const, label: 'Round robin', icon: <Repeat {...i16} />, words: 'groups rotation fair' }, { id: 'routing' as const, label: 'Routing', icon: <Split {...i16} />, words: 'rules form questions' }] : []),
     { id: 'schedaccess', label: 'Scheduling access', icon: <Eye {...i16} />, words: 'who can see manage hours calendar' }] },
   ...(kind === 'team' ? [] : [{ title: 'Business', items: [{ id: 'business' as const, label: 'Business', icon: <Store {...i16} />, words: 'business page places hours special days photos address switch' }, { id: 'services' as const, label: kind === 'restaurant' ? 'Table bookings' : 'Services', icon: <Scissors {...i16} />, words: 'prices categories' },
     { id: 'staff' as const, label: 'Staff and shifts', icon: <UserCog {...i16} />, words: 'roster shifts' }, ...(kind === 'restaurant' ? [{ id: 'tables' as const, label: 'Places and tables', icon: <LayoutGrid {...i16} />, words: 'areas seats floor' }, { id: 'menu' as const, label: 'Menu', icon: <UtensilsCrossed {...i16} />, words: 'dishes qr codes' }] : [])] }]),
   { title: 'Data', items: [{ id: 'objects', label: 'Objects', icon: <Database {...i16} />, words: 'attributes fields people companies deals custom configuration access' }, ...(LISTS_ON ? [{ id: 'lists' as const, label: 'Lists', icon: <ListChecks {...i16} />, words: 'stages each record once' }] : []), { id: 'automations', label: 'Automations', icon: <Workflow {...i16} />, words: 'workflow rules trigger when if then runs' }, { id: 'trash', label: 'Trash', icon: <Trash2 {...i16} />, words: 'deleted restore' }] },
-  { title: 'Developer', items: [{ id: 'developer', label: 'API keys', icon: <Code2 {...i16} />, words: 'api keys tokens' }] },
+  { title: 'Developer', items: [{ id: 'developer', label: 'API keys', icon: <Code2 {...i16} />, words: 'api keys tokens reference' }, { id: 'webhooks', label: 'Webhooks', icon: <Webhook {...i16} />, words: 'endpoints events zapier make n8n deliveries secret' }] },
 ];
 
 /** Props for SettingsScreen. */
@@ -96,7 +103,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
   const item = GROUPS.flatMap((g) => g.items).find((x) => x.id === page);
   return (
     <div className={cx('tf-set', picked && 'tf-set--page', shownPage !== undefined && 'tf-set--sidenav')}>
-      <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
+      <SettingsLayout title={item?.label ?? 'Settings'} narrowPane={picked ? 'content' : 'nav'} contentInset={shownPage !== undefined ? 'flush' : 'default'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
         <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} openObject={page === 'objects' ? openObject : undefined} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} onOpenTrashed={onOpenTrashed} sub={(start ?? '').split(':')[0] === page ? (start ?? '').split(':').slice(1).join(':') : undefined} bookings={bookings} onBookingsAction={onBookingsAction} onImport={onImport} onLinkPage={onLinkPage} />
@@ -112,7 +119,8 @@ type Ask =
   | { readonly kind: 'devices' } | { readonly kind: 'device'; readonly id: string } | { readonly kind: '2fa-off' } | { readonly kind: 'signout' }
   | { readonly kind: 'team'; readonly id?: string } | { readonly kind: 'remove'; readonly id: string } | { readonly kind: 'key' } | { readonly kind: 'revoke'; readonly id: string }
   | { readonly kind: 'guest'; readonly id: string } | { readonly kind: 'transfer' } | { readonly kind: 'leave' } | { readonly kind: 'partner'; readonly id?: string } | { readonly kind: 'unpartner'; readonly id: string }
-  | { readonly kind: 'address'; readonly to: string } | { readonly kind: 'codes' } | { readonly kind: 'signout-all' } | { readonly kind: 'role'; readonly from?: string } | { readonly kind: 'cal-off'; readonly id: string };
+  | { readonly kind: 'address'; readonly to: string } | { readonly kind: 'codes' } | { readonly kind: 'signout-all' } | { readonly kind: 'role'; readonly from?: string } | { readonly kind: 'cal-off'; readonly id: string }
+  | { readonly kind: 'rolechange'; readonly id: string; readonly to: string } | { readonly kind: 'retention'; readonly months: string } | { readonly kind: 'caps'; readonly id: string } | { readonly kind: 'team-del'; readonly id: string };
 
 const ROLE_ID = (r: Member['role']) => r.toLowerCase();
 const TAKEN = ['acme', 'timefix', 'admin', 'help', 'northwind-team'];
@@ -145,6 +153,8 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
   const [histTab, setHistTab] = useState<'changes' | 'signins'>('changes');
   const [roleName, setRoleName] = useState('');
   const [freshCodes, setFreshCodes] = useState<ReadonlyArray<string>>([]);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [roleStart, setRoleStart] = useState<{ readonly id?: string; readonly n: number }>({ n: 0 });
   const act = (a: BookingsAction) => onBookingsAction?.(a);
   const cals = bookings?.calendars ?? [];
   const when = (d: Date) => `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}`;
@@ -161,21 +171,24 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
   const close = () => { setAsk(undefined); setTyped(''); setCode(''); };
   let body: ReactNode;
   /** Pages only owners and admins open; a preview as a member or guest shows why they can't. */
-  const ADMIN_ONLY: ReadonlyArray<Page> = ['general', 'brand', 'members', 'roles', 'apps', 'objects', 'trash', 'developer', 'history', 'jobs', 'roundrobin', 'routing', 'business', 'services', 'staff', 'tables', 'menu'];
+  const ADMIN_ONLY: ReadonlyArray<Page> = ['general', 'brand', 'members', 'roles', 'signin', 'apps', 'objects', 'trash', 'developer', 'webhooks', 'history', 'roundrobin', 'routing', 'business', 'services', 'staff', 'tables', 'menu'];
   if (state.previewRole && ADMIN_ONLY.includes(page)) return <SettingsSection title="Only owners and admins open this" description={`A ${state.previewRole.toLowerCase()} sees their own settings: profile, preferences, notifications, sign in and calendars.`}><Button variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></SettingsSection>;
   switch (page) {
     case 'profile': body = <>
-      <SettingsSection title="You"><div className="tf-set__row">{p.photo ? <img className="tf-set__logo tf-set__photo" src={p.photo} alt="Your photo" /> : <Avatar name={state.me} size={56} />}
-        <div className="tf-set__grow"><FileDrop variant="compact" label={p.photo ? 'Replace photo' : 'Add a photo'} description="Square works best, up to 2 MB" acceptedFileTypes={['image/png', 'image/jpeg', 'image/webp']} allowsMultiple={false}
-          onFiles={(files) => { const f = files[0]; if (!f) return; if (f.size > 2_000_000) { toast({ message: `${f.name} is over 2 MB. Pick a smaller file.`, tone: 'danger' }); return; } const was = p.photo; dispatch({ type: 'prefs/update', fn: () => ({ photo: URL.createObjectURL(f) }) }); toast({ message: 'Photo saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: () => ({ photo: was }) }) } }); }} /></div>
+      <SettingsSection title="You"><div className="tf-set__row tf-set__top">{p.photo ? <img className="tf-set__logo tf-set__photo" src={p.photo} alt="Your photo" /> : <Avatar name={state.me} size={56} />}
+        <div className="tf-set__grow tf-set__stack tf-set__gap"><FileDrop variant="compact" label={p.photo ? 'Replace photo' : 'Add a photo'} description="Square works best, up to 2 MB" acceptedFileTypes={['image/png', 'image/jpeg', 'image/webp']} allowsMultiple={false}
+          onFiles={(files) => { const f = files[0]; if (!f) return; if (f.size > 2_000_000) { toast({ message: `${f.name} is over 2 MB. Pick a smaller file.`, tone: 'danger' }); return; } const was = p.photo; dispatch({ type: 'prefs/update', fn: () => ({ photo: URL.createObjectURL(f) }) }); toast({ message: 'Photo saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: () => ({ photo: was }) }) } }); }} />
+          <GooglePhoto state={state} dispatch={dispatch} email={me?.email ?? ''} /></div>
         <div className="tf-rec__form tf-set__grow">
         <CommitField label="Name" value={state.me} onCommit={(v) => { dispatch({ type: 'me/rename', name: v }); toast({ message: 'Name saved', tone: 'success' }); }} />
         <TextField label="Email" value={me?.email ?? ''} isReadOnly description="You sign in with this." /></div></div>
-        {sw('Show my photo on my booking and link pages', p.showPhoto, (on) => set({ showPhoto: on }))}</SettingsSection>
+        <div className="tf-set__switch"><span><strong>Show my account photo on my pages</strong><span className="tf-rec__muted">{p.photo ? 'Your link page’s own photo shows instead, once published.' : 'Add a photo first. Your pages show your initials.'}</span></span>
+          <Switch aria-label="Show my account photo on my pages" isSelected={Boolean(p.photo) && p.showPhoto} isDisabled={!p.photo} onChange={(on) => { dispatch({ type: 'prefs/set', prefs: { showPhoto: on } }); toast({ message: on ? 'Account photo shown on your pages' : 'Account photo hidden on your pages', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { showPhoto: !on } }) } }); }} /></div></SettingsSection>
       {(() => { const handle = handleFor(state, bookings); const lp = state.linkPage ?? STARTER; const url = `timefix.com/${handle}`; return (
         <SettingsSection title="Public profile" description="What people see on your link page and booking pages.">
-          <div className="tf-set__row"><TextField label="Your page" value={url} isReadOnly className="tf-set__grow" description="Your handle comes from the workspace address." />
-            <Button size="sm" variant="secondary" onPress={() => { void copy(`https://${url}`).then((ok) => toast({ message: ok ? 'Link copied' : `Copy didn’t work. Your link is ${url}`, tone: ok ? 'success' : 'danger' })); }}>Copy</Button></div>
+          <div className="tf-rec__form"><HandleField key={state.linkHandle ?? 'none'} state={state} dispatch={dispatch} />
+          <div className="tf-set__row tf-set__labelled"><TextField label="Your page" value={url} isReadOnly className="tf-set__grow" />
+            <Button size="sm" variant="secondary" onPress={() => { void copy(`https://${url}`).then((ok) => toast({ message: ok ? 'Link copied' : `Copy didn’t work. Your link is ${url}`, tone: ok ? 'success' : 'danger' })); }}>Copy link</Button></div></div>
           <CommitField label="Bio" value={lp.profile.bio ?? ''} clean={(v) => v.trim() || ' '} description="One or two lines under your name."
             onCommit={(v) => { const was = state.linkPage; const bio = v.trim(); if (state.linkDraft) dispatch({ type: 'link/draft', page: { ...state.linkDraft, profile: { ...state.linkDraft.profile, bio: bio || undefined } } }); dispatch({ type: 'link/publish', page: { ...lp, profile: { ...lp.profile, bio: bio || undefined } } }); toast({ message: 'Bio saved', tone: 'success', action: { label: 'Undo', onAction: () => { if (was) dispatch({ type: 'link/publish', page: was }); } } }); }} />
           <div className="tf-set__switch"><span><strong>Social links</strong><span className="tf-rec__muted">{lp.socials.length === 0 ? 'None yet' : lp.socials.map((x) => x.network).join(', ')}</span></span>
@@ -186,9 +199,9 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
     case 'preferences': body = <><SettingsSection title="Look and start">
       <div className="tf-rec__form tf-set__narrow">
         <Select label="Theme" value={p.theme} onChange={(v) => v && set({ theme: v as Prefs['theme'] })} items={[{ id: 'system', label: 'Match my device' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }]} />
-        <Select label="Time zone" value={p.timeZone} onChange={(v) => v && set({ timeZone: v })} description="Your times in Bookings, Tasks and the daily summary." items={ZONES} />
-        <div className="tf-bkf__pair"><Select label="Dates read" value={p.dateFormat} onChange={(v) => v && set({ dateFormat: v })} items={[{ id: 'dmy', label: '10 Nov 2026' }, { id: 'mdy', label: 'Nov 10, 2026' }, { id: 'iso', label: '2026-11-10' }]} />
-          <Select label="Weeks start on" value={p.weekStart} onChange={(v) => v && set({ weekStart: v as Prefs['weekStart'] })} items={[{ id: 'mon', label: 'Monday' }, { id: 'sun', label: 'Sunday' }, { id: 'sat', label: 'Saturday' }]} /></div>
+        <Select label="Time zone" value={p.timeZone} onChange={(v) => v && set({ timeZone: v })} description="Your times in Bookings, Tasks and the daily summary." items={[{ id: 'auto', label: 'Automatic (India, from this device)', description: 'Follows the device' }, { id: 'workspace', label: `Same as the workspace (${ZONES.find((z) => z.id === (ws.zone ?? 'ist'))?.label ?? 'IST'})` }, ...ZONES]} />
+        <div className="tf-bkf__pair"><Select label="Dates read" value={p.dateFormat} onChange={(v) => v && set({ dateFormat: v })} items={[{ id: 'auto', label: `Automatic (${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})` }, { id: 'dmy', label: '10 Nov 2026' }, { id: 'mdy', label: 'Nov 10, 2026' }, { id: 'iso', label: '2026-11-10' }]} />
+          <Select label="Weeks start on" value={p.weekStart} onChange={(v) => v && set({ weekStart: v as Prefs['weekStart'] })} items={[{ id: 'auto', label: 'Automatic (Monday)' }, { id: 'mon', label: 'Monday' }, { id: 'sun', label: 'Sunday' }, { id: 'sat', label: 'Saturday' }]} /></div>
         <Select label="Open the app on" value={p.startPage} onChange={(v) => v && set({ startPage: v })} items={[{ id: 'home', label: 'Home' }, { id: 'inbox', label: 'Inbox' }, { id: 'bookings', label: kind === 'restaurant' ? 'Reservations' : 'Meetings' }, { id: 'records:people', label: 'People' }]} />
       </div></SettingsSection>
       <SettingsSection title="In the sidebar" description="Hide what you don’t use. Nothing is deleted.">
@@ -200,29 +213,16 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       </SettingsSection></>; break;
     case 'notifications': body = <SettingsSection title="Email me when" description="The Inbox always gets everything; these are emails.">
       {([['mention', 'Someone mentions me'], ['reply', 'Someone replies to my comment'], ['task', 'Someone gives me a task'], ['booking', 'A guest books, moves or cancels'], ['form', 'A form gets a response'], ['digest', 'A daily summary at 8 AM', 'Your meetings and tasks for the day']] as const)
-        .map(([k, label, hint]) => sw(label, p.notify[k] ?? false, (on) => set({ notify: { ...p.notify, [k]: on } }), hint))}</SettingsSection>; break;
-    case 'security': body = <>
-      <SettingsSection title="Two factor" status={<Tag size="sm" hue={p.twoFactor ? 'green' : 'gray'}>{p.twoFactor ? 'On' : 'Off'}</Tag>} description={p.rules.require2fa && !p.twoFactor ? 'Your workspace asks everyone to use two factor. Set it up to keep access.' : 'A code from an authenticator app each time you sign in on a new device.'}
-        action={p.twoFactor ? <Button variant="secondary" isDisabled={p.rules.require2fa} onPress={() => setAsk({ kind: '2fa-off' })}>Turn off</Button> : <Button variant="primary" onPress={() => { setCode(''); setTwofa('setup'); }}>Set up</Button>}>
-        {p.twoFactor && p.rules.require2fa ? <p className="tf-rec__muted">Your workspace requires two factor, so it can't be turned off.</p> : <span />}</SettingsSection>
-      {p.twoFactor && <SettingsSection title="Backup codes" status={<Tag size="sm" hue={(p.backupLeft ?? 6) <= 2 ? 'orange' : 'gray'}>{p.backupLeft ?? 6} of 6 left</Tag>} description="Each works once if you lose your phone."
-        action={<Button variant="secondary" onPress={() => { setFreshCodes(Array.from({ length: 6 }, () => `${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6)}`.toUpperCase())); setAsk({ kind: 'codes' }); }}>Make new codes</Button>}><span /></SettingsSection>}
-      <SettingsSection title="Where you're signed in" action={p.devices.length > 1 ? <Button variant="secondary" onPress={() => setAsk({ kind: 'devices' })}>Sign out of other devices</Button> : undefined}>
-        <ul className="tf-set__list">{p.devices.map((d) => <li key={d.id}><span><strong>{d.what}</strong> <span className="tf-rec__muted">{d.current ? `${d.where} · this device` : d.where}</span></span>
-          {d.current ? <Tag size="sm" hue="green">This device</Tag> : <Button size="sm" variant="ghost" onPress={() => setAsk({ kind: 'device', id: d.id })}>Sign out</Button>}</li>)}</ul>
-      </SettingsSection>
-      <SettingsSection title="Recent sign-ins" description="Your last 90 days. A sign-in you don't know? Sign out everywhere and change your password.">
-        <ul className="tf-set__list">{(p.signIns ?? []).filter((x) => x.who === state.me).map((x) => <li key={x.id}><span><strong>{x.what}</strong> <span className="tf-rec__muted">{x.where} · {when(x.at)}</span></span><Tag size="sm" hue={x.ok ? 'gray' : 'red'}>{x.ok ? 'Signed in' : 'Wrong code'}</Tag></li>)}</ul>
-      </SettingsSection>
-      <SettingsSection title="Sign out" description="Of this device only." action={<Button variant="secondary" onPress={() => setAsk({ kind: 'signout' })}>Sign out</Button>}><span /></SettingsSection>
-    </>; break;
+        .map(([k, label, hint]) => sw(label, p.notify[k] ?? false, (on) => set({ notify: { ...p.notify, [k]: on } }), hint))}</SettingsSection>; body = <>{body}<WorkspaceEmails state={state} dispatch={dispatch} /></>; break;
+    case 'security': body = <SecurityPage state={state} dispatch={dispatch} require2fa={p.rules.require2fa} onSignOut={() => setAsk({ kind: 'signout' })} />; break;
     case 'calendars': { const targets = cals.filter((c) => c.status === 'connected').flatMap((c) => (bookings?.subCalendars?.[c.id]?.filter((x) => x.conflicts) ?? [{ id: c.provider === 'Google' ? 'work' : c.id, name: c.provider === 'Google' ? 'Work' : 'Calendar' }]).map((x) => ({ id: x.id, label: x.name, description: `${c.provider} · ${c.email}` })));
       const isAdmin = me?.role === 'Owner' || me?.role === 'Admin';
       const syncedAt = bookings?.lastSync ?? p.lastSync;
       body = <>
       {bookings?.fellBack && <Callout tone="warning" onDismiss={() => act({ type: 'calendar/fellback', fellBack: undefined })}>New bookings now go to {bookings.fellBack.now}. {bookings.fellBack.was} stopped taking them.</Callout>}
+      {cals.length >= 6 && <Callout tone="info">Limit of 6 accounts. Disconnect one to add another.</Callout>}
       <SettingsSection title="Connected calendars" description="Busy times there are never offered to guests. Open an account to pick which of its calendars count, show on your week and log meetings.">
-        {!bookings ? <p className="tf-rec__muted">Open Bookings once to load your calendars.</p> : <CalendarConnections accounts={cals}
+        {!bookings ? <p className="tf-rec__muted">Open Bookings once to load your calendars.</p> : <CalendarConnections accounts={cals} providers={cals.length >= 6 ? [] : undefined}
           calendarsOf={(id) => bookings.subCalendars?.[id]}
           onCalendarChange={(acc, id, patch) => act({ type: 'subcal/set', account: acc, calendars: (bookings.subCalendars?.[acc] ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) })}
           onDisconnect={(id) => setAsk({ kind: 'cal-off', id })}
@@ -240,69 +240,64 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           <Select label="Teammates see" value={p.teammatesSee ?? 'busy'} onChange={(v) => v && set({ teammatesSee: v === 'full' ? 'full' : 'busy' })} items={[{ id: 'busy', label: 'Busy or free only', description: 'Your events show as Busy, with no title' }, { id: 'full', label: 'Full details', description: 'Titles, guests and places' }]} />
         </div>
       </SettingsSection>
-      <SettingsSection title="Workspace" description={isAdmin ? 'For everyone in the workspace.' : 'Only owners and admins change this.'}>
-        <div className="tf-set__switch"><span><strong>Add people from meetings</strong><span className="tf-rec__muted">Guests you meet who aren’t in People yet are added, for everyone</span></span>
-          <Switch aria-label="Add people from meetings" isSelected={p.addFromMeetings ?? true} isDisabled={!isAdmin} onChange={(on) => set({ addFromMeetings: on }, `${state.me} turned ${on ? 'on' : 'off'} adding people from meetings`)} /></div>
-      </SettingsSection>
+      {isAdmin && <SettingsSection title="For everyone in the workspace" description="Only owners and admins see this.">
+        <div className="tf-set__switch"><span><strong>Add people from meetings <InfoTip label="About adding people">A meeting with ana@acme.com adds Ana to People, linked to Acme if a company has acme.com.</InfoTip></strong><span className="tf-rec__muted">Guests you meet who aren’t in People yet are added, for everyone</span></span>
+          <Switch aria-label="Add people from meetings" isSelected={p.addFromMeetings ?? true} onChange={(on) => set({ addFromMeetings: on }, `${state.me} turned ${on ? 'on' : 'off'} adding people from meetings`)} /></div>
+      </SettingsSection>}
     </>; break; }
     case 'general': body = <>
       <SettingsSection title="Workspace"><div className="tf-rec__form tf-set__narrow">
         <CommitField label="Name" value={ws.name} onCommit={(v) => set({ workspace: { ...ws, name: v } }, `${state.me} renamed the workspace to ${v}`, 'Name saved')} />
-        <CommitField key={`addr-${ws.slug}-${ask?.kind === 'address' ? 'asking' : 'idle'}`} label="Web address" value={ws.slug} prefix="timefix.com/" clean={(v) => v.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}
-          check={(v) => (TAKEN.includes(v) ? `timefix.com/${v} is taken. Try another.` : v.length < 3 ? 'At least 3 letters' : undefined)}
-          description="Your pages live here. Old links keep working for 30 days." onCommit={(v) => setAsk({ kind: 'address', to: v })} />
+        <AddressField key={`addr-${ws.slug}-${ask?.kind === 'address' ? 'asking' : 'idle'}`} slug={ws.slug} onChange={(v) => setAsk({ kind: 'address', to: v })} />
         <div className="tf-bkf__pair"><Select label="Currency" value={ws.currency} onChange={(v) => v && set({ workspace: { ...ws, currency: v } })} items={[{ id: 'inr', label: 'Indian rupee (₹)' }, { id: 'usd', label: 'US dollar ($)' }, { id: 'eur', label: 'Euro (€)' }, { id: 'gbp', label: 'Pound (£)' }]} />
           <Select label="Country" value={ws.country} onChange={(v) => v && set({ workspace: { ...ws, country: v } })} items={[{ id: 'in', label: 'India' }, { id: 'gb', label: 'United Kingdom' }, { id: 'us', label: 'United States' }, { id: 'ae', label: 'United Arab Emirates' }]} /></div>
         <Select label="Time zone" value={ws.zone ?? 'ist'} onChange={(v) => v && set({ workspace: { ...ws, zone: v } }, `${state.me} set the workspace time zone`)} items={ZONES} description="For opening hours and anyone who hasn’t set their own." />
       </div></SettingsSection>
-      <SettingsSection title="Form answers" description="Older answers are deleted for good, on every form."><div className="tf-rec__form tf-set__narrow">
-        <Select label="Keep answers" value={ws.retention ?? 'forever'} onChange={(v) => v && set({ workspace: { ...ws, retention: v } }, `${state.me} set form answers to keep ${v === 'forever' ? 'forever' : `${v} months`}`)} items={[{ id: 'forever', label: 'Forever' }, { id: '24', label: '24 months' }, { id: '12', label: '12 months' }]} />
+      <SettingsSection title="Forms"><div className="tf-rec__form tf-set__narrow">
+        <Select label="Keep submissions" value={ws.retention ?? 'forever'} description="Older ones are deleted nightly. People and companies they made stay. Spam goes after 30 days."
+          onChange={(v) => { if (!v || v === (ws.retention ?? 'forever')) return; const now = ws.retention ?? 'forever'; if (v !== 'forever' && (now === 'forever' || Number(v) < Number(now))) { setAsk({ kind: 'retention', months: v }); return; }
+            set({ workspace: { ...ws, retention: v } }, `${state.me} set submissions to keep ${v === 'forever' ? 'forever' : `${v} months`}`, v === 'forever' ? 'Submissions are kept forever.' : `Submissions are kept for ${v} months.`); }}
+          items={[{ id: 'forever', label: 'Forever' }, { id: '24', label: '24 months' }, { id: '12', label: '12 months' }]} />
       </div></SettingsSection>
-      <SettingsSection title="Delete workspace" tone="danger" description="Everyone loses access. You can restore it for 30 days." action={<Button variant="danger" onPress={() => setAsk({ kind: 'workspace' })}>Delete workspace</Button>}><span /></SettingsSection>
+      <UsageSection state={state} />
+      <SettingsSection title="Delete workspace" tone="danger" description="Everyone loses access. Restorable for 30 days. Export anything you want to keep first." action={<Button variant="danger" onPress={() => setAsk({ kind: 'workspace' })}>Delete workspace</Button>}><span /></SettingsSection>
     </>; break;
-    case 'brand': { const hueOf = (c: string | undefined) => (c === 'blue' ? 'blue' : c === 'ink' ? 'gray' : c === 'violet' ? 'purple' : 'green');
-      const COLOURS = [{ id: 'teal', label: 'Teal', hue: 'green' as const }, { id: 'blue', label: 'Blue', hue: 'blue' as const }, { id: 'ink', label: 'Ink', hue: 'gray' as const }, { id: 'violet', label: 'Violet', hue: 'purple' as const }];
-      const tpl = ws.template ?? 'classic';
+    case 'brand': { const HEX: Readonly<Record<string, string>> = { teal: '#0F766E', blue: '#1F5FD6', ink: '#111111', violet: '#7C3AED' };
+      const look: GuestLookValue = ws.look ?? { look: 'custom', accent: HEX[ws.colour] ?? '#0F766E', font: 'sans', scheme: 'light' };
       body = <>
-      <SettingsSection title="Logo and colours" description="On booking pages, forms, the link page and emails.">
+      <SettingsSection title="Logo" description="On booking pages, forms, the link page and emails.">
         <div className="tf-set__row">{ws.logo ? <img className="tf-set__logo" src={ws.logo} alt={`${ws.name} logo`} /> : <Avatar name={ws.name} size={56} shape="square" />}
           <div className="tf-set__grow"><FileDrop variant="compact" label={ws.logo ? 'Replace logo' : 'Upload logo'} description="PNG or SVG, square, up to 2 MB" acceptedFileTypes={['image/png', 'image/svg+xml', 'image/jpeg']} allowsMultiple={false}
             onFiles={(files) => { const f = files[0]; if (!f) return; if (f.size > 2_000_000) { toast({ message: `${f.name} is over 2 MB. Pick a smaller file.`, tone: 'danger' }); return; } const was = ws.logo; dispatch({ type: 'prefs/set', prefs: { workspace: { ...ws, logo: URL.createObjectURL(f) } }, note: `${state.me} changed the logo` }); toast({ message: 'Logo saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: (q) => ({ workspace: { ...q.workspace, logo: was } }) }) } }); }} /></div>
           {ws.logo && <Button size="sm" variant="ghost" onPress={() => { const was = ws.logo; dispatch({ type: 'prefs/update', fn: (q) => ({ workspace: { ...q.workspace, logo: undefined } }) }); toast({ message: 'Logo removed', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: (q) => ({ workspace: { ...q.workspace, logo: was } }) }) } }); }}>Remove</Button>}</div>
-        <div className="tf-bkf__pair">
-          <Select label="Colour" value={ws.colour} onChange={(v) => v && set({ workspace: { ...ws, colour: v } }, `${state.me} changed the brand colour`)} items={COLOURS} />
-          <Select label="On dark pages" value={ws.colourDark ?? ws.colour} onChange={(v) => v && set({ workspace: { ...ws, colourDark: v } })} items={COLOURS} description="Night look, and guests in dark mode." />
-        </div>
       </SettingsSection>
-      <SettingsSection title="Look" description="How your public pages are laid out.">
-        <SegmentedControl aria-label="Look" selectedKey={tpl} onSelectionChange={(k) => set({ workspace: { ...ws, template: String(k) } }, `${state.me} changed the page look`)}
-          items={[{ id: 'classic', label: 'Classic' }, { id: 'studio', label: 'Studio' }, { id: 'night', label: 'Night' }, { id: 'split', label: 'Split' }]} />
-        <div className="tf-set__brand" data-template={tpl} data-hue={hueOf(tpl === 'night' ? ws.colourDark ?? ws.colour : ws.colour)} aria-label="Preview">
-          <div className="tf-set__brandcard">
-            <div className="tf-set__brandside">{ws.logo ? <img className="tf-set__logo" src={ws.logo} alt="" /> : <Avatar name={ws.name} size={44} shape="square" />}<strong>{ws.name}</strong><span>30 min · Google Meet</span></div>
-            <div className="tf-set__brandmain"><span className="tf-set__brandlabel">Thursday 12 November</span>
-              <span className="tf-set__brandslots"><span>10:00</span><span data-on>10:30</span><span>11:00</span></span>
-              <span className="tf-set__brandbtn">Book</span></div>
-          </div>
-        </div>
+      <SettingsSection title="Guest pages" description="What your booking pages, forms and link page wear unless one picks its own.">
+        <GuestLook value={look} host={ws.name} onChange={(v) => { const was = ws.look; dispatch({ type: 'prefs/set', prefs: { workspace: { ...ws, look: v } }, note: `${state.me} changed the page look` }); toast({ message: 'Look saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: (q) => ({ workspace: { ...q.workspace, look: was } }) }) } }); }} />
       </SettingsSection>
     </>; break; }
     case 'members': body = <>
-      <TeamList workspace={ws.name} now={new Date()} members={[...state.members.map((m, n) => ({ id: m.id, name: m.name, email: m.email, role: ROLE_ID(m.role), status: 'active' as const, seen: new Date(Date.now() - n * 3_600_000 * 5), isYou: m.name === state.me })),
-        ...p.invites.map((iv) => ({ id: iv.id, name: iv.email, email: iv.email, role: iv.role, status: 'invited' as const, seen: iv.at }))]}
+      <TeamList workspace={ws.name} now={new Date()} members={memberRows(state, new Date())} roles={roleOptions(state)}
         onRoleChange={(id, role) => {
           const m = state.members.find((x) => x.id === id);
-          if (m && role === 'guest' && m.role !== 'Guest') { setAsk({ kind: 'guest', id: m.id }); return; }
-          if (m) { dispatch({ type: 'member/set', member: { ...m, role: ROLE_NAME(role) }, note: `${state.me} made ${m.name} ${ROLE_NAME(role).toLowerCase()}` }); toast({ message: `${m.name.split(' ')[0]} is now ${ROLE_NAME(role).toLowerCase()}`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); return; }
+          if (m) { const from = roleIdOf(m); const lower = role === 'guest' || (from === 'owner') || (from === 'admin' && role !== 'owner') || ((state.prefs.roles ?? []).find((r) => r.id === role)?.readOnly ?? false);
+            if (lower) { setAsk({ kind: 'rolechange', id: m.id, to: role }); return; }
+            moveTo(dispatch, state, m, role); const nm = nameOfRole(state, role); toast({ message: `${m.name} is now ${/^[AEIOU]/.test(nm) ? 'an' : 'a'} ${nm}.`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); return; }
           set({ invites: p.invites.map((iv) => (iv.id === id ? { ...iv, role } : iv)) });
         }}
-        onResend={(id) => { set({ invites: p.invites.map((iv) => (iv.id === id ? { ...iv, at: new Date() } : iv)) }, undefined, 'Invitation sent again'); }}
+        canSelect={(m) => m.status === 'active' && !m.isYou && (m.role !== 'owner' || me?.role === 'Owner')} selectedIds={picked} onSelectionChange={setPicked}
+        actionsFor={(m) => (m.status === 'active' ? [{ id: 'caps', label: `What ${m.name.split(' ')[0]} can do` }] : [])}
+        onAction={(k, m) => { if (k === 'caps') setAsk({ kind: 'caps', id: m.id }); }}
+        footnote={`${state.members.length} members · ${p.invites.length} ${p.invites.length === 1 ? 'invitation' : 'invitations'}${p.invites.some((iv) => iv.expires && iv.expires < new Date()) ? ' · some expired' : ''}`}
+        onResend={(id) => { set({ invites: p.invites.map((iv) => (iv.id === id ? { ...iv, at: new Date(), expires: new Date(Date.now() + 7 * 86_400_000) } : iv)) }, undefined, 'Invitation sent again'); }}
         onRemove={(id) => {
           const iv = p.invites.find((x) => x.id === id);
           if (iv) set({ invites: p.invites.filter((x) => x.id !== id) }, `${state.me} cancelled the invitation to ${iv.email}`, 'Invitation cancelled');
         }}
         onRemoveRequest={(id) => { setReassign(state.me); setAsk({ kind: 'remove', id }); }}
         action={<Button variant="primary" onPress={() => setInviting(true)}>Invite people</Button>} />
+      <BulkRoleBar state={state} ids={picked} onClear={() => setPicked(new Set())} onApply={(role) => { const ms = state.members.filter((m) => picked.has(m.id)); const before = ms; for (const m of ms) moveTo(dispatch, state, m, role, false);
+        dispatch({ type: 'history/add', text: `${state.me} made ${ms.length} people ${nameOfRole(state, role)}` }); setPicked(new Set());
+        toast({ message: `${ms.length} ${ms.length === 1 ? 'person is' : 'people are'} now ${nameOfRole(state, role)}.`, tone: 'success', action: { label: 'Undo', onAction: () => { for (const m of before) dispatch({ type: 'member/set', member: m }); } } }); }} />
       {p.joinRequests.length > 0 && <SettingsSection title="Asking to join" description={`They signed up with an @${ws.slug}.com email.`}>
         <ul className="tf-set__list">{p.joinRequests.map((r) => <li key={r.id}><span><strong>{r.name}</strong> <span className="tf-rec__muted">{r.email}</span></span><span className="tf-set__row">
           <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'member/set', member: { id: newId('u'), name: r.name, email: r.email, role: 'Member', title: '' }, note: `${state.me} let ${r.name} join` }); set({ joinRequests: p.joinRequests.filter((x) => x.id !== r.id) }, undefined, `${r.name} joined as a member`); }}>Let in</Button>
@@ -330,30 +325,8 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         {p.teams.length === 0 ? <EmptyState size="sm" icon={<Users size={20} strokeWidth={1.75} />} title="No teams yet" description="Teams share round robins and views." /> : <ul className="tf-set__list">{p.teams.map((t) => <li key={t.id}><button type="button" className="tf-set__open" onClick={() => { setTeamName(t.name); setTeamMembers(t.members); setTeamAccess(t.access ?? {}); setAsk({ kind: 'team', id: t.id }); }}>
           <strong>{t.name}</strong><span className="tf-rec__muted">{t.members.length === 0 ? 'Nobody yet' : t.members.map((n) => n.split(' ')[0]).join(', ')}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden /></button></li>)}</ul>}</SettingsSection>
     </>; break;
-    case 'roles': { const custom = p.roles ?? []; const all = [{ id: 'owner', name: 'Owner', isLocked: true }, { id: 'admin', name: 'Admin' }, { id: 'member', name: 'Member' }, { id: 'guest', name: 'Guest' }, ...custom];
-      const count = (id: string) => state.members.filter((m) => ROLE_ID(m.role) === id).length;
-      body = <>
-      <SettingsSection title="Roles" description={`What each role can do. Up to 20 roles; ${all.length} so far.`} action={<Button variant="secondary" isDisabled={all.length >= 20} onPress={() => { setRoleName(''); setAsk({ kind: 'role' }); }}>New role</Button>}>
-        <ul className="tf-set__list">{all.map((r) => <li key={r.id}><span><strong>{r.name}</strong> <span className="tf-rec__muted tf-num">{count(r.id)} {count(r.id) === 1 ? 'person' : 'people'}{(p.defaultRole ?? 'member') === r.id ? ' · new people get this' : ''}</span></span>
-          <span className="tf-set__row">{r.id !== 'owner' && <Button size="sm" variant="ghost" isDisabled={all.length >= 20} onPress={() => { setRoleName(`${r.name} copy`); setAsk({ kind: 'role', from: r.id }); }}>Duplicate</Button>}
-            {custom.some((c) => c.id === r.id) && <Button size="sm" variant="ghost" onPress={() => { const was = { roles: p.roles, grants: p.grants, defaultRole: p.defaultRole }; dispatch({ type: 'prefs/set', prefs: { roles: custom.filter((c) => c.id !== r.id), defaultRole: p.defaultRole === r.id ? 'member' : p.defaultRole }, note: `${state.me} deleted the role ${r.name}` }); toast({ message: `${r.name} deleted`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: was }) } }); }}>Delete</Button>}</span></li>)}</ul>
-        <div className="tf-rec__form tf-set__narrow"><Select label="New people join as" value={p.defaultRole ?? 'member'} onChange={(v) => v && set({ defaultRole: v }, `${state.me} changed the default role`)} items={all.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, label: r.name }))} description="For invitations, the invite link and people let in from your domain." /></div>
-      </SettingsSection>
-      <RolePowers roles={all}
-        areas={[{ id: 'records', title: 'Records', powers: [{ id: 'records.edit', label: 'Add and edit records (without it: read only)' }, { id: 'records.delete', label: 'Delete records' }, { id: 'records.export', label: 'Export records' }, { id: 'schema', label: 'Change objects and attributes' }] },
-          { id: 'people', title: 'People', powers: [{ id: 'members', label: 'Invite and remove members' }] },
-          { id: 'bookings', title: 'Scheduling', powers: [{ id: 'bookings', label: 'Make booking pages and round robins' }, { id: 'sched.see', label: 'See teammates’ calendars and hours' }, { id: 'sched.manage', label: 'Change teammates’ hours and time off' }] }]}
-        grants={p.grants} onChange={(role, power, held) => set({ grants: { ...p.grants, [role]: held ? [...(p.grants[role] ?? []), power] : (p.grants[role] ?? []).filter((x) => x !== power) } }, `${state.me} changed what ${all.find((r) => r.id === role)?.name ?? role} can do`)} />
-      <SettingsSection title="See it as they do" description="Look around the app as a member or a guest would. Nothing changes while you preview.">
-        <div className="tf-set__row"><Button variant="secondary" onPress={() => { dispatch({ type: 'preview/set', role: 'Member' }); toast({ message: 'Previewing as a member' }); }}>Preview as a member</Button>
-          <Button variant="secondary" onPress={() => { dispatch({ type: 'preview/set', role: 'Guest' }); toast({ message: 'Previewing as a guest' }); }}>Preview as a guest</Button></div>
-      </SettingsSection>
-      <SettingsSection title="Sign in rules" action={<Button variant="secondary" onPress={() => setAsk({ kind: 'signout-all' })}>Sign out everyone</Button>}>
-        {sw('Everyone must use two factor', p.rules.require2fa, (on) => set({ rules: { ...p.rules, require2fa: on } }, `${state.me} turned required two factor ${on ? 'on' : 'off'}`, on ? 'Members without two factor set it up at their next sign in' : 'Saved'), 'Members without it set it up at their next sign in')}
-        {sw('Allow Google sign in', p.rules.google, (on) => set({ rules: { ...p.rules, google: on } }, `${state.me} turned Google sign in ${on ? 'on' : 'off'}`))}
-        <div className="tf-rec__form tf-set__narrow"><Select label="Stay signed in for" value={p.sessionDays ?? '30'} onChange={(v) => v && set({ sessionDays: v }, `${state.me} set sign-ins to last ${v} days`)} items={[{ id: '1', label: '1 day' }, { id: '7', label: '7 days' }, { id: '30', label: '30 days' }, { id: '90', label: '90 days' }]} description="Then everyone signs in again." /></div>
-      </SettingsSection>
-    </>; break; }
+    case 'roles': body = <RolesPage key={roleStart.n} state={state} dispatch={dispatch} startRole={roleStart.id} onPreview={(r) => { dispatch({ type: 'preview/set', role: r }); toast({ message: `Previewing as a ${r.toLowerCase()}` }); }} />; break;
+    case 'signin': body = <SignInRulesPage state={state} dispatch={dispatch} onSetUpYours={() => onGoPage?.('security')} />; break;
     case 'apps': body = <>
       <SettingsSection title="Business apps" description="Each adds its pages to Bookings. Turning one off hides its pages; nothing is deleted.">
         {APPS.map((a) => { const fits = (a.kinds as ReadonlyArray<string>).includes(kind); const on = p.apps[a.id]; return (
@@ -370,14 +343,10 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
             <span className="tf-set__row"><Button size="sm" variant="secondary" onPress={() => setAsk({ kind: 'partner', id: x.id })}>Change access</Button><Button size="sm" variant="ghost" onPress={() => setAsk({ kind: 'unpartner', id: x.id })}>Disconnect</Button></span></li>)}</ul>}
       </SettingsSection>
     </>; break;
-    case 'history': body = <>
-      <SegmentedControl aria-label="History" selectedKey={histTab} onSelectionChange={(k) => setHistTab(k === 'signins' ? 'signins' : 'changes')} items={[{ id: 'changes', label: 'Changes' }, { id: 'signins', label: 'Sign-ins' }]} />
-      {histTab === 'changes' ? <SettingsSection title="Changes" description="Who changed what in the workspace, newest first.">
-        <ul className="tf-set__list">{state.history.slice(0, 60).map((h) => <li key={h.id}><span>{h.text}</span><span className="tf-rec__muted tf-num">{when(h.at)}</span></li>)}</ul></SettingsSection>
-        : <SettingsSection title="Sign-ins" description="Everyone in the workspace, last 90 days. Failed ones are marked.">
-          <ul className="tf-set__list">{(p.signIns ?? []).map((x) => <li key={x.id}><span><strong>{x.who}</strong> <span className="tf-rec__muted">{x.what} · {x.where} · {when(x.at)}</span></span><Tag size="sm" hue={x.ok ? 'gray' : 'red'}>{x.ok ? 'Signed in' : 'Wrong code'}</Tag></li>)}</ul></SettingsSection>}
-    </>; break;
-    case 'jobs': body = <JobsPage state={state} dispatch={dispatch} onImport={onImport} startJob={sub || undefined} />; break;
+    case 'history': body = <SettingsSection title="Changes" description="Who changed what in the workspace, newest first. Your own sign-ins are in Sign in and security.">
+        <ul className="tf-set__list">{state.history.slice(0, 60).map((h) => <li key={h.id}><span>{h.text}</span><span className="tf-rec__muted tf-num">{when(h.at)}</span></li>)}</ul></SettingsSection>; break;
+    case 'jobs': body = <>{!state.previewRole && <JobsPage state={state} dispatch={dispatch} onImport={onImport} startJob={sub || undefined} />}<BackgroundJobs state={state} dispatch={dispatch} /></>; break;
+    case 'webhooks': body = <WebhooksPage state={state} dispatch={dispatch} />; break;
     case 'objects': body = <ObjectsPage key={openObject ?? 'all'} state={state} dispatch={dispatch} startMaking={newObject} startOpen={openObject} />; break;
     case 'lists': body = <ListsPage state={state} dispatch={dispatch} onOpenList={onOpenList} />; break;
     case 'trash': body = <TrashPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} onOpenTrashed={onOpenTrashed} startObject={sub || undefined} />; break;
@@ -420,12 +389,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
     case 'menu': body = summary('Menu', 'Your dishes, menus and table QR codes.', bookings?.menu ? [
         ['Menus', bookings.menu.menus.length.toString()], ['Dishes', bookings.menu.dishes.length.toString()], ['Published', bookings.menuLive ? 'Yes' : 'Not yet'],
       ] : [], 'menu', 'Open menu'); break;
-    case 'developer': body = <SettingsSection title="API keys" description="For your own scripts and tools. A key acts as the workspace, so keep it secret."
-      action={<Button variant="secondary" onPress={() => { setKeyName(''); setKeyScope('read'); setNewKey(undefined); setAsk({ kind: 'key' }); }}>New key</Button>}>
-      {p.apiKeys.length === 0 ? <EmptyState size="sm" icon={<Code2 size={20} strokeWidth={1.75} />} title="No keys yet" description="Make one to read or write records from outside Timefix." /> : (
-        <ul className="tf-set__list">{p.apiKeys.map((k) => <li key={k.id}><span><strong>{k.name}</strong> <span className="tf-rec__muted tf-num">{k.scope === 'read' ? 'Read only' : 'Read and write'} · ends {k.last4} · made {k.at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span></span>
-          <Button size="sm" variant="ghost" onPress={() => setAsk({ kind: 'revoke', id: k.id })}>Revoke</Button></li>)}</ul>)}
-    </SettingsSection>; break;
+    case 'developer': body = <ApiKeysPage state={state} dispatch={dispatch} onNew={() => { setKeyName(''); setKeyScope('read'); setNewKey(undefined); setAsk({ kind: 'key' }); }} />; break;
   }
   const removing = ask?.kind === 'remove' ? state.members.find((m) => m.id === ask.id) : undefined;
   const owns = removing ? { people: state.people.filter((x) => x.owner === removing.name).length, deals: state.deals.filter((x) => x.owner === removing.name).length, tasks: state.tasks.filter((t) => t.assignee === removing.name && !t.done).length } : undefined;
@@ -440,10 +404,21 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           description={ask.kind === 'account' ? (otherOwners === 0 ? `You're the only owner of ${ws.name}. Make someone else an owner first, or delete the workspace.` : 'You leave every workspace. This can’t be undone.') : 'Everyone loses access now. You can restore it within 30 days.'}
           actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" isDisabled={(ask.kind === 'account' && otherOwners === 0) || typed.trim().toLowerCase() !== (ask.kind === 'account' ? (me?.email ?? '') : ws.slug)}
             onPress={() => { const k = ask.kind; close(); if (k === 'workspace') { dispatch({ type: 'history/add', text: `${state.me} deleted ${ws.name}` }); onDoor?.('deleted'); } else onDoor?.('signin'); }}>{ask.kind === 'account' ? 'Delete account' : 'Delete workspace'}</Button></>}>
-          {(ask.kind === 'workspace' || otherOwners > 0) && <TextField label={ask.kind === 'account' ? `Type ${me?.email ?? 'your email'} to confirm` : `Type ${ws.slug} to confirm`} value={typed} onChange={setTyped} autoFocus />}
+          {(ask.kind === 'workspace' || otherOwners > 0) && <TextField label={ask.kind === 'account' ? `Type ${me?.email ?? 'your email'} to confirm` : `Type ${ws.slug} to confirm`} value={typed} onChange={setTyped} autoFocus  description={ask.kind === 'workspace' ? 'Export anything you want to keep first.' : undefined} />}
           {ask.kind === 'account' && otherOwners === 0 && <Button variant="secondary" onPress={() => setAsk({ kind: 'transfer' })}>Make someone else owner</Button>}
         </Dialog>
       )}
+      {ask?.kind === 'rolechange' && (() => { const m = state.members.find((x) => x.id === ask.id); if (!m) return null; const to = ask.to; return <RoleChangeDialog state={state} bookings={bookings} member={m} to={to} onClose={close}
+        onConfirm={() => { close(); moveTo(dispatch, state, m, to); toast({ message: `${m.name} is now ${nameOfRole(state, to)}.`, action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); }} />; })()}
+      {ask?.kind === 'caps' && (() => { const m = state.members.find((x) => x.id === ask.id); if (!m) return null; return <CapabilitiesDialog state={state} member={m} onClose={close} onOpenRole={(id) => { setRoleStart((r) => ({ id, n: r.n + 1 })); onGoPage?.('roles'); }} />; })()}
+      {ask?.kind === 'retention' && (() => { const m = Number(ask.months); const cut = Date.now() - m * 30.4 * 86_400_000; const old = state.forms.reduce((n, f) => n + f.responses.filter((r) => r.at.getTime() < cut).length, 0); return (
+        <ConfirmDialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Keep submissions for ${m} months?`} confirmLabel="Delete older ones"
+          consequence={old === 0 ? `None are older than ${m} months yet. Older ones will be deleted nightly.` : `${old === 1 ? '1 submission' : `${old} submissions`} older than ${m} months will be deleted tonight. People and companies they made stay.`}
+          onConfirm={() => { close(); set({ workspace: { ...ws, retention: ask.months } }, `${state.me} set submissions to keep ${m} months`, `Submissions are kept for ${m} months.`); }} />); })()}
+      {ask?.kind === 'team-del' && (() => { const t = p.teams.find((x) => x.id === ask.id); if (!t) return null; const n = teamScheduling(state, t.id); return (
+        <ConfirmDialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Delete ${t.name}?`} confirmLabel="Delete team" cancelLabel="Keep team"
+          consequence={`${n} ${n === 1 ? 'person loses' : 'people lose'} access to see ${poss(t.name)} scheduling.`}
+          onConfirm={() => { close(); dispatch({ type: 'prefs/set', prefs: { teams: p.teams.filter((x) => x.id !== t.id) }, note: `${state.me} deleted the team ${t.name}` }); toast({ message: `${t.name} deleted.` }); }} />); })()}
       {ask?.kind === 'guest' && (() => { const m = state.members.find((x) => x.id === ask.id); if (!m) return null; const n = state.people.filter((x) => x.owner === m.name).length + state.deals.filter((x) => x.owner === m.name).length + state.companies.filter((x) => x.owner === m.name).length; return (
         <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Make ${m.name} a guest?`} description={`Guests only see what’s shared with them and can’t change records. ${m.name.split(' ')[0]} owns ${n} ${n === 1 ? 'record' : 'records'}; they stay theirs, read only.`}
           actions={<><Button variant="ghost" slot="close">Keep as {m.role.toLowerCase()}</Button><Button variant="primary" onPress={() => { close(); dispatch({ type: 'member/set', member: { ...m, role: 'Guest' }, note: `${state.me} made ${m.name} a guest` }); toast({ message: `${m.name.split(' ')[0]} is now a guest`, action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); }}>Make guest</Button></>} />); })()}
@@ -498,7 +473,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="danger" onPress={() => { dispatch({ type: 'member/remove', id: removing.id, reassignTo: reassign }); close(); toast({ message: `${removing.name} removed. Their records went to ${reassign.split(' ')[0]}.` }); }}>Remove member</Button></>}>
         <Select label="Give their records and tasks to" value={reassign} onChange={(v) => { if (v) setReassign(v); }} items={state.members.filter((m) => m.id !== removing.id && m.role !== 'Guest').map((m) => ({ id: m.name, label: m.name === state.me ? `${m.name} (you)` : m.name }))} /></Dialog>}
       {ask?.kind === 'team' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={team ? `Edit ${team.name}` : 'New team'}
-        actions={<>{team && <Button variant="ghost" onPress={() => { const before = p.teams; close(); dispatch({ type: 'prefs/set', prefs: { teams: p.teams.filter((t) => t.id !== team.id) }, note: `${state.me} deleted the team ${team.name}` }); toast({ message: `${team.name} deleted`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: (q) => ({ teams: [...q.teams.slice(0, before.findIndex((t) => t.id === team.id)), team, ...q.teams.slice(before.findIndex((t) => t.id === team.id))] }) }) } }); }}>Delete team</Button>}
+        actions={<>{team && <Button variant="ghost" onPress={() => { if (teamScheduling(state, team.id) > 0) { setAsk({ kind: 'team-del', id: team.id }); return; } const before = p.teams; close(); dispatch({ type: 'prefs/set', prefs: { teams: p.teams.filter((t) => t.id !== team.id) }, note: `${state.me} deleted the team ${team.name}` }); toast({ message: `${team.name} deleted.`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'prefs/update', fn: (q) => ({ teams: [...q.teams.slice(0, before.findIndex((t) => t.id === team.id)), team, ...q.teams.slice(before.findIndex((t) => t.id === team.id))] }) }); toast({ message: `${team.name} is back.`, tone: 'success' }); } } }); }}>Delete team</Button>}
           <Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!teamName.trim() || p.teams.some((t) => t.id !== team?.id && t.name.toLowerCase() === teamName.trim().toLowerCase())} onPress={() => {
             const next = { id: team?.id ?? newId('tm'), name: teamName.trim(), members: teamMembers, access: teamAccess }; close();
             set({ teams: team ? p.teams.map((t) => (t.id === team.id ? next : t)) : [...p.teams, next] }, team ? undefined : `${state.me} made the team ${next.name}`, team ? 'Team saved' : `${next.name} made`); }}>{team ? 'Save' : 'Create team'}</Button></>}>
@@ -506,13 +481,13 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           <fieldset className="tf-set__check"><legend>Who's in it</legend>{state.members.map((m) => <Checkbox key={m.id} isSelected={teamMembers.includes(m.name)} onChange={(on) => setTeamMembers(on ? [...teamMembers, m.name] : teamMembers.filter((n) => n !== m.name))}>{m.name}</Checkbox>)}</fieldset>
           <fieldset className="tf-set__check"><legend>Records they see</legend>{state.objects.filter((o) => !o.archived).map((o) => <Select key={o.id} label={o.many} value={teamAccess[o.id] ?? 'all'} onChange={(v) => v && setTeamAccess({ ...teamAccess, [o.id]: v === 'own' ? 'own' : v === 'team' ? 'team' : 'all' })} items={[{ id: 'all', label: 'All of them' }, { id: 'team', label: 'The team’s' }, { id: 'own', label: 'Their own' }]} />)}</fieldset></div>
       </Dialog>}
-      {ask?.kind === 'key' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={newKey ? 'Copy your key now' : 'New API key'} description={newKey ? 'We won’t show it again. If you lose it, revoke it and make another.' : undefined}
+      {ask?.kind === 'key' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={newKey ? 'Copy your key' : 'Create API key'} description={newKey ? 'This is the only time it shows. Keep it somewhere safe.' : undefined}
         actions={newKey ? <Button variant="primary" onPress={close}>Done</Button> : <><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!keyName.trim()} onPress={() => {
           const raw = `tf_${keyScope === 'read' ? 'r' : 'w'}_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`; setNewKey(raw);
-          dispatch({ type: 'prefs/set', prefs: { apiKeys: [...p.apiKeys, { id: newId('key'), name: keyName.trim(), scope: keyScope, last4: raw.slice(-4), at: new Date() }] }, note: `${state.me} made the API key ${keyName.trim()}` }); }}>Make key</Button></>}>
-        {newKey ? <div className="tf-set__row"><TextField label="Your key" value={newKey} isReadOnly className="tf-set__grow" /><Button size="sm" variant="secondary" onPress={() => { void copy(newKey).then((ok) => toast({ message: ok ? 'Key copied' : 'Copy didn’t work. Select the key and copy it.', tone: ok ? 'success' : 'danger' })); }}>Copy</Button></div>
+          dispatch({ type: 'prefs/set', prefs: { apiKeys: [...p.apiKeys, { id: newId('key'), name: keyName.trim(), scope: keyScope, last4: raw.slice(-4), at: new Date() }] }, note: `${state.me} made the API key ${keyName.trim()}` }); }}>Create key</Button></>}>
+        {newKey ? <CodeBlock code={newKey} copyLabel="Copy the API key" />
           : <div className="tf-rec__form"><TextField label="Name" value={keyName} onChange={setKeyName} placeholder="Website sync" autoFocus description="So you know what uses it." />
-            <Select label="It can" value={keyScope} onChange={(v) => { if (v) setKeyScope(v as 'read' | 'write'); }} items={[{ id: 'read', label: 'Read records' }, { id: 'write', label: 'Read and change records' }]} /></div>}
+            <Select label="Access" value={keyScope} onChange={(v) => { if (v) setKeyScope(v as 'read' | 'write'); }} items={[{ id: 'read', label: 'Read', description: 'Look up records.' }, { id: 'write', label: 'Read and write', description: 'Look up, create, change and delete records.' }]} /></div>}
       </Dialog>}
       {revoking && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Revoke ${revoking.name}?`} description="Anything using it stops working straight away."
         actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { close(); set({ apiKeys: p.apiKeys.filter((k) => k.id !== revoking.id) }, `${state.me} revoked the API key ${revoking.name}`, 'Key revoked'); }}>Revoke</Button></>} />}
@@ -536,7 +511,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
             const known = new Set([...state.members.map((m) => m.email.toLowerCase()), ...p.invites.map((iv) => iv.email.toLowerCase())]);
             const fresh = list.filter((x) => !known.has(x.email.toLowerCase()));
             setInviting(false);
-            dispatch({ type: 'prefs/set', prefs: { invites: [...p.invites, ...fresh.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: fresh.length ? `${state.me} invited ${fresh.map((x) => x.email).join(', ')}` : undefined });
+            dispatch({ type: 'prefs/set', prefs: { invites: [...p.invites, ...fresh.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date(), by: state.me, expires: new Date(Date.now() + 7 * 86_400_000) }))] }, note: fresh.length ? `${state.me} invited ${fresh.map((x) => x.email).join(', ')}` : undefined });
             const skipped = list.length - fresh.length;
             toast(fresh.length === 0 ? { message: skipped === 1 ? 'That person is already in or invited.' : 'They’re all already in or invited.' } : { message: `${fresh.length} ${fresh.length === 1 ? 'invitation' : 'invitations'} sent${skipped ? ` · ${skipped} already in or invited` : ''}`, tone: 'success' }); resolve(); }, 500); })} />
         </Dialog>
@@ -561,6 +536,44 @@ function CommitField({ label, value, onCommit, description, prefix, clean = (v) 
     onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setV(value); }} isInvalid={Boolean(problem)} errorMessage={problem} />;
 }
 
+
+/** The workspace's web address: copy it, change it (checked as you type), and pick a free one when it's taken. */
+function AddressField({ slug, onChange }: { readonly slug: string; readonly onChange: (to: string) => void }) {
+  const [v, setV] = useState(slug);
+  const [st, setSt] = useState<'idle' | 'checking' | 'free' | 'taken'>('idle');
+  const clean = v.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const bad = clean.length < 3 || clean.length > 40;
+  useEffect(() => { if (clean === slug || bad) { setSt('idle'); return; } setSt('checking'); const t = window.setTimeout(() => setSt(TAKEN.includes(clean) ? 'taken' : 'free'), 300); return () => window.clearTimeout(t); }, [clean, slug, bad]);
+  const free = st === 'taken' ? [`${clean}-team`, `${clean}-hq`, `${clean}-app`, `${clean}-2`].filter((x) => !TAKEN.includes(x)).slice(0, 3) : [];
+  return (
+    <div className="tf-set__stack">
+      <div className="tf-set__row tf-set__labelled">
+        <TextField label="Web address" className="tf-set__grow" value={v} onChange={setV} icon={<span className="tf-bkf__prefix">timefix.com/</span>} isInvalid={bad || st === 'taken'}
+          errorMessage={bad ? 'Use 3 to 40 lowercase letters and digits, with single dashes.' : st === 'taken' ? 'Taken' : undefined}
+          description={bad || st === 'taken' ? undefined : clean === slug ? 'Old links still work.' : st === 'checking' ? 'Checking' : st === 'free' ? 'Free' : '3 to 40 lowercase letters and digits, with single dashes.'}
+          onKeyDown={(e) => { if (e.key === 'Enter' && st === 'free') onChange(clean); if (e.key === 'Escape') setV(slug); }} />
+        <CopyButton value={`https://timefix.com/${slug}`} label="Copy address" />
+        <Button variant="secondary" isDisabled={st !== 'free'} onPress={() => onChange(clean)}>Change address</Button>
+      </div>
+      {free.length > 0 && <div className="tf-set__chips" role="group" aria-label="Free addresses"><span className="tf-rec__muted">Free addresses</span>{free.map((x) => <Button key={x} size="sm" variant="secondary" onPress={() => setV(x)}>{x}</Button>)}
+        <span className="tf-sr-only" aria-live="polite">{clean} is taken. Also free: {free.join(', ')}.</span></div>}
+    </div>
+  );
+}
+
+/** Usage against the plan's limits, as meters. */
+function UsageSection({ state }: { readonly state: AppState }) {
+  const customs = state.objects.filter((o) => o.custom).length;
+  const rows: ReadonlyArray<readonly [string, number, number]> = [
+    ['Custom objects', customs, limitOf(state, 'customObjects', customs)], ['Lists', state.lists.length, LIMITS.lists], ['Automations', state.automations.length, LIMITS.automations],
+    ['Teams', state.prefs.teams.length, LIMITS.teams], ['Open invites', state.prefs.invites.length, LIMITS.invites], ['Reports', state.reports.length, LIMITS.reports],
+  ];
+  return (
+    <SettingsSection title="Plan and usage" description="Team plan. What this workspace uses of what the plan holds.">
+      <div className="tf-set__meters">{rows.map(([label, used, max]) => <Meter key={label} label={label} value={used} maxValue={max} valueLabel={`${used} of ${max}`} hint={used >= max ? 'At your plan’s limit' : undefined} />)}</div>
+    </SettingsSection>
+  );
+}
 
 /** New object: its name, one and many. The same dialog from Settings › Objects and the sidebar's Records +. */
 export function NewObjectDialog({ onClose, onCreate }: { readonly onClose: () => void; readonly onCreate: (object: ObjectSchema) => void }) {
@@ -595,11 +608,7 @@ function ObjectsPage({ state, dispatch, startMaking = false, startOpen }: { read
         <Tabs aria-label={o.many} items={[{ id: 'attributes', label: 'Attributes', count: o.attributes.filter((a) => !a.archived).length }, { id: 'config', label: 'Configuration' }, { id: 'access', label: 'Access' }]}>
           <TabPanel id="attributes"><ObjectAttributes state={state} dispatch={dispatch} o={o} /></TabPanel>
           <TabPanel id="config"><ObjectConfig o={o} save={save} /><StageRules o={o} save={save} /></TabPanel>
-          <TabPanel id="access"><SettingsSection title="Who can do what" description={`For ${o.many.toLowerCase()} only. Owners can always edit.`}>
-            <ul className="tf-set__list">{[['admin', 'Admin'], ['member', 'Member'], ['guest', 'Guest'], ...(state.prefs.roles ?? []).map((r) => [r.id, r.name])].map(([id, name]) => <li key={id}><strong>{name}</strong>
-              <Select label={`${name} on ${o.many}`} isLabelHidden className="tf-you__select" value={o.access?.[id ?? ''] ?? (id === 'guest' ? 'view' : 'edit')} onChange={(v) => v && save({ access: { ...(o.access ?? {}), [id ?? '']: v === 'none' ? 'none' : v === 'view' ? 'view' : 'edit' } }, `${name} access saved`)}
-                items={[{ id: 'edit', label: 'See and edit' }, { id: 'view', label: 'See only' }, { id: 'none', label: 'No access' }]} /></li>)}</ul>
-          </SettingsSection></TabPanel>
+          <TabPanel id="access"><ObjectAccess state={state} o={o} save={save} /></TabPanel>
         </Tabs>
       </div>
     );
@@ -619,13 +628,17 @@ function ObjectConfig({ o, save }: { readonly o: ObjectSchema; readonly save: (p
   return (
     <>
       <SettingsSection title="Names"><div className="tf-rec__form tf-set__narrow">
-        <div className="tf-bkf__pair"><CommitField label="One" value={o.one} onCommit={(v) => save({ one: v }, 'Name saved')} /><CommitField label="Many" value={o.many} onCommit={(v) => save({ many: v }, 'Name saved')} /></div>
+        <div className="tf-set__row tf-set__bottom tf-set__iconrow"><ObjectIcon o={o} onPick={(name) => save({ icon: name }, 'Icon saved')} />
+          <div className="tf-bkf__pair tf-set__grow"><CommitField label="One" value={o.one} onCommit={(v) => save({ one: v }, 'Name saved')} /><CommitField label="Many" value={o.many} onCommit={(v) => save({ many: v }, 'Name saved')} /></div></div>
         <CommitField label="API name" value={api} clean={(v) => v.toLowerCase().replace(/[^a-z0-9_]/g, '_')} description={o.custom ? 'Scripts use this. Changing it breaks scripts that use the old one.' : 'Built in, so it stays.'} onCommit={(v) => { if (o.custom) save({ apiName: v }, 'API name saved'); }} />
         <div className="tf-bkf__pair">
           <Select label="Colour" value={o.colour ?? 'blue'} onChange={(v) => v && save({ colour: v })} items={[{ id: 'blue', label: 'Blue', hue: 'blue' }, { id: 'green', label: 'Green', hue: 'green' }, { id: 'purple', label: 'Purple', hue: 'purple' }, { id: 'orange', label: 'Orange', hue: 'orange' }, { id: 'gray', label: 'Gray', hue: 'gray' }]} />
           <Select label="A record is named by" value={o.recordName ?? 'name'} onChange={(v) => v && save({ recordName: v })} items={texts.map((a) => ({ id: a.id, label: a.name }))} />
         </div>
       </div></SettingsSection>
+      <SettingsSection title="Identifiers" description="For your developer: scripts and the API name objects by these.">
+        <div className="tf-set__row tf-set__labelled"><TextField label="Object ID" value={o.id} isReadOnly className="tf-set__grow" description="Set by the system." /><CopyButton value={o.id} label="Copy object ID" /></div>
+      </SettingsSection>
       {o.custom && <SettingsSection title={o.archived ? 'Archived' : 'Archive'} description={o.archived ? `${o.many} are out of the sidebar. Their records are kept.` : `Takes ${o.many} out of the sidebar. Records are kept and it can come back.`}
         action={<Button variant="secondary" onPress={() => save({ archived: !o.archived }, o.archived ? `${o.many} are back` : `${o.many} archived`)}>{o.archived ? 'Bring back' : 'Archive'}</Button>}><span /></SettingsSection>}
     </>

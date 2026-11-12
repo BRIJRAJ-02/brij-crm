@@ -97,21 +97,11 @@
 /* Forms: a grid of cards; the editor with a name field, status and actions on top, then five tabs. */
 .tf-forms { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; }
 .tf-forms__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-menu) * 1.1), 1fr)); gap: var(--space-16); margin: 0; padding: 0; list-style: none; }
-.tf-forms__gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-12); margin: 0; padding: 0; list-style: none; }
-.tf-forms__tpl { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); width: 100%; height: 100%; padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
-@media (hover: hover) and (pointer: fine) { .tf-forms__tpl:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); } }
-.tf-forms__tpl:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-forms__tpl strong { font: 600 15px/22px var(--font-sans); }
 .tf-forms__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .tf-forms__name { width: calc(var(--size-menu) * 1.1); }
 .tf-forms__panel { display: flex; flex-direction: column; gap: var(--space-16); padding-top: var(--space-20); }
 .tf-forms__build { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--space-24); align-items: start; }
-/* The builder keeps the question's settings beside the list (never dropped below it), and only stacks when the page is narrow. */
-.tf-forms__build .tf-qbuilder { flex-wrap: nowrap; }
-.tf-forms__build .tf-qbuilder > :first-child { flex: 1 1 0; }
-.tf-forms__build .tf-qbuilder > :last-child { flex: 0 0 calc(var(--size-menu) + var(--space-48)); position: sticky; top: 0; }
 @container tf-app (max-width: 72rem) { .tf-forms__build { grid-template-columns: minmax(0, 1fr); } .tf-forms__preview { position: static; } }
-@container tf-app (max-width: 44rem) { .tf-forms__build .tf-qbuilder { flex-wrap: wrap; } .tf-forms__build .tf-qbuilder > :last-child { flex: 1 1 100%; position: static; } }
 .tf-forms__preview { position: sticky; top: 0; }
 .tf-forms__settings { display: flex; flex-direction: column; gap: var(--space-20); }
 .tf-forms__link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding: var(--space-12) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface-subtle); font: 500 15px/22px var(--font-sans); }
@@ -145,7 +135,7 @@
 .tf-forms__bar > span[data-w='100'] { width: 100%; }
 .tf-forms__guest { display: flex; flex-direction: column; gap: var(--space-16); min-height: 100%; }
 .tf-forms__guestbar { display: flex; align-items: center; gap: var(--space-12); }
-@container tf-app (max-width: 60rem) { .tf-forms__build, .tf-forms__resp { grid-template-columns: minmax(0, 1fr); } .tf-forms__gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container tf-app (max-width: 60rem) { .tf-forms__build, .tf-forms__resp { grid-template-columns: minmax(0, 1fr); } }
 .tf-forms__row > .tf-tag { justify-self: end; }
 .tf-grow { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; }
 .tf-grow__url { color: var(--text); font: 600 15px/22px var(--font-sans); }
@@ -226,14 +216,9 @@
 .tf-more__item svg { color: var(--text-secondary); }
 .tf-more__item:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-lg); }
 .tf-more__count { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); font-variant-numeric: tabular-nums; }
-/* Settings at phone width: the list, then one page with "All settings" to go back. */
+/* Settings at phone width: the list, then one page with "All settings" to go back (SettingsLayout's narrowPane shows one or the other). */
 .tf-set__back { display: none; }
 @container tf-app (max-width: 640px) {
-  .tf-set .tf-settings { display: block; height: auto; }
-  .tf-set .tf-settings__nav { width: auto; padding: var(--space-16) 0; border-right: 0; }
-  .tf-set .tf-settings__content { padding: var(--space-8) 0 var(--space-32); overflow: visible; }
-  .tf-set:not(.tf-set--page) .tf-settings__content { display: none; }
-  .tf-set--page .tf-set__nav { display: none; }
   .tf-set--page .tf-set__back { display: inline-flex; align-self: flex-start; order: -1; }
 }
 .tf-rec__rel--static { cursor: default; }
@@ -256,14 +241,6 @@
   .tf-links__nums { display: none; }
   .tf-links__acts { grid-column: 2 / -1; }
 }
-.tf-door__choices { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
-.tf-door__choice { display: flex; align-items: center; gap: var(--space-16); width: 100%; padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-smooth-out); }
-@media (hover: hover) and (pointer: fine) { .tf-door__choice:hover { border-color: var(--border-strong); background: var(--surface-hover); } }
-.tf-door__choice:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-door__choice > span:last-child { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
-.tf-door__choice strong { font: 500 15px/22px var(--font-sans); }
-.tf-door__choice-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
-@media (prefers-reduced-motion: reduce) { .tf-door__choice { transition: none; } }
 .tf-rec__rel { min-width: 0; }
 .tf-rec__rel > :not(svg):not(.tf-avatar):not(.tf-tag) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-dup__who strong, .tf-dup__who .tf-rec__muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -286,29 +263,6 @@
 @container tf-app (max-width: 640px) { .tf-set__facts > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); } }
 
 /* Settings › Brand: a small booking card in the chosen look and colour. */
-.tf-set__brand { --brand: var(--tag-green-text); display: grid; padding: var(--space-20); border-radius: var(--radius-xl); background: var(--surface-subtle); }
-.tf-set__brand[data-hue='blue'] { --brand: var(--tag-blue-text); }
-.tf-set__brand[data-hue='purple'] { --brand: var(--tag-purple-text); }
-.tf-set__brand[data-hue='gray'] { --brand: var(--text); }
-.tf-set__brandcard { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); width: 100%; max-width: 26rem; margin-inline: auto; padding: var(--space-24); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); color: var(--text); text-align: center; }
-.tf-set__brandside { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
-.tf-set__brandside strong { font: 600 16px/24px var(--font-sans); }
-.tf-set__brandside span, .tf-set__brandlabel { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
-.tf-set__brandmain { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); }
-.tf-set__brandslots { display: flex; gap: var(--space-8); }
-.tf-set__brandslots span { padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); box-shadow: 0 0 0 var(--border-width-hairline) var(--border); font: 500 13px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
-.tf-set__brandslots span[data-on] { box-shadow: 0 0 0 var(--border-width-focus) var(--brand); color: var(--brand); }
-.tf-set__brandbtn { padding: var(--space-6) var(--space-20); border-radius: var(--radius-full); background: var(--brand); color: var(--surface); font: 500 14px/20px var(--font-sans); }
-.tf-set__brand[data-hue='gray'] .tf-set__brandbtn { color: var(--on-inverse); }
-.tf-set__brand[data-template='studio'] .tf-set__brandcard, .tf-set__brand[data-template='studio'] .tf-set__brandside, .tf-set__brand[data-template='studio'] .tf-set__brandmain { align-items: flex-start; text-align: left; }
-.tf-set__brand[data-template='night'] .tf-set__brandcard { background: var(--surface-inverse); color: var(--on-inverse); }
-.tf-set__brand[data-template='night'] .tf-set__brandside span, .tf-set__brand[data-template='night'] .tf-set__brandlabel { color: var(--on-inverse); opacity: var(--opacity-busy); }
-.tf-set__brand[data-template='night'] .tf-set__brandslots span { box-shadow: 0 0 0 var(--border-width-hairline) var(--on-inverse); }
-.tf-set__brand[data-template='night'] .tf-set__brandslots span[data-on] { box-shadow: 0 0 0 var(--border-width-focus) var(--brand); }
-.tf-set__brand[data-template='split'] .tf-set__brandcard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: stretch; max-width: 32rem; padding: 0; overflow: hidden; text-align: left; }
-.tf-set__brand[data-template='split'] .tf-set__brandside { align-items: flex-start; justify-content: center; padding: var(--space-20); background: var(--brand); color: var(--surface); }
-.tf-set__brand[data-template='split'] .tf-set__brandside span { color: var(--on-inverse); opacity: var(--opacity-busy); }
-.tf-set__brand[data-template='split'] .tf-set__brandmain { align-items: flex-start; padding: var(--space-20); }
 
 /* Forms › Records: question → field rows, the arrow between them. */
 .tf-forms__records { display: flex; flex-direction: column; gap: var(--space-16); }
@@ -351,14 +305,13 @@
 .tf-rec__subhead { display: block; padding: var(--space-6) var(--space-8) var(--space-2); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans); }
 /* The form's Look popover: the look picker's controls, no preview of its own (the builder's preview is beside it). */
 .tf-forms__look { width: min(calc(var(--size-menu) * 1.9), calc(100vw - var(--space-32))); padding: var(--space-16); }
-.tf-forms__guest > .tf-hform--look { border-radius: var(--radius-xl); }
 /* Insights › Share: a short panel with the link, when it stops working, and Stop sharing. */
 .tf-grow__share { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); width: min(calc(var(--size-menu) * 1.5), calc(100vw - var(--space-32))); padding: var(--space-16); }
 .tf-grow__share-title { color: var(--text); font: 600 14px/20px var(--font-sans); }
 .tf-grow__share-link { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); }
 .tf-grow__share-link > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; user-select: all; }
 /* With the sidebar holding the settings groups, the page drops its own nav column (a phone keeps its list, where the sidebar steps aside). */
-@media (min-width: 40.0625rem) { .tf-set--sidenav .tf-set__nav { display: none; } .tf-set--sidenav .tf-settings__content { padding-inline: 0; } }
+@media (min-width: 40.0625rem) { .tf-set--sidenav .tf-set__nav { display: none; } }
 
 /* A form's publish bar floats at the foot of the window while the page scrolls under it, as on a booking page. */
 /* A strip kept clear at the foot, so the bar never sits over the last field. */
@@ -549,7 +502,6 @@
 .tf-fp__fullroom { flex: 1; min-height: 0; overflow: auto; padding: var(--space-24); }
 .tf-fp__fullroom[data-device='phone'] { display: flex; justify-content: center; }
 .tf-fp__fullroom[data-device='phone'] > .tf-fprev { width: calc(var(--size-menu) * 1.6); }
-.tf-fp__fullroom .tf-fprev__bar { display: none; }
 .tf-forms__look { display: flex; flex-direction: column; gap: var(--space-12); }
 .tf-forms__spam { gap: var(--space-8); }
 .tf-fp__rsel { flex: 1 1 calc(var(--size-menu) * 0.55); min-width: 0; }
@@ -562,7 +514,6 @@
 .tf-gp__shared { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--canvas); }
 .tf-gp__sharedbody { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-32) var(--space-16); }
 .tf-gp__sharedcol { display: flex; flex-direction: column; gap: var(--space-20); max-width: calc(var(--size-measure) * 1.6); margin: 0 auto; }
-.tf-gp__sharedcol > .tf-hform__foot { align-self: center; }
 .tf-gp__sharedhead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-12); }
 .tf-gp__sharedtitle { margin: var(--space-4) 0 0; color: var(--text); font: 600 24px/32px var(--font-sans); letter-spacing: -0.01em; }
 .tf-links__tags { display: inline-flex; gap: var(--space-4); }
@@ -582,7 +533,6 @@
 .tf-bizset__gallery { display: flex; flex-wrap: wrap; gap: var(--space-12); margin: 0; padding: 0; list-style: none; }
 .tf-bizset__photo { display: flex; flex-direction: column; gap: var(--space-8); width: calc(var(--space-64) * 3 + var(--space-24)); padding: var(--space-8); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface); }
 .tf-bizset__img { display: block; width: 100%; aspect-ratio: 3 / 1; object-fit: cover; border-radius: var(--radius-md); }
-.tf-bizset__photo .tf-cropped { border-radius: var(--radius-md); }
 .tf-bizset__photobar { display: flex; align-items: center; gap: var(--space-6); }
 .tf-set__uses { margin: var(--space-8) 0 0; padding-left: var(--space-20); }
 .tf-set__uses li + li { margin-top: var(--space-4); }
@@ -627,3 +577,81 @@
 .tf-bizset__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .tf-bizset__cell, .tf-bizset__svcs { transition: none; } }
 .tf-bizset__crumb { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
+
+/* ---------- Wave E: members, roles, access, sign in rules ---------- */
+.tf-set__caps { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-set__capsum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin: 0; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-set__caps .tf-set__list li { align-items: center; }
+.tf-set__caps .tf-set__list li > span:first-child, .tf-set__stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-set__impact { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-12); }
+.tf-set__impact strong { color: var(--text); font: 500 13px/20px var(--font-sans); }
+.tf-set__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); }
+.tf-set__stepup { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-12); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-set__stepup > .tf-set__row { align-self: stretch; align-items: flex-end; }
+.tf-set__perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--size-menu) * 1.25)), 1fr)); gap: var(--space-12) var(--space-24); }
+.tf-set__access { display: flex; flex-direction: column; }
+.tf-set__accessrow { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-control) * 2) calc(var(--size-control) * 2) calc(var(--size-control) * 5) var(--size-control-sm); align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-6) 0; }
+.tf-set__accessrow + .tf-set__accessrow { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-set__accesshead { min-height: 0; padding-bottom: var(--space-8); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+.tf-set__accesswho { display: flex; align-items: center; gap: var(--space-8); min-width: 0; color: var(--text-secondary); }
+.tf-set__accesswho strong { overflow: hidden; color: var(--text); font: 500 14px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-set__accessrow > [role='cell'] .tf-you__select { width: 100%; }
+@container tf-app (max-width: 46rem) { .tf-set__accessrow { grid-template-columns: minmax(0, 1fr) var(--size-control) var(--size-control) calc(var(--size-control) * 4) var(--size-control-sm); } }
+.tf-set__sections { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-set__list--center > li { align-items: center; }
+.tf-set__half { width: min(100%, var(--size-panel)); }
+.tf-set__bottom { align-items: flex-end; }
+.tf-set__bottom > .tf-btn { margin-bottom: var(--space-20); }
+.tf-set__top { align-items: flex-start; }
+.tf-set__steps { display: flex; flex-direction: column; gap: var(--space-4); margin: 0; padding-left: var(--space-20); color: var(--text); font: 400 14px/20px var(--font-sans); }
+/* Doors: join list rows, a wide field in a centred card, and Opening Timefix over the app's outline. */
+.tf-door__ws { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.tf-door__wide { align-self: stretch; text-align: left; }
+.tf-door__opening { position: relative; display: grid; height: 100%; }
+.tf-door__ghost { display: grid; grid-template-columns: var(--size-sidebar) minmax(0, 1fr); height: 100%; }
+.tf-door__ghostside { display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-24) var(--space-16); }
+.tf-door__ghostmain { display: flex; flex-direction: column; gap: var(--space-16); margin: var(--space-8) var(--space-8) var(--space-8) 0; padding: var(--space-48) var(--space-32); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-door__openmsg { position: absolute; top: 50%; left: 50%; display: flex; flex-direction: column; align-items: center; gap: var(--space-12); width: min(calc(100% - var(--space-32)), var(--size-dialog)); padding: var(--space-32); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-md); text-align: center; transform: translate(-50%, -50%); }
+.tf-door__openmsg > strong { font: 500 15px/22px var(--font-sans); }
+.tf-door__openmsg > .tf-callout { align-self: stretch; text-align: left; }
+@media (max-width: 40rem) { .tf-door__ghost { grid-template-columns: minmax(0, 1fr); } .tf-door__ghostside { display: none; } }
+/* Webhooks, API keys and background jobs. */
+.tf-wh__url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12px; }
+.tf-wh__state { align-items: flex-end; }
+.tf-wh__end { flex: none; flex-wrap: nowrap; gap: var(--space-8); }
+.tf-wh__nobtn { display: inline-block; width: calc(var(--size-control) * 2.4); }
+.tf-wh__log { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-wh__title { margin: 0; color: var(--text); font: 600 15px/22px var(--font-sans); }
+.tf-wh__job > .tf-set__stack { flex: 1; }
+.tf-wh__job .tf-set__stack > [role='progressbar'] { max-width: calc(var(--size-panel) * 0.8); }
+.tf-set__objrow { grid-template-columns: auto auto auto minmax(0, 1fr) auto; }
+.tf-set__objrow > .tf-rec__muted { justify-self: end; }
+.tf-set__iconrow > :first-child { margin-bottom: var(--space-2); }
+.tf-set__meter { margin-bottom: var(--space-16); }
+.tf-set__meters { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--size-menu) * 1.2)), 1fr)); gap: var(--space-16) var(--space-24); }
+/* Super admin: its own sidebar beside a white page, like the app shell. */
+.tf-adm { display: grid; grid-template-columns: var(--size-sidebar) minmax(0, 1fr); height: 100%; background: var(--canvas); color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-adm__nav { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-16) var(--space-8); overflow-y: auto; }
+.tf-adm__main { margin: var(--space-8) var(--space-8) var(--space-8) 0; padding: var(--space-24) var(--space-32) var(--space-48); overflow-y: auto; border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface); container: tf-adm / inline-size; }
+.tf-adm__main > .tf-empty { margin-top: calc(var(--space-64) * 1.5); }
+.tf-adm__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-12); margin-bottom: var(--space-24); }
+.tf-adm__title { margin: 0; font: 500 24px/32px var(--font-sans); }
+.tf-adm__body { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-adm__stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-menu) * 0.7), 1fr)); gap: var(--space-16) var(--space-24); }
+.tf-adm__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); }
+@container tf-adm (max-width: 46rem) { .tf-adm__charts { grid-template-columns: minmax(0, 1fr); } }
+.tf-adm__search { width: min(100%, var(--size-panel)); }
+.tf-adm__strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--space-8), 1fr)); gap: var(--space-2); margin-top: var(--space-16); max-width: var(--size-dialog-wide); }
+.tf-adm__strip > span { aspect-ratio: 1; border-radius: var(--radius-xs); background: var(--surface-subtle); }
+.tf-adm__strip > span[data-on] { background: var(--accent); }
+@media (max-width: 48rem) { .tf-adm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); } .tf-adm__nav { flex-direction: row; overflow-x: auto; } .tf-adm__main { margin: 0 var(--space-8) var(--space-8); padding: var(--space-16); } }
+/* Public pages. */
+.tf-pub__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin: 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-pub__ok { color: var(--success); }
+.tf-pub__error { color: var(--danger); font: 400 13px/18px var(--font-sans); }
+.tf-set__gap { gap: var(--space-12); }
+/* A field with its label above and a button or tip beside it: the button lines up with the input, whatever sits under the field. */
+.tf-set__labelled { align-items: flex-start; flex-wrap: nowrap; gap: var(--space-12); }
+.tf-set__labelled > .tf-btn, .tf-set__labelled > .tf-infotip, .tf-set__labelled > button { margin-top: calc(var(--space-20) + var(--space-4)); flex: none; }
+.tf-set__labelled > .tf-btn--sm { margin-top: calc(var(--space-24) + var(--space-4)); }
+.tf-set__labelled > .tf-infotip { margin-top: var(--space-32); }

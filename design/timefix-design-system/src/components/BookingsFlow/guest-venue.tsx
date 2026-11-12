@@ -8,13 +8,12 @@ import { TextField, TextArea } from '../Field/Field.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { Select } from '../Select/Select.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
-import { SuccessCheck } from '../Motion/Motion.tsx';
 import { VenuePage, VenueCheckout, PersonTile, type Venue } from '../VenuePage/VenuePage.tsx';
 import { dishPrice } from '../MenuPage/MenuPage.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
-import { BrandCard, DayTimes } from '../BookingFlow/BookingFlow.tsx';
+import { BrandCard, DayTimes, DoneMark } from '../BookingFlow/BookingFlow.tsx';
 import { HOST, PLACES, at, dayFrom, first, isoDay, lengthOf, lengthsText, openTimes, placeOf, plural, priceText, turnFor, type BookingPage, type BookingsState, type PlaceKind, venueDay } from './state.ts';
 import { saveFile } from '../../lib/saveFile.ts';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
@@ -121,7 +120,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
     if (outcome === 'saved') toast({ message: 'Calendar file saved', tone: 'success' });
     else if (outcome === 'failed') toast({ message: 'Couldn’t save the file. Try again.' });
   };
-  const foot = <div className="tf-bkf__powered-row"><BrandCard className="tf-booking__brand--solo" /></div>;
+  const foot = <div className="tf-bkf__powered-row"><BrandCard variant="solo" /></div>;
 
   // The page itself.
   if (!page) {
@@ -163,7 +162,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
     return (
       <VenueCheckout steps={steps} step={steps.length - 1} title={waitMode ? 'You’re on the waitlist' : page.confirmFirst ? 'Request sent' : 'You’re booked'} onBack={back} summary={summary}>
         <div className="tf-bkf-venue-done">
-          <span className="tf-booking__celebrate"><span className="tf-booking__check"><SuccessCheck size={28} /></span></span>
+          <DoneMark />
           <p>{waitMode ? `We’ll text ${phone} if a table for ${party} opens up on ${formatLongDay(day)}.`
             : page.confirmFirst ? `${venue.name} confirms soon. You’ll get an email.`
               : isTable ? `See you ${isoDay(day) === isoDay(now) ? 'tonight' : formatLongDay(day)} at ${time !== undefined ? formatClock(time) : ''}. A confirmation is on its way to ${email}.` : `A confirmation is on its way to ${email}.`}</p>

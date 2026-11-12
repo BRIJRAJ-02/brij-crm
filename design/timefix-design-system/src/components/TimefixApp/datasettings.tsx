@@ -25,6 +25,32 @@ import { newId, type AppAction, type AppState, type ImportJob, type ObjectId, ty
 import { computedValues, formulaAttributes, liveAttributes, ownFields, recordsOf, relationsOf, schemaOf, valuesOf, wordsOf } from './model.tsx';
 import { automationsUsing } from './automations.tsx';
 import { undoImport } from './importer.tsx';
+import { IconPicker, IconTile } from '../IconPicker/IconPicker.tsx';
+import { Meter } from '../Progress/Progress.tsx';
+import { Link } from '../Link/Link.tsx';
+import type { Hue } from '../Tag/Tag.tsx';
+
+/** The plan's limits, as the real app's engine has them (#38 later reads them from the plan). */
+export const LIMITS = { customObjects: 50, attributes: 250, lists: 500, automations: 50, teams: 100, invites: 100, reports: 200 } as const;
+/** A limit for this workspace; the prototype's "at its plan limits" demo lowers it to what's used. */
+export const limitOf = (state: AppState, key: keyof typeof LIMITS, used: number) => (state.prefs.tightLimits ? Math.max(1, used) : LIMITS[key]);
+/** The calm at-limit line: how much is used, the way forward, and who to ask for more room. */
+export function AtLimit({ used, limit, what }: { readonly used: number; readonly limit: number; readonly what: string }) {
+  const [asking, setAsking] = useState(false);
+  return <>
+    <span className="tf-rec__muted tf-num">{used} of {limit} used. Archive one first, or <Link onPress={() => setAsking(true)}>ask for more room</Link>.</span>
+    {asking && <Dialog isOpen onOpenChange={setAsking} title="More room" description={`Your plan holds ${limit} ${what}. Write to us and we’ll raise it for your workspace.`}
+      actions={<><Button variant="ghost" slot="close">Not now</Button><Button variant="primary" onPress={() => { window.open('mailto:hello@timefix.com?subject=More%20room', '_blank', 'noopener'); setAsking(false); }}>Email Timefix</Button></>} />}
+  </>;
+}
+const DEFAULT_ICON: Readonly<Record<string, string>> = { people: 'Person', companies: 'Building', deals: 'Handshake' };
+/** An object's icon name, its own or the built-in default. */
+export const iconOf = (o: ObjectSchema) => o.icon ?? DEFAULT_ICON[o.id] ?? 'Folder';
+const hueOf = (o: ObjectSchema): Hue => (['blue', 'green', 'purple', 'orange', 'gray'].includes(o.colour ?? '') ? (o.colour as Hue) : 'blue');
+/** The object's icon picker, drawn on its hue. */
+export function ObjectIcon({ o, onPick }: { readonly o: ObjectSchema; readonly onPick: (name: string) => void }) {
+  return <IconPicker label={`Icon: ${iconOf(o)}`} value={iconOf(o)} hue={hueOf(o)} onChange={onPick} />;
+}
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const when = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -42,12 +68,17 @@ export function usageOf(state: AppState, object: ObjectId, id: string): Readonly
 export function ObjectsList({ state, dispatch, onOpen, onNew }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onOpen: (id: string) => void; readonly onNew: () => void }) {
   const { toast } = useToast();
   const counts = (id: string) => recordsOf(state, id).length;
+  const custom = state.objects.filter((o) => o.custom).length; const limit = limitOf(state, 'customObjects', custom);
   return (
-    <SettingsSection title="Objects" description="What your workspace keeps records of. Drag to reorder the sidebar; open one to add or change its attributes." action={<Button variant="secondary" onPress={onNew}>New object</Button>}>
+    <SettingsSection title="Objects" description="What your workspace keeps records of. Drag to reorder the sidebar; open one to add or change its attributes."
+      action={<span className="tf-set__row">{custom >= limit && <AtLimit used={custom} limit={limit} what="custom objects" />}<Button variant="secondary" isDisabled={custom >= limit} onPress={onNew}>New object</Button></span>}>
+      {custom >= limit * 0.8 && <Meter label="Custom objects" value={custom} maxValue={limit} valueLabel={`${custom} of ${limit}`} />}
       <SortableList items={state.objects} label="Objects" getText={(o) => o.many} onReorder={(next) => { const was = state.objects.map((o) => o.id); dispatch({ type: 'objects/order', ids: next.map((o) => o.id) }); toast({ message: 'Order saved', action: { label: 'Undo', onAction: () => dispatch({ type: 'objects/order', ids: was }) } }); }}>
         {(x) => (
-          <button type="button" className="tf-set__open tf-set__open--drag" onClick={() => onOpen(x.id)}>
-            <strong>{x.many}</strong><span className="tf-rec__muted tf-num">{counts(x.id)} records · {liveAttributes(x).length} attributes{x.custom ? ' · yours' : ''}{x.archived ? ' · archived' : ''}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden />
+          <button type="button" className="tf-set__open tf-set__open--drag tf-set__objrow" onClick={() => onOpen(x.id)}>
+            <IconTile name={iconOf(x)} hue={hueOf(x)} size="sm" />
+            <strong>{x.many}</strong><Tag size="sm" hue={x.custom ? 'purple' : 'gray'}>{x.custom ? 'Custom' : 'Standard'}</Tag>
+            <span className="tf-rec__muted tf-num">{counts(x.id)} {counts(x.id) === 1 ? 'record' : 'records'} · {liveAttributes(x).length} attributes{x.archived ? ' · archived' : ''}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden />
           </button>
         )}
       </SortableList>
@@ -59,8 +90,10 @@ export function ObjectsList({ state, dispatch, onOpen, onNew }: { readonly state
 export function ObjectAttributes({ state, dispatch, o }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly o: ObjectSchema }) {
   const [special, setSpecial] = useState<{ readonly kind: 'formula' | 'lookup' | 'rollup' | 'relationship'; readonly attribute?: SchemaAttribute }>();
   const put = (attributes: ReadonlyArray<SchemaAttribute>) => dispatch({ type: 'object/set', object: { ...o, attributes } });
+  const used = o.attributes.filter((a) => !a.archived).length; const limit = limitOf(state, 'attributes', used);
   return (
     <>
+      <div className="tf-set__meter"><Meter label="Attributes" value={used} maxValue={limit} valueLabel={`${used} of ${limit}`} hint={used >= limit ? <AtLimit used={used} limit={limit} what={`attributes on ${o.many.toLowerCase()}`} /> : undefined} /></div>
       <AttributeSettings objectName={o.one} objectPlural={o.many} attributes={o.attributes} valueCounts={Object.fromEntries(o.attributes.map((a) => [a.id, recordsOf(state, o.id).length]))}
         onChange={put} usageOf={(id) => usageOf(state, o.id, id)} pluralOf={(id) => schemaOf(state, id)?.many ?? 'Records'}
         onNewSpecial={(kind) => setSpecial({ kind })} onEditSpecial={(a) => setSpecial({ kind: a.relation ? 'relationship' : a.computed?.kind ?? 'formula', attribute: a })} />

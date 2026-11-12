@@ -26,3 +26,5 @@
 .tf-crumbs__more[data-hovered] { background: var(--surface-hover); color: var(--text); }
 .tf-crumbs__more[aria-expanded='true'] { background: var(--surface-selected); color: var(--text); }
 @media (prefers-reduced-motion: reduce) { .tf-crumbs__link, .tf-crumbs__more { transition: none; } .tf-crumbs__more[data-pressed] { transform: none; } }
+/* Phone: only the page you're on; the trail above it folds away. */
+@media (max-width: 40rem) { .tf-crumbs__item:not(:last-child), .tf-crumbs__sep { display: none; } }

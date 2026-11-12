@@ -2,7 +2,7 @@ SignInForm is the way in, for signing in and signing up alike: Continue with Goo
 
 **Use it for**: the sign in page, inside AuthLayout. **Don't use it for**: re-checking a signed in person (use a Dialog with CodeInput), or passwords and passkeys (not offered).
 
-**The consumer provides**: `onSendCode(email)` and `onVerify(email, code)`, each resolving to `undefined` when it went through or a sentence that says what to do; `onGoogle` to show the Google button (leave it out when Google is off); `onSignedIn`; `notice` for a refusal about the sign in as a whole (a danger Callout at the top, never on the field); `resendAfter` seconds; `workspace` for the success line.
+**The consumer provides**: `onSendCode(email)` and `onVerify(email, code)`, each resolving to `undefined` when it went through or a sentence that says what to do; `onGoogle` to show the Google button (leave it out when Google is off); `onSignedIn`; `notice` for a refusal about the sign in as a whole (a danger Callout at the top, never on the field); `resendAfter` seconds; `workspace` for the success line. `onSendCode` may answer a rate limit as `{ message, retryIn }`: the message's `{time}` counts down in place ("Try again in 4 minutes", then seconds) and Continue waits until it ends; `waitWords` gives the same wording. `noticeTone` sets the notice's tone (danger by default; info for why someone was signed out, success for a deleted account).
 
 **States**: email (idle, sending, refused), code (typing, checking, wrong, resend waiting, resend ready), signed in.
 

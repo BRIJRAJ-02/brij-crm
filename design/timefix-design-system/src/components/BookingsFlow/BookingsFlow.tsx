@@ -502,7 +502,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   const demoMenu = showDemoMenu && (
     <MenuTrigger>
-      <Button size="sm" variant="ghost" icon={<FlaskConical {...i14} />}>Demo</Button>
+      <Button size="sm" variant="ghost" collapse="phone" icon={<FlaskConical {...i14} />}>Demo</Button>
       <Menu aria-label="Demo" placement="bottom end" onAction={demo}>
         <MenuSection title="As a guest">
           {GUEST_SCENARIOS.map((s) => <MenuItem key={s.id} id={s.id} icon={<Play {...i16} />}>{s.label}</MenuItem>)}

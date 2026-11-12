@@ -95,13 +95,15 @@ export interface HostedFormPreviewProps extends HostedFormProps {
   readonly address?: string;
   /** Something in the preview's bar before the device switch: the form's Look button. */
   readonly barAction?: ReactNode;
+  /** False leaves out the bar (the Preview label, `barAction` and the device switch), for a page that has its own: pass `device` then. */
+  readonly showBar?: boolean;
 }
 
 /**
  * The builder's live preview: the real HostedForm inside a browser or phone frame, laid out at the device's width and scaled to
  * fit the column. Switching device eases the frame to its new size (01 card resize) and the form fades in softly (34).
  */
-export function HostedFormPreview({ device, defaultDevice = 'desktop', onDeviceChange, address = 'timefix.com/f/form', barAction, ...form }: HostedFormPreviewProps) {
+export function HostedFormPreview({ device, defaultDevice = 'desktop', onDeviceChange, address = 'timefix.com/f/form', barAction, showBar = true, ...form }: HostedFormPreviewProps) {
   const [own, setOwn] = useState<PreviewDevice>(defaultDevice);
   const current = device ?? own;
   const box = useRef<HTMLDivElement>(null);
@@ -120,14 +122,16 @@ export function HostedFormPreview({ device, defaultDevice = 'desktop', onDeviceC
   const pick = (k: string) => { const d: PreviewDevice = k === 'phone' ? 'phone' : 'desktop'; setOwn(d); onDeviceChange?.(d); };
   return (
     <section className="tf-fprev" aria-label="Preview">
-      <header className="tf-fprev__bar">
-        <span className="tf-fprev__label">Preview</span>
-        <span className="tf-fprev__end">{barAction}
-        <SegmentedControl aria-label="Device" size="sm" selectedKey={current} onSelectionChange={pick} items={[
-          { id: 'desktop', icon: <Monitor size={14} strokeWidth={1.75} />, ariaLabel: 'Desktop' },
-          { id: 'phone', icon: <Smartphone size={14} strokeWidth={1.75} />, ariaLabel: 'Phone' },
-        ]} /></span>
-      </header>
+      {showBar && (
+        <header className="tf-fprev__bar">
+          <span className="tf-fprev__label">Preview</span>
+          <span className="tf-fprev__end">{barAction}
+          <SegmentedControl aria-label="Device" size="sm" selectedKey={current} onSelectionChange={pick} items={[
+            { id: 'desktop', icon: <Monitor size={14} strokeWidth={1.75} />, ariaLabel: 'Desktop' },
+            { id: 'phone', icon: <Smartphone size={14} strokeWidth={1.75} />, ariaLabel: 'Phone' },
+          ]} /></span>
+        </header>
+      )}
       <div ref={box} className="tf-fprev__room">
         <div className={cx('tf-fprev__frame', `tf-fprev__frame--${current}`)}>
           {current === 'desktop' && (

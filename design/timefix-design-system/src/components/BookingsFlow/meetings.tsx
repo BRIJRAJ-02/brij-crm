@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { MeetingCard, MeetingList, type Meeting } from '../MeetingList/MeetingList.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { ShowMore } from '../Disclosure/Disclosure.tsx';
-import { WeekCalendar, type WeekBusy, type WeekEvent, type WeekSelection } from '../WeekCalendar/WeekCalendar.tsx';
+import { WeekCalendar, WeekPopActions, type WeekBusy, type WeekEvent, type WeekSelection } from '../WeekCalendar/WeekCalendar.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Select } from '../Select/Select.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
@@ -454,7 +454,7 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
         <span className="tf-bkf__spacer" />
         <GoToDate value={mode === 'day' ? dayAt : first0} onPick={goTo} />
       </div>
-      <WeekCalendar days={days.map((d, n) => ({ weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), isToday: n === todayIndex }))}
+      <WeekCalendar fillHeight narrowScroll days={days.map((d, n) => ({ weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), isToday: n === todayIndex }))}
         events={evs} busy={busy} startHour={startHour} endHour={endHour} now={todayIndex >= 0 ? { day: todayIndex, minutes: minutesOf(now) } : undefined}
         eventDetails={(ev, close) => {
           if (ev.kind === 'calendar') { const e = props.events.find((x) => x.id === ev.id); return e ? <EventAbout event={e} /> : undefined; }
@@ -468,10 +468,10 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
                 <dt>Repeats</dt><dd>{b.weekly ? `Every ${weekday}` : 'Doesn’t repeat'}</dd>
               </dl>
               <p className="tf-bkf__muted">{b.kind === 'hold' ? 'Only your link only pages can book it.' : 'None of your pages offers this time.'}</p>
-              <div className="tf-week__pop-actions">
+              <WeekPopActions>
                 <Button size="sm" variant="secondary" onPress={() => { close(); window.setTimeout(() => setRemoving({ block: b, every: false, date: ev.id.split('@')[1] ?? b.day }), 150); }}>{b.kind === 'hold' ? 'Release' : 'Remove'}</Button>
                 {b.weekly && <Button size="sm" variant="ghost" onPress={() => { close(); window.setTimeout(() => setRemoving({ block: b, every: true, date: b.day }), 150); }}>Remove every {weekday}</Button>}
-              </div>
+              </WeekPopActions>
             </div>
           );
         }}

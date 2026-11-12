@@ -12,12 +12,19 @@ export interface SettingsLayoutProps {
   /** The page title and its grey one-liner. */
   readonly title: string;
   readonly description?: string;
+  /**
+   * Narrow (the layout under 640px wide): master and detail. `'nav'` shows only the nav, `'content'` only the page, each full width
+   * on the page's own scroll. Left out, nav and page stay side by side at every width.
+   */
+  readonly narrowPane?: 'nav' | 'content';
+  /** `'flush'` drops the page's side padding, for when the app's sidebar holds the nav and the page sits in the app's own gutter. */
+  readonly contentInset?: 'default' | 'flush';
 }
 
 /** Settings: a grey icon list on the left, and section cards in a readable column on the right. */
-export function SettingsLayout({ nav, children, title, description }: SettingsLayoutProps) {
+export function SettingsLayout({ nav, children, title, description, narrowPane, contentInset = 'default' }: SettingsLayoutProps) {
   return (
-    <div className="tf-settings">
+    <div className={cx('tf-settings', narrowPane !== undefined && 'tf-settings--panes', contentInset === 'flush' && 'tf-settings--flush')} data-pane={narrowPane}>
       {nav}
       <div className="tf-settings__content">
         <div className="tf-settings__column">

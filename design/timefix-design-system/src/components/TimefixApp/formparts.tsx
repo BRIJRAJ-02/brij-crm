@@ -456,12 +456,12 @@ export function FullPreview({ form, onClose, address }: { readonly form: HostedF
   return (
     <FullScreenDialog aria-label="Preview" onOpenChange={(o) => { if (!o) onClose(); }} className="tf-fp__full">
       <div className="tf-fp__fullbar">
-        <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onClose}>Back to editor</Button>
+        <Button size="sm" variant="secondary" icon={<ArrowLeft {...i14} />} onPress={onClose}>Back to editor</Button>
         <Tag size="sm" hue="orange">Preview · nothing is sent</Tag>
         <span className="tf-rec__spacer" />
         <SegmentedControl aria-label="Preview on" size="sm" selectedKey={device} onSelectionChange={(k) => setDevice(k === 'phone' ? 'phone' : 'desktop')} items={[{ id: 'desktop', label: 'Desktop' }, { id: 'phone', label: 'Phone' }]} />
       </div>
-      <div className="tf-fp__fullroom" data-device={device}><HostedFormPreview {...form} device={device} onDeviceChange={setDevice} address={address} /></div>
+      <div className="tf-fp__fullroom" data-device={device}><HostedFormPreview {...form} device={device} onDeviceChange={setDevice} address={address} showBar={false} /></div>
     </FullScreenDialog>
   );
 }

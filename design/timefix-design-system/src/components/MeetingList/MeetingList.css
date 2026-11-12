@@ -98,6 +98,18 @@
   .tf-meetings__actions { justify-self: start; opacity: 1; transform: none; }
   .tf-meetings__title { white-space: normal; }
 }
+/* "Needs your OK" leads with the day, too long for the narrow time column: the when takes its own line over the meeting
+   ("Mon 16 Nov  3:00 PM · 45 min"), then what, then the note and Decline / Confirm. */
+@container (max-width: 40rem) {
+  .tf-meetings__group--ask .tf-meetings__main { grid-template-columns: minmax(0, 1fr) auto auto; row-gap: var(--space-2); align-items: center; }
+  .tf-meetings__group--ask .tf-meetings__time { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-8); }
+}
+@container (max-width: 28rem) {
+  .tf-meetings__group--ask .tf-meetings__main { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--space-4); }
+  .tf-meetings__group--ask .tf-meetings__what { grid-column: 1 / -1; }
+  .tf-meetings__group--ask .tf-meetings__status { grid-column: 1; }
+  .tf-meetings__group--ask .tf-meetings__decide { grid-column: 2; justify-self: end; }
+}
 
 /* MeetingCard: a shell holding a white card, with an optional tinted strip under it. */
 .tf-meetcard { display: flex; flex-direction: column; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--surface-shell); font: 400 14px/20px var(--font-sans); color: var(--text); min-width: 0; }

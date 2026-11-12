@@ -80,7 +80,7 @@ export function LinkPageScreen({ state, dispatch, handle: ownHandle, onBack, boo
     <>
       {seeing && (
         <div className="tf-grow__see">
-          <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setSeeing(false)}>Back to editing</Button><span className="tf-rec__muted">{url}</span>
+          <div className="tf-forms__guestbar"><Button size="sm" variant="secondary" icon={<ArrowLeft {...i14} />} onPress={() => setSeeing(false)}>Back to editing</Button><span className="tf-rec__muted">{url}</span>
             {draft && <Tag size="sm" hue="orange">This is the live page; your changes aren’t published yet</Tag>}</div>
           <LinkPage {...live} booking={demoBooking} onSignup={signup} closing={live.details?.closing} members={members} />
         </div>

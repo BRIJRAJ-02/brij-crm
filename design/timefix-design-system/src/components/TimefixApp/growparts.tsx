@@ -18,7 +18,7 @@ import { BarChart, BarList, ChartCard } from '../Chart/Chart.tsx';
 import { DataGrid, type GridColumn } from '../DataGrid/DataGrid.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { QrCode, downloadQr } from '../QrCode/QrCode.tsx';
-import { Logo } from '../Logo/Logo.tsx';
+import { PoweredByFoot } from '../HostedForm/HostedForm.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { BarChart3 } from 'lucide-react';
 import type { LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
@@ -253,7 +253,7 @@ export function SharedInsights({ state, bookings, shareId, onClose }: { readonly
             <header className="tf-gp__sharedhead"><div><span className="tf-rec__muted">Shared by {state.prefs.workspace.name}</span><h1 className="tf-gp__sharedtitle">{share.name}</h1></div>
               <span className="tf-rec__muted tf-num">Last {days} days · {share.pages.includes('all') ? 'All pages' : `${share.pages.length} ${share.pages.length === 1 ? 'page' : 'pages'}`}</span></header>
             {cur.length === 0 ? <EmptyState icon={<BarChart3 size={20} strokeWidth={1.75} />} title="No visits in this period" description="The numbers show here as soon as people visit." /> : <InsightsNumbers state={state} sessions={cur} prev={prev} kind={kind} days={days} isShared />}
-            <a className="tf-hform__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
+            <PoweredByFoot align="center" />
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { RadioGroup, Radio, Label, Link as AriaLink } from 'react-aria-components';
+import { RadioGroup, Radio, Label, Link as AriaLink, Button as AriaButton } from 'react-aria-components';
 import type { ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
@@ -143,7 +143,8 @@ export function StatCard({ label, icon, value, format, delta, sparkline, breakdo
 }
 
 /** One choice card. */
-export interface TileItem { readonly id: string; readonly title: string; readonly description?: string; readonly icon?: ReactNode; readonly isDisabled?: boolean }
+export interface TileItem { readonly id: string; readonly title: string; readonly description?: string; readonly icon?: ReactNode; readonly isDisabled?: boolean;
+  /** A third, quieter line (counts, "4 questions in steps"). */ readonly meta?: string }
 
 /** Props for TileGrid. */
 export interface TileGridProps {
@@ -152,22 +153,43 @@ export interface TileGridProps {
   readonly value?: string;
   readonly defaultValue?: string;
   readonly onChange?: (id: string) => void;
+  /** Tiles that start something (a template gallery) instead of picking one: each is a button, with no selected state. */
+  readonly onAction?: (id: string) => void;
   /** Columns at full width; tiles wrap to fit (min 160px). */
   readonly columns?: number;
   readonly isLabelHidden?: boolean;
+  /** `default` stacks icon, title and description; `compact` is one 52px row: icon well, then the title (a meeting location). */
+  readonly variant?: 'default' | 'compact';
 }
 
-/** Selectable cards with radio semantics: pick one template, location or plan. The chosen card gets an accent edge and a check badge that pops in. */
-export function TileGrid({ label, items, value, defaultValue, onChange, columns = 3, isLabelHidden = false }: TileGridProps) {
+/** Selectable cards with radio semantics: pick one template, location or plan. The chosen card gets an accent edge and a check badge that pops in.
+ *  With `onAction` the same cards are buttons that start something (a template gallery). */
+export function TileGrid({ label, items, value, defaultValue, onChange, onAction, columns = 3, isLabelHidden = false, variant = 'default' }: TileGridProps) {
+  const body = (it: TileItem) => <>
+    {it.icon !== undefined && <span className="tf-tile__icon" aria-hidden="true">{it.icon}</span>}
+    <span className="tf-tile__text"><span className="tf-tile__title">{it.title}</span>
+      {it.description !== undefined && <span className="tf-tile__desc">{it.description}</span>}
+      {it.meta !== undefined && <span className="tf-tile__meta">{it.meta}</span>}</span>
+  </>;
+  const cls = cx('tf-tiles', variant === 'compact' && 'tf-tiles--compact');
+  const grid = { '--tf-cols': columns } as React.CSSProperties;
+  if (onAction) {
+    return (
+      <div className={cls} role="group" aria-label={isLabelHidden ? label : undefined}>
+        {!isLabelHidden && <span className="tf-tiles__label">{label}</span>}
+        <ul className="tf-tiles__grid" style={grid}>
+          {items.map((it) => <li key={it.id} className="tf-tiles__cell"><AriaButton className="tf-tile tf-tile--action" isDisabled={it.isDisabled} onPress={() => onAction(it.id)}>{body(it)}</AriaButton></li>)}
+        </ul>
+      </div>
+    );
+  }
   return (
-    <RadioGroup value={value} defaultValue={defaultValue} onChange={onChange} className="tf-tiles">
+    <RadioGroup value={value} defaultValue={defaultValue} onChange={onChange} className={cls}>
       <Label className={isLabelHidden ? 'tf-sr-only' : 'tf-tiles__label'}>{label}</Label>
-      <div className="tf-tiles__grid" style={{ '--tf-cols': columns } as React.CSSProperties}>
+      <div className="tf-tiles__grid" style={grid}>
         {items.map((it) => (
           <Radio key={it.id} value={it.id} isDisabled={it.isDisabled} className="tf-tile">
-            {it.icon !== undefined && <span className="tf-tile__icon">{it.icon}</span>}
-            <span className="tf-tile__title">{it.title}</span>
-            {it.description !== undefined && <span className="tf-tile__desc">{it.description}</span>}
+            {body(it)}
             <span className="tf-tile__badge" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
           </Radio>
         ))}

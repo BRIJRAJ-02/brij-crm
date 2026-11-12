@@ -14,6 +14,8 @@ import { HOURS_DAYS, type HoursDay } from '../HoursEditor/HoursEditor.tsx';
 import { formatClock, formatClockRange } from '../WeekCalendar/WeekCalendar.tsx';
 import { AuthLayout, AuthFooterLink, AuthHeading, AuthPages } from '../AuthLayout/AuthLayout.tsx';
 import { InviteRows, type Invite } from '../InviteRows/InviteRows.tsx';
+import { TileGrid } from '../Card/Card.tsx';
+import { FileDrop } from '../FileDrop/FileDrop.tsx';
 import './Onboarding.css';
 
 /** First run's hours, kept simple: the same range on the chosen days. Breaks and per-day hours live in Settings. */
@@ -40,7 +42,11 @@ export interface OnboardingValues {
   readonly party?: number;
   /** The calendar connected on the way, if any. */
   readonly calendar?: 'google' | 'outlook';
+  /** Your name and photo (a data or object URL), and your own link page's handle. */
+  readonly name?: string; readonly photo?: string; readonly handle?: string;
 }
+/** What connecting a calendar came back with. */
+export type CalendarResult = 'connected' | 'denied' | 'failed';
 
 /** Which part of the preview the current step is changing. */
 export type PreviewFocus = 'kind' | 'workspace' | 'link' | 'meeting' | 'hours' | 'calendar' | 'team';
@@ -151,9 +157,11 @@ export interface OnboardingProps {
   /** Runs after the person confirms Sign out in a dialog. */
   readonly onSignOut: () => void;
   readonly defaultValues?: Partial<OnboardingValues>;
+  /** Connects a calendar (leaving for Google or Microsoft) and says how it went; connected by default. */
+  readonly connectCalendar?: (c: 'google' | 'outlook') => Promise<CalendarResult>;
 }
 
-type StepId = 'kind' | 'workspace' | 'link' | 'meeting' | 'hours' | 'calendar' | 'team';
+type StepId = 'kind' | 'you' | 'workspace' | 'link' | 'handle' | 'meeting' | 'hours' | 'calendar' | 'team';
 const KINDS: ReadonlyArray<{ readonly id: BusinessKind; readonly title: string; readonly line: string; readonly icon: ReactNode }> = [
   { id: 'team', title: 'Meetings', line: 'Calls and demos with you or your team', icon: <CalendarDays size={20} strokeWidth={1.75} /> },
   { id: 'salon', title: 'Appointments', line: 'Services with staff: a salon, clinic or studio', icon: <Scissors size={20} strokeWidth={1.75} /> },
@@ -162,7 +170,7 @@ const KINDS: ReadonlyArray<{ readonly id: BusinessKind; readonly title: string; 
 /** The steps for each kind: a restaurant has no calendar to connect. */
 function stepsFor(kind: BusinessKind): ReadonlyArray<{ readonly id: StepId; readonly label: string }> {
   return [
-    { id: 'kind', label: 'What you book' }, { id: 'workspace', label: 'Name' }, { id: 'link', label: 'Link' },
+    { id: 'kind', label: 'What you book' }, { id: 'workspace', label: 'Name' }, { id: 'you', label: 'You' }, { id: 'link', label: 'Link' }, { id: 'handle', label: 'Link page' },
     { id: 'meeting', label: kind === 'team' ? 'First meeting' : kind === 'salon' ? 'First service' : 'Tables' },
     { id: 'hours', label: 'Hours' }, ...(kind === 'restaurant' ? [] : [{ id: 'calendar' as const, label: 'Calendar' }]),
     { id: 'team', label: kind === 'salon' ? 'Staff' : 'Team' },
@@ -172,7 +180,7 @@ function stepsFor(kind: BusinessKind): ReadonlyArray<{ readonly id: StepId; read
 type SlugState = 'idle' | 'checking' | 'free' | 'taken';
 
 /** First run, full screen: what you book, then a few short steps on the left and a live preview on the right that changes as you type. One question, no questionnaire. */
-export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, defaultValues }: OnboardingProps) {
+export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, defaultValues, connectCalendar = () => new Promise((r) => { window.setTimeout(() => r('connected'), 900); }) }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [kind, setKind] = useState<BusinessKind>(defaultValues?.kind ?? 'team');
   const [party, setParty] = useState(defaultValues?.party ?? 6);
@@ -193,7 +201,13 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
   const [calendar, setCalendar] = useState<'google' | 'outlook' | undefined>(defaultValues?.calendar);
   const [connecting, setConnecting] = useState<'google' | 'outlook'>();
   const [live, setLive] = useState(false);
-  const connect = (c: 'google' | 'outlook') => { setConnecting(c); window.setTimeout(() => { setConnecting(undefined); setCalendar(c); }, 900); };
+  const [calResult, setCalResult] = useState<CalendarResult>();
+  const connect = (c: 'google' | 'outlook') => { setConnecting(c); setCalResult(undefined); void connectCalendar(c).then((r) => { setConnecting(undefined); setCalResult(r); if (r === 'connected') setCalendar(c); }); };
+  const [name, setName] = useState(defaultValues?.name ?? owner);
+  const [photo, setPhoto] = useState<string | undefined>(defaultValues?.photo);
+  const [photoError, setPhotoError] = useState<string>();
+  const [handle, setHandle] = useState(defaultValues?.handle ?? slugify(owner));
+  const [free, setFree] = useState<ReadonlyArray<string>>([]);
   const [finishing, setFinishing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const check = useRef(checkSlug);
@@ -210,8 +224,18 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
     return () => { live = false; window.clearTimeout(t); };
   }, [link]);
 
+  // A taken link offers up to three free ones, checked in order (at most six checks).
+  useEffect(() => {
+    if (slugState !== 'taken' || link === '') { setFree([]); return; }
+    let live = true;
+    const base = link.replace(/-(team|hq|app|\d)$/, '');
+    const tries = [`${base}-team`, `${base}-hq`, `${base}-app`, `${base}-2`, `${base}-3`, `${base}-4`].filter((x) => x !== link);
+    void Promise.all(tries.map((x) => check.current(x).then((ok) => (ok ? x : undefined)))).then((r) => { if (live) setFree(r.filter((x): x is string => x !== undefined).slice(0, 3)); });
+    return () => { live = false; };
+  }, [slugState, link]);
+
   const hoursBad = hours.end <= hours.start;
-    const okFor: Readonly<Record<StepId, boolean>> = { kind: true, workspace: workspace.trim() !== '', link: slugState === 'free', meeting: kind === 'restaurant' || meeting.name.trim() !== '', hours: hours.days.length > 0 && !hoursBad, calendar: connecting === undefined, team: true };
+    const okFor: Readonly<Record<StepId, boolean>> = { kind: true, you: name.trim() !== '', handle: /^[a-z0-9]+(-[a-z0-9]+)*$/.test(handle) && handle.length >= 3, workspace: workspace.trim() !== '', link: slugState === 'free', meeting: kind === 'restaurant' || meeting.name.trim() !== '', hours: hours.days.length > 0 && !hoursBad, calendar: connecting === undefined, team: true };
   const can = okFor[STEPS[step]?.id ?? 'kind'];
   const last = step === STEPS.length - 1;
   const finish = async () => {
@@ -220,17 +244,18 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
     await new Promise<void>((r) => { window.setTimeout(r, 700); });
     setFinishing(false); setLive(true);
   };
-  const values = (): OnboardingValues => ({ kind, workspace: workspace.trim(), slug: link, hours, invites, meeting: { name: kind === 'restaurant' ? 'Table' : meeting.name.trim(), length: meeting.length }, calendar, ...(kind === 'restaurant' ? { party } : {}) });
+  const values = (): OnboardingValues => ({ kind, workspace: workspace.trim(), slug: link, hours, invites, meeting: { name: kind === 'restaurant' ? 'Table' : meeting.name.trim(), length: meeting.length }, calendar, name: name.trim(), photo, handle, ...(kind === 'restaurant' ? { party } : {}) });
   const next = () => { if (!can) return; if (last) void finish(); else setStep(step + 1); };
   const nextLabel = !last ? 'Continue' : invites.length > 0 ? `Send ${invites.length} invite${invites.length === 1 ? '' : 's'} and finish` : 'Finish setup';
-  const focus = STEPS[step]?.id;
+  const stepId = STEPS[step]?.id;
+  const focus: PreviewFocus | undefined = stepId === 'you' || stepId === 'handle' ? undefined : stepId;
 
   const liveLink = `timefix.com/${link}/${kind === 'restaurant' ? 'table' : slugify(meeting.name) || 'intro-call'}`;
   const pageName = kind === 'restaurant' ? 'Book a table' : meeting.name.trim() || 'Intro call';
   return (
     <>
       <AuthLayout account={account} footer={<AuthFooterLink onPress={() => setSigningOut(true)}>Sign out</AuthFooterLink>}
-        preview={<WorkspacePreview workspace={workspace} slug={link} owner={owner} hours={hours} invites={invites} meeting={meeting} kind={kind} party={party} focus={live ? undefined : focus} />}>
+        preview={<WorkspacePreview workspace={workspace} slug={link} owner={name.trim() || owner} hours={hours} invites={invites} meeting={meeting} kind={kind} party={party} focus={live ? undefined : focus} />}>
         {live ? (
           <div className="tf-onb tf-onb--live">
             <AuthHeading title="You’re live" description={kind === 'restaurant' ? 'Guests can book a table now. Share the link anywhere.' : 'People can book you now. Share the link anywhere.'} />
@@ -263,17 +288,30 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
                   case 'kind': return (
                     <div key="kind" className="tf-onb__page">
                       <AuthHeading title="What do people book with you?" description="It sets up the right pages. You can add the others later." />
-                      <div className="tf-onb__kinds" role="radiogroup" aria-label="What people book">
-                        {KINDS.map((k) => (
-                          <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} className="tf-onb__kind" onClick={() => chooseKind(k.id)}
-                            onKeyDown={(e) => { const at = KINDS.findIndex((y) => y.id === kind); const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0; if (!d) return; e.preventDefault(); const to = KINDS[(at + d + KINDS.length) % KINDS.length]; if (to) { chooseKind(to.id); (e.currentTarget.parentElement?.children[KINDS.indexOf(to)] as HTMLElement | undefined)?.focus(); } }}
-                            tabIndex={kind === k.id ? 0 : -1}>
-                            <span className="tf-onb__kind-icon" aria-hidden="true">{k.icon}</span>
-                            <span className="tf-onb__kind-text"><strong>{k.title}</strong><span>{k.line}</span></span>
-                            <span className="tf-onb__kind-tick" aria-hidden="true"><Check size={14} strokeWidth={2} /></span>
-                          </button>
-                        ))}
+                      <TileGrid label="What people book" isLabelHidden variant="compact" columns={1} value={kind} onChange={(v) => chooseKind(v as BusinessKind)}
+                        items={KINDS.map((k) => ({ id: k.id, title: k.title, description: k.line, icon: k.icon }))} />
+                    </div>
+                  );
+                  case 'you': return (
+                    <div key="you" className="tf-onb__page">
+                      <AuthHeading title="Your name" description="Shown to your team, and on your pages." />
+                      <TextField label="Your name" size="lg" value={name} onChange={setName} isInvalid={name.trim() === ''} errorMessage="Enter your name." />
+                      <div className="tf-onb__group">
+                        <span className="tf-onb__label">Photo (optional)</span>
+                        <div className="tf-onb__photo">
+                          {photo ? <img className="tf-onb__photo-img" src={photo} alt="Your photo" /> : <Avatar name={name || owner} size={44} />}
+                          <FileDrop variant="compact" label={photo ? 'Change photo' : 'Upload photo'} description="JPEG, PNG or WebP, up to 20 MB" acceptedFileTypes={['image/png', 'image/jpeg', 'image/webp']} allowsMultiple={false}
+                            onFiles={(files) => { const f = files[0]; if (!f) return; if (!/^image\/(png|jpeg|webp)$/.test(f.type) || f.size > 20_000_000) { setPhotoError('That picture couldn’t be read. Try a JPEG or PNG.'); return; } setPhotoError(undefined); setPhoto(URL.createObjectURL(f)); }} />
+                        </div>
+                        {photoError && <span className="tf-onb__error" role="alert">{photoError}</span>}
                       </div>
+                    </div>
+                  );
+                  case 'handle': return (
+                    <div key="handle" className="tf-onb__page">
+                      <AuthHeading title="Your link page" description="Your own page, with your booking pages and links in one place." />
+                      <TextField label="Your link" size="lg" value={handle} onChange={(v) => setHandle(cleanSlug(v))} icon={<span className="tf-onb__prefix">timefix.com/</span>}
+                        isInvalid={handle === '' || (handle.length > 0 && handle.length < 3)} errorMessage={handle === '' ? 'Pick a link.' : 'Use at least 3 characters.'} description="Lowercase letters, numbers and single hyphens." />
                     </div>
                   );
                   case 'workspace': return (
@@ -290,6 +328,11 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
                         suffix={<SlugStatus state={slugState} />}
                         isInvalid={slugState === 'taken'} errorMessage={`timefix.com/${link} is taken. Try ${link}-team.`}
                         description={slugState === 'free' ? `People book you at timefix.com/${link}` : 'Letters, numbers and dashes.'} />
+                      {free.length > 0 && <div className="tf-onb__free-list" role="group" aria-label="Free addresses">
+                        <span className="tf-onb__label">Free addresses</span>
+                        <span className="tf-onb__free-row">{free.map((x) => <Button key={x} size="sm" variant="secondary" onPress={() => { setSlugEdited(true); setSlug(x); }}>{x}</Button>)}</span>
+                        <span className="tf-sr-only" aria-live="polite">{link} is taken. Also free: {free.join(', ')}.</span>
+                      </div>}
                     </div>
                   );
                   case 'meeting': return kind === 'restaurant' ? (
@@ -336,8 +379,10 @@ export function Onboarding({ account, owner, checkSlug, onFinish, onSignOut, def
                   case 'calendar': return (
                     <div key="calendar" className="tf-onb__page">
                       <AuthHeading title="Connect your calendar" description="So people only book when you’re free." />
+                      {calResult === 'denied' && <Callout tone="danger" title="Calendar not connected">You didn’t give Timefix access.</Callout>}
+                      {calResult === 'failed' && <Callout tone="danger" title="Calendar not connected">Couldn’t connect. Try again.</Callout>}
                       {calendar ? (
-                        <Callout tone="success">Your {calendar === 'google' ? 'Google' : 'Outlook'} calendar is connected. Busy times there are kept free.</Callout>
+                        <Callout tone="success" title="Your calendar is connected.">Your meetings are syncing. Busy times there are kept free.</Callout>
                       ) : (
                         <div className="tf-onb__connect">
                           <Button size="lg" variant="secondary" isPending={connecting === 'google'} isDisabled={connecting !== undefined} onPress={() => connect('google')}>Connect Google Calendar</Button>

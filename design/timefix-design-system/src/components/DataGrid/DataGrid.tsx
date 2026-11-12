@@ -127,6 +127,8 @@ export interface DataGridProps {
   readonly onColumnResize?: (widths: Readonly<Record<string, number>>) => void;
   /** Hides the header row: for groups under the first, which line up with its columns. */
   readonly hideHeader?: boolean;
+  /** Off for a read-only report table (an admin list): no checkboxes, rows only open. */
+  readonly isSelectable?: boolean;
 }
 
 const SKELETON_ROWS = ['sk1', 'sk2', 'sk3', 'sk4', 'sk5'];
@@ -138,7 +140,7 @@ const WASH_MS = 1000;
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary, calcs, onPaste, onClear, onColumnResize, hideHeader = false }: DataGridProps) {
+export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary, calcs, onPaste, onClear, onColumnResize, hideHeader = false , isSelectable = true }: DataGridProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [calcMenu, setCalcMenu] = useState<{ readonly colId: string; readonly anchor: HTMLElement }>();
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
@@ -199,12 +201,12 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
   const shown: ReadonlyArray<GridRecord> = isLoading ? SKELETON_ROWS.map((id) => ({ id, values: {} })) : rows;
 
   return (
-    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing', hideHeader && 'tf-grid--headless')} onKeyDownCapture={onKeyDownCapture} onPaste={paste} aria-busy={isLoading || undefined}>
+    <div ref={wrapRef} className={cx('tf-grid', revealing && 'tf-grid--revealing', hideHeader && 'tf-grid--headless', !isSelectable && 'tf-grid--plain')} onKeyDownCapture={onKeyDownCapture} onPaste={paste} aria-busy={isLoading || undefined}>
       <ResizableTableContainer className="tf-grid__scroll" onResizeEnd={onColumnResize ? (m) => onColumnResize(Object.fromEntries([...m].filter(([, w]) => typeof w === 'number').map(([k, w]) => [String(k), Number(w)]))) : undefined}>
         <Table
           aria-label={label}
           className="tf-grid__table"
-          selectionMode="multiple"
+          selectionMode={isSelectable ? 'multiple' : 'none'}
           selectedKeys={selectedKeys}
           onSelectionChange={onSelectionChange}
           onRowAction={(k) => { if (k !== CALC_ROW) onRowAction?.(String(k)); }}
@@ -214,9 +216,9 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           disabledBehavior="selection"
         >
           <TableHeader className="tf-grid__head">
-            <Column width={44} minWidth={44} className="tf-grid__th tf-grid__th--check">
+            {isSelectable ? <Column width={44} minWidth={44} className="tf-grid__th tf-grid__th--check">
               <Checkbox slot="selection" />
-            </Column>
+            </Column> : null}
             {columns.map((c, i) => (
               <Column
                 key={c.id}
@@ -254,9 +256,9 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
           <TableBody className="tf-grid__body" renderEmptyState={() => <div className="tf-grid__empty">{emptyState ?? 'No records'}</div>}>
             {shown.map((r, ri) => (
               <Row key={r.id} id={r.id} className={cx('tf-grid__row', washed.has(r.id) && 'is-changed')}>
-                <Cell className="tf-grid__td tf-grid__td--check">
+                {isSelectable ? <Cell className="tf-grid__td tf-grid__td--check">
                   {isLoading ? <Skeleton width={18} height={18} /> : <Checkbox slot="selection" />}
-                </Cell>
+                </Cell> : null}
                 {columns.map((c, i) => (
                   <Cell
                     key={c.id}
@@ -283,7 +285,7 @@ export function DataGrid({ onColumnAction, columnActions, onAddColumn, label, co
             ))}
             {calcs && !isLoading && rows.length > 0 ? (
               <Row key={CALC_ROW} id={CALC_ROW} className="tf-grid__row tf-grid__calcrow">
-                <Cell className="tf-grid__td tf-grid__td--check">{''}</Cell>
+                {isSelectable ? <Cell className="tf-grid__td tf-grid__td--check">{''}</Cell> : null}
                 {columns.map((c, i) => (
                   <Cell key={c.id} textValue={calcs.text[c.id] || 'Calculate'} className={cx('tf-grid__td', 'tf-grid__td--calc', i === 0 && 'tf-grid__td--pin', c.type === 'number' && 'tf-grid__td--num')}>
                     <AriaButton className={cx('tf-grid__calc', calcs.text[c.id] && 'is-set')} aria-label={`${c.name}: ${calcs.text[c.id] || 'no calculation'}. Change`} aria-haspopup="menu" aria-expanded={calcMenu?.colId === c.id}

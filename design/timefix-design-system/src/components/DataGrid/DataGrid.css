@@ -17,6 +17,7 @@
 .tf-grid__th--check { padding-left: var(--space-2); }
 .tf-grid__th--pin, .tf-grid__td--pin { position: sticky; left: var(--size-row); z-index: 3; }
 .tf-grid__td--check, .tf-grid__td--pin { z-index: 1; }
+.tf-grid--plain .tf-grid__th--pin, .tf-grid--plain .tf-grid__td--pin { left: 0; }
 .tf-grid__thin { position: relative; display: flex; align-items: center; gap: var(--space-6); height: var(--size-control); padding: 0 var(--space-12); }
 .tf-grid__th--num .tf-grid__thin { justify-content: flex-end; }
 .tf-grid__thicon { display: inline-grid; color: var(--text-tertiary); flex: none; }

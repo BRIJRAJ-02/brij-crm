@@ -34,6 +34,7 @@ import { Popover } from '../Popover/Popover.tsx';
 import { GUEST_LOOKS, GuestLook, type GuestLookValue } from '../GuestLook/GuestLook.tsx';
 import { AfterSendSection, AnalyticsPanel, DevelopersSection, EmbedSection, FullPreview, SubmissionsPanel, SyncDialog, routable, type SyncPreview } from './formparts.tsx';
 import { ShareSheet } from '../ShareSheet/ShareSheet.tsx';
+import { TileGrid } from '../Card/Card.tsx';
 
 /** Calm, what a form wears until its owner picks a look. */
 const CALM_LOOK: GuestLookValue = { look: 'calm', ...(GUEST_LOOKS[0]?.value ?? { accent: '#1F5FD6', font: 'sans', scheme: 'light' }) };
@@ -185,18 +186,15 @@ export function FormsScreen({ state, dispatch, onOpenPerson, onOpenRecord, onBoo
       {qr && <QrSheet url={`timefix.com/f/${qr.slug}`} name={qr.name} onClose={() => setQr(undefined)} />}
       {gallery && (
         <Dialog isOpen size="wide" onOpenChange={(o) => { if (!o) setGallery(false); }} title="New form" description="Start blank or from a template; change anything after.">
-          <ul className="tf-forms__gallery">
-            {TEMPLATES.map((t) => (
-              <li key={t.id}><button type="button" className="tf-forms__tpl" onClick={() => {
+          <TileGrid label="Templates" isLabelHidden columns={3} items={TEMPLATES.map((t) => ({ id: t.id, title: t.name, description: t.line, meta: t.questions.length ? `${t.questions.length} questions${t.mode === 'steps' ? ' in steps' : ''}` : 'No questions' }))}
+            onAction={(tid) => { const t = TEMPLATES.find((x) => x.id === tid); if (!t) return;
                 const f: AppForm = { id: newId('f'), name: t.id === 'blank' ? 'Untitled form' : t.name, slug: `${t.id}-${Date.now().toString(36).slice(-4)}`, status: 'draft', questions: t.questions.map((q) => ({ ...q, id: newId('q') })), mode: t.mode ?? 'one',
                   saveTo: t.id === 'feedback' || t.id === 'nps' ? 'none' : 'people', owner: state.me, after: { kind: t.id === 'demo' ? 'booking' : 'thanks', message: 'Thanks, we got it.' }, responses: [], views: 0, seen: 0, updated: new Date() };
                 // Jumps and Show only if in a template point at its own question ids; keep them pointing after the ids change.
                 const ids = new Map(t.questions.map((q, n) => [q.id, f.questions[n]?.id ?? q.id]));
                 const fixed = { ...f, questions: f.questions.map((q) => ({ ...q, showIf: q.showIf ? { ...q.showIf, questionId: ids.get(q.showIf.questionId) ?? q.showIf.questionId } : undefined, jumps: q.jumps?.map((j) => ({ ...j, to: ids.get(j.to) ?? j.to })) })) };
                 dispatch({ type: 'form/set', form: fixed }); setGallery(false); setOpenId(fixed.id); toast({ message: `${fixed.name} made. Publish when it’s ready.` });
-              }}><strong>{t.name}</strong><span className="tf-rec__muted">{t.line}</span><span className="tf-rec__muted tf-num">{t.questions.length ? `${t.questions.length} questions${t.mode === 'steps' ? ' in steps' : ''}` : 'No questions'}</span></button></li>
-            ))}
-          </ul>
+              }} />
         </Dialog>
       )}
     </div>
@@ -286,7 +284,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
   };
   const finishes = form.responses.filter((r) => !r.spam).length;
   const live = form.status === 'live';
-  const brandLook: GuestLookValue = { look: 'custom', accent: BRAND_HEX[state.prefs.workspace.colour] ?? '#0F766E', font: 'sans', scheme: 'light' };
+  const brandLook: GuestLookValue = state.prefs.workspace.look ?? { look: 'custom', accent: BRAND_HEX[state.prefs.workspace.colour] ?? '#0F766E', font: 'sans', scheme: 'light' };
   const lookFor = (f: { readonly useBrand?: boolean; readonly look?: GuestLookValue }) => (f.useBrand ? brandLook : f.look);
   // A visit to the live page counts as a view and a visit; each question reached feeds "Where people stop".
   useGuestScale(guest);
@@ -310,10 +308,10 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
     const endings = (visitorView.endings ?? []).map((e) => ({ id: e.id, title: e.title, line: e.line, action: e.button && /^https?:\/\//.test(e.button.url) ? { label: e.button.label, href: e.button.url } : undefined }));
     return (
       <div className="tf-forms__guest">
-        <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => { setGuest(false); setPrefill(undefined); }}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
+        <div className="tf-forms__guestbar"><Button size="sm" variant="secondary" icon={<ArrowLeft {...i14} />} onPress={() => { setGuest(false); setPrefill(undefined); }}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
           {!live && <Tag size="sm" hue="orange">Preview · answers aren’t saved</Tag>}</div>
         {form.status === 'paused' || closedNow(form) ? <EmptyState icon={<Pause size={20} strokeWidth={1.75} />} title="This form is closed" description={form.closedMessage || `${form.owner.split(' ')[0]} isn't taking answers right now.`} /> : (
-          <HostedForm look={lookFor(visitorView)} title={visitorView.headline || visitorView.name} description={visitorView.subtitle} logic={visitorView.mode === 'one' ? visitorView.logic : undefined} questions={visitorView.questions} mode={visitorView.mode}
+          <HostedForm isFramed look={lookFor(visitorView)} title={visitorView.headline || visitorView.name} description={visitorView.subtitle} logic={visitorView.mode === 'one' ? visitorView.logic : undefined} questions={visitorView.questions} mode={visitorView.mode}
             thanks={{ title: 'Thanks, we got it.', line: after.kind === 'redirect' && after.url ? `${after.message} Visitors now go to ${after.url}.` : after.message, action: after.kind === 'thanks' && after.button?.label && after.button.url ? { label: after.button.label, href: after.button.url } : undefined }}
             endings={endings} endingFor={(answers) => { const flat = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v ?? '')])); const r = routeFor(flat); return r?.to === 'ending' ? r.ending : undefined; }}
             lang={(visitorView.lang ?? 'en') as FormLang} corners={visitorView.corners}
