@@ -348,6 +348,7 @@
     var skeleton = document.createElement('div');
     skeleton.className = 'sk';
     skeleton.setAttribute('aria-hidden', 'true');
+    // eslint-disable-next-line no-restricted-syntax -- constant markup this script writes itself, never page or guest input (spec 0073, AC-7317)
     skeleton.innerHTML =
       kind === 'booking' ? '<i></i><i></i>' + new Array(36).join('<u></u>') : '<i></i><i></i><i></i><i></i><i></i>';
     if (kind === 'booking') skeleton.className = 'sk sb';
@@ -404,6 +405,7 @@
     close.type = 'button';
     close.className = 'x';
     close.setAttribute('aria-label', 'Close');
+    // eslint-disable-next-line no-restricted-syntax -- constant markup this script writes itself, never page or guest input (spec 0073, AC-7317)
     close.innerHTML =
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
     var head = document.createElement('div');
@@ -555,6 +557,7 @@
       var glyph = document.createElement('span');
       glyph.className = 'mark';
       glyph.setAttribute('aria-hidden', 'true');
+      // eslint-disable-next-line no-restricted-syntax -- constant markup this script writes itself, never page or guest input (spec 0073, AC-7317)
       glyph.innerHTML = mark;
       button.insertBefore(glyph, button.firstChild);
     }
