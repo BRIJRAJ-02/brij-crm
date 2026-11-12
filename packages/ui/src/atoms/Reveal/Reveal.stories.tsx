@@ -57,6 +57,20 @@ export const Drop: Story = {
   play: async ({ canvas, canvasElement }) => {
     await expect(canvasElement.querySelectorAll('[data-still]')).toHaveLength(2);
     await userEvent.click(canvas.getByRole('button', { name: 'Add a task' }));
+    // No blur at any frame: the new row's own animations, read from their keyframes rather than the settled end,
+    // open its height and rise it, and not one keyframe sets a filter.
+    const arriving = canvas.getByText('Follow up 3').closest('[data-opening]');
+    if (arriving === null) throw new Error('the new row is not opening');
+    const played = arriving.getAnimations({ subtree: true }) as CSSAnimation[];
+    await expect(played.map((animation) => animation.animationName).sort()).toEqual([
+      expect.stringMatching(/drop-open/),
+      expect.stringMatching(/drop-rise/),
+    ]);
+    for (const animation of played) {
+      const keyframes = animation.effect instanceof KeyframeEffect ? animation.effect.getKeyframes() : [];
+      await expect(keyframes.length).toBeGreaterThan(0);
+      for (const keyframe of keyframes) await expect(keyframe).not.toHaveProperty('filter');
+    }
     await settleAnimations();
     await expect(canvas.getByText('Follow up 3')).toBeVisible();
     // Once in, nothing clips it: a focus ring inside is never cut.

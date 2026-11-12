@@ -74,5 +74,23 @@ export const Soft: Story = {
     await expect(canvas.getByText('$48,210')).toBeInTheDocument();
     const root = canvasElement.querySelector('[data-variant="soft"]');
     await expect(root).toHaveAttribute('data-align', 'end');
+    // A cross fade in place: the old value fades out and the new one fades in, both at once (no wait for the exit),
+    // and neither keyframe moves anything.
+    const fades = (text: string) => {
+      const animations = canvas.getByText(text).getAnimations() as CSSAnimation[];
+      const [animation] = animations;
+      if (animations.length !== 1 || animation === undefined) throw new Error(`${text} has no one animation`);
+      const keyframes = animation.effect instanceof KeyframeEffect ? animation.effect.getKeyframes() : [];
+      return { name: animation.animationName, delay: animation.effect?.getTiming().delay, keyframes };
+    };
+    const leaving = fades('$1,320');
+    const arriving = fades('$48,210');
+    await expect(leaving.name).toMatch(/words-fade-out/);
+    await expect(arriving.name).toMatch(/words-fade-in/);
+    await expect(arriving.delay).toBe(0);
+    for (const keyframe of [...leaving.keyframes, ...arriving.keyframes]) {
+      await expect(keyframe).not.toHaveProperty('translate');
+      await expect(keyframe).not.toHaveProperty('transform');
+    }
   },
 };

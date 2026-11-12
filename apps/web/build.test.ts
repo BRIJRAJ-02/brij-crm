@@ -252,7 +252,8 @@ describe('the first load', () => {
   });
 
   // Spec 0073 (AC-7314): ShareSheet (with QrCode and uqr) and Ask AI (`@crm/ui/ai`) load with the screens that open
-  // them, never in the app's, the booking page's or the hosted form's first load. Rolldown merges modules into chunks,
+  // them, never in any HTML entry's first load (the app, the booking page, the hosted form, the guest menu and the
+  // reservation page). Rolldown merges modules into chunks,
   // so this looks for what only they carry: Ask AI's class names (`ws-ai-assist-`, as `uiVite()` writes them, in
   // kebab case) and status words, and ShareSheet's refusal line (it has no stylesheet of its own). Until a screen
   // adopts one (phases 3 and 5) neither ships at all, so this holds trivially; it was made to fail once by importing
@@ -264,8 +265,17 @@ describe('the first load', () => {
       'This link can’t be shared, because it isn’t a web address.',
     ];
     const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
-    for (const entry of ['index.html', 'book.html', 'form.html']) {
+    // Every HTML entry the build writes: the app, the booking page, the hosted form, the guest menu and the
+    // reservation page. Checked against the built folder, so a new entry can't slip past this list.
+    const entries = ['index.html', 'book.html', 'form.html', 'menu.html', 'reserve.html'];
+    expect(
+      readdirSync(outDir)
+        .filter((file) => file.endsWith('.html'))
+        .sort(),
+    ).toEqual([...entries].sort());
+    for (const entry of entries) {
       const { js, css: sheets } = firstLoad(manifest, entry);
+      expect(js.length, `${entry} has a first load`).toBeGreaterThan(0);
       const upFront = [...js, ...sheets].map(read);
       for (const marker of markers)
         expect(
