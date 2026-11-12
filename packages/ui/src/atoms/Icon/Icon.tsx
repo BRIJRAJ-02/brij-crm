@@ -30,13 +30,13 @@ export function IconScope({ icons: scoped, children }: IconScopeProps) {
 }
 
 /**
- * Icon sizes, from the `size-icon` tokens: `lg` one and a half `size-icon` (a picture slot: a choice tile's mark),
+ * Icon sizes, from the `size-icon` tokens: `lg` 20 (empty states, tiles and picture slots such as a choice tile's mark),
  * `md` 16 (nav, menus, rows), `sm` 14 (buttons, chips), `xs` 12 (card footers).
  */
 export type IconSize = 'lg' | 'md' | 'sm' | 'xs';
 
-/** Icon colour: `inherit` takes the parent's, `muted` is `text-secondary`, `ai` is the AI sparkle only. */
-export type IconTone = 'inherit' | 'muted' | 'ai' | 'success' | 'danger';
+/** Icon colour: `inherit` takes the parent's, `muted` is `text-secondary`, `faint` is `text-tertiary`, `ai` is the AI sparkle only. */
+export type IconTone = 'inherit' | 'muted' | 'faint' | 'ai' | 'success' | 'danger';
 
 interface IconBase {
   /** The icon, exactly as lucide.dev names it. Only names in the registry type check. */

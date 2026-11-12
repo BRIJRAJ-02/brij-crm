@@ -80,10 +80,18 @@ export function Checkbox({
       {...(value === undefined ? {} : { value })}
     >
       <CheckboxButton className={classes(styles.root, look?.root)}>
-        {({ isSelected: checked, isIndeterminate: partial }) => (
+        {({ isIndeterminate: partial }) => (
           <>
             <span className={classes(styles.box, look?.box)} aria-hidden="true">
-              {partial ? <Icon name="minus" size="xs" /> : checked && <Icon name="check" size="xs" />}
+              {/* The tick is always there and drawn in by its clip when checked (transitions.dev 25), so it draws
+                  on a change and never on the first paint. */}
+              {partial ? (
+                <Icon name="minus" size="sm" />
+              ) : (
+                <span className={styles.tick}>
+                  <Icon name="check" size="sm" />
+                </span>
+              )}
             </span>
             {leading !== undefined && (
               <span className={styles.leading} aria-hidden="true">
@@ -140,7 +148,7 @@ export function CheckboxMark({ label, isSelected, isIndeterminate = false, isRea
       data-readonly={isReadOnly || undefined}
     >
       <span className={styles.box} aria-hidden="true">
-        {isIndeterminate ? <Icon name="minus" size="xs" /> : isSelected && <Icon name="check" size="xs" />}
+        {isIndeterminate ? <Icon name="minus" size="sm" /> : isSelected && <Icon name="check" size="sm" />}
       </span>
       {label !== undefined && (
         <VisuallyHidden>

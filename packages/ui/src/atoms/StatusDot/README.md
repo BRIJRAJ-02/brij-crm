@@ -30,3 +30,9 @@ It takes no focus.
 ## Differences from the artifact
 
 - `hue` replaces `color`, and is required; `isArchived` is new.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Tag (spec 0072): the prototype's dot and label form, an 8px dot in the status's `dot-<hue>`, then its label in `body-sm-strong` (500 13/20). The colour is never the only cue: the label always shows.
+
+**Differences from the prototype**: `shortLabel`, `isInherited` and `isAnimated` are kept. The prototype's status shapes (dashed circle draft, half circle in progress and so on) belong to its Tag `status` and are owed to the phase that ports statuses.

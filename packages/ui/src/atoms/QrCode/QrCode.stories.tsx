@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Code } from '../Code/Code.tsx';
 import { QrCode } from './QrCode.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Atoms/QrCode',
@@ -111,7 +112,8 @@ export const Small: Story = {
   ),
   play: async ({ canvas }) => {
     const code = canvas.getByRole('img', { name: 'QR code for your link page' });
-    await expect(Math.round(code.getBoundingClientRect().width)).toBe(120);
+    // Half of size-menu, the prototype's small code, at the document's scale.
+    await expect(Math.round(code.getBoundingClientRect().width)).toBe(Math.round(tokenLength('size-menu') / 2));
   },
 };
 

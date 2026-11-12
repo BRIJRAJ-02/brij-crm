@@ -1,22 +1,27 @@
-/* LinkChip: a 20px chip in the accent's soft tint with link-coloured text. A
-   refused link is a plain grey chip; a flat one is the link's text alone. */
+/* LinkChip, after the prototype's link chip (spec 0072, folded into RecordChip's look): a 24px chip on the surface
+   with a hairline edge, the site's icon (or its first letter while it loads) and the bare address in the text colour.
+   A refused link is the same chip, filled grey; a flat one is the address alone. */
 @layer components {
   .root {
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
     max-inline-size: 100%;
-    block-size: var(--size-chip);
-    padding-inline: var(--space-6);
-    border: var(--border-width-hairline) solid var(--accent-border);
+    block-size: var(--space-24);
+    padding: 0 var(--space-8) 0 var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--accent-soft);
-    color: var(--link);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     text-decoration: none;
     white-space: nowrap;
+    vertical-align: middle;
     outline: none;
+    transition-property: background-color, border-color;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-out);
   }
 
   .label {
@@ -29,11 +34,11 @@
     display: inline-grid;
     flex: none;
     place-items: center;
-    inline-size: var(--size-icon-sm);
-    block-size: var(--size-icon-sm);
+    inline-size: calc(var(--size-icon) - var(--space-2));
+    block-size: calc(var(--size-icon) - var(--space-2));
     overflow: hidden;
     border-radius: var(--radius-xs);
-    background: var(--surface-hover);
+    background: var(--surface-subtle);
   }
 
   .icon[data-state='shown'] {
@@ -44,8 +49,10 @@
     grid-area: 1 / 1;
   }
 
-  .letter {
-    color: var(--text-secondary);
+  .letter,
+  .flag {
+    flex: none;
+    color: var(--text-tertiary);
     font: var(--text-label);
   }
 
@@ -59,18 +66,11 @@
     opacity: 0;
   }
 
-  .flag {
-    flex: none;
-    font: var(--text-label);
-  }
-
   .root[data-plain] {
-    border-color: var(--border);
-    background: var(--surface-hover);
-    color: var(--text);
+    background: var(--surface-subtle);
   }
 
-  /* Flat: the link's text alone (a card, a line of the timeline), on the chip's line height. */
+  /* Flat: the address alone (a card, a line of the timeline), on the chip's line height. */
   .root[data-flat] {
     padding-inline: 0;
     border-color: transparent;
@@ -78,7 +78,12 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .root:any-link:hover {
+    .root:not([data-plain], [data-flat]):is(:any-link, [data-pressable]):hover {
+      border-color: var(--border-strong);
+      background: var(--surface-hover);
+    }
+
+    .root[data-flat]:any-link:hover {
       text-decoration: underline;
     }
   }
@@ -86,9 +91,8 @@
   /* A pressable chip is React Aria's Button, which marks keyboard focus with data-focus-visible. */
   .root:focus-visible,
   .root[data-focus-visible] {
-    border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
-    outline: none;
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (forced-colors: active) {
@@ -96,9 +100,11 @@
       border-color: LinkText;
       color: LinkText;
     }
+  }
 
-    .root:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition: none;
     }
   }
 }

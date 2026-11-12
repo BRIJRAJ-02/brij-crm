@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button } from '../Button/Button.tsx';
 import { ProviderMark, type ProviderName } from './ProviderMark.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Atoms/ProviderMark',
@@ -89,7 +90,7 @@ export const Large: Story = {
   play: async ({ canvas }) => {
     const mark = canvas.getByRole('img', { name: 'Timefix' });
     const shown = [...mark.querySelectorAll('img')].find((image) => image.getBoundingClientRect().width > 0);
-    await expect(shown?.getBoundingClientRect().width).toBe(20);
+    await expect(shown?.getBoundingClientRect().width).toBe(tokenLength('size-icon-lg'));
   },
 };
 

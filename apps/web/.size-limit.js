@@ -99,6 +99,13 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
   throw new Error("dist holds React's development build. Build with NODE_ENV unset or production, then measure again.");
 }
 
+// 12 November 2026, spec 0072 (port phase 1, AC-10): every line below is lowered to what tier 1 measured, rounded up
+// to the next 0.1 kB, so nothing the port saved can quietly be spent again. Measured on the tier 1 tip against the base
+// (f81623f0c): first load JavaScript 296.64 to 296.62 kB, first load CSS 7.86 to 7.73, hosted form JavaScript 205.91 to
+// 205.95, its CSS 18.57 to 18.58, step layouts 5.75 to 5.75, signature and ranking 6.25 to 6.30, booking page
+// JavaScript 188.89 to 188.89, its CSS 19.37 to 19.30, media 1.14, picture and gallery 1.67, next times 1.37, notice
+// sheet 0.463 to 0.465. The comments under each line tell how it got its old limit. Raising any of these is a spec
+// change.
 export default [
   // 300 kB from 2 November 2026 (the owner, "raise it to 300"): the CRM UI pass (follows, sample data, Excel import
   // and export) took the first load to 252.34 kB, and the cars behind it add a little more. Room for those, not a
@@ -107,8 +114,8 @@ export default [
   // their addresses are read up front by the command menu, and a contact card gained its second and third email,
   // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
   // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '300 kB', gzip: true, running: false },
-  { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '296.7 kB', gzip: true, running: false },
+  { name: 'First load CSS (gzipped)', path: inDist(css), limit: '7.8 kB', gzip: true, running: false },
   // 223 kB from 26 October 2026: forms take files (spec 0023's uploads). The question's drop area brings React
   // Aria's drag and drop code, which took the form to 245.52 kB, 24.52 kB over. That is not what a form without a
   // file question should pay, so `FileQuestion` now loads on its own behind a Skeleton (`Question.tsx`), which
@@ -119,7 +126,7 @@ export default [
   // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
   // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206 kB', gzip: true, running: false },
   // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
@@ -127,12 +134,12 @@ export default [
   // 12 November 2026: 18 kB to 18.8 kB for spec 0071 (measured 18.57 kB). The new token set every page carries (the
   // prototype's colours and type styles, the legacy tokens the port still needs, the Geist fallback faces) added about
   // 575 bytes; the app's own sizes live in tokens-app.css, which no public page loads.
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '18.8 kB', gzip: true, running: false },
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '18.6 kB', gzip: true, running: false },
   // Spec 0063's own line: Steps and One at a time together at most 10 kB, loaded only by a form that uses them.
   {
     name: 'Form step layouts, lazy (gzipped)',
     path: inDist([...steps.js, ...steps.css]),
-    limit: '10 kB',
+    limit: '5.8 kB',
     gzip: true,
     running: false,
   },
@@ -141,16 +148,16 @@ export default [
   {
     name: 'Form signature and ranking, lazy (gzipped)',
     path: inDist([...batchTwo.js, ...batchTwo.css]),
-    limit: '14 kB',
+    limit: '6.4 kB',
     gzip: true,
     running: false,
   },
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '188.9 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).
   // 19.5 kB for spec 0071 (12 Nov 2026, measured 19.37 kB): the same token set as the hosted form's line above.
-  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '19.5 kB', gzip: true, running: false },
+  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '19.4 kB', gzip: true, running: false },
   // Spec 0061, AC-6126, measured on this build (2 November 2026, gzipped): media 1.15 kB, the picture and gallery
   // chunk 1.68 kB (one chunk: `LinkPageGallery.tsx` re-exports `LinkPageImage`, so a page with either draws from
   // the same code), next times 1.11 kB and the notice sheet 0.49 kB. Each limit is the measurement with a little
@@ -158,22 +165,22 @@ export default [
   {
     name: 'Media block chunk (gzipped)',
     path: lazyBlock('LinkPageMedia'),
-    limit: '1.5 kB',
+    limit: '1.2 kB',
     gzip: true,
     running: false,
   },
   {
     name: 'Picture and gallery chunk (gzipped)',
     path: lazyBlock('LinkPageGallery'),
-    limit: '2 kB',
+    limit: '1.7 kB',
     gzip: true,
     running: false,
   },
-  { name: 'Next times chunk (gzipped)', path: lazyBlock('LinkPageTimes'), limit: '1.5 kB', gzip: true, running: false },
+  { name: 'Next times chunk (gzipped)', path: lazyBlock('LinkPageTimes'), limit: '1.4 kB', gzip: true, running: false },
   {
     name: 'Notice sheet chunk (gzipped)',
     path: lazyBlock('LinkPageNotice'),
-    limit: '0.8 kB',
+    limit: '0.5 kB',
     gzip: true,
     running: false,
   },

@@ -1,11 +1,8 @@
-/* Code: mono text-code on the sunken surface with a hairline edge. Inline, a chip in the sentence; block and list,
-   a full width box holding the code and, at its end, the copy button. */
+/* Code, after the prototype's Code (spec 0072): mono text-code on surface-subtle with no edge. Inline, a small chip in
+   the sentence; block and list, a full width box (radius-md) holding the code and, at its end, the copy button. */
 @layer components {
-  .root {
-    padding-inline: var(--space-4);
-    border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: var(--surface-subtle);
+  .root,
+  .text {
     color: var(--text);
     font: var(--text-code);
     letter-spacing: var(--tracking-code);
@@ -14,6 +11,12 @@
     font-feature-settings:
       'liga' 0,
       'calt' 0;
+  }
+
+  .root {
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-xs);
+    background: var(--surface-subtle);
     overflow-wrap: anywhere;
   }
 
@@ -32,9 +35,7 @@
     gap: var(--space-8);
     box-sizing: border-box;
     inline-size: 100%;
-    padding-block: var(--space-4);
-    padding-inline: var(--space-12);
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    padding: var(--space-6) var(--space-16);
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
   }
@@ -48,13 +49,6 @@
     min-inline-size: 0;
     /* The first line sits on the copy button's centre line. */
     padding-block: calc((var(--size-control-sm) - 1lh) / 2);
-    color: var(--text);
-    font: var(--text-code);
-    letter-spacing: var(--tracking-code);
-    font-variant-ligatures: none;
-    font-feature-settings:
-      'liga' 0,
-      'calt' 0;
     /* Lines break only between the groups; a group longer than the whole line is the one thing ever split. */
     overflow-wrap: break-word;
   }
@@ -73,7 +67,7 @@
   @media (forced-colors: active) {
     .root,
     .box {
-      border-color: CanvasText;
+      border: var(--border-width-hairline) solid CanvasText;
     }
   }
 }

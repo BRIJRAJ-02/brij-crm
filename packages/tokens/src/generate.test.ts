@@ -414,7 +414,7 @@ describe('the app scale (spec 0071, AC-3, AC-4)', () => {
 
   it('puts legacy colours in the theme blocks and legacy sizes under :root, unscaled', () => {
     const output = css(real());
-    expect(blockAfter(output, "[data-theme='dark']")).toContain('--danger-hover: #ff8d84;');
+    expect(blockAfter(output, "[data-theme='dark']")).toContain('--tag-red-border: #5a2a35;');
     expect(blockAfter(output, '  :root {')).toContain('--size-chip: 20px;');
   });
 

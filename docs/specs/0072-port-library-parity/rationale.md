@@ -67,6 +67,9 @@ The owner delegates design calls; each is decided here, with options and the rea
 8. **Hover springs done in JavaScript.** The prototype's RecordChipList sets `--tf-shift` and `--tf-scale` per item from a pointer handler. That is a state change per item on every hover (gate 3). Picked: the same spring with CSS sibling and `:has()` selectors, as the prototype's own AvatarGroup does.
 9. **Raw prototype lengths.** Options: add a source token for every raw value (26px tags, 18px checkboxes), or build each from existing tokens. Picked: a single token, else a `calc()` of two tokens, else a new source token in its own commit (index.md, *How a prototype value becomes a token*). The phase 2 lane edits the same source file, so new tokens are kept to the ones that cannot be built.
 10. **Folded parts' sizes.** Badge has sizes the prototype's Count lacks (`chip`, `chip-lg`, `fit`); StatusDot has a short label and an inherited look; Radio has card and letter rows. All kept, restyled in the replacer's language.
+11. **An AvatarStack that opens nothing does not fan out.** The prototype's AvatarGroup lifts on hover "to show it can be opened". Every library stack is a still picture (a team, the people on a record); a lift would promise an action that isn't there (`interface-affordances`), and its CSS sat on the booking page's stylesheet. Picked: no fan on a stack; RecordChipList, whose chips are links, keeps the fan, in CSS.
+12. **The tooltip's arrow waits.** Built twice and measured: as React Aria's `OverlayArrow` it cost every page with a tooltip about 330 B of script, and drawn in CSS it took the booking page's stylesheet past its budget (19.52 kB against 19.5). Picked: no arrow and no entry scale in tier 1; the arrow is owed to the phase that trims the booking page's CSS (phase 2's BookingFlow).
+13. **Retire legacy tokens as soon as their last user goes.** Tier 1 removed the last uses of `danger-hover`, `border-inverse`, `on-accent-kbd`, `size-check`, `size-switch`, `size-kbd` and four `duration-public-*` timings, so they leave `legacy.json` (and `tokens.css`, which every page loads) in the same tier, with their contrast pairs and the `size-check` house rule.
 
 ## Evidence
 
@@ -128,4 +131,52 @@ The after tables are filled in per tier below.
 
 ### Tier 1 after
 
-_Filled in by the tier 1 build._
+`node packages/ui/scripts/part-cost.ts --tier 1 --against f81623f0c` on the tier 1 tip (bytes, gzipped):
+
+| Folder | CSS before → after | JS before → after | Change |
+|---|---|---|---|
+| Button | 2392 → 2380 | 4483 → 4496 | 0% |
+| Icon | 513 → 469 | 4117 → 4117 | -1% |
+| ProviderMark | 386 → 394 | 1099 → 1099 | 0.5% |
+| Kbd | 390 → 413 | 695 → 695 | 2.1% |
+| Link | 404 → 459 | 631 → 631 | 5.3% |
+| Code | 509 → 508 | 447 → 447 | -0.1% |
+| Tooltip | 579 → 613 | 1180 → 1180 | 1.9% |
+| Tag | 702 → 697 | 626 → 626 | -0.4% |
+| Badge | 642 → 649 | 631 → 631 | 0.5% |
+| StatusDot | 530 → 537 | 506 → 506 | 0.7% |
+| Avatar | 1037 → 1056 | 1261 → 1263 | 0.9% |
+| PersonLine | 401 → 402 | 615 → 615 | 0.1% |
+| RecordChip | 562 → 629 | 717 → 718 | 5.3% |
+| LinkChip | 609 → 720 | 784 → 784 | 8% |
+| Mention | 221 → 235 | 139 → 139 | 3.9% |
+| Variable | 333 → 296 | 375 → 375 | -5.2% |
+| RecordChipList | 163 → 335 | 664 → 664 | 20.8% |
+| QrCode | 420 → 418 | 1280 → 1280 | -0.1% |
+| Checkbox | 1532 → 1637 | 1022 → 1027 | 4.3% |
+| Radio | 1958 → 2005 | 1344 → 1344 | 1.4% |
+| Switch | 752 → 859 | 506 → 506 | 8.5% |
+| Slider | 564 → 887 | 454 → 463 | 32.6% |
+| DragHandle | 478 → 532 | 443 → 443 | 5.9% |
+| Total | 16077 → 17130 | 24019 → 24049 | 2.7% |
+
+**AC-8 is not met for tier 1: the touched folders cost 2.7% more, not 30% less.** Why: tier 1 kept every behaviour (AC-3), and the prototype adds motion and states the library didn't draw: the drawn tick, the switch's stretch and overshoot, the slider's value bubble, RecordChipList's hover spring, the link chip's wash. The cuts that were available were taken (one rule per hue through custom properties, the stack fan and the tooltip arrow dropped, dead focus halos, folded duplicates). The atoms are small and mostly unique code; there is little duplicate left in them to remove. Where phase 1 can cut a lot is tier 2 and 3, whose folded parts duplicate whole components (Table, SampleTable and DataGrid; four bars and FloatingBar; Stats, RecordStats, TileGrid and Card), and in retiring legacy tokens every page loads. The owner decides whether AC-8 stays per tier, moves to the whole phase, or measures the built pages instead (see the report).
+
+`pnpm size` on the tier 1 tip against the base:
+
+| Line | Base | Tier 1 | Budget now |
+|---|---|---|---|
+| First load JavaScript | 296.64 kB | 296.62 kB | 296.7 kB (was 300) |
+| First load CSS | 7.86 kB | 7.73 kB | 7.8 kB (was 40) |
+| Hosted form JavaScript | 205.91 kB | 205.95 kB | 206 kB (was 223) |
+| Hosted form CSS | 18.57 kB | 18.58 kB | 18.6 kB (was 18.8) |
+| Form step layouts, lazy | 5.75 kB | 5.75 kB | 5.8 kB (was 10) |
+| Form signature and ranking, lazy | 6.25 kB | 6.30 kB | 6.4 kB (was 14) |
+| Booking page JavaScript | 188.89 kB | 188.89 kB | 188.9 kB (was 230) |
+| Booking page CSS | 19.37 kB | 19.30 kB | 19.4 kB (was 19.5) |
+| Media block chunk | 1.14 kB | 1.14 kB | 1.2 kB (was 1.5) |
+| Picture and gallery chunk | 1.67 kB | 1.67 kB | 1.7 kB (was 2) |
+| Next times chunk | 1.37 kB | 1.37 kB | 1.4 kB (was 1.5) |
+| Notice sheet chunk | 463 B | 465 B | 500 B (was 800) |
+
+All of `apps/web/dist/assets`, gzipped: JavaScript 2,169,429 to 2,170,195 B, CSS 149,413 to 150,063 B. **AC-9 is not met in full**: the hosted form's JavaScript (+40 B), its CSS (+10 B), the signature chunk (+50 B) and the notice sheet (+2 B) grew, and so did the totals. Part of the JavaScript is noise: a changed chunk's content hash changes the import strings of every chunk that loads it, and about a hundred route chunks moved by 10 to 14 B each with no code change. The real growth is the checkbox's tick wrapper (about 20 B) and Button's `soft` look. The CSS totals grew by the new motion above, less the retired tokens (130 B off every page's first load).

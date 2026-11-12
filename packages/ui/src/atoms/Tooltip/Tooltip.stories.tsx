@@ -6,6 +6,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LockReason } from './LockReason.tsx';
 import { ShortcutTooltip } from './ShortcutTooltip.tsx';
 import { Tooltip } from './Tooltip.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Atoms/Tooltip',
@@ -134,6 +135,6 @@ export const Lock: Story = {
     await expect(lock).toHaveFocus();
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
     const small = canvas.getByRole('button', { name: 'You can’t change this here yet.' });
-    await expect(Math.round(small.getBoundingClientRect().height)).toBe(20);
+    await expect(Math.round(small.getBoundingClientRect().height)).toBe(tokenLength('space-20'));
   },
 };

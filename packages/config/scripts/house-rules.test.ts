@@ -197,11 +197,11 @@ describe('house rules check', () => {
     expect(borrowed.output).toContain('Modal.module.css: --size-sidebar belongs to another component');
 
     const owned = runHouseRules({
-      'packages/ui/src/atoms/Checkbox/Checkbox.tsx':
-        "import styles from './Checkbox.module.css';\nexport const classes = styles;\n",
-      'packages/ui/src/atoms/Checkbox/Checkbox.module.css': '.box { inline-size: var(--size-check); }\n',
-      'packages/ui/src/atoms/Checkbox/README.md': '# Checkbox\n\nA checkbox.\n',
-      'packages/ui/src/atoms/Checkbox/Checkbox.stories.tsx': "export default { title: 'Atoms/Checkbox' };\n",
+      'packages/ui/src/modules/Sidebar/Sidebar.tsx':
+        "import styles from './Sidebar.module.css';\nexport const classes = styles;\n",
+      'packages/ui/src/modules/Sidebar/Sidebar.module.css': '.root { inline-size: var(--size-sidebar); }\n',
+      'packages/ui/src/modules/Sidebar/README.md': '# Sidebar\n\nThe sidebar.\n',
+      'packages/ui/src/modules/Sidebar/Sidebar.stories.tsx': "export default { title: 'Modules/Sidebar' };\n",
     });
     expect(owned.output).not.toContain('belongs to another component');
   });

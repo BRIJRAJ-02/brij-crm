@@ -30,7 +30,8 @@
   }
 
   .field[data-variant='row']:has(.root[data-focus-visible]) {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   .field[data-variant='row'][data-selected] {

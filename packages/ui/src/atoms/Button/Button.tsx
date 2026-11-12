@@ -32,10 +32,11 @@ const LazyStatusDot = lazy(() =>
   import('../StatusDot/StatusDot.tsx').then((module) => ({ default: module.StatusDot })),
 );
 
-/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours, `field` for a picker drawn as a Field's box among Fields (a form question's answer type), its `fieldName` inside. */
+/** The prototype's looks (spec 0072), all pills: `secondary` (the default, white with a hairline) for view controls and Cancel, `primary` (ink) for the one action that commits, `soft` (grey) for a quiet action inside a card, `danger` (red words and edge) for a control that starts a destructive action, `danger-solid` (red fill, the prototype's danger) for the final commit that destroys, `ghost` for toolbars, rows and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `link` for a quiet text action, `value` for a value that opens something, `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours, `field` for a picker drawn as a filled Field among Fields (a form question's answer type), its `fieldName` inside. Blue is never a fill: it marks a selection. */
 export type ButtonVariant =
   | 'secondary'
   | 'primary'
+  | 'soft'
   | 'danger'
   | 'danger-solid'
   | 'ghost'
@@ -46,7 +47,7 @@ export type ButtonVariant =
   | 'warning'
   | 'field';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-control`, which the form raises to its public size) with room at the sides, so a short word never draws a square. `sheet` is the one action at a guest sheet's foot (the guest menu's Add to selection), 48px with a title sized label, after checklabs. */
+/** Heights after the prototype (spec 0072): `md` (the default) 28 full and 24 in the app, the prototype's `sm`; `lg` 36 and 32, its `md`; `xl` 44 and 38, its `lg`, for a page's own call to action outside the app (the marketing site's hero); `sm` a chip's 20, for an icon only Remove beside a chip inside a field; `touch` 44, a public page's control under a thumb (a link page's Save contact, Share and social links); `public` a hosted form's own button (Continue, OK, Send), the fields' height with room at the sides, so a short word never draws a square; `sheet` 48, the one action at a guest sheet's foot (the guest menu's Add to selection). */
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public' | 'sheet';
 
 interface ButtonLook {
@@ -252,7 +253,7 @@ function keycaps(kbd: ButtonLook['kbd'], variant: ButtonVariant): ReactNode {
   return (
     <span className={styles.keys} aria-hidden="true">
       {caps.map((cap) => (
-        <Kbd key={cap} tone={variant === 'primary' ? 'onAccent' : 'soft'}>
+        <Kbd key={cap} tone={variant === 'primary' || variant === 'danger-solid' ? 'onAccent' : 'soft'}>
           {cap}
         </Kbd>
       ))}

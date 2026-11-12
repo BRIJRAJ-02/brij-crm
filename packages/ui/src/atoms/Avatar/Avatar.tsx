@@ -7,8 +7,9 @@ import { strings } from './strings.ts';
 import styles from './Avatar.module.css';
 
 /**
- * Avatar sizes: `xs` 16px (cells, chips), `sm` 20px, `md` 24px, `lg` 32px, `title` 48px (a record heading its
- * page or panel), `xl` 72px (a booking page's host, the picture on Settings › Profile).
+ * Avatar sizes, after the prototype (spec 0072): `xs` 16px (cells), `sm` 20px (inline, chips), `md` 28px (rows), `lg`
+ * 36px (lists), `title` 44px (a record heading its page or panel), `xl` 72px (a booking page's host, the picture on
+ * Settings › Profile), `hero` 96px (a link page's own face). Full size values; the app draws them at its scale.
  */
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'title' | 'xl' | 'hero';
 
@@ -176,7 +177,7 @@ export function AvatarStack({ people, max = 3, size = 'sm', total = people.lengt
         />
       ))}
       {rest > 0 && (
-        <span className={styles.more} aria-hidden="true">
+        <span className={styles.more} data-size={size} aria-hidden="true">
           {strings.more(rest)}
         </span>
       )}

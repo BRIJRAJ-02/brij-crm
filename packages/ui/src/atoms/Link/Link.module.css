@@ -1,13 +1,17 @@
-/* Link: link-coloured text, underlined on hover and while focused; quiet, in the text's own colour. */
+/* Link, after the prototype's Link (spec 0072): link coloured text whose underline strengthens over --duration-quick
+   on hover, and the prototype's outline focus ring. The underline stays faint at rest (the prototype has none) because
+   the link colour alone is under 3:1 against body text (WCAG 1.4.1). */
 @layer components {
-  /* Underlined at rest, so a link in a sentence never relies on colour alone. */
   .root {
     border-radius: var(--radius-xs);
     color: var(--link);
-    text-decoration: underline;
+    text-decoration: underline var(--border-width-hairline);
     text-decoration-color: var(--accent-border);
     text-underline-offset: var(--space-2);
     outline: none;
+    transition-property: text-decoration-color, color;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-out);
   }
 
   /* Quiet: the text's own colour, its underline faint (border-strong) until hover or focus. */
@@ -18,17 +22,14 @@
 
   @media (hover: hover) and (pointer: fine) {
     .root[data-hovered] {
-      text-decoration-color: currentColor;
+      text-decoration-color: currentcolor;
     }
   }
 
-  /* The 1px accent ring just outside the text, with the faint halo: the halo
-     alone is under 3:1 (WCAG 1.4.11). */
   .root[data-focus-visible] {
-    text-decoration-color: currentColor;
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    text-decoration-color: currentcolor;
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   /* A link on its own line with its mark (Directions, a phone): the icon before the words, in the link's colour. */
@@ -50,11 +51,16 @@
   @media (forced-colors: active) {
     .root {
       color: LinkText;
-      text-decoration: underline;
     }
 
     .root[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
+      outline-color: Highlight;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition: none;
     }
   }
 }

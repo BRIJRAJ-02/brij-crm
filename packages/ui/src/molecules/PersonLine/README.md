@@ -35,3 +35,9 @@ Not in the artifact.
 
 `isMetaWrapped` (3 November 2026, spec 0062's Requests card) lets the quiet line wrap instead of cutting its last part,
 for a row whose last fact is the point (a request's "Expires …"). Column heads keep the default one line.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Avatar (spec 0072): avatar, name (`body-strong`) over a grey sub line (`body-sm-tight`, 400 13/18), 12px apart, the one way a person or record is drawn in a row.
+
+**Differences from the prototype**: the tone leads (`away`, `free`, `off`), `isMetaWrapped` and the narrow container rule are kept.

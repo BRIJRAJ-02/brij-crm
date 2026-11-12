@@ -96,3 +96,19 @@ A label that changes after the first paint resolves in over `--label-swap` (a 2p
 ## Status dot
 
 `dot` on Button draws a status dot before the label, as ToggleButton's does, in the label's type and colour: where something stands, on the control that changes it (a menu's Live or Hidden, 6 November 2026). Decorative: the label says it too. With a label only. With `animateLabel` the dot's colour fades and the word swaps when it changes (StatusDot's `isAnimated`): Bookings › Pages' Live or Hidden pill, 9 November 2026.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Button: pills, an ink `primary` (`--primary` on `--on-primary`), a white `secondary` with a hairline and `shadow-xs`, a grey `soft`, a bare `ghost` and a red `danger-solid`. Blue is never a button fill; it marks a selection only (a held ToggleButton wears `accent-soft` and `accent-text`, a strong selection the accent fill).
+
+**Use it for**: `primary` for the one thing the view is for (Save changes, Book, Create), at most one per region; `secondary` for every other visible action; `soft` for a quiet action inside a card (Next, Complete); `ghost` in toolbars, rows and icon only buttons; `danger-solid` only for the last step of something that cannot be undone. **Don't** fill a button with blue or put two primaries side by side.
+
+**States**: rest; hover (the fill washes in over `--duration-quick` on `--ease-smooth-out`); pressed (colour only: nothing scales in the app, `--scale-press` is 1, and a public page sets its own); focus visible (the outline ring, `--border-width-focus` in `--focus-ring`, 2px out); pending (the spinner takes the icon's place, presses are ignored); disabled (`--opacity-disabled`, still focusable for its tooltip). A trigger whose menu is open stays pressed (`surface-selected`).
+
+**Differences from the prototype**
+- Sizes keep the library's names (spec 0072's prop map): `md` (the default) is the prototype's `sm` (28 full, 24 in the app), `lg` its `md` (36, 32), `xl` its `lg` (44, 38). `sm` (a chip's Remove), `touch`, `public` and `sheet` are the library's own, drawn in the prototype's language.
+- `danger-solid` is the prototype's `danger`. The library's `danger` (red words and edge on the white pill), `ghost-danger`, `dashed` (the prototype's Add row pattern), `link`, `value`, `warning` and `field` (the prototype's filled input, its value at the start) are kept.
+- Danger's hover mixes 12% of the text colour into the red (`color-mix`), darker in light and lighter in dark, instead of the prototype's `filter: brightness(0.94)`, which also darkened the focus ring.
+- Pending no longer dims the button (the prototype doesn't); the spinner says it.
+- Kept beyond the prototype: keycaps and `aria-keyshortcuts`, a Modal footer's keys, `labelReserve` and `animateLabel`, an `amount`, `dot`, `tooltipWhenCut`, `isLabelCollapsible`, `touchTarget`, ButtonLink, ToggleButton, SplitButton, ButtonGroup and CopyButton.
+- Owed: the prototype's `collapse="phone"` (below 640px of screen) has no prop yet; `isLabelCollapsible` covers a container under 480px.

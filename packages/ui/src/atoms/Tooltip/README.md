@@ -39,3 +39,11 @@ Focus on the trigger shows it; Esc hides it.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Tooltip: a short ink label (`surface-inverse`, label type, `shadow-md`, `radius-sm`), 4px from its trigger. It rises in from 4px off over `--duration-quick` on `--ease-out` after React Aria's delay, and fades out over `--duration-micro`; opened from the keyboard it appears and goes at once. Reduced motion keeps the fade.
+
+**Use it for**: every icon only button (its name and shortcut), text cut short, a disabled control's reason. **Don't** put links, buttons or more than one short sentence in it; that is a Popover.
+
+**Differences from the prototype**: no arrow and no 0.98 scale on entry. Both were built and measured (spec 0072): the arrow as an element cost every page with a tooltip about 330 B of script, and drawn in CSS it took the booking page's stylesheet past its budget, which phase 1 may not grow. The arrow is owed to the phase that trims the booking page's CSS (phase 2's BookingFlow). AnchoredTooltip (one tooltip shared by a grid's cells), the text trigger and LockReason are the library's own and keep their behaviour.

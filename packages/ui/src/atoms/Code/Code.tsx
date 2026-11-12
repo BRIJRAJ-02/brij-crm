@@ -55,7 +55,8 @@ export function Code({ children, variant = 'inline', isCopyable = false, copyLab
     <div className={styles.box} data-variant={variant} {...(copy === null ? {} : { 'data-copyable': true })}>
       <code ref={ref} className={styles.text}>
         {variant === 'list'
-          ? lines.map((line, index) => (
+          ? // A static list (recovery codes): it never reorders, so its place is a stable part of the key.
+            lines.map((line, index) => (
               <span key={`${String(index)}-${line}`} className={styles.item}>
                 {line}
               </span>

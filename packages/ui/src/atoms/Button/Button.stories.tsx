@@ -7,6 +7,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button, ButtonGroup, ButtonLink, ToggleButton } from './Button.tsx';
 import { TOUCH_TARGET } from './touch-target.ts';
 import { SplitButton } from './SplitButton.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 
 const meta = {
   title: 'Atoms/Button',
@@ -196,8 +197,8 @@ export const ExtraLarge: Story = {
   ),
   play: async ({ canvas }) => {
     const link = canvas.getByRole('link', { name: 'Get started' });
-    // size-control and space-6 at the app's density (spec 0071): 32 + 5.
-    await expect(Math.round(link.getBoundingClientRect().height)).toBe(37);
+    // The prototype's large button: size-control-lg at the document's scale (spec 0072).
+    await expect(Math.round(link.getBoundingClientRect().height)).toBe(tokenLength('size-control-lg'));
   },
 };
 
@@ -233,8 +234,8 @@ export const LargeHitArea: Story = {
   play: async ({ canvas }) => {
     const button = canvas.getByRole('button', { name: 'More for Intro call' });
     const box = button.getBoundingClientRect();
-    // size-control at the app's density (spec 0071).
-    await expect(Math.round(box.height)).toBe(32);
+    // size-control at the document's scale (spec 0071).
+    await expect(Math.round(box.height)).toBe(tokenLength('size-control'));
     const middle = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
     // Half a pixel outside what is drawn, on each side, still lands on the button.
     for (const [x, y] of [
@@ -259,7 +260,7 @@ export const Small: Story = {
   ),
   play: async ({ canvas }) => {
     const button = canvas.getByRole('button', { name: 'Remove Ada Lovelace' });
-    await expect(Math.round(button.getBoundingClientRect().height)).toBe(20);
+    await expect(Math.round(button.getBoundingClientRect().height)).toBe(tokenLength('space-20'));
   },
 };
 
@@ -842,8 +843,8 @@ export const TouchTarget: Story = {
       // The area's inset counts from inside the border (the padding box).
       const area = getComputedStyle(button, '::after');
       const width = button.clientWidth - Number.parseFloat(area.left) - Number.parseFloat(area.right);
-      // size-control, space-12 and space-2 at the app's density (spec 0071): 32 + 11 + 2, still past 44.
-      await expect(Math.round(width)).toBe(45);
+      // The prototype's large control, size-control-lg, at the document's scale (spec 0072).
+      await expect(Math.round(width)).toBe(tokenLength('size-control-lg'));
     }
   },
 };

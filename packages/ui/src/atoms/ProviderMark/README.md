@@ -46,3 +46,9 @@ It takes no focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Icon (spec 0072): a brand's own mark at the Icon atom's sizes, 14 (`sm`), 16 (`md`) and 20 (`lg`, `size-icon-lg`), never recoloured, except `mono` which draws the shape in the text colour so a row of social marks reads as one set. Black marks swap their light and dark files by theme.
+
+**Differences from the prototype**: the prototype draws ProviderMark from Icon's file; the library keeps it a component of its own, sharing Icon's sizes. Artwork is unchanged.

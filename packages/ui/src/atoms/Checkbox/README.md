@@ -38,3 +38,9 @@ Space toggles it. Tab moves on. The mark takes no keys or focus; its owner (a gr
 
 - React Aria's props replace the input attributes: `isSelected`, `onChange(isSelected)`, `isDisabled`, `isReadOnly`.
 - `error` (a sentence) replaces `invalid`. The tick is Lucide's `check` through the Icon atom.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Checkbox: an 18px box (`space-16` and `space-2`) with a 1.5px `control-border` edge on the surface; checked and indeterminate fill it with the accent. The tick draws itself in from the start over `--duration-medium`, a stagger after the fill (transitions.dev 25), by its clip, so it draws on a change and never on the first paint. Hover darkens the edge, the focus ring sits 2px out, invalid edges in red, disabled fades. Nothing scales when pressed.
+
+**Differences from the prototype**: the prototype's `round` (a task's done circle, its label struck through) is owed to the tasks phase. `leading`, `description`, `look`, CheckboxRow and CheckboxMark (a grid's mark, which never animates, so rows scrolling in don't draw their ticks) are kept.

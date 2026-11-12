@@ -26,3 +26,9 @@ It takes no focus itself; the editor moves past it as one character (#45).
 ## Differences from the artifact
 
 - `path` is a list (through relations) and `isMissing` replaces `missing`.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's RecordChip (spec 0072): a template variable is a purple token (`tag-purple-*`) in mono type, orange (`tag-orange-*`) when the record has no value for it. No edge.
+
+**Differences from the prototype**: the library draws a braces icon before the path where the prototype draws faded braces.

@@ -22,6 +22,16 @@ export const Default: Story = {
   },
 };
 
+/** A `javascript:` address is refused (safeHref): the chip draws plain, never a link (spec 0072, AC-12). */
+export const RefusedHref: Story = {
+  args: { href: 'javascript:alert(1)' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument();
+    await expect(canvas.getByText('Northwind Traders')).toBeVisible();
+  },
+};
+
 /** Records and actors: a person, a company, another record, a member, an API key, an automation and the system. */
 export const Kinds: Story = {
   parameters: { crm: { preview: true } },

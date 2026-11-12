@@ -31,3 +31,9 @@ The code takes no focus; the copy button is a button.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Code: mono `text-code` on `surface-subtle` with no edge, inline as a small chip in the sentence, block and list as a full width box at `radius-md`.
+
+**Differences from the prototype**: the library's `list` variant (two columns of whole codes) and its copy button stay. The prototype's `SecretKey` (a masked key with reveal and copy) has no library part yet; it is owed to the settings phase (developer keys), and must mask by default (spec 0072, AC-13).

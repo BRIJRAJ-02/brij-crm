@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { SAMPLE_RECORD, sampleDetails, sampleEditorProps } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 import { AttributeList } from './AttributeList.tsx';
 
 interface SampleProps {
@@ -178,7 +179,7 @@ export const ReadOnly: Story = {
     const lock = canvas.getByRole('button', { name: 'The system sets this when the record is made.' });
     // The lock sits with the name, small; an empty value says "Not set", never a lone dash.
     await expect(lock.closest('dt')).not.toBeNull();
-    await expect(Math.round(lock.getBoundingClientRect().height)).toBe(20);
+    await expect(Math.round(lock.getBoundingClientRect().height)).toBe(Math.round(tokenLength('space-20')));
     await expect(canvas.getAllByText('Not set').length).toBeGreaterThan(0);
   },
 };

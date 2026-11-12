@@ -44,3 +44,9 @@ It takes no focus.
 - `isDecorative` replaces `decorative`. Outside pictures are refused: a Google account picture and a company's logo come through the api's own origin routes.
 
 A square at `hero` size takes the card corner (`radius-xl`): a link page's rounded face (spec 0060, AC-13).
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Avatar: initials on the name's hue tile, semibold at 36% of the diameter, circles for people and rounded squares (28% of the side) for companies, workspaces and pages. The avatar scale (`base.css`) is the prototype's: 20 (`sm`), 28 (`md`, `size-avatar`), 36 (`lg`), 44 (`title`, `size-avatar-lg`). An AvatarStack overlaps by 22% of a face, rings each in the surface and shows "+N" as a grey face of its own.
+
+**Differences from the prototype**: the prototype's AvatarGroup fans out on hover "to show it can be opened"; a library AvatarStack opens nothing, so it stays still (a lift would promise an action that isn't there), and the fan's CSS stays off every public page that draws a stack. A stack that opens something gets the fan with it. `xs`, `xl`, `hero`, `mark`, `fit`, `ink` and `accent` hues and the picture fade are kept; `xl` and `hero` keep their public page sizes (72, 96).

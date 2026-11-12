@@ -5,7 +5,7 @@ _Steps derived from spec 0072 AC-1 to AC-17. `/check verify` runs these per tier
 - [ ] Storybook beside the design system artifact (or the prototype harness, `dist/index.html?only=<Name>&w=650`), light and dark: each part of the tier at rest, hover, focus, pressed, selected, disabled and its README's other states → same geometry, colours, type and motion within the 0071 rounding → AC-1
 - [ ] Tab through each interactive part → the outline ring shows 2px outside; press and hold → colour changes, size never does; turn on reduced motion → fades only → AC-6
 - [ ] Open one screen per batch in the real app (Home, a records table, a record page, Bookings, a form editor) → nothing a person could do before is missing; menus, tooltips and popovers still sit on their triggers → AC-3
-- [ ] Hover a RecordChipList and an AvatarStack with React DevTools' "highlight updates" on → nothing re-renders → AC-15
+- [ ] Hover a RecordChipList with React DevTools' "highlight updates" on → nothing re-renders → AC-15
 
 ## Commands (per tier)
 - [ ] `node packages/ui/scripts/part-cost.ts --tier <n> --against f81623f0c` → the tier's CSS plus JS total is at least 30% under the base → AC-8

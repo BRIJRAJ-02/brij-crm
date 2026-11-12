@@ -34,3 +34,11 @@ Tab reaches it; Enter follows it.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Link: link coloured words, an underline that strengthens over `--duration-quick` on hover, and the outline focus ring. `tone="quiet"` is the prototype's `muted` (the text's own colour, a faint underline). `weight="strong"` is its `strong`.
+
+**States**: rest, hover (underline to the text colour), focus visible (the ring), external (opens in a new tab with `rel="noopener noreferrer"`), refused address (plain text, never a link).
+
+**Differences from the prototype**: the underline stays faint at rest (`accent-border`) instead of hidden, because the link colour is under 3:1 against body text and a link in a sentence must not rely on colour alone (WCAG 1.4.1). The prototype's LearnMoreLink is not in the library yet; it is owed to the screen phase that first needs it.

@@ -1,66 +1,66 @@
-/* The Icon atom: a Lucide glyph sized, stroked and toned from tokens. Its
-   variants are declared once, here, as data attributes. */
+/* The Icon atom, after the prototype's Icon (spec 0072): a Lucide glyph at one stroke and four sizes, 16 by default, 14 in
+   small controls and chips, 12 in footers and meta lines, 20 in empty states and tiles. Variants are data attributes. */
 @layer components {
   .icon {
     display: inline-block;
     flex: none;
     inline-size: var(--size-icon);
     block-size: var(--size-icon);
-    stroke: currentColor;
+    stroke: currentcolor;
     stroke-width: var(--icon-stroke);
     vertical-align: middle;
   }
 
-  /* A mark that is a picture, not a label: a choice tile's (TileGrid variant="choice"). */
   .icon[data-size='lg'] {
-    inline-size: calc(var(--size-icon) * 1.5);
-    block-size: calc(var(--size-icon) * 1.5);
+    inline-size: var(--size-icon-lg);
+    block-size: var(--size-icon-lg);
   }
 
+  /* 14: a step under size-icon. */
   .icon[data-size='sm'] {
-    inline-size: var(--size-icon-sm);
-    block-size: var(--size-icon-sm);
+    inline-size: calc(var(--size-icon) - var(--space-2));
+    block-size: calc(var(--size-icon) - var(--space-2));
   }
 
   .icon[data-size='xs'] {
-    inline-size: var(--size-icon-xs);
-    block-size: var(--size-icon-xs);
+    inline-size: var(--space-12);
+    block-size: var(--space-12);
   }
 
   .icon[data-filled] {
-    fill: currentColor;
+    fill: currentcolor;
   }
 
   .icon[data-tone='muted'] {
     color: var(--text-secondary);
   }
 
+  .icon[data-tone='faint'] {
+    color: var(--text-tertiary);
+  }
+
   .icon[data-tone='ai'] {
     color: var(--ai);
   }
 
-  /* Something checked and found right: a phone number valid for its country. */
   .icon[data-tone='success'] {
     color: var(--success);
   }
 
-  /* Something checked and found wrong: an import row that can't go in. */
   .icon[data-tone='danger'] {
     color: var(--danger);
   }
 
-  /* An object's icon on its hue: Companies blue, People green, Deals orange. */
+  /* An object's icon on its hue, with no outline (the prototype's tags and tiles have none). */
   .tile {
     --tile-bg: var(--tag-gray-bg);
     --tile-fg: var(--tag-gray-text);
-    --tile-edge: var(--tag-gray-border);
 
     display: inline-grid;
     place-items: center;
     flex: none;
-    inline-size: var(--size-tile);
-    block-size: var(--size-tile);
-    border: var(--border-width-hairline) solid var(--tile-edge);
+    inline-size: var(--space-20);
+    block-size: var(--space-20);
     border-radius: var(--radius-xs);
     background: var(--tile-bg);
     color: var(--tile-fg);
@@ -69,48 +69,40 @@
   .tile[data-hue='red'] {
     --tile-bg: var(--tag-red-bg);
     --tile-fg: var(--tag-red-text);
-    --tile-edge: var(--tag-red-border);
   }
 
   .tile[data-hue='orange'] {
     --tile-bg: var(--tag-orange-bg);
     --tile-fg: var(--tag-orange-text);
-    --tile-edge: var(--tag-orange-border);
   }
 
   .tile[data-hue='yellow'] {
     --tile-bg: var(--tag-yellow-bg);
     --tile-fg: var(--tag-yellow-text);
-    --tile-edge: var(--tag-yellow-border);
   }
 
   .tile[data-hue='lime'] {
     --tile-bg: var(--tag-lime-bg);
     --tile-fg: var(--tag-lime-text);
-    --tile-edge: var(--tag-lime-border);
   }
 
   .tile[data-hue='green'] {
     --tile-bg: var(--tag-green-bg);
     --tile-fg: var(--tag-green-text);
-    --tile-edge: var(--tag-green-border);
   }
 
   .tile[data-hue='sky'] {
     --tile-bg: var(--tag-sky-bg);
     --tile-fg: var(--tag-sky-text);
-    --tile-edge: var(--tag-sky-border);
   }
 
   .tile[data-hue='blue'] {
     --tile-bg: var(--tag-blue-bg);
     --tile-fg: var(--tag-blue-text);
-    --tile-edge: var(--tag-blue-border);
   }
 
   .tile[data-hue='purple'] {
     --tile-bg: var(--tag-purple-bg);
     --tile-fg: var(--tag-purple-text);
-    --tile-edge: var(--tag-purple-border);
   }
 }

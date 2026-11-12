@@ -33,3 +33,9 @@ It is a label, not a control, so it takes no focus.
 - The `onAccent` cap is edged rather than filled: on-accent text on the `on-accent-kbd` fill measured 3.3:1, under the 4.5:1 rule; on the accent itself it holds 4.6:1.
 - The text is `children: string`, one keycap. Several keycaps are several Kbds (Button's `kbd` takes a list).
 - Platform aware keys (⌘ on Mac, Ctrl elsewhere) arrive with the full Kbd in milestone 2.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Kbd: a 20px keycap (`space-20`) with a hairline edge on the surface, in `text-tertiary` and the keycap type. Inside an ink button (`onAccent`) or a tooltip (`onInverse`) it turns clear, in the label's own colour, with a faint edge mixed from that colour.
+
+**Differences from the prototype**: `soft` (a filled cap inside a secondary button or a menu item) is kept. The legacy `shadow-control`, `on-accent-kbd` and `border-inverse` are no longer used: the clear caps take their edge from `currentColor`, which works on an ink, red or inverse fill alike.

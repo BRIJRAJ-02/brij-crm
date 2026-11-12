@@ -57,3 +57,14 @@ It takes no focus. Put a labelled icon inside a Button when it must be pressed.
 - `tone` replaces the artifact's `ws-icon-muted` and `ws-icon-ai` classes, because callers never pass a class name.
 - Nothing else passes through to the `svg`: one look, set here.
 - The artifact accepts any of the 1,857 Lucide names as a string. Here the registry lists the icons in use, so the bundle carries only those. The curated `ObjectIcon` set joins the registry with `IconPicker` in milestone 2.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Icon: Lucide at one stroke (`--icon-stroke`) and four sizes, 16 (`md`, the default) in rows, menus and buttons, 14 (`sm`) inside 28px controls and chips, 12 (`xs`) in footers and meta lines, 20 (`lg`) in empty states and tiles. A hue tile has no outline, as the prototype's tags and tiles have none.
+
+**Use it for**: every interface glyph, through the registry. **Don't** recolour a brand, put a brand mark where a Lucide glyph belongs, or use the `ai` tone for anything but AI.
+
+**Differences from the prototype**
+- The prototype passes a Lucide component (`icon={Calendar}`) and a pixel size (`size={16}`); the library passes a registry name and a size name (`name="calendar" size="md"`), so only registered glyphs ship.
+- `faint` (`text-tertiary`) is added from the prototype. `lg` is now 20 (`size-icon-lg`); it was one and a half `size-icon`.
+- 14 and 12 are built from tokens (`size-icon` less `space-2`, and `space-12`), since the source has no 14 or 12 icon token.

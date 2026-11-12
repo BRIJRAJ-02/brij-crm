@@ -189,7 +189,7 @@ No data and no permissions. The library takes data through props and makes no ne
 - `scripts/part-cost.ts` on the base and the tier's tip: total at least 30% lower → **AC-8**
 - `pnpm size` before and after: no line grows → **AC-9**
 - A Link, Button, RecordChip and LinkChip story with `href="javascript:alert(1)"` renders plain text with no `href` → **AC-12**
-- A RecordChipList or AvatarStack hovered with React's profiler: no component renders → **AC-15**
+- A RecordChipList hovered with React's profiler: no component renders → **AC-15**
 - `grep` for `key={i}` and `key={index}` in the tier's folders finds only commented static lists → **AC-16**
 
 ## Build plan

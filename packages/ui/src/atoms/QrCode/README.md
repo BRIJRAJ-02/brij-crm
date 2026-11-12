@@ -52,3 +52,9 @@ Not focusable.
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's QrCode, which it already matched: dark modules on a light ground in either theme, the ground stepping down to `border-strong` in a dark app, paper and clear grounds. Sizes now follow the prototype: `md` is `size-menu`, `sm` half of it, a code beside a column five sixths of it.
+
+**Differences from the prototype**: none in look. `downloadQr` and the print sheet live elsewhere in the library.

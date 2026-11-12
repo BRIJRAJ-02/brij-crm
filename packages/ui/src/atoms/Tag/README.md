@@ -30,3 +30,14 @@ Tags take no focus. The "+N" chip is a button: Enter or Space opens the popover,
 
 - `hue` replaces `color`; `isArchived` is new.
 - `TagList` takes `tags` (id, label, hue) rather than children, so it can count and fold the rest into "+N".
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Tag at its table size (`sm`): 22px (`space-20` and `space-2`), no outline, the words in the option's `tag-<hue>-text` on its `tag-<hue>-bg`, label type. The "+N" chip is the prototype's outline tag made pressable (hairline edge on the surface, a hover wash, the outline ring).
+
+**Use it for**: select and multi select values, everywhere they show. **Don't** use a tag as an action; a removable filter is a FilterChip.
+
+**Differences from the prototype**
+- No `size` prop yet: every library tag is a value in a cell, a card or a field, which the prototype draws at `sm`. The prototype's `md` (26) and `pill` (30) are owed to the screen phase that first needs them, as Badge's `chip-lg` already draws the 26.
+- No `status` shapes or `icon`: a status value is a StatusDot, through the field set.
+- Archived keeps a dashed `border-strong` edge, since the prototype has no archived look.

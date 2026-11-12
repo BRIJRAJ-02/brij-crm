@@ -1,7 +1,7 @@
-/* QrCode: dark modules on a light ground in either theme (the code carries
+/* QrCode, after the prototype's QrCode (spec 0072): dark modules on a light ground in either theme (the code carries
    data-theme="light", so its tokens are the light theme's), with the card's corners: white in a light app, a softer
    grey in a dark one. With a
-   column beside it, the code is size-column wide and the column sits beside it
+   column beside it, the code is five sixths of size-menu wide and the column sits beside it
    where the slot has room, under it where it doesn't. */
 @layer components {
   .root {
@@ -36,9 +36,8 @@
     font-family: var(--font-sans);
   }
 
-  /* The slot's width decides the layout, not the window's: a dialog is narrower than the page. The code (size-column)
-     and a column of at least size-column-narrow plus space-32 fit side by side in a dialog; in a narrower slot (a dialog on a
-     phone) the column wraps under the code, at the slot's full width. Wrapping needs no breakpoint, so any slot works. */
+  /* The slot's width decides the layout, not the window's: the code and a column as wide fit side by side in a dialog;
+     in a narrower slot the column wraps under the code. Wrapping needs no breakpoint, so any slot works. */
   .layout {
     display: flex;
     flex-wrap: wrap;
@@ -47,19 +46,17 @@
   }
 
   .layout > .root {
-    inline-size: var(--size-column);
+    inline-size: calc(var(--size-menu) * 5 / 6);
   }
 
   .root[data-size='sm'],
   .layout > .root[data-size='sm'] {
-    inline-size: var(--size-column-narrow);
+    inline-size: calc(var(--size-menu) / 2);
   }
 
   .aside {
     display: flex;
-    /* A narrow column and a little more: the app's dialogs are narrower at its density (spec 0071) while the code
-       keeps its column width, so this still fits beside the code in a dialog and still wraps under it on a phone. */
-    flex: 1 1 calc(var(--size-column-narrow) + var(--space-32));
+    flex: 1 1 calc(var(--size-menu) * 5 / 6);
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;

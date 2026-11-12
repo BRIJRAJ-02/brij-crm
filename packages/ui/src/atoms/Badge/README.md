@@ -43,3 +43,9 @@ It takes no focus.
 
 - `count` is a number, not children, so it formats in the viewer's language and caps at `max`. A label goes in `text`, a string, never markup.
 - `tone="accent"` replaces the `ws-badge-accent` class.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Tag (spec 0072): a count is the prototype's `Count`, a round 20px pill in tabular figures, grey (`neutral`) or blue (`accent`, `tag-blue-*`); a label is a Tag's chip.
+
+**Differences from the prototype**: `accent` was a solid accent fill and is now the prototype's blue tint, since blue fills are for selection. `strong`, the `chip`, `chip-lg` and `fit` sizes, `isRound`, `dot`, `icon` and `isAtLeast` are kept. The prototype's ink count is not a tone yet.

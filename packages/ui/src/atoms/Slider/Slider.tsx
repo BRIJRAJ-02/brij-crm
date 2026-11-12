@@ -65,7 +65,11 @@ export function Slider({
         <span className={styles.rail} aria-hidden="true">
           <SliderFill className={styles.fill} />
         </span>
-        <SliderThumb className={styles.thumb} />
+        <SliderThumb className={styles.thumb}>
+          {/* The value bubble over the thumb (the prototype's, transitions.dev 17): for sight, while hovered, dragged
+              or focused. The thumb's own input already tells a screen reader its value. */}
+          <SliderOutput className={styles.bubble} aria-hidden="true" />
+        </SliderThumb>
       </SliderTrack>
     </AriaSlider>
   );

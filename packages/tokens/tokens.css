@@ -81,10 +81,7 @@
     --tag-blue-border: #c6d6fa;
     --tag-purple-border: #dcd1fa;
     --inverse-hover: #ffffff26;
-    --border-inverse: #77787c;
     --scrim-soft: #1c1d1f14;
-    --on-accent-kbd: #ffffff33;
-    --danger-hover: #b40411;
     --shadow-control: 0 1px 1px #1c1d1f0a;
     --shadow-primary: 0 1px 1px #1f5fd626;
     --shadow-pinned-edge: 4px 0 6px -4px #1c1d1f1f;
@@ -171,10 +168,7 @@
     --tag-blue-border: #2c3a5e;
     --tag-purple-border: #3f2f6e;
     --inverse-hover: #1c1d1f1f;
-    --border-inverse: #77787c;
     --scrim-soft: #00000066;
-    --on-accent-kbd: #ffffff33;
-    --danger-hover: #ff8d84;
     --shadow-control: 0 0 #0000;
     --shadow-primary: 0 0 #0000;
     --shadow-pinned-edge: 4px 0 6px -4px #00000059;
@@ -262,10 +256,7 @@
       --tag-blue-border: #2c3a5e;
       --tag-purple-border: #3f2f6e;
       --inverse-hover: #1c1d1f1f;
-      --border-inverse: #77787c;
       --scrim-soft: #00000066;
-      --on-accent-kbd: #ffffff33;
-      --danger-hover: #ff8d84;
       --shadow-control: 0 0 #0000;
       --shadow-primary: 0 0 #0000;
       --shadow-pinned-edge: 4px 0 6px -4px #00000059;
@@ -393,12 +384,9 @@
     --size-toolbar: 48px;
     --size-table-header: 36px;
     --size-chip: 20px;
-    --size-check: 16px;
-    --size-switch: 28px;
     --size-icon-sm: 14px;
     --size-icon-xs: 12px;
     --size-tile: 20px;
-    --size-kbd: 16px;
     --size-measure-sm: 280px;
     --size-dialog-sm: 400px;
     --size-dialog-form: 560px;
@@ -414,11 +402,7 @@
     --size-column-wide: 300px;
     --size-column-max: 640px;
     --duration-public-hover: 180ms;
-    --duration-public-press: 220ms;
-    --duration-public-popover: 280ms;
     --duration-public-move: 300ms;
-    --duration-public-modal: 340ms;
-    --duration-public-exit: 180ms;
     --duration-public-slide: 320ms;
     --duration-public-reveal: 440ms;
   }

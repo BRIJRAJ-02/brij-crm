@@ -39,3 +39,9 @@ Tab reaches each chip in turn; Enter opens its record.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's RecordChip (spec 0072): chips in a row that wraps, 6px apart. The hovered chip lifts 4px and its neighbours 2px, in CSS alone (sibling and `:has()` selectors), settling back on the strong bounce; the prototype sets a custom property per chip from a pointer handler, which would re-render every chip on each hover (spec 0072, AC-15). Reduced motion keeps them still.
+
+**Differences from the prototype**: no scale on hover (no scale token above 1). The prototype's `max` with a "+n" overflow is not in the library; the list shows every record it is given.

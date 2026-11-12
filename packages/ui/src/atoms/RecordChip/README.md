@@ -32,3 +32,9 @@ When it links, Tab reaches it and Enter follows it.
 
 - One `display` prop replaces `name`, `kind` and `color`, and actors are new.
 - `isFlat` replaces `flat`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's RecordChip: a 24px chip on the surface with a hairline edge, a 20px avatar 2px in from its start (round for people, square for companies) or an actor's icon, the name in `body-sm-strong`. A linked chip washes on hover (`surface-hover`, `border-strong`), darkens while pressed (`surface-selected`) and shows the outline ring on keys.
+
+**Differences from the prototype**: `isFlat` and `isPlain` and the actor kinds (API key, automation, system) are kept. Links pass `safeHref`; a refused one renders a plain chip.

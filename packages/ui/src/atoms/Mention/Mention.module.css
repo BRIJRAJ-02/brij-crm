@@ -1,13 +1,15 @@
-/* Mention: link-coloured, medium weight, on the accent's soft tint. */
+/* Mention, after the prototype's Mention (spec 0072, folded into RecordChip's look): the name in medium weight on a
+   grey wash inside the sentence, so it reads as a reference without borrowing the link colour. */
 @layer components {
   .root {
-    padding-inline: var(--space-2);
+    padding: 0 var(--space-2);
     border-radius: var(--radius-xs);
-    background: var(--accent-soft);
-    color: var(--link);
+    background: var(--surface-subtle);
+    color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
+    box-decoration-break: clone;
   }
 
   @media (forced-colors: active) {

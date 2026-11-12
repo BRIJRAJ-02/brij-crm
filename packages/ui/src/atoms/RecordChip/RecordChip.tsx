@@ -61,7 +61,7 @@ function Face({ display }: { readonly display: RecordRefDisplay | ActorDisplay }
       <Avatar
         name={display.name}
         id={display.id ?? display.name}
-        size="xs"
+        size="sm"
         isDecorative
         {...(display.imageSrc === undefined ? {} : { src: display.imageSrc })}
         {...(display.hue === undefined ? {} : { hue: display.hue })}
@@ -70,7 +70,7 @@ function Face({ display }: { readonly display: RecordRefDisplay | ActorDisplay }
   }
   return (
     <span className={styles.icon}>
-      <Icon name={ACTOR_ICONS[display.type]} size="xs" />
+      <Icon name={ACTOR_ICONS[display.type]} size="sm" />
     </span>
   );
 }

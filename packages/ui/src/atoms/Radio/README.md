@@ -46,3 +46,9 @@ Tab enters the group at the chosen choice; arrow keys move and choose; Tab leave
 ## RadioMark
 
 `RadioMark` is the same circle and dot with no control, for a row that is the control and says its own state: an option in a `Select` with `showsMarks`. It says nothing to a screen reader. It stays inside the library, as `CheckboxMark` does.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Checkbox (spec 0072): 18px circles with a 1.5px `control-border` edge; the chosen one fills with the accent and an 8px dot scales in over `--duration-quick`. A horizontal group sits 24px apart.
+
+**Differences from the prototype**: the card, letter and row variants (public forms, the guest menu) are the library's own and keep their look, with the outline focus ring.

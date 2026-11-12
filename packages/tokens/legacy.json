@@ -93,15 +93,6 @@
     "retire": "Phase 1 (library parity): its component moves to the prototype design."
    },
    {
-    "name": "border-inverse",
-    "value": {
-     "light": "#77787c",
-     "dark": "#77787c"
-    },
-    "usage": "A keycap's edge on `surface-inverse` (a tooltip's shortcut). 3.9:1 light, 3.8:1 dark.",
-    "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
     "name": "scrim-soft",
     "value": {
      "light": "#1c1d1f14",
@@ -109,24 +100,6 @@
     },
     "usage": "The lighter backdrop behind a dialog, a form dialog and a window, where the shadow lifts the dialog rather than the dim. A peek, a sheet, the palette and an alert keep `scrim`.",
     "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
-    "name": "on-accent-kbd",
-    "value": {
-     "light": "#ffffff33",
-     "dark": "#ffffff33"
-    },
-    "usage": "Keycap fill inside a primary button ('⌘↵').",
-    "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
-    "name": "danger-hover",
-    "value": {
-     "light": "#b40411",
-     "dark": "#ff8d84"
-    },
-    "usage": "Hover and pressed fill of a destructive button: danger with OKLCH lightness 0.06 lower in light and 0.06 higher in dark (spec 0071). on-danger on it stays above 4.5:1.",
-    "retire": "Phase 1 (Button): the prototype darkens with a filter; the ported Button decides."
    }
   ]
  },
@@ -200,18 +173,6 @@
     "retire": "Phase 1 (library parity): its component moves to the prototype design."
    },
    {
-    "name": "size-check",
-    "value": "16px",
-    "usage": "Checkbox and radio box.",
-    "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
-    "name": "size-switch",
-    "value": "28px",
-    "usage": "Switch track width; the track is 16px tall with a 12px knob.",
-    "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
     "name": "size-icon-sm",
     "value": "14px",
     "usage": "Icons inside buttons, chips, table headers, card rows.",
@@ -227,12 +188,6 @@
     "name": "size-tile",
     "value": "20px",
     "usage": "The hue tile an object icon sits on in the sidebar and top bar (`Icon` `tile`), holding a `size-icon-sm` icon.",
-    "retire": "Phase 1 (library parity): its component moves to the prototype design."
-   },
-   {
-    "name": "size-kbd",
-    "value": "16px",
-    "usage": "A keycap's height and minimum width.",
     "retire": "Phase 1 (library parity): its component moves to the prototype design."
    },
    {
@@ -330,33 +285,9 @@
     "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
    },
    {
-    "name": "duration-public-press",
-    "value": "220ms",
-    "usage": "The public booking pages' calmer pace: press feedback (stands in for `duration-press` there).",
-    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
-   },
-   {
-    "name": "duration-public-popover",
-    "value": "280ms",
-    "usage": "The public booking pages' calmer pace: popovers and a time's entrance (stands in for `duration-popover` there).",
-    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
-   },
-   {
     "name": "duration-public-move",
     "value": "300ms",
     "usage": "The public booking pages' calmer pace: indicators, the picked fill, a label swap (stands in for `duration-move` there).",
-    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
-   },
-   {
-    "name": "duration-public-modal",
-    "value": "340ms",
-    "usage": "The public booking pages' calmer pace: dialogs and arrivals (stands in for `duration-modal` there).",
-    "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
-   },
-   {
-    "name": "duration-public-exit",
-    "value": "180ms",
-    "usage": "The public booking pages' calmer pace: anything leaving (stands in for `duration-exit` there).",
     "retire": "Phase 6 (scheduling) or the phase that ports this public page: the calmer public pace (owner, 2 Nov 2026) is restated in the prototype scale."
    },
    {

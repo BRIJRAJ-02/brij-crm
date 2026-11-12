@@ -29,3 +29,9 @@ Space toggles it.
 ## Differences from the artifact
 
 - React Aria's props replace the input attributes; there is no invalid state, since a switch takes effect at once.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's Checkbox (spec 0072): a 36 by 20 track (`size-control` by `space-20`) and a 16px thumb with `shadow-sm`. The thumb stretches 4px while pressed (leftward when on) and travels with the bounce ease's small overshoot over `--duration-medium` (transitions.dev 27).
+
+**Differences from the prototype**: the off track is `control-border`, not the prototype's `border-strong`, which falls under the 3:1 a control's outline needs against the surface (WCAG 1.4.11). The prototype's keyframed double bounce needs a "touched" state, so the transition's single overshoot stands in for it. `offStatus`, `labelContext` and a hidden label's larger hit area are kept.

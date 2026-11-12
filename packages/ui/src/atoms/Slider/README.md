@@ -35,3 +35,9 @@ Left and Down step it down, Right and Up step it up, Page Up and Page Down by a 
 ## Differences from the artifact
 
 The artifact has no Slider card yet; this is the code first version, published with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Slider: a 4px `surface-selected` rail with the accent fill, a 20px white thumb with `shadow-sm`, and a value bubble (`surface-inverse`, label type, tabular figures) that rises over the thumb on hover, drag or keyboard focus (transitions.dev 17: `--duration-quick`, `--ease-out`, from 4px lower and `--scale-small`) and leaves at once. The label and value sit in a row above in `body-sm-strong`.
+
+**Differences from the prototype**: the thumb's edge is `control-border` (the prototype's `border-strong` falls under 3:1 against the surface), darkening to `text-secondary` on hover and the accent while dragged. The bubble is hidden from screen readers; the thumb's own input says the value. Ranges, ticks and marks are owed to the screen phase that needs them.

@@ -32,3 +32,9 @@ Tab reaches it; Enter follows it.
 
 - `children` is the shown text only; the protocol allowlist is new.
 - A link out (`mailto:`, `tel:`, `http`, `https`) is a plain `<a>`, not React Aria's `Link`: it needs no router, and a table draws hundreds of them, so it skips the hooks each would set up. Hover and focus come from `:any-link:hover` and `:focus-visible`. App paths still go through React Aria's `Link` and the router.
+
+## Timefix prototype (spec 0072)
+
+Folded into the prototype's RecordChip (spec 0072): a website or address is the prototype's link chip, the same white chip with a hairline, the site's icon and the bare address in the text colour (it was a blue tinted chip).
+
+**Differences from the prototype**: the site's favicon (with its first letter while it loads) stands where the prototype draws a globe; `isFlat`, the refused state and a country flag are kept. Every address passes `safeHref`; one that opens a new tab carries `rel="noopener noreferrer"`.

@@ -36,10 +36,8 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
     { foregrounds: ['link'], backgrounds: ['surface', 'surface-raised', 'accent-soft'], minimum: 4.5 },
     { foregrounds: ['on-accent'], backgrounds: ['accent', 'accent-hover'], minimum: 4.5 },
     { foregrounds: ['on-primary'], backgrounds: ['primary', 'primary-hover'], minimum: 4.5 },
-    { foregrounds: ['on-danger'], backgrounds: ['danger', 'danger-hover'], minimum: 4.5 },
+    { foregrounds: ['on-danger'], backgrounds: ['danger'], minimum: 4.5 },
     { foregrounds: ['on-inverse'], backgrounds: ['surface-inverse'], minimum: 4.5 },
-    // A keycap's edge in a tooltip.
-    { foregrounds: ['border-inverse'], backgrounds: ['surface-inverse'], minimum: 3.5 },
     // Blue text and icons on an accent fill, on a selected chip, and on any ground.
     { foregrounds: ['accent-text'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 4.5 },
     { foregrounds: ['danger'], backgrounds: [...SURFACES, 'danger-soft'], minimum: 4.5 },

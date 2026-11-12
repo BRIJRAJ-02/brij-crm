@@ -12,8 +12,8 @@
 //      ws-<component>-<local> with no hash, and story titles, since story ids
 //      come from them.
 //   6. Sizes stay with their owner: `size-sidebar` only in the sidebar, the
-//      app shell and the story workbench, and `size-check` only in Checkbox,
-//      Radio and Switch. Anything else uses its own size token (spec 0003).
+//      app shell and the story workbench. Anything else uses its own size
+//      token (spec 0003).
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -143,7 +143,6 @@ function libraryNamesAreUnique(files: string[]): string[] {
 /** Size tokens that belong to one part of the library, and the folders allowed to read them. */
 const OWNED_SIZES: readonly { readonly token: string; readonly owners: readonly string[] }[] = [
   { token: '--size-sidebar', owners: ['modules/AppShell/', 'modules/Sidebar/', 'workbench/'] },
-  { token: '--size-check', owners: ['atoms/Checkbox/', 'atoms/Radio/', 'atoms/Switch/'] },
 ];
 
 function sizesStayWithTheirOwner(files: string[]): string[] {

@@ -52,7 +52,8 @@ describe('contrast (AC-4)', () => {
   });
 
   it('measures every pair in the table, in both themes', () => {
-    expect(checkContrast(tokens.color)).toHaveLength(182);
+    // 178 since spec 0072 retired danger-hover and border-inverse with the Button and Kbd that used them.
+    expect(checkContrast(tokens.color)).toHaveLength(178);
   });
 
   it("catches the pairs the prototype's published colours missed (spec 0071)", () => {

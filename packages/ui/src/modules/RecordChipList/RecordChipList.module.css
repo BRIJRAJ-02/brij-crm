@@ -1,10 +1,12 @@
-/* RecordChipList: record chips in a row that wraps, a control's gap apart. */
+/* RecordChipList, after the prototype's RecordChipList (spec 0072, folded into RecordChip's look): record chips in a
+   row that wraps, 6px apart. transitions.dev 11 in CSS alone: the chip under the pointer lifts, its neighbours follow
+   half way, and they settle back on the strong bounce. Nothing re-renders on hover. */
 @layer components {
   .root {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--space-6);
     min-inline-size: 0;
     margin: 0;
     padding: 0;
@@ -15,5 +17,31 @@
     display: inline-flex;
     min-inline-size: 0;
     max-inline-size: 100%;
+    transition: translate var(--duration-medium) var(--ease-bounce-strong);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .item:hover {
+      translate: 0 calc(-1 * var(--distance-micro));
+      transition-timing-function: var(--ease-smooth-out);
+    }
+
+    .item:hover + .item,
+    .item:has(+ .item:hover) {
+      translate: 0 calc(-1 * var(--space-2));
+      transition-timing-function: var(--ease-smooth-out);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item {
+      transition: none;
+    }
+
+    .item:hover,
+    .item:hover + .item,
+    .item:has(+ .item:hover) {
+      translate: none;
+    }
   }
 }
