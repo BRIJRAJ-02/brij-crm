@@ -1,0 +1,84 @@
+/* ProviderMark's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw ProviderMark.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* ProviderMark: a brand's own artwork at the Icon atom's sizes (spec 0072 folds it into Icon's look), never
+   recoloured: the same image in light and dark, except the black marks (Timefix, X, GitHub, AngelList, TikTok,
+   Threads), whose light and dark files swap by theme the way the wordmark does (a saved choice on the root, else the
+   OS), and a page that pins its own scheme inside the document (a public template: Night dark, Studio light) wins. */
+@layer utilities.app-look {
+  .ws-provider-mark-mark:where([data-scale='app'] *),
+  .ws-provider-mark-mono:where([data-scale='app'] *) {
+    display: inline-block;
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    vertical-align: middle;
+  }
+
+  .ws-provider-mark-mark:where([data-scale='app'] *) {
+    object-fit: contain;
+  }
+
+  :is(.ws-provider-mark-mark, .ws-provider-mark-mono)[data-size='sm']:where([data-scale='app'] *) {
+    inline-size: calc(var(--size-icon) - var(--space-2));
+    block-size: calc(var(--size-icon) - var(--space-2));
+  }
+
+  :is(.ws-provider-mark-mark, .ws-provider-mark-mono)[data-size='lg']:where([data-scale='app'] *) {
+    inline-size: var(--size-icon-lg);
+    block-size: var(--size-icon-lg);
+  }
+
+  .ws-provider-mark-pair:where([data-scale='app'] *) {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .ws-provider-mark-mark[data-scheme='dark']:where([data-scale='app'] *),
+  :root[data-theme='dark']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='dark'] {
+    display: inline-block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']):where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']):where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='dark'] {
+      display: inline-block;
+    }
+  }
+
+  /* A page pinned to a scheme of its own (not the document root) wins over the document's: written after the
+     document rules at their weight. */
+  :not(:root)[data-theme='dark']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='light'],
+  :not(:root)[data-theme='light']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :not(:root)[data-theme='dark']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='dark'],
+  :not(:root)[data-theme='light']:where([data-scale='app'] *) .ws-provider-mark-mark[data-scheme='light'] {
+    display: inline-block;
+  }
+
+  /* The mark's shape in the text colour (tone mono), so every brand in a row reads as one set. */
+  .ws-provider-mark-mono:where([data-scale='app'] *) {
+    /* The brand's own artwork, set by the component as the shape to mask. */
+    --mark: none;
+
+    background: currentcolor;
+    mask: var(--mark) center / contain no-repeat;
+  }
+
+  @media (forced-colors: active) {
+    .ws-provider-mark-mono:where([data-scale='app'] *) {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+  }
+}

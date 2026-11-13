@@ -1,0 +1,367 @@
+/* FileDrop's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw FileDrop.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* FileDrop: the Timefix prototype's drop zone (spec 0072): a dashed control-border box (the house 3:1 for a control whose only boundary is its edge; the prototype draws border-strong) on the surface that turns
+   accent, on accent-soft, while a file is dragged over it, its upload mark on a round grey tile lifting as it does;
+   the label, "browse" as a link, and what it takes. */
+@layer utilities.app-look {
+  .ws-file-drop-field:where([data-scale='app'] *) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .ws-file-drop-root:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding-block: var(--space-24);
+    padding-inline: var(--space-16);
+    border: var(--border-width-hairline) dashed var(--control-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    color: var(--text);
+    text-align: center;
+    outline: none;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
+  }
+
+  .ws-file-drop-root[data-drop-target]:where([data-scale='app'] *) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .ws-file-drop-root[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  /* The upload mark on a round grey tile, a control tall, space-8 above the words; a file over the zone turns it
+     white with the mark in the accent and lifts it (transitions.dev's bounce, movement dropped for reduced motion). */
+  .ws-file-drop-mark:where([data-scale='app'] *) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    margin-block-end: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      color var(--duration-quick) var(--ease-out),
+      translate var(--duration-fast) var(--ease-bounce);
+  }
+
+  .ws-file-drop-root[data-drop-target]:where([data-scale='app'] *) .ws-file-drop-mark {
+    background: var(--surface);
+    color: var(--accent-text);
+    translate: 0 calc(var(--distance-micro) * -1);
+  }
+
+  /* What is there already, in the icon's place: wide enough to read, never tall enough to push the words out. */
+  .ws-file-drop-preview:where([data-scale='app'] *) {
+    max-inline-size: calc(var(--size-row) * 2);
+    max-block-size: var(--size-row);
+    border-radius: var(--radius-sm);
+    object-fit: contain;
+  }
+
+  /* Read only: the picture itself at a control's height, as wide as it needs up to a column, never cropped. */
+  .ws-file-drop-preview[data-read-only]:where([data-scale='app'] *) {
+    align-self: flex-start;
+    block-size: var(--size-control);
+    max-inline-size: var(--size-column);
+    max-block-size: none;
+    border-radius: var(--radius-xs);
+  }
+
+  /* variant="row": one line, a small picture, the label, and its buttons at the end. Still a drop target, so a
+     dragged file rings it in the accent as the zone does. */
+  /* Too narrow for the words and the buttons side by side (a phone), the buttons wrap under them, kept at the row's
+     end (`margin-inline-start: auto` on `.rowActions`), where they sit when they fit beside the words. */
+  .ws-file-drop-row:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-12);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--text);
+    outline: none;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
+  }
+
+  .ws-file-drop-row[data-drop-target]:where([data-scale='app'] *) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .ws-file-drop-row[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  /* What is there, small and wide (a cover or a share picture is wide), or the picture mark on a quiet tile. */
+  .ws-file-drop-thumb:where([data-scale='app'] *) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: calc(var(--size-row) * 2);
+    block-size: var(--size-row);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+  }
+
+  /* Square, it keeps the wide tile's column, so its label lines up with a wide row's above or below it. */
+  .ws-file-drop-thumb[data-shape='square']:where([data-scale='app'] *) {
+    inline-size: var(--avatar-title);
+    block-size: var(--avatar-title);
+    margin-inline-end: calc(var(--size-row) * 2 - var(--avatar-title));
+    border-radius: var(--radius-md);
+  }
+
+  .ws-file-drop-thumb-image:where([data-scale='app'] *) {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* variant="photo": the picture and its buttons, or one box to press, drop on or paste into. */
+  .ws-file-drop-photo:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    border-radius: var(--radius-md);
+    outline: none;
+  }
+
+  .ws-file-drop-photo[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  .ws-file-drop-photo-add:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) dashed var(--control-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    color: var(--text);
+    text-align: start;
+    outline: none;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-file-drop-photo-add[data-hovered]:where([data-scale='app'] *) {
+      border-color: var(--control-border);
+      background: var(--surface-hover);
+    }
+  }
+
+  .ws-file-drop-photo-add[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  /* The compact zone's mark: the zone's round grey tile at a small control's size. */
+  .ws-file-drop-photo-mark:where([data-scale='app'] *) {
+    /* Over the shipped module: its hairline (the prototype's mark is a filled circle). */
+    border: 0;
+
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-control-sm);
+    block-size: var(--size-control-sm);
+    border-radius: var(--radius-full);
+    background: var(--surface-subtle);
+  }
+
+  .ws-file-drop-photo-words:where([data-scale='app'] *) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .ws-file-drop-photo-image:where([data-scale='app'] *) {
+    display: block;
+    flex: none;
+    box-sizing: border-box;
+    inline-size: var(--size-column);
+    aspect-ratio: 4 / 3;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    object-fit: cover;
+  }
+
+  .ws-file-drop-photo-actions:where([data-scale='app'] *) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .ws-file-drop-photo-add[data-disabled]:where([data-scale='app'] *) {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* Touch has nothing to drop or paste with: the box's own words are enough. */
+  @media (hover: none) {
+    .ws-file-drop-photo-how:where([data-scale='app'] *) {
+      display: none;
+    }
+  }
+
+  .ws-file-drop-photo[data-drop-target]:where([data-scale='app'] *) .ws-file-drop-photo-add,
+  .ws-file-drop-photo[data-drop-target]:where([data-scale='app'] *) .ws-file-drop-photo-image {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .ws-file-drop-row-label:where([data-scale='app'] *) {
+    flex: 1 1 var(--size-column-narrow);
+    min-inline-size: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* The label with its one line under it (`description`), taking the row's free room as the label alone does. */
+  .ws-file-drop-row-text:where([data-scale='app'] *) {
+    display: flex;
+    flex: 1 1 var(--size-column-narrow);
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .ws-file-drop-row-text:where([data-scale='app'] *) .ws-file-drop-row-label {
+    flex: none;
+  }
+
+  .ws-file-drop-row-hint:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .ws-file-drop-row[data-disabled]:where([data-scale='app'] *) .ws-file-drop-row-hint {
+    color: var(--text-tertiary);
+  }
+
+  .ws-file-drop-row-actions:where([data-scale='app'] *) {
+    display: flex;
+    flex: none;
+    margin-inline-start: auto;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .ws-file-drop-row[data-disabled]:where([data-scale='app'] *) .ws-file-drop-row-label {
+    color: var(--text-tertiary);
+  }
+
+  .ws-file-drop-label:where([data-scale='app'] *) {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .ws-file-drop-hint:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .ws-file-drop-browse:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--link);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--accent-border);
+    outline: none;
+  }
+
+  .ws-file-drop-browse[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  .ws-file-drop-limits:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .ws-file-drop-error:where([data-scale='app'] *) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+    color: var(--danger);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  /* Disabled text stays at text-tertiary (4.5:1), rather than fading below it. */
+  .ws-file-drop-root[data-disabled]:where([data-scale='app'] *) {
+    border-style: solid;
+    border-color: var(--border-subtle);
+    color: var(--text-tertiary);
+  }
+
+  .ws-file-drop-root[data-disabled]:where([data-scale='app'] *) .ws-file-drop-hint,
+  .ws-file-drop-root[data-disabled]:where([data-scale='app'] *) .ws-file-drop-limits,
+  .ws-file-drop-root[data-disabled]:where([data-scale='app'] *) .ws-file-drop-browse {
+    color: var(--text-tertiary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-file-drop-mark:where([data-scale='app'] *) {
+      transition-property: background-color, color;
+    }
+
+    .ws-file-drop-root[data-drop-target]:where([data-scale='app'] *) .ws-file-drop-mark {
+      translate: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .ws-file-drop-root:where([data-scale='app'] *) {
+      border-color: CanvasText;
+    }
+  }
+}

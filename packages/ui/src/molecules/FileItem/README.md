@@ -36,6 +36,8 @@ Not in the artifact.
 
 Takes its look from the prototype's FileDrop file row (FileRow; spec 0072): the type icon on a grey `surface-subtle` tile a control tall (`radius-md`), the name in `text-body-strong` over its size in `text-body-sm` tabular figures, the upload's progress bar, or the error sentence in danger with the tile turning `danger-soft`, and Remove at the end; the row draws no box of its own, so a list of them reads as rows. The `chip` variant is a record chip's chip (24px, `radius-sm`, a hairline on the surface).
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw FileItem too (a hosted form's file question), and guest pages keep their shipped look and cost until their own port phase (7). So `FileItem.module.css` is the shipped look, which every page loads, and the prototype's look described here is `FileItem.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
+
 **States**: uploading (the bar), done (the size, and `detail`), failed (the red tile and sentence).
 
 **Differences from the prototype**

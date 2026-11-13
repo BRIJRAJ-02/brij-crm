@@ -1,12 +1,16 @@
-/* PersonLine, after the prototype's PersonLine (spec 0072, folded into Avatar's look): a picture, the name, and one quiet line under it whose parts are joined by a middle dot; the line is
+/* PersonLine: a picture, the name, and one quiet line under it whose parts are joined by a middle dot; the line is
    cut at its end, so the first part (what it is about) always shows. Room at the end for a chip or a menu. */
 @layer components {
   .root {
     display: flex;
     align-items: center;
-    gap: var(--space-12);
+    gap: var(--space-8);
     inline-size: 100%;
     min-inline-size: 0;
+  }
+
+  .root[data-size='lg'] {
+    gap: var(--space-12);
   }
 
   .picture {
@@ -23,9 +27,6 @@
 
   .name {
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -35,9 +36,9 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-body-sm-tight);
+    font: var(--text-label);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-body-sm-tight);
+    letter-spacing: var(--tracking-label);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

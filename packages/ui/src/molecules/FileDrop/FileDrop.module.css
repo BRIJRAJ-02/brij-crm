@@ -1,6 +1,6 @@
-/* FileDrop: the Timefix prototype's drop zone (spec 0072): a dashed control-border box (the house 3:1 for a control whose only boundary is its edge; the prototype draws border-strong) on the surface that turns
-   accent, on accent-soft, while a file is dragged over it, its upload mark on a round grey tile lifting as it does;
-   the label, "browse" as a link, and what it takes. */
+/* FileDrop: a dashed box on surface-subtle that turns accent while a file is
+   dragged over it; an upload icon, the label, "browse" as a link, and what
+   it takes. */
 @layer components {
   .field {
     display: flex;
@@ -17,13 +17,18 @@
     padding-inline: var(--space-16);
     border: var(--border-width-hairline) dashed var(--control-border);
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--surface-subtle);
     color: var(--text);
     text-align: center;
     outline: none;
     transition:
       background-color var(--duration-quick) var(--ease-out),
       border-color var(--duration-quick) var(--ease-out);
+  }
+  /* The drop mark's holder: the app look draws it (spec 0072, decision 16); it draws nothing here, so the rule is empty
+     and the class is only named. */
+  /* stylelint-disable-next-line block-no-empty -- named for the app look, which styles it */
+  .mark {
   }
 
   .root[data-drop-target] {
@@ -32,37 +37,13 @@
   }
 
   .root[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-focus);
-  }
-
-  /* The upload mark on a round grey tile, a control tall, space-8 above the words; a file over the zone turns it
-     white with the mark in the accent and lifts it (transitions.dev's bounce, movement dropped for reduced motion). */
-  .mark {
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: var(--size-control);
-    block-size: var(--size-control);
-    margin-block-end: var(--space-8);
-    border-radius: var(--radius-full);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      color var(--duration-quick) var(--ease-out),
-      translate var(--duration-fast) var(--ease-bounce);
-  }
-
-  .root[data-drop-target] .mark {
-    background: var(--surface);
-    color: var(--accent-text);
-    translate: 0 calc(var(--distance-micro) * -1);
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-focus);
   }
 
   /* What is there already, in the icon's place: wide enough to read, never tall enough to push the words out. */
   .preview {
-    max-inline-size: calc(var(--size-row) * 2);
+    max-inline-size: var(--size-tile);
     max-block-size: var(--size-row);
     border-radius: var(--radius-sm);
     object-fit: contain;
@@ -103,8 +84,8 @@
   }
 
   .row[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-focus);
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-focus);
   }
 
   /* What is there, small and wide (a cover or a share picture is wide), or the picture mark on a quiet tile. */
@@ -144,8 +125,7 @@
   }
 
   .photo[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-focus);
+    box-shadow: var(--shadow-focus);
   }
 
   .photoAdd {
@@ -153,10 +133,10 @@
     flex: 1;
     align-items: center;
     gap: var(--space-12);
-    padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+    padding: var(--space-12);
     border: var(--border-width-hairline) dashed var(--control-border);
-    border-radius: var(--radius-lg);
-    background: var(--surface);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
     color: var(--text);
     text-align: start;
     outline: none;
@@ -167,25 +147,25 @@
 
   @media (hover: hover) and (pointer: fine) {
     .photoAdd[data-hovered] {
-      border-color: var(--control-border);
+      border-color: var(--text-secondary);
       background: var(--surface-hover);
     }
   }
 
   .photoAdd[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-focus);
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-focus);
   }
 
-  /* The compact zone's mark: the zone's round grey tile at a small control's size. */
   .photoMark {
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: var(--size-control-sm);
-    block-size: var(--size-control-sm);
-    border-radius: var(--radius-full);
-    background: var(--surface-subtle);
+    inline-size: var(--avatar-title);
+    block-size: var(--avatar-title);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
   }
 
   .photoWords {
@@ -251,8 +231,8 @@
 
   .rowHint {
     color: var(--text-secondary);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .row[data-disabled] .rowHint {
@@ -278,8 +258,8 @@
 
   .hint {
     color: var(--text-secondary);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .browse {
@@ -295,23 +275,24 @@
   }
 
   .browse[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-focus);
+    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-text);
+    outline-offset: var(--border-width-hairline);
   }
 
   .limits {
     color: var(--text-secondary);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .error {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-6);
+    align-items: center;
+    gap: var(--space-4);
     color: var(--danger);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   /* Disabled text stays at text-tertiary (4.5:1), rather than fading below it. */
@@ -325,16 +306,6 @@
   .root[data-disabled] .limits,
   .root[data-disabled] .browse {
     color: var(--text-tertiary);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .mark {
-      transition-property: background-color, color;
-    }
-
-    .root[data-drop-target] .mark {
-      translate: none;
-    }
   }
 
   @media (forced-colors: active) {

@@ -1,0 +1,111 @@
+/* StatusDot's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw StatusDot.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* StatusDot, after the prototype's StatusDot (spec 0072, folded into Tag's look): an 8px dot in the status's dot-<hue>,
+   then its label in the strong small body type. The colour is never the only cue: the label always shows. */
+@layer utilities.app-look {
+  .ws-status-dot-root:where([data-scale='app'] *) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
+    white-space: nowrap;
+  }
+
+  .ws-status-dot-root[data-archived]:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+  }
+
+  /* Inside a control that sets the words' colour and type (a segment, a menu item): the dot reads like them. */
+  .ws-status-dot-root[data-inherit]:where([data-scale='app'] *) {
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .ws-status-dot-label:where([data-scale='app'] *) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* With a short label: the label in a wide container, the short word in a narrow one (a phone's bar), whole. */
+  .ws-status-dot-label[data-width='narrow']:where([data-scale='app'] *) {
+    display: none;
+    flex: none;
+  }
+
+  @container (inline-size < 480px) {
+    .ws-status-dot-root[data-short]:where([data-scale='app'] *) {
+      flex: none;
+    }
+
+    .ws-status-dot-label[data-width='wide']:where([data-scale='app'] *) {
+      display: none;
+    }
+
+    .ws-status-dot-label[data-width='narrow']:where([data-scale='app'] *) {
+      display: inline;
+    }
+  }
+
+  .ws-status-dot-dot:where([data-scale='app'] *) {
+    --dot: var(--dot-gray);
+
+    flex: none;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--dot);
+  }
+
+  .ws-status-dot-dot[data-hue='red']:where([data-scale='app'] *) {
+    --dot: var(--dot-red);
+  }
+
+  .ws-status-dot-dot[data-hue='orange']:where([data-scale='app'] *) {
+    --dot: var(--dot-orange);
+  }
+
+  .ws-status-dot-dot[data-hue='yellow']:where([data-scale='app'] *) {
+    --dot: var(--dot-yellow);
+  }
+
+  .ws-status-dot-dot[data-hue='lime']:where([data-scale='app'] *) {
+    --dot: var(--dot-lime);
+  }
+
+  .ws-status-dot-dot[data-hue='green']:where([data-scale='app'] *) {
+    --dot: var(--dot-green);
+  }
+
+  .ws-status-dot-dot[data-hue='sky']:where([data-scale='app'] *) {
+    --dot: var(--dot-sky);
+  }
+
+  .ws-status-dot-dot[data-hue='blue']:where([data-scale='app'] *) {
+    --dot: var(--dot-blue);
+  }
+
+  .ws-status-dot-dot[data-hue='purple']:where([data-scale='app'] *) {
+    --dot: var(--dot-purple);
+  }
+
+  /* Animated (a Live or Hidden trigger): the new hue fades in with the words' swap. */
+  .ws-status-dot-root[data-animated]:where([data-scale='app'] *) .ws-status-dot-dot {
+    transition: background-color var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .ws-status-dot-root[data-animated]:where([data-scale='app'] *) .ws-status-dot-label {
+    overflow: visible;
+  }
+
+  @media (forced-colors: active) {
+    .ws-status-dot-dot:where([data-scale='app'] *) {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}

@@ -1,25 +1,19 @@
-/* DescriptionList: the Timefix prototype's details rows (spec 0072): terms in text-body-sm, text-secondary, beside (or
-   above) their values in the body type, each row a control tall (--row-line), terms at the top, level with the
-   value's first line, so a taller value never moves its term. */
+/* DescriptionList: terms in text-secondary beside (or above) their values,
+   on a 28px rhythm (a body line and space-8 between rows). */
 @layer components {
   .root {
-    --row-line: var(--size-control);
-
     display: grid;
     grid-template-columns: minmax(auto, max-content) 1fr;
-    gap: 0 var(--space-16);
+    gap: var(--space-8) var(--space-16);
     margin: 0;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  /* Compact: terms in the prototype's fixed name column (136 at full size), rows a small control tall, so a short
-     list reads as one block. */
+  /* Compact: terms in one narrow fixed column, rows space-4 apart, so a short list reads as one block. */
   .root[data-layout='compact'] {
-    --row-line: var(--size-control-sm);
-
-    grid-template-columns: calc(4 * var(--size-control) - var(--space-8)) minmax(0, 1fr);
-    column-gap: var(--space-8);
+    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
+    gap: var(--space-4) var(--space-12);
   }
 
   /* Stacked: one column that never grows past its container, so a long link or word wraps or cuts inside it. */
@@ -38,20 +32,13 @@
     gap: var(--space-2);
   }
 
-  /* Term and value each pad their first line to the row's height. */
-  .term,
-  .description {
-    padding-block: calc((var(--row-line) - 1lh) / 2);
-  }
-
   .term {
     color: var(--text-secondary);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
   }
 
-  .root[data-layout='stacked'] :is(.term, .description) {
-    padding-block: 0;
+  .root[data-layout='stacked'] .term {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .description {

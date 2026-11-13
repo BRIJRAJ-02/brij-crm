@@ -35,4 +35,6 @@ It takes no focus.
 
 Folded into the prototype's Tag (spec 0072): the prototype's dot and label form, an 8px dot in the status's `dot-<hue>`, then its label in `body-sm-strong` (500 13/20). The colour is never the only cue: the label always shows.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw StatusDot too (a booking, form, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `StatusDot.module.css` is the shipped look, which every page loads, and the prototype's look described here is `StatusDot.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
+
 **Differences from the prototype**: `shortLabel`, `isInherited` and `isAnimated` are kept. The prototype's status shapes (dashed circle draft, half circle in progress and so on) belong to its Tag `status` and are owed to the phase that ports statuses.

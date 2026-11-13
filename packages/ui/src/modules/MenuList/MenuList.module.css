@@ -226,10 +226,6 @@
   .eyebrow {
     --text-label: 600 var(--look-type-11) / 1 var(--look-face);
     --tracking-label: var(--track-caps);
-    /* The table's pill stays the accent's solid fill with its own words: Badge's accent tone became a tint in spec
-       0072's tier 1, and the brand's accent words on the menu's chip fell under 4.5:1 in dark. */
-    --accent-soft: var(--look-accent);
-    --accent-text: var(--look-on-accent);
 
     display: flex;
     flex-wrap: wrap;
