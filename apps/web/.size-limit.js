@@ -138,8 +138,8 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 // the owner settle that gap (spec 0072, rationale, "One look everywhere").
 // 13 November 2026, the merge of port phases 0, 1 and 2 (feat/port-12, specs 0072 and 0073): every line from both
 // phases kept, each at the merged build's measurement plus 0.5 kB where that is under both phases' limits, else at the
-// lower phase's limit. Measured: first load JavaScript 296.77 kB, first load CSS 7.88, workspace shell CSS 36.08,
-// hosted form JavaScript 206.03, its CSS 19.32, step layouts 5.75, signature and ranking 6.33, booking page JavaScript
+// lower phase's limit. Measured: first load JavaScript 296.78 kB, first load CSS 7.88, workspace shell CSS 36.08,
+// hosted form JavaScript 206.03, its CSS 19.33, step layouts 5.75, signature and ranking 6.33, booking page JavaScript
 // 188.84, its CSS 19.52, media 1.14, picture and gallery 1.68, next times 1.37, notice sheet 0.466. Three lines sit
 // above phase 2's limit because they grew in the combining, none above its measurement plus 0.5 kB: first load
 // JavaScript at phase 1's 297.2 kB (main's wallet card, through phase 0, added 0.17 kB), hosted form JavaScript at

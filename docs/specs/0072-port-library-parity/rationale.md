@@ -422,7 +422,29 @@ What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, meas
 
 Tiers 3b to 3d added to the signed in pages' lines (the shell look on every screen, +189 to +231 B of CSS; the week; the settings parts), cut the booking page's and the business page's, and took the public profile page and the captures pages under their `f81623f0c` figures, by the LinkListToolbar split. The menu, reserve and business lines are listed for the first time: they carry tiers 1 to 3a's shared parts (Button, Select, Field, Tag and the like), not tier 3's.
 
-**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then.
+**After the merge of phases 0, 1 and 2** (feat/port-12, 7f6364a69; measured the same way, against `f81623f0c`; "phase 1" is the line above, "phase 2" its own change measured from `f81623f0c` to feat/port-2's tip, "main" what phase 0 brought from main after `f81623f0c`, the wallet card):
+
+| Page | JavaScript | CSS | Over the base | Of which |
+|---|---|---|---|---|
+| Hosted form | 205.91 -> 206.03 kB (+120 B) | 18.57 -> 19.33 kB (+760 B) | **+880 B** | phase 1 +820, the merge notes' FormParts remaps +41 (CSS), main +10, hash noise |
+| Booking page | 188.89 -> 188.84 kB (-50 B) | 19.37 -> 19.52 kB (+150 B) | **+100 B** | phase 1 +20, BookingFrame's merge note +20 (CSS), phase 2 +11 (StatusDot's words), main +13, hash noise about +40 (JS) |
+| Menu page | 240,259 -> 241,139 B (+880) | 30,098 -> 30,805 B (+707) | **+1,587 B** | phase 1 +514, phase 2 +1,001 (Modal's discard confirm, Reveal's drop, TextSwap), main +14 |
+| Reserve page | 293,645 -> 294,396 B (+751) | 41,875 -> 42,999 B (+1,124) | **+1,875 B** | phase 1 +1,140, phase 2 +612, main +14 |
+| Business page | 253,748 -> 254,292 B (+544) | 29,207 -> 29,560 B (+353) | **+897 B** | phase 1 +180, phase 2 +618, main +17 |
+| Public profile | 270,196 -> 247,278 B (-22,918) | 35,796 -> 33,325 B (-2,471) | **-25,389 B**, under the base | phase 1 -25,903, phase 2 +406 |
+| Sign in | 415,059 -> 415,347 B (+288) | 26,735 -> 27,741 B (+1,006) | **+1,294 B** | phase 1 +999, main +147, phase 2 +23 |
+| Workspace shell (w.$slug) | 472,242 -> 472,956 B (+714) | 34,809 -> 36,302 B (+1,493) | **+2,207 B** | phase 1 +1,515, phase 2 +402, main +152, the entry's chunk map +76 |
+| Workspace index | 449,144 -> 449,815 B (+671) | 28,116 -> 29,305 B (+1,189) | **+1,860 B** | phase 1 +1,189, phase 2 +402, main +152 |
+| An object's records | 457,049 -> 457,727 B (+678) | 29,811 -> 31,041 B (+1,230) | **+1,908 B** | phase 1 +1,246, phase 2 +408, main +154 |
+| Bookings list (the week) | 680,334 -> 681,183 B (+849) | 51,956 -> 54,439 B (+2,483) | **+3,332 B** | phase 1 +2,526, phase 2 +460, main +158 |
+| Settings, an object's tab | 728,001 -> 728,936 B (+935) | 52,932 -> 55,734 B (+2,802) | **+3,737 B** | phase 1 +2,894, phase 2 +452, main +191 |
+| Link page editor | 764,592 -> 766,035 B (+1,443) | 70,798 -> 73,977 B (+3,179) | **+4,622 B** | phase 1 +3,330, phase 2 +883, main +192 |
+| Captures, links | 511,530 -> 498,091 B (-13,439) | 38,565 -> 37,717 B (-848) | **-14,287 B**, under the base | phase 1 -14,966, phase 2 +377, main +148 |
+| Captures, a form | 783,126 -> 781,501 B (-1,625) | 67,524 -> 68,022 B (+498) | **-1,127 B**, under the base | phase 1 -2,052, phase 2 +454, main +194 |
+
+The merge adds nothing of its own beyond the two merge notes' CSS (FormParts +41 B on the hosted form, BookingFrame +20 B on the booking page) and content-hash noise; phase 2's figures are its own (spec 0073 records Modal's +375 B and Reveal's +232 B chunks, which every page that loads them now carries). The screen phases' rule below applies to these lines.
+
+**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then; on the merged branch, the hosted form's JavaScript at 206.5 kB and the first load's at 297.2 kB (see `.size-limit.js`).
 
 ### Merge notes (phase 1 + 2)
 
@@ -436,3 +458,5 @@ Things phase 1 can't do because they live in phase 2's files, for the merge to p
 - GuestLook remaps the legacy `shadow-focus`, `shadow-focus-inset` and `shadow-primary` (and reads `shadow-control`) only for BookingFrame, MenuList and the other phase 2 guest parts; they leave when the last of those ports.
 - `apps/web/src/features/booking/page-picture.tsx`'s comment still says the picture draws "a month"; it draws a week since tier 3c (a screen phase's one line fix). BookingPagePicture reads the provider's language, so it must render inside UiProvider (every caller does).
 - `public-booking/booking.ts` now imports `LinkListToolbar` from `modules/LinkList/LinkListToolbar.tsx`; a merge that touches that file keeps the import, or the public profile page loads LinkList again (+3.4 kB CSS, +23 kB JavaScript).
+
+Applied in feat/port-12 (ec7f36019, 62c80306d, 7f6364a69): the card's `text-body-sm` steps map to the body size keeping their weights, and its `--focus-ring` to the brand; its `--shadow-focus` and `--form-focus` remaps stay, since Rating still reads `shadow-focus`; BookingReceipt remaps `--primary` to `--accent`; BookingFrame's `--focus-ring` and logo link as written above; NumberField and SearchField now pass `isTabular` and `aria-keyshortcuts` (they did not before the merge, so the hosted form's 64 B is Field's, phase 1's); page-picture's comment says a week; `booking.ts` keeps the import. Still owed: MenuList's own pill (phase 8) and GuestLook's legacy remaps.

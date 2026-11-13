@@ -159,6 +159,7 @@ Totals: 19 (a), 6 (b), 2 (c). A phase in brackets means nothing is built here; t
 - Modal `isDirty`: the confirm goes when `isDirty` turns false or the caller closes the Modal, and a Save that clears it and closes in one handler doesn't ask; the confirm no longer takes the ModalTrigger's dialog id.
 - AIAssist: a retired stream no longer cancels the new answer's frame, and following is decided by the person's scrolling, so long answers stay followed.
 - The checks the review found unable to fail (`LongStream`, `Stopped`, `Debounced`, `Drop`, `Soft`, SearchField `Disabled`, RemoteCursor `Pointers`) were each made to fail once by breaking the code.
+- _Merged with phases 0 and 1 into feat/port-12 (13 Nov 2026): Tag's ai tone, PresenceGroup and AIAssist take phase 1's look (hairline, AvatarStack's faces, the outline ring, BookingChat's bubble radius), NumberField passes `isTabular` and SearchField `aria-keyshortcuts`; its per page cost is in spec 0072's rationale, After the merge._
 - Accepted, not changed: `apps/web/embed/v1.js` keeps `MARKS[attr]` without `Object.hasOwn`, since the script is 2 bytes under its 6.5 kB cap, the attribute is the site owner's, and the worst case is junk text.
 
 ### Not ported from the prototype (and why)
