@@ -1,16 +1,16 @@
-/* Badge: a 16px count, tabular figures, grey or accent; or a short label that
-   truncates past the room it has (its full text stays in the DOM). */
+/* Badge, after the prototype's Count (spec 0072, folded into Tag's look): a round 20px count in tabular figures, grey,
+   blue or ink; or a short label on a Tag's chip that truncates past the room it has (its full text stays in the DOM). */
 @layer components {
   .root {
     display: inline-flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    min-inline-size: var(--size-icon);
-    block-size: var(--size-icon);
-    padding-inline: var(--space-4);
-    border-radius: var(--radius-xs);
-    background: var(--surface-hover);
+    min-inline-size: var(--space-20);
+    block-size: var(--space-20);
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--surface-subtle);
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
@@ -18,64 +18,53 @@
     white-space: nowrap;
   }
 
-  /* A glyph before the count (a comment mark): a little gap, and the glyph stays quiet beside the figure. */
+  /* A glyph before the count (a comment mark). */
   .root[data-icon] {
     gap: var(--space-2);
   }
 
-  /* A label may shrink below its text, so the value beside it keeps its room. */
+  /* A label may shrink below its text, so the value beside it keeps its room; a label is a Tag's shape. */
   .root[data-text] {
     flex: 0 1 auto;
     justify-content: flex-start;
     min-inline-size: 0;
     overflow: hidden;
+    border-radius: var(--radius-sm);
   }
 
-  /* A label too short to cut ("You") keeps its whole width; the value beside it truncates instead. */
   .root[data-whole] {
     flex: none;
   }
 
   /* A Tag's height, for a Badge in a row of chips. */
   .root[data-size='chip'] {
-    block-size: var(--size-chip);
-    padding-inline: var(--space-6);
+    block-size: calc(var(--space-20) + var(--space-2));
     border-radius: var(--radius-sm);
   }
 
-  /* A chip read on its own (a dish's allergens on its sheet): 4px taller, in the body's words. */
+  /* A chip read on its own (a dish's allergens on its sheet): the prototype's default tag, in the body's words. */
   .root[data-size='chip-lg'] {
-    block-size: calc(var(--size-chip) + var(--space-4));
+    block-size: calc(var(--size-control-sm) - var(--space-2));
     padding-inline: var(--space-8);
     border-radius: var(--radius-sm);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
-  /* As tall as its words, 4px over and under: a label inside a line of small type, whose words the line sets (the
-     guest menu's table, in its eyebrow's 11px semibold capitals). */
+  /* As tall as its words, 4px over and under: a label inside a line of small type, whose words the line sets. */
   .root[data-size='fit'] {
     block-size: auto;
     padding: var(--space-4) var(--space-6);
   }
 
-  /* Round: a pill, its sides half its height in less 2px (6px on a count, 10px on a 24px chip, 12px on a 28px one),
-     after checklabs' guest pills. */
+  /* Round: a pill, its sides half its height less 2px. */
   .root[data-round] {
-    padding-inline: var(--space-6);
+    padding-inline: var(--space-8);
     border-radius: var(--radius-full);
   }
 
-  .root[data-round][data-size='chip'] {
-    padding-inline: calc(var(--size-chip) / 2 - var(--space-2));
-  }
-
   .root[data-round][data-size='chip-lg'] {
-    padding-inline: calc((var(--size-chip) + var(--space-4)) / 2 - var(--space-2));
-  }
-
-  .root[data-round][data-size='fit'] {
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-12);
   }
 
   .text {
@@ -85,55 +74,56 @@
 
   /* A state's dot before the label (a calendar's "Connected"). */
   .dot {
+    --dot: var(--dot-gray);
+
     flex: none;
     inline-size: var(--space-6);
     block-size: var(--space-6);
     margin-inline-end: var(--space-4);
     border-radius: var(--radius-full);
-  }
-
-  .dot[data-hue='gray'] {
-    background: var(--dot-gray);
+    background: var(--dot);
   }
 
   .dot[data-hue='red'] {
-    background: var(--dot-red);
+    --dot: var(--dot-red);
   }
 
   .dot[data-hue='orange'] {
-    background: var(--dot-orange);
+    --dot: var(--dot-orange);
   }
 
   .dot[data-hue='yellow'] {
-    background: var(--dot-yellow);
+    --dot: var(--dot-yellow);
   }
 
   .dot[data-hue='lime'] {
-    background: var(--dot-lime);
+    --dot: var(--dot-lime);
   }
 
   .dot[data-hue='green'] {
-    background: var(--dot-green);
+    --dot: var(--dot-green);
   }
 
   .dot[data-hue='sky'] {
-    background: var(--dot-sky);
+    --dot: var(--dot-sky);
   }
 
   .dot[data-hue='blue'] {
-    background: var(--dot-blue);
+    --dot: var(--dot-blue);
   }
 
   .dot[data-hue='purple'] {
-    background: var(--dot-purple);
+    --dot: var(--dot-purple);
   }
 
+  /* Counts that ask for attention (unread): the prototype's accent count, the blue tag's words on its tint (its own
+     tokens, which hold 4.5:1 in both themes whatever accent a page sets: the guest menu's brand read 3.3:1 in dark). */
   .root[data-tone='accent'] {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
   }
 
-  /* A label in the text colour on the neutral fill (a guest page's tags: checklabs' ink on cream). */
+  /* A label in the text colour on the neutral fill (a guest page's tags). */
   .root[data-tone='strong'] {
     color: var(--text);
   }
