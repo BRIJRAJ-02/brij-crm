@@ -1,14 +1,15 @@
-/* PhotoCrop: in a window Modal, a 4:3 stage (2:1 for a 3:1 cover) in the dark theme whatever the page's, on
-   surface-sunken, holding the photo, with the scrim over all of it but the frame, the frame's edge in the accent, and
-   thirds that show while the photo moves. Under
-   it, the zoom's minus, Slider and plus, and a small preview of the crop as it will sit (round for a face). The
-   photo is placed by the cropper's arithmetic through four custom properties; keys and Reset ease it there over
-   duration-move, a pointer moves it at once, and reduced motion drops the easing. */
+/* PhotoCrop, after the Timefix prototype's cropper (spec 0072): in a window Modal, a 4:3 stage (2:1 for a 3:1 cover)
+   in the dark theme whatever the page's, on surface-subtle, holding the photo, with the scrim over all of it but the
+   frame, the frame's edge a border-width-focus line in the text colour (light on the dark stage), and thirds in the
+   text colour that fade in to opacity-busy while the photo moves. Under it, space-16 down, the zoom's minus, Slider
+   and plus, and a small preview of the crop as it will sit (round for a face, radius-md otherwise). The photo is
+   placed by the cropper's arithmetic through four custom properties; keys and Reset ease it there over
+   duration-quick, a pointer moves it at once, and reduced motion drops the easing. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-16);
     min-inline-size: 0;
   }
 
@@ -29,11 +30,11 @@
     aspect-ratio: 2 / 1;
   }
 
-  /* The ring is drawn inside the stage, on its own dark ground: outside it, the dark theme's accent line would sit on
-     the light modal at under 3.5:1. */
+  /* The outline ring, drawn inside the stage on its own dark ground: outside it, the dark theme's focus-ring would sit
+     on a light modal at under 3:1. */
   .stage:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: calc(-1 * var(--border-width-thick));
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .photo,
@@ -90,22 +91,24 @@
     fill: var(--scrim);
   }
 
-  .edge {
+  .edge,
+  .thirds {
     fill: none;
-    stroke: var(--accent);
-    stroke-width: var(--border-width-thick);
+    stroke: var(--text);
+  }
+
+  .edge {
+    stroke-width: var(--border-width-focus);
   }
 
   .thirds {
-    fill: none;
-    stroke: var(--on-accent);
     stroke-width: var(--border-width-hairline);
     opacity: 0;
-    transition: opacity var(--duration-quick) var(--ease-smooth-out);
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
 
   .stage[data-moving] .thirds {
-    opacity: var(--opacity-pulse);
+    opacity: var(--opacity-busy);
   }
 
   .controls {
@@ -124,7 +127,7 @@
     aspect-ratio: var(--photo-crop-ratio);
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--surface-subtle);
   }
 
@@ -135,7 +138,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .stage[data-easing] .photo {
       transition-property: top, left, inline-size, block-size;
-      transition-duration: var(--duration-fast);
+      transition-duration: var(--duration-quick);
       transition-timing-function: var(--ease-smooth-out);
     }
   }

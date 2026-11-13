@@ -37,12 +37,12 @@
     border: 0;
     background: var(--surface-subtle);
     overflow: hidden;
-    outline: none;
   }
 
+  /* Inside the clipped photo, so the ring sits just inside its edge. */
   .tile:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent);
-    outline-offset: calc(var(--border-width-thick) * -1);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(var(--border-width-focus) * -1);
   }
 
   .picture {
@@ -181,12 +181,6 @@
     .largePicture {
       animation: none;
       transition: none;
-    }
-  }
-
-  @media (forced-colors: active) {
-    .tile:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

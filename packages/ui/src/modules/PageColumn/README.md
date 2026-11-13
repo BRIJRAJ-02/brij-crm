@@ -29,3 +29,14 @@ None of its own.
 ## Differences from the artifact
 
 Not in the artifact. Its padding was space-24 until 20 October 2026, when it took the app's space-16 gutter. The same day its `width` prop went: `default` capped it at the wide dialog's width and `narrow` at the page card's, and every page is now full width.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from LinkPage (spec 0072): the prototype folds PageColumn into its LinkPage, where it is the centred column every public page sits in (480 or 640 wide, a `space-16` gutter). The library's PageColumn is something else, the app's page body, so it keeps its own module, unchanged: its `space-16` gutter is the prototype's, and the prototype's 480 and 640 caps would break the owner's full width rule (20 October 2026). The public pages' own column is LinkPage's `.column` and BookingFrame's.
+
+Rules it repeats from LinkPage's prototype: the `space-16` gutter. Nothing else.
+
+**Use it for** a page body that isn't a grid or a settings page. **Don't use it for** a public page's column. **The consumer provides** `children`, `align`, `actions`, `aside`, `stack`, `footer`.
+
+**Differences from the prototype**: full width, not centred at 480 or 640 (`narrow`, `wide` there; the library dropped its own `width` prop on 20 October 2026); `align`, `actions`, `aside`, `stack` and `footer` are the library's. Cost: 411 B of CSS, unchanged.
+

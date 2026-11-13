@@ -54,13 +54,12 @@
     border-radius: var(--page-radius-card, var(--radius-md));
     background: var(--page-card-hover, var(--surface-hover));
     overflow: hidden;
-    outline: none;
   }
 
   /* Inside the picture: the row scrolls, and a ring outside it would be clipped on every side. */
   .shot:focus-visible {
-    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
-    outline-offset: calc(var(--border-width-thick) * -1);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(var(--border-width-focus) * -1);
   }
 
   .root[data-fill] .shot,
@@ -123,11 +122,5 @@
     border-radius: var(--radius-md);
     object-fit: contain;
     user-select: none;
-  }
-
-  @media (forced-colors: active) {
-    .shot:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
-    }
   }
 }

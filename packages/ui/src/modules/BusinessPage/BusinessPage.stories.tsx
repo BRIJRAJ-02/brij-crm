@@ -437,3 +437,30 @@ export const Reserve: Story = {
     );
   },
 };
+
+/**
+ * A section tab by keyboard (spec 0072): Tab reaches it and it takes the outline ring just inside its edge (the tabs
+ * scroll sideways, so a ring outside would be clipped); Enter makes it current and goes to its section.
+ */
+export const TabByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <BusinessPage {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const tabs = within(within(canvasElement).getByRole('navigation', { name: 'Sections' }));
+    const hours = tabs.getByRole('link', { name: 'Opening hours' });
+    await userEvent.tab();
+    while (document.activeElement !== hours && canvasElement.contains(document.activeElement)) {
+      await userEvent.tab();
+    }
+    await expect(hours).toHaveFocus();
+    await expect(hours.matches(':focus-visible')).toBe(true);
+    // The story stays on its own page: the press is the tab's, not the browser's jump.
+    hours.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(hours).toHaveAttribute('aria-current', 'location'));
+  },
+};

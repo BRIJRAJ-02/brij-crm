@@ -112,6 +112,20 @@ export const Keyboard: Story = {
   },
 };
 
+/** Moving (spec 0072): while a pointer holds the photo the stage says so (the thirds fade in), and stops on release. */
+export const Moving: Story = {
+  parameters: { crm: { screenshot: false } },
+  // The play's own userEvent keeps the held button between its two calls, so the release reaches the stage.
+  play: async ({ userEvent }) => {
+    const dialog = await opened();
+    const stage = dialog.getByRole('application', { name: 'Photo position' });
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: stage }]);
+    await waitFor(() => expect(stage).toHaveAttribute('data-moving'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: stage }]);
+    await waitFor(() => expect(stage).not.toHaveAttribute('data-moving'));
+  },
+};
+
 /** The way out by keyboard: Cancel shows ESC, and Esc from the photo leaves with nothing used. */
 export const Escape: Story = {
   parameters: { crm: { screenshot: false } },

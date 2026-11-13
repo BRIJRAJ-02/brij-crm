@@ -40,6 +40,7 @@ export function FormLayoutThumbnail({ layout, rows }: FormLayoutThumbnailProps) 
         </span>
       )}
       {drawn.map((row, index) => (
+        // A still drawing whose rows never reorder: their place is their key (AC-16).
         <span key={index} className={styles.field} data-row={row}>
           <span className={styles.label} />
           {MARKS[row] === undefined ? (
@@ -47,6 +48,7 @@ export function FormLayoutThumbnail({ layout, rows }: FormLayoutThumbnailProps) 
           ) : (
             <span className={styles.marks}>
               {Array.from({ length: MARKS[row] ?? 0 }, (_, mark) => (
+                // Static marks: their place is their key (AC-16).
                 <span key={mark} className={styles.mark} />
               ))}
             </span>

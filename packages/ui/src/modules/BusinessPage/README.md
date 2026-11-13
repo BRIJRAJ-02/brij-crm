@@ -19,7 +19,7 @@ New (4 November 2026). The link page (`LinkPage`) is a person's list of things t
 - **Section tabs** are a `nav` of links to the sections (not React Aria Tabs: they move through one page, they don't switch panels), sticky under the top. The current one (`aria-current="location"`) is the last section whose top passed under the tabs (their measured height, kept by a ResizeObserver), read by an IntersectionObserver, so scrolling costs nothing. The indicator slides between them on `duration-move` and `ease-in-out`, positioned through the CSS object model as React Aria's own tab indicator is, so the page's `style-src` is unchanged; still under reduced motion. On a phone the tabs scroll sideways and the current one is kept in view, gliding there, or jumping under reduced motion. A page with one section has no tabs.
 - **A section's hash** (`/<handle>#hours`, shared or typed) opens the page on that section: its tab current and the section scrolled to (smoothly, or at once under reduced motion), and again when the hash changes later.
 - **Look** (5 November 2026): the guest look, so the menu, the reservation page and this page read as one product. The page wears GuestLook around itself, and its client links `/api/public/business/<handle>/look/menu.css` (the guest menu's look stylesheet, the brand's accent in it): the accent is the brand's, else the ink, never the app's blue.
-- **Motion**: the header's lines rise in once, a quarter press apart (texts reveal); photos fade in from the sunken surface; the phone's bar rises from the foot on `ease-drawer`; the viewer is the Modal's own panel reveal. All off under reduced motion.
+- **Motion**: the header's lines rise in once, `duration-stagger` (40ms) apart, over `duration-very-slow` from `distance-medium` below (texts reveal, spec 0072); photos fade in from the sunken surface; the phone's bar rises from the foot on `ease-drawer`; the viewer is the Modal's own panel reveal. All off under reduced motion.
 - **Wide and narrow**: one breakpoint, the library's (`1024px`): under it, the gallery is edge to edge and the bar carries Reserve; from it up, the page sits in its margins, the mosaic shows, and the panel sticks beside the sections under the tabs, carrying whether it is open ("Closed · Opens at 12:00", which the header then leaves out there, checklabs' rail card), the action, and under Reserve the phone ("Or call …"); the name and Directions were repeats (the owner, 5 November 2026); on a phone with no gallery the header starts 16px under the top, never flush against it; with no action the sections take the whole width.
 - **States**: `isLoading` draws the gallery's and header's shapes (Skeleton) in the page's own layout. With no photos the header leads; with no menu, About or amenities those sections and their tabs go; with no Table seating there is no action, no panel and no bar. Errors and "no such page" are the public page's (`BookingMessage`), not this module's.
 - **Accessibility**: one `h1` (the name), an `h2` per section with its tab pointing at it, the panel an `aside` named by the business, every photo a button naming its place and what it shows ("Open photo 2 of 8: The terrace"), the viewer headed by the description (or the name) with its place said once, in the Modal's polite status, and an image with the business's own description or "<name>, photo 2 of 8". Every link out says it opens a new tab.
@@ -27,3 +27,29 @@ New (4 November 2026). The link page (`LinkPage`) is a person's list of things t
 ## Where it differs from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact` publish. Its stories are screenshotted like every other module's; their baselines are shot in the pinned image (CI's visual job) on first run.
+
+## Timefix prototype (spec 0072)
+
+The prototype's BusinessPage is Fresha's venue page (cover, services, a person to see, the booking card in steps); the library's is the owner's restaurant page after checklabs (gallery, menu, About, hours, location, Reserve), the public business page, which the owner approved on 24 October. One look (decision 16) on a guest page: only what visibly differs and costs nothing moved.
+
+- **Header**: the name `text-title-lg`, the facts `text-body` in `text-secondary`, as the prototype's. Its lines now rise as the prototype's do: `duration-very-slow` on `ease-smooth-out` from `distance-medium` below, `duration-stagger` apart (the fourth and fifth lines together, as before, which saves a rule). Reduced motion: no rise.
+- **Section tabs**: sticky under the top, `text-body-strong` in `text-secondary`, current in `text`, as the prototype's Tabs. Focus is the outline ring (`border-width-focus` solid `focus-ring`) just inside the tab, since the tabs scroll sideways and clip an outside ring (was `shadow-focus-inset`).
+- **Menu rows** (BusinessMenu) take the prototype's service rows: `space-12` of room between hairlines (was 16), the name `text-body-lg-strong` (500 16/24, was `text-heading`), the price `text-heading` (500 15/22, was `text-body-strong`).
+- **Gallery**: a photo's focus is the outline ring just inside its clipped corner, in `focus-ring` (was the accent at `border-width-thick`); the forced colours override went, since an outline shows there by itself.
+- **Amenities**: their column's least width is `size-column` + `size-column-min` (280, was the legacy `size-measure-sm`).
+
+**Use it for** a place's public page at its handle. **Don't use it for** a person's link page (LinkPage) or a booking page.
+
+**The consumer provides** `name`, `kind`, `description`, `about`, `photos`, `amenities`, `place` (or `places`), `menu`, `reserve`, `directions`, `website`, `foot`, `isLoading`.
+
+**States** (stories): a restaurant (`Restaurant`), Directions only, a 12 hour clock, Plain, several places, Reserve open and choosing a place, the full menu link, open now, loading, each part alone, a section from the hash (`SectionFromHash`) and a tab by keyboard (`TabByKeyboard`).
+
+**Differences from the prototype**
+- Kept: the restaurant page's sections, gallery, panel and phone bar, Reserve (BusinessReserve), and the guest look (GuestLook) around it. The prototype's cover with a logo over its foot, services with staff, the steps that slide to the booking card and its "Powered by Timefix" pill are the services page the library doesn't draw yet: owed to the business page's screen phase.
+- The page's ground stays `surface`; the prototype's tabs sit on `canvas`. The page's ground is the guest look's, so a change there belongs to GuestLook and the screen phase.
+- The section tabs are links with their own sliding indicator (see Anatomy), not the Tabs molecule, since they move through one page.
+
+Cost (`node scripts/part-cost.ts BusinessPage --against cec3928a0`, gzipped, every CSS module in the folder): 3,772 -> 3,779 B (+7 B: the outline ring is a longer declaration than the inset shadow it replaces, and the tab's ring sits inside); its JavaScript unchanged.
+
+PartyBand, folded into this part by the prototype, keeps its own module (see its README).
+

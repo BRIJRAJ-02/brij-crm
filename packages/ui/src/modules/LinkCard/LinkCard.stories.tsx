@@ -200,11 +200,32 @@ export const Pending: Story = {
   },
 };
 
-/** Focused from the keyboard: the whole card rings (in forced colours, the title draws an outline). */
+/** Focused from the keyboard: the whole card takes the outline ring (in forced colours, the title draws an outline). */
 export const Focused: Story = {
   play: async ({ canvas }) => {
     await userEvent.tab();
     await expect(canvas.getByRole('link', { name: 'Intro call' })).toHaveFocus();
+    await expect(canvas.getByRole('link', { name: 'Intro call' })).toHaveAttribute('data-focus-visible');
+  },
+};
+
+/** Hovered (spec 0072): the card's link lies over the whole card, so its edge and shadow answer the pointer. */
+export const Hovered: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: 'Intro call' });
+    await userEvent.hover(link);
+    await waitFor(() => expect(link).toHaveAttribute('data-hovered'));
+  },
+};
+
+/** A refused address (spec 0072, AC-12): `javascript:` never becomes a link; the title stays as plain text. */
+export const RefusedHref: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { href: 'javascript:alert(1)' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { name: 'Intro call' })).toBeInTheDocument();
   },
 };
 

@@ -8,6 +8,7 @@ import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
+import { safeHref } from '../../lib/safe-href.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
@@ -466,7 +467,8 @@ export function LinkList({
         <ul className={styles.root} data-links="" aria-label={label}>
           {shown.map((row) => (
             <li key={row.id} className={styles.item}>
-              <a className={styles.row} href={row.href} data-off={row.isOff === true || undefined}>
+              {/* Through safeHref: a refused address (javascript:, data:) draws the row as plain text, never a link. */}
+              <a className={styles.row} href={safeHref(row.href)} data-off={row.isOff === true || undefined}>
                 <RowContent row={row} isCompact={isCompact} isMedia={isMedia} />
               </a>
             </li>
@@ -503,7 +505,8 @@ function SkeletonRows({
   readonly leadingLoading: ReactNode;
 }) {
   return Array.from({ length: count }, (_, index) => (
-    // The last one is marked: the loading words for screen readers follow it, so it isn't the last child.
+    // The last one is marked: the loading words for screen readers follow it, so it isn't the last child. Static
+    // placeholders that never reorder, so their place is their key (AC-16).
     <div key={index} className={styles.row} data-loading="" data-last={index === count - 1 || undefined}>
       {/* The grip's place, so the titles that follow land where these lines stood. */}
       {hasGrip && <span className={styles.grip} />}

@@ -150,7 +150,7 @@ A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:0
 
 ## States
 
-Both densities: rows, off (badge and switch), not published (badge, switch disabled), pending, searched and no matches, loading (skeleton rows), failed (Try again), no access, empty (the caller's EmptyState). Hover on a row (pointer only), focus (the inset ring); the controls' own hover, focus and pressed states. With `onMove`: grips (the skeleton rows keep their place too), a row lifted while it moves, and no grips while a search narrows the rows.
+Both densities: rows, off (badge and switch), not published (badge, switch disabled), pending, searched and no matches, loading (skeleton rows), failed (Try again), no access, empty (the caller's EmptyState). Hover on a row (pointer only) and pressed (the same wash), focus (the outline ring just inside the row); the controls' own hover, focus and pressed states. With `onMove`: grips (the skeleton rows keep their place too), a row lifted while it moves, and no grips while a search narrows the rows.
 
 ## Keyboard
 
@@ -171,3 +171,18 @@ A menu's items: rows told apart by a picture, inside a Card. Why a density rathe
 - `footer` is the list's last line, lined up with the tiles, drawn with no rows too (with or without an `emptyState`). A menu's Add item, which turns into its field in place.
 - Rows that arrive after the first draw ease in (a fade with a `space-4` rise; a fade alone with reduced motion).
 - Under 480px of list: the words stack beside the tile, the name, then the amount on a clear line, then the facts, which may wrap. The name may wrap too.
+
+## Timefix prototype (spec 0072)
+
+The prototype's LinkList is a link page's buttons (full width pills, tiles, a featured card), which the library draws in LinkPage. This LinkList is a list of things to manage, which the prototype's README keeps out of its LinkList, so it takes the prototype's list card language instead (its question cards, its booking page and form cards): the comfortable box is `surface` with a `border-subtle` hairline and `radius-lg` corners, its rows parted by `border-subtle` hairlines. A row washes `surface-hover` under a fine pointer (over `duration-quick` on `ease-out`) and while pressed (a colour, never a scale); the keyboard's row takes the outline ring (`border-width-focus` solid `focus-ring`) just inside it (`outline-offset: calc(-1 * border-width-focus)`), since rows sit edge to edge, and a row as a link (`rowsAreLinks`) takes the same ring on `:focus-visible`. The muted text is the prototype's sub line, `text-body-sm` in `text-secondary`: the address, the description and compact's facts. The grip's cell is DragHandle's width (`space-20`), so a moving list's titles, a media list's inset tiles (`space-32`) and its footer (`space-24`) line up with the handle. A figure still on its way holds a Badge's height (`space-20`). Compact, media and section rows, the row motion and the narrow layouts are unchanged.
+
+**Use it for** short lists of links beside other work (Bookings › Availability's pages, a profile's ordered pages, the link page editor's blocks, a menu's items, a public profile's booking links). **Don't use it for** a link page's own buttons (LinkPage) or a card grid (LinkGrid).
+
+**The consumer provides** `rows` (`id`, `title`, `address`, `chips`, and per row `description`, `badge`, `titleBadge`, `toggle`, `actions`, `leading`, `href`, `isOff`, `isPending`, `variant`, `amount`, `quickAction`, `isLeaving`), `label` and `searchLabel`, `onOpen`, `density` and `placement`, `status` with `onRetry`, and for moving rows `onMove` with `rowOrder={LinkListRowOrder}`.
+
+**States**: rest, hover, pressed, keyboard focus, off, pending, dragging (lifted, `shadow-md`), searched and no matches, loading, failed, no access, empty; rows as links, a refused address drawn as plain text.
+
+**Differences from the prototype**
+- Not the prototype's pills, tiles or featured card, and no hover lift: those draw a link page (LinkPage, another part), and a list of things to manage stays a list (`GridList` rows with the arrows, the switch and the menu).
+- Kept beyond the prototype: `density`, `placement`, search, moving rows, `rowsAreLinks`, section rows, media rows, row motion, every state and key.
+- `rowsAreLinks` now passes each row's `href` through `safeHref` (AC-12): a refused address (`javascript:`, `data:`) draws its row with no `href`, as plain text (story `RowsAsLinks`). It costs the booking profile page a few bytes of script (`safeHref` is already in its bundle through BookingFrame).

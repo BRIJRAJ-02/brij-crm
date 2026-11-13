@@ -34,3 +34,15 @@ Choices, a form, and whatever the form shows (pending, an error Callout). Saving
 ## Keyboard
 
 Tab moves through Back, the choices or the form. Picking a choice, Back and a save move focus to the first control of what shows next. The Popover around it closes on Escape.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's pick menu (BookingsFlow's "use this time" card; the prototype lists SpanCard under its LinkList, but the card a drawn span opens is drawn there): the span in `text-heading` (tabular figures) over its day and length in `text-body-sm-tight`, `text-secondary`, `space-2` apart; then the choices, `space-2` apart, or the picked choice's form.
+
+**Use it for** the card a span drawn on a week opens. **Don't use it for** a menu of commands (Menu) or a booking's details (BookingDetails).
+
+**The consumer provides** `title`, `meta`, `choices` (`id`, `label`, `icon`, `onPress`) or `children`, `onBack`, `isBusy`, `focusKey`.
+
+**Differences from the prototype**
+- The choices are full width ghost Buttons, not MenuList items: Button's look is the prototype's, and a Menu closes on a pick, which this card must not do.
+- Its width comes from the Popover around it (`width="menu"`), not the prototype's `size-menu` plus `space-32`.

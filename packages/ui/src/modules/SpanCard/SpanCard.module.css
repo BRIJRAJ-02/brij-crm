@@ -1,5 +1,6 @@
 /* SpanCard: a drawn span's card (the Popover around it sets a menu's width): the span and its day,
-   then its choices as full width quiet buttons, or the picked one's form. */
+   then its choices as full width quiet buttons, or the picked one's form. The Timefix prototype's pick menu (spec
+   0072): the span in text-heading over its day in text-body-sm-tight, text-secondary. */
 @layer components {
   .root {
     display: flex;
@@ -28,14 +29,15 @@
 
   .title {
     color: var(--text);
-    font: var(--text-body-strong);
+    font: var(--text-heading);
     font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-heading);
   }
 
   .meta {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-tight);
+    letter-spacing: var(--tracking-body-sm-tight);
   }
 
   .choices {

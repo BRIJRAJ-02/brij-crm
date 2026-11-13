@@ -24,13 +24,10 @@
     min-inline-size: 0;
   }
 
-  /* checklabs' caps overline: small, strong, spaced. */
+  /* The prototype's field label: sentence case, strong, in the text colour. */
   .label {
     margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-kbd);
-    text-transform: uppercase;
+    font: var(--text-body-sm-strong);
   }
 
   .line {
@@ -45,8 +42,7 @@
     margin: 0;
     padding-inline: var(--space-16);
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body);
   }
 
   .more:not(:empty) {

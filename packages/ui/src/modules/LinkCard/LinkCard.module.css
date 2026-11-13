@@ -19,7 +19,14 @@
    loses its colour. The facts line can
    start with the link's status as a StatusDot, a middle dot after it; the footer's start can hold one control of
    the card's own (`lead`) in the address's place; the facts line can end with one (`factsEnd`), raised above the
-   card's link, a middle dot before it; Copy link can be a quiet ghost icon. */
+   card's link, a middle dot before it; Copy link can be a quiet ghost icon.
+
+   The Timefix prototype's look (spec 0072, its BookingPageCard and FormCard): a surface card, its hairline
+   border-subtle, radius-lg and no shadow at rest; a fine pointer over its link turns the edge border and adds
+   shadow-xs; the keyboard's focus on the title rings the whole card (the outline ring, space-2 out). The title is
+   text-body-strong on one line, the facts text-body-sm in text-secondary. The stage is surface-subtle, the sheet
+   surface with shadow-xs, still under the pointer; off, the picture fades to opacity-disabled in grey. The page
+   variant's foot sits on the card's own surface, as the prototype's card foot does. */
 @layer components {
   .root {
     position: relative;
@@ -32,8 +39,7 @@
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-xs);
+    background: var(--surface);
     color: var(--text);
     transition:
       border-color var(--duration-quick) var(--ease-out),
@@ -83,21 +89,22 @@
 
   @media (hover: hover) and (pointer: fine) {
     .root:has(.title[data-hovered]) {
-      border-color: var(--border-strong);
+      border-color: var(--border);
+      box-shadow: var(--shadow-xs);
     }
   }
 
   .root:has(.title[data-focus-visible]) {
-    border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   .body {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-16) var(--space-16) var(--space-12);
+    gap: var(--space-2);
+    padding: var(--space-12) var(--space-16) var(--space-8);
   }
 
   .head {
@@ -118,8 +125,8 @@
   .heading {
     min-inline-size: 0;
     margin: 0;
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   .title {
@@ -130,8 +137,8 @@
     overflow-wrap: anywhere;
     outline: none;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 
   /* The card's one link covers the card. */
@@ -152,9 +159,9 @@
   .facts {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-body);
+    font: var(--text-body-sm);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-body);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .address {
@@ -195,7 +202,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    padding: 0 var(--space-12) var(--space-12) var(--space-16);
+    padding: var(--space-8) var(--space-12) var(--space-12) var(--space-16);
   }
 
   /* With no link to show, the foot's controls still sit at its end. */
@@ -216,16 +223,12 @@
     flex: none;
     justify-content: center;
     box-sizing: border-box;
-    block-size: calc(var(--size-column-narrow) + var(--space-24));
+    block-size: calc(3 * var(--size-control-lg) + var(--space-4));
     padding-block-start: var(--space-16);
     overflow: hidden;
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-subtle);
-  }
-
-  /* A link with a colour tints its stage with it, faintly: the dot's colour, carried up to the picture. */
-  .root[data-hue] .stage {
-    background: color-mix(in oklab, var(--edge) 14%, var(--surface-subtle));
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
 
   .sheet {
@@ -237,26 +240,15 @@
     border-block-end: 0;
     border-start-start-radius: var(--radius-md);
     border-start-end-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-md);
-    transition: translate var(--duration-fast) var(--ease-smooth-out);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
   }
 
-  /* Off (a paused page or form), the picture loses its colour as the title goes quiet: it isn't taking anyone. */
+  /* Off (a paused page or form), the picture fades and loses its colour as the title goes quiet: it isn't taking
+     anyone. Reduced motion keeps the fade (it is one). */
   .root[data-off] .stage {
-    filter: saturate(0);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .root:has(.title[data-hovered]) .sheet {
-      translate: 0 calc(-1 * var(--space-4));
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .root:has(.title[data-hovered]) .sheet {
-      translate: none;
-    }
+    opacity: var(--opacity-disabled);
+    filter: grayscale(1);
   }
 
   /* The status, then the facts after a middle dot, then the card's own quiet control after another. */
@@ -308,8 +300,9 @@
   }
 
   /* `page` (Bookings › Pages, the mock of 9 November 2026): a head of the kind's tile, the title and ⋯; an inset of
-     the facts, who it books with and the link; a foot band on surface-subtle over a hairline, Copy link at its start
-     and the card's own control (Live or Hidden) at its end. Hidden reads quieter: the title and the inset dim. */
+     the facts (text-body-sm, text-secondary), who it books with and the link; a foot on the card's own surface (the
+     prototype's card foot, spec 0072), Copy link at its start and the card's own control (Live or Hidden) at its
+     end. Hidden reads quieter: the title goes text-secondary. */
   .pageHead {
     display: flex;
     align-items: center;
@@ -340,11 +333,6 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .root[data-variant='page'] .title {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-  }
-
   /* Above the card's link: the ⋯ does its own thing. */
   .headActions {
     position: relative;
@@ -367,11 +355,10 @@
 
   .pageFacts {
     margin: 0;
-    color: var(--text);
-    transition: color var(--duration-fast) var(--ease-smooth-out);
-    font: var(--text-body);
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-body);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .people {
@@ -408,14 +395,7 @@
     align-items: center;
     gap: var(--space-8);
     margin-block-start: auto;
-    padding: var(--space-8) var(--space-12);
-    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-subtle);
-  }
-
-  /* Hidden reads quieter by colour, not opacity, so every word keeps its contrast. */
-  .root[data-variant='page'][data-off] .pageFacts {
-    color: var(--text-secondary);
+    padding: var(--space-8) var(--space-12) var(--space-12) var(--space-16);
   }
 
   @media (forced-colors: active) {

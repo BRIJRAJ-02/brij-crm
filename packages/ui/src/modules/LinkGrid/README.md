@@ -43,3 +43,14 @@ A list of cards: Tab moves through each card's link and controls in order.
 ## Differences from the artifact
 
 Not in the artifact yet.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's LinkList family through LinkCard, which it renders: each card is LinkCard's prototype look (a `surface` card, `border-subtle` hairline, `radius-lg`, no shadow at rest, the edge and `shadow-xs` under a pointer, the outline ring on focus). The grid itself keeps its own rules, which the prototype only draws as demo layout (its booking pages and forms demos), so nothing here changed and none of its rules repeat LinkCard's.
+
+**Use it for** Captures › Links and Forms, Bookings › Pages. **Don't use it for** a short list beside other work (LinkList).
+
+**The consumer provides** `label`, `cards` (LinkCard's props with an `id` and an optional `groupId`), `query` and `onQueryChange`, `status` with `onRetry`, `errorTitle`, `emptyState`, `groups`, `hasPictures`, `cardVariant`.
+
+**Differences from the prototype**
+- Kept: the search, groups, the loading cards and every state above; the prototype's demo grid (`auto-fill` columns of `size-menu` plus `space-12`, `space-12` apart) is not a component rule, so the library's `size-column-wide` columns `space-16` apart stay.

@@ -106,6 +106,7 @@ export function LinkGrid({
       <div className={styles.grid} aria-busy="true">
         {showSkeleton &&
           Array.from({ length: SKELETON_CARDS }, (_, index) => (
+            // Static placeholders that never reorder: their place is their key (AC-16).
             <LinkCardSkeleton key={index} hasPicture={hasPictures} variant={cardVariant} />
           ))}
         <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>

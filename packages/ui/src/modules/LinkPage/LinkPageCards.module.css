@@ -112,7 +112,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .card:hover {
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-sm);
       transform: translateY(calc(var(--space-2) * -1));
     }
   }
@@ -393,8 +393,8 @@
   }
 
   .piece[data-pressable]:focus-visible {
-    outline: none;
-    box-shadow: var(--page-focus, var(--shadow-focus));
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -463,16 +463,10 @@
     flex-direction: column;
     justify-content: flex-end;
     gap: var(--space-4);
-    animation: step-in var(--duration-fast) var(--ease-smooth-out);
+    animation: fade-in var(--duration-fast) var(--ease-smooth-out);
   }
 
   @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-  }
-
-  @keyframes step-in {
     from {
       opacity: 0;
     }
@@ -505,8 +499,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cell[data-enter],
-    .step {
+    .cell[data-enter] {
       animation-name: fade-in;
     }
 

@@ -48,3 +48,16 @@ None: it is a picture inside LinkCard's stage, hidden from assistive tech and in
 ## Differences from the artifact
 
 Not in the artifact yet.
+
+## Timefix prototype (spec 0072)
+
+The prototype's FormPicture draws the form's real guest controls at half size; this one draws them as shapes (props `title`, `count`, `fields`, `hue`, so no real questions reach it), in the prototype's control language: a field is the prototype's filled box (`surface-subtle`, no edge, `radius-xs`), a choice a hairline pill (`border-strong`), the picked one tinted with the colour, a rating's lit dots in the colour, a check a hairline box, and the button a pill (`radius-full`) solid in the colour, on LinkCard's `surface` sheet. The head (the mark, the name in `text-label`, the count in `text-tertiary`) is unchanged.
+
+**Use it for** LinkCard's `picture` on the forms list. **Don't use it for** the form itself (HostedFormPreview) or a layout's tile (FormLayoutThumbnail).
+
+**The consumer provides** `title`, `count`, `fields` and `hue`.
+
+**Differences from the prototype**
+- Shapes, not the real controls: drawing them would need the form's questions (a new prop) and the hosted form's controls in the forms list's chunk; owed to the forms screen phase if it wants them.
+- The button is in the form's colour (`hue`), not ink: the owner's colour per form (5 November 2026), the same colour as the mark.
+- The prototype's FormCard and FormStatusTag are LinkCard's (its `status` and `factsEnd`).

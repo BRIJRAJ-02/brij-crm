@@ -1,10 +1,9 @@
-/* LinkList (spec 0025's Cal.com alignment, the event types list): a search
-   field (size-column-wide at most) with the list's action at the other end,
-   then rows about 60px tall, parted by a hairline in a raised, bordered box.
-   Each row opens its link: surface-hover under a pointer, the inset focus
-   ring from the keyboard. Left: the title (body-strong, the text colour) with
-   the address inline in the muted label type, an optional two line
-   description, and the chips. Right: the Off badge, the switch, and the
+/* LinkList (spec 0025's Cal.com alignment, the event types list; the Timefix prototype's list card, spec 0072): a
+   search field (size-column-wide at most) with the list's action at the other end, then rows about 60px tall, parted
+   by a border-subtle hairline in a surface box with a border-subtle edge and radius-lg corners. Each row opens its
+   link: surface-hover under a pointer and while pressed (a wash, never a scale), the outline ring just inside the
+   row from the keyboard. Left: the title (body-strong, the text colour) with the address inline in the muted
+   body-sm type, an optional two line description, and the chips. Right: the Off badge, the switch, and the
    actions as one ButtonGroup. An off row's title reads in text-secondary. A
    pending row (a copy on its way) reads in text-tertiary. On a narrow container the end moves under the
    title.
@@ -48,9 +47,9 @@
     flex-direction: column;
     margin: 0;
     padding: 0;
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
     outline: none;
     container-type: inline-size;
   }
@@ -62,21 +61,27 @@
     box-sizing: border-box;
     min-block-size: calc(var(--size-row) + var(--space-24));
     padding: var(--space-8) var(--space-16);
-    border-block-end: var(--border-width-hairline) solid var(--border);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     color: var(--text);
     outline: none;
     transition: background-color var(--duration-quick) var(--ease-out);
   }
 
+  /* A row as a link (rowsAreLinks). */
+  .row[href] {
+    text-decoration: none;
+    cursor: pointer;
+  }
+
   .row:first-child {
-    border-start-start-radius: var(--radius-md);
-    border-start-end-radius: var(--radius-md);
+    border-start-start-radius: var(--radius-lg);
+    border-start-end-radius: var(--radius-lg);
   }
 
   .row:last-child {
     border-block-end: none;
-    border-end-start-radius: var(--radius-md);
-    border-end-end-radius: var(--radius-md);
+    border-end-start-radius: var(--radius-lg);
+    border-end-end-radius: var(--radius-lg);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -86,8 +91,16 @@
     }
   }
 
-  .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+  /* Pressed: the same wash, on touch too; nothing scales. */
+  .row[data-pressed] {
+    background: var(--surface-hover);
+  }
+
+  /* Rows sit edge to edge in their box, so the ring is drawn just inside the row. */
+  .row[data-focus-visible],
+  .row[href]:focus-visible {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .row[data-pending] {
@@ -102,7 +115,7 @@
   }
 
   .item:not(:last-child) > .row {
-    border-block-end: var(--border-width-hairline) solid var(--border);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     border-end-start-radius: 0;
     border-end-end-radius: 0;
   }
@@ -110,15 +123,6 @@
   .item:not(:first-child) > .row {
     border-start-start-radius: 0;
     border-start-end-radius: 0;
-  }
-
-  .row[href] {
-    text-decoration: none;
-    cursor: pointer;
-  }
-
-  .row[href]:focus-visible {
-    box-shadow: var(--shadow-focus-inset);
   }
 
   /* A row's tile (a link page's block's mark, icon or letter), before its title. */
@@ -188,8 +192,8 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -207,8 +211,8 @@
     margin: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -227,7 +231,7 @@
      and nothing under it moves. */
   .chips[data-pending] {
     align-items: center;
-    min-block-size: var(--size-chip);
+    min-block-size: var(--space-20);
   }
 
   .end {
@@ -259,14 +263,15 @@
     display: inline-flex;
   }
 
-  /* Rows that move (onMove): each starts with its grip's cell, the handle's width whether it holds a grip or not
-     (a pending row, a loading one), so the titles line up; space-8 from the title rather than the row's gap. */
+  /* Rows that move (onMove): each starts with its grip's cell, the handle's width (DragHandle's space-20) whether it
+     holds a grip or not (a pending row, a loading one), so the titles line up; space-8 from the title rather than the
+     row's gap. */
   .grip {
     display: inline-flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    inline-size: calc(var(--size-icon-sm) + 2 * var(--space-2));
+    inline-size: var(--space-20);
     margin-inline-end: calc(var(--space-8) - var(--space-16));
   }
 
@@ -305,11 +310,11 @@
 
     /* A row that moves keeps its grip beside the title, and its end wraps under the title rather than the grip. */
     .frame[data-reorderable]:not([data-density='compact']) .main {
-      flex-basis: calc(100% - var(--size-icon-sm) - 2 * var(--space-2) - var(--space-8));
+      flex-basis: calc(100% - var(--space-20) - var(--space-8));
     }
 
     .frame[data-reorderable]:not([data-density='compact']) .end {
-      margin-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-8));
+      margin-inline-start: calc(var(--space-20) + var(--space-8));
     }
 
     /* Rows with a tile stay on one line, the tile and the end beside the words, which wrap: the address goes
@@ -372,7 +377,7 @@
 
   /* No grips to hold the column (read only, or under a search): the tiles still start under an inset title. */
   .frame[data-tile-inset] .row {
-    padding-inline-start: calc(var(--space-8) + var(--size-icon-sm) + 2 * var(--space-2) + var(--space-4));
+    padding-inline-start: var(--space-32);
   }
 
   /* The grip's column stays on the same line as a section head's chevron, so the tiles start under its title. */
@@ -477,7 +482,7 @@
   }
 
   .frame[data-reorderable] > .footer {
-    padding-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-4));
+    padding-inline-start: var(--space-24);
   }
 
   /* Rows that arrive after the first draw ease in, a fade with a small rise (a fade alone with reduced motion). */
@@ -690,9 +695,9 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-label);
+    font: var(--text-body-sm);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-body-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

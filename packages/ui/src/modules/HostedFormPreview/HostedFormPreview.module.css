@@ -1,7 +1,8 @@
 /* HostedFormPreview: the form's own ground under it. The phone's screen stretches its one child to the frame's foot
    (PreviewLayout), so this ground, in the form's own look (`data-theme`), runs to the bottom of the phone instead
    of stopping where a short form does over the app's surface (a light form in dark mode). The headline and the
-   button take a press target laid over them when the builder edits words in place (`onTextChange`). */
+   button take a press target laid over them when the builder edits words in place (`onTextChange`). Its keyboard
+   focus is the Timefix prototype's outline ring (spec 0072). */
 @layer components {
   .ground {
     position: relative;
@@ -57,18 +58,13 @@
 
   .spot[data-focus-visible] {
     border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .spot:hover {
       border-color: var(--accent-text);
-    }
-  }
-
-  @media (forced-colors: active) {
-    .spot[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

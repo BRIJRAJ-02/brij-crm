@@ -2,7 +2,9 @@
    Steps as a small card, One at a time on the slot's own ground with its question drawn larger. A template's tile
    draws its own answers instead (`data-row`): a taller box for a long answer, a stack of lines for choices, round
    marks for stars, a row of boxes for a scale, a short box for a day, a dashed box for an upload. Shapes only, in
-   the form's tokens; nothing moves. */
+   the form's tokens; nothing moves. The Timefix prototype's form in miniature (spec 0072): a surface sheet with a
+   border-subtle hairline, fields as its filled boxes (surface-subtle, no edge), its buttons as pills, the primary in
+   ink (primary). */
 @layer components {
   .root {
     display: flex;
@@ -11,9 +13,9 @@
     box-sizing: border-box;
     inline-size: var(--size-column-min);
     padding: var(--space-6);
-    border: var(--border-width-hairline) solid var(--border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    background: var(--surface-raised);
+    background: var(--surface);
   }
 
   .root[data-layout='conversational'] {
@@ -51,9 +53,8 @@
 
   .input {
     block-size: var(--space-6);
-    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-xs);
-    background: var(--surface);
+    background: var(--surface-subtle);
   }
 
   /* One at a time: the question at heading size, so its line is longer and thicker. */
@@ -73,7 +74,7 @@
   }
 
   .field[data-row='upload'] .input {
-    border-style: dashed;
+    border: var(--border-width-hairline) dashed var(--border-strong);
   }
 
   /* A row of little marks where a control would be: a rating's stars, a scale's numbers, a choice list's options. */
@@ -122,14 +123,14 @@
     inline-size: 30%;
     block-size: var(--space-6);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-full);
   }
 
   .button {
     flex: 1;
     block-size: var(--space-6);
-    border-radius: var(--radius-xs);
-    background: var(--accent);
+    border-radius: var(--radius-full);
+    background: var(--primary);
   }
 
   .root[data-layout='conversational'] .button {
@@ -140,6 +141,7 @@
   @media (forced-colors: active) {
     .fill,
     .button,
+    .input,
     .mark {
       background: CanvasText;
     }

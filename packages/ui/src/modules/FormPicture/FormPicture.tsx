@@ -66,6 +66,7 @@ function FieldShape({ field }: { readonly field: FormPictureField }) {
     return (
       <span className={styles.row}>
         {Array.from({ length: pills }, (_, at) => (
+          // A fixed drawing that never reorders: its place is its key (AC-16).
           <span key={at} className={styles.pill} data-picked={at === 0 ? '' : undefined} />
         ))}
       </span>
@@ -75,6 +76,7 @@ function FieldShape({ field }: { readonly field: FormPictureField }) {
     return (
       <span className={styles.row}>
         {Array.from({ length: RATING_DOTS }, (_, at) => (
+          // A fixed drawing that never reorders: its place is its key (AC-16).
           <span key={at} className={styles.star} data-lit={at < RATING_LIT ? '' : undefined} />
         ))}
       </span>

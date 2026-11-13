@@ -37,13 +37,13 @@ The drag, pinch and wheel are about 150 lines of pointer events over pure arithm
 ## Anatomy
 
 - The Modal is a `window` (`size-dialog-wide`), so the stage is about 750px across on a desk and the window's width on a phone (round 2, 4 November 2026: at 560px the photo was too small to place).
-- The stage: 4:3 (2:1 for a cover), at most 55% of the window's height, in the dark theme whatever the page's (`data-theme="dark"` on it, as HostedFormPreview scopes its theme): `surface-sunken` under the photo, and the dark `scrim` (55%) over all of it but the frame, so what the crop cuts reads as clearly on a light page as on a dark one (a light wash was too pale to show it). The frame's edge is in the accent, and thirds fade in while the photo moves.
+- The stage: 4:3 (2:1 for a cover), at most 55% of the window's height, in the dark theme whatever the page's (`data-theme="dark"` on it, as HostedFormPreview scopes its theme): `surface-subtle` under the photo, and the dark `scrim` over all of it but the frame, so what the crop cuts reads as clearly on a light page as on a dark one (a light wash was too pale to show it). The frame's edge is a `border-width-focus` line in the text colour, and thirds fade in while the photo moves.
 - Under it: the zoom's minus, Slider and plus, then a preview a bar high in the frame's shape (round for a face): the crop as it will sit.
 - The footer: Reset at its start, then Cancel (with its `ESC` keycap) and Use photo.
 
 ## States
 
-Opening (a Skeleton fills the stage and Use photo waits), ready, moving (thirds show, the grabbing cursor), easing (after a key or Reset, the photo eases to its place over `duration-move`; a pointer, the wheel and the Slider move it at once), unreadable (a sentence in the stage, Use photo stays off). Reduced motion drops the easing; forced colours draw the frame's edge in Highlight.
+Opening (a Skeleton fills the stage and Use photo waits), ready, moving (thirds show, the grabbing cursor), easing (after a key or Reset, the photo eases to its place over `duration-quick`; a pointer, the wheel and the Slider move it at once), unreadable (a sentence in the stage, Use photo stays off). Reduced motion drops the easing; forced colours draw the frame's edge in Highlight.
 
 ## Keyboard and screen readers
 
@@ -56,3 +56,18 @@ Drag places it; the wheel zooms about the pointer; two fingers pinch about their
 ## Differences from the artifact
 
 The artifact has no PhotoCrop card yet; this is the code first version, published with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's PhotoCrop: a dark stage (`surface-subtle` in the dark theme, `radius-lg`), the photo under the frame and the `scrim` over everything the crop cuts; the frame's edge a `border-width-focus` line in `text` (light on the dark stage, as the prototype's mask edge); thirds in `text`, `border-width-hairline`, fading in to `opacity-busy` over `duration-fast` on `ease-smooth-out` while the photo moves; keys and Reset ease the photo over `duration-quick` on `ease-smooth-out`, a pointer moves it at once. The controls sit `space-16` under the stage. The stage's keyboard focus is the outline ring (`border-width-focus` solid `focus-ring`) drawn just inside it, on its own dark ground: outside, the dark theme's ring would sit on a light modal at under 3:1. The preview's corners are `radius-md` (round for a face), as the prototype's CroppedImage. Reduced motion drops the easing and keeps the fade; forced colours draw the edge and the ring in Highlight.
+
+**Use it for** profile photos, logos, covers, link page pictures, share pictures, dishes, staff and gallery photos, before upload. **Don't use it for** files that are not pictures (FileDrop) or editing a photo's colours.
+
+**The consumer provides** `source`, `shape`, `title`, `onDone(crop)` and `onCancel`; or `usePhotoCrop()`'s `crop(file, shape)` and `cropper`.
+
+**States**: opening, ready, moving (`Moving`), easing (`Keyboard`), unreadable, each shape, free with its frames, picked from FileDrop (`WithPicker`).
+
+**Differences from the prototype**
+- The frame's corners stay square for wide and square frames (the prototype rounds them `radius-md` and eases them between shapes): the veil is one SVG path cut by the frame, and rounding it is arithmetic in the TSX, owed to a later pass.
+- No saving or saved state (Save spinning, then a drawn check): the library's cropper answers the crop (`onDone`) and the screen uploads and confirms; a `src`, `onSave` that may return a promise and `CroppedImage` are the prototype's API, not this one's (`preparePhoto` draws the kept part).
+- The stage keeps its aspect ratio (4:3, 2:1 for a cover, at most 55% of the window's height), not the prototype's fixed height; the zoom runs to 400% (the prototype's 300%), with minus and plus beside the Slider and a live preview at the row's end.

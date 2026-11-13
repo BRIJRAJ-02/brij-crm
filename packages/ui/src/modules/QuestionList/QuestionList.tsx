@@ -456,7 +456,8 @@ export function QuestionList({
                                   </span>,
                                 ]),
                           ].map((part, at) => (
-                            // The separator stays outside the part, so its spaces are where a line may break.
+                            // The separator stays outside the part, so its spaces are where a line may break. A
+                            // line's parts are drawn fresh in a fixed order and never reorder: place is key (AC-16).
                             <Fragment key={at}>
                               {at === 0 ? null : strings.separator}
                               <span className={styles.part}>{part}</span>

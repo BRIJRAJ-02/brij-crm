@@ -168,7 +168,7 @@ export const Search: Story = {
   },
 };
 
-/** By keyboard: the arrows move between rows, Enter opens one, right reaches its controls. */
+/** By keyboard: the arrows move between rows (the focused one takes the outline ring), Enter opens one, right reaches its controls. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
@@ -180,6 +180,7 @@ export const Keyboard: Story = {
     canvas.getAllByRole('row')[0]?.focus();
     await userEvent.keyboard('{ArrowDown}');
     await expect(canvas.getAllByRole('row')[1]).toHaveFocus();
+    await expect(canvas.getAllByRole('row')[1]).toHaveAttribute('data-focus-visible');
     await userEvent.keyboard('{Enter}');
     await expect(args.onOpen).toHaveBeenCalledWith('visit');
     await userEvent.keyboard('{ArrowRight}');
@@ -1089,5 +1090,54 @@ export const Figures: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('12 clicks')).toBeInTheDocument();
     await expect(canvas.getByText('christian@rilian.com')).toBeInTheDocument();
+  },
+};
+
+/** Hover and press (spec 0072): a row under the pointer washes, and holds the wash while pressed; nothing scales. */
+export const RowHoverAndPress: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <LinkList {...args} rows={pages()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const row = canvas.getAllByRole('row')[0] as HTMLElement;
+    await userEvent.hover(row);
+    await waitFor(() => expect(row).toHaveAttribute('data-hovered'));
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: row }]);
+    await waitFor(() => expect(row).toHaveAttribute('data-pressed'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: row }]);
+    await waitFor(() => expect(row).not.toHaveAttribute('data-pressed'));
+    await expect(args.onOpen).toHaveBeenCalledWith('intro');
+  },
+};
+
+/**
+ * Rows as links (a public profile's booking links): each row is a plain link to its address, Tab moves from link to
+ * link. An address safeHref refuses (`javascript:`) draws its row as plain text, never a link (spec 0072, AC-12).
+ */
+export const RowsAsLinks: Story = {
+  args: { label: 'Booking links', isToolbarHidden: true },
+  render: (args) => (
+    <Stage>
+      <LinkList
+        {...args}
+        rowsAreLinks
+        rows={[
+          { id: 'intro', title: 'Intro call', address: '30 min', chips: [], href: '/acme/intro-call' },
+          { id: 'bad', title: 'Free consult', address: '15 min', chips: [], href: 'javascript:alert(1)' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const link = canvas.getByRole('link', { name: /Intro call/ });
+    await expect(link).toHaveAttribute('href', '/acme/intro-call');
+    await expect(canvas.getAllByRole('link')).toHaveLength(1);
+    const refused = canvas.getByText('Free consult').closest('a');
+    await expect(refused).not.toHaveAttribute('href');
+    await userEvent.tab();
+    await expect(link).toHaveFocus();
   },
 };

@@ -197,10 +197,16 @@ export const Opening: Story = {
   },
 };
 
-/** One question open, its head filled, its editor under it, and its footer row: Required at the start, Duplicate and Delete at the end. */
+/**
+ * One question open (the selected card: the accent edge and ring, spec 0072), its editor under it, and its footer row:
+ * Required at the start, Duplicate and Delete at the end.
+ */
 export const OneOpen: Story = {
   args: { initialOpen: ['email'] },
   play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('row');
+    await expect(rows[1]).toHaveAttribute('data-open');
+    await expect(rows[0]).not.toHaveAttribute('data-open');
     await expect(canvas.getByRole('checkbox', { name: 'Visitors must answer' })).toBeChecked();
     await expect(canvas.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
   },
@@ -248,6 +254,28 @@ export const KeyboardReorder: Story = {
     await waitFor(() =>
       expect(within(document.body).getByText('Your name, moved to position 2 of 4.')).toBeInTheDocument(),
     );
+  },
+};
+
+/** Hover (spec 0072): a closed card's head washes under the pointer and its grip takes the type tile's place. */
+export const CardHover: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = canvas.getByRole('button', { name: /^Budget/ });
+    await userEvent.hover(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute('data-hovered'));
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/** By keyboard: Tab enters the list on its first card, which takes the outline ring. */
+export const CardFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[0] as HTMLElement;
+    for (let step = 0; step < 4 && document.activeElement !== row; step += 1) await userEvent.tab();
+    await expect(row).toHaveFocus();
+    await expect(row).toHaveAttribute('data-focus-visible');
   },
 };
 

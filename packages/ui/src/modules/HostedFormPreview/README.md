@@ -52,3 +52,18 @@ Why here and new: a choice tile takes a Lucide mark or a thumbnail, and no mark 
 ## Differs from the artifact
 
 The artifact has no form preview. `logo` (the Timefix wordmark at the foot) defaults to the web app's own files; stories pass a stand in.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's FormPicture (its HostedFormPreview and FormLayoutThumbnail fold into it). The preview is the hosted form itself, so its look is HostedForm's (phase 2's `public-form`); the frame round it (browser or phone, the device switch) is PreviewLayout's. What this folder draws: the edit spots over the headline and button, a dashed `accent-text` edge on hover, focus or while open, and on keyboard focus the outline ring (`border-width-focus` solid `focus-ring`, `space-2` out), which forced colours keep.
+
+FormLayoutThumbnail draws the prototype's form in miniature as shapes: a `surface` sheet with a `border-subtle` hairline, fields as the prototype's filled boxes (`surface-subtle`, no edge; an upload's a dashed `border-strong` box), the buttons as pills, the primary in ink (`primary`, as the prototype's primary button) and Back with a hairline; the progress line and a rating's stars stay `accent`.
+
+**Use it for** the builder's live preview, a draft opened to try, a template tile's thumbnail (`size="thumbnail"`), and the Layout tiles (FormLayoutThumbnail). **Don't use it for** the hosted page (HostedForm) or the forms list's picture (FormPicture).
+
+**The consumer provides** `form`, `mode`, `logo`, `step`, `brand`, `onTextChange`, `ending` and `size`; FormLayoutThumbnail `layout` and `rows`.
+
+**Differences from the prototype**
+- No browser or phone frame, address bar or device switch here: PreviewLayout draws those (its `device`), and the form's own fade on a device change with them.
+- Kept beyond the prototype: `mode="page"`, editing the headline and button in place, `ending`, `step`, `brand`, `size="thumbnail"`.
+- Does not render FormPicture: FormPicture takes a name, a count and up to two fields as shapes; this draws the real form, and FormLayoutThumbnail draws a layout's frame (progress, Back) and seven row kinds FormPicture lacks, so neither can render it without new props. Rules repeated from FormPicture's look in FormLayoutThumbnail's module: the filled field box and the pill button (a few declarations), which leave with it when its last caller moves.

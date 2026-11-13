@@ -17,7 +17,6 @@
     border-radius: var(--page-radius-card, var(--radius-md));
     background: var(--page-card-hover, var(--surface-hover));
     overflow: hidden;
-    outline: none;
   }
 
   .root[data-fill] .frame {
@@ -27,8 +26,8 @@
 
   /* Inside the frame's clipped corners, as every pressable picture on the page draws it. */
   .frame[data-link]:focus-visible {
-    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
-    outline-offset: calc(var(--border-width-thick) * -1);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(var(--border-width-focus) * -1);
   }
 
   .picture {
@@ -56,11 +55,5 @@
     letter-spacing: var(--tracking-label);
     font-family: var(--page-body-face, var(--font-sans));
     overflow-wrap: anywhere;
-  }
-
-  @media (forced-colors: active) {
-    .frame[data-link]:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
-    }
   }
 }

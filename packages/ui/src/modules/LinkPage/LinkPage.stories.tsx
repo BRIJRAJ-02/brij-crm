@@ -1295,3 +1295,79 @@ export const TemplateThumbnailsReal: Story = {
     );
   },
 };
+
+/**
+ * By keyboard (spec 0072, the prototype's Interaction): Tab walks the rows in the owner's order, and the row it
+ * reaches takes the outline ring (`:focus-visible`), named by its title.
+ */
+export const KeyboardOrder: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const rows = [/Intro call/, /Product demo/, /LinkedIn/, /^X/, /timefix\.com/].map((name) =>
+      canvas.getByRole('link', { name }),
+    );
+    const [first] = rows;
+    if (first === undefined) throw new Error('No rows');
+    // Start just before the first row, wherever the hero's own controls end.
+    await userEvent.tab();
+    while (document.activeElement !== first && canvasElement.contains(document.activeElement)) {
+      await userEvent.tab();
+    }
+    for (const row of rows) {
+      await expect(row).toHaveFocus();
+      await expect(row.matches(':focus-visible')).toBe(true);
+      await userEvent.tab();
+    }
+  },
+};
+
+/** Under a pointer a row lifts with a soft shadow and stays the one link it was (spec 0072). */
+export const RowHover: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement, args }) => {
+    settleEntrance(canvasElement);
+    const row = canvas.getByRole('link', { name: /Product demo/ });
+    await userEvent.hover(row);
+    await expect(row).toHaveAttribute('href', '/anish/demo');
+    row.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.click(row);
+    await expect(args.onPress).toHaveBeenCalledWith('demo');
+  },
+};
+
+/**
+ * The brand reaches the focus ring (decision 16): a row reached by keyboard wears the outline ring in the page's own
+ * accent, as the primary button wears it.
+ */
+export const BrandedFocusRing: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON, variables: ORANGE_BRAND },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const row = canvas.getByRole('link', { name: /Intro call/ });
+    await userEvent.tab();
+    while (document.activeElement !== row && canvasElement.contains(document.activeElement)) {
+      await userEvent.tab();
+    }
+    await expect(row).toHaveFocus();
+    await expect(getComputedStyle(row).outlineColor).toBe('rgb(230, 87, 8)');
+  },
+};

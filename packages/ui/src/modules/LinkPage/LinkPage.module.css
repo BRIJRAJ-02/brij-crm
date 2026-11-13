@@ -18,12 +18,12 @@
     --page-surface: var(--surface-inverse);
     --page-text: var(--on-inverse);
     --page-text-quiet: var(--on-inverse);
-    --page-card: var(--inverse-hover);
-    --page-card-border: var(--inverse-hover);
+    --page-card: var(--page-ink-card);
+    --page-card-border: var(--page-card);
     --page-card-text: var(--on-inverse);
     --page-card-quiet: var(--on-inverse);
     --page-card-mark: var(--on-inverse);
-    --page-card-hover: var(--inverse-hover);
+    --page-card-hover: var(--page-card);
     --page-card-shadow: none;
     /* Dark to look at, so a brand draws its dark pair here (spec 0060, AC-5). */
     --page-brand-accent: var(--brand-accent-dark, var(--page-none));
@@ -38,12 +38,12 @@
       --page-surface: var(--surface-inverse);
       --page-text: var(--on-inverse);
       --page-text-quiet: var(--on-inverse);
-      --page-card: var(--inverse-hover);
-      --page-card-border: var(--inverse-hover);
+      --page-card: var(--page-ink-card);
+      --page-card-border: var(--page-card);
       --page-card-text: var(--on-inverse);
       --page-card-quiet: var(--on-inverse);
       --page-card-mark: var(--on-inverse);
-      --page-card-hover: var(--inverse-hover);
+      --page-card-hover: var(--page-card);
       --page-card-shadow: none;
       --page-brand-accent: var(--brand-accent-dark, var(--page-none));
       --page-brand-on-accent: var(--brand-on-accent-dark, var(--page-none));
@@ -242,7 +242,7 @@
     --page-card-quiet: var(--page-on-accent);
     --page-card-mark: var(--page-on-accent);
     --page-card-hover: var(--page-accent-hover);
-    --page-card-shadow: var(--shadow-control);
+    --page-card-shadow: var(--shadow-xs);
   }
 
   /* The typeface puts the name and each row's title in the mono face; sentences stay in Geist (AC-5410). Only the
@@ -277,7 +277,6 @@
 
   .root[data-page-font='display'] {
     --page-face: var(--font-pack-display);
-    --page-name-text: var(--text-title-lg);
   }
 
   /* Follow the visitor (spec 0060, AC-15) sets no `data-theme`, so the tokens and `light-dark()` below take the
@@ -308,10 +307,12 @@
     --page-radius-card: var(--page-radius);
     --page-face: var(--font-sans);
     --page-body-face: var(--font-sans);
-    --page-name-text: var(--text-title);
+    --page-name-text: var(--text-title-lg);
     --page-ground-paint: none;
     /* What a thumbnail draws for a photo it has no photo for: a page without one draws plain and never shows it. */
     --page-photo-stand-in: linear-gradient(to bottom right, var(--tag-sky-bg), var(--tag-purple-bg));
+    /* A card on ink: the light words' colour at 15% over the dark ground. */
+    --page-ink-card: color-mix(in srgb, var(--on-inverse) 15%, transparent);
 
     /* The brand (spec 0060, AC-5, AC-14): the accent pair the page's own stylesheet sets at the root, or the app's
        preview through `variables`, its light or dark half picked by the page's own colour scheme. With no brand
@@ -329,14 +330,13 @@
     /* A tenth of the link colour over the page's own surface: the link keeps 4.5:1 on it for any accent. */
     --page-soft-base: var(--surface);
     --page-brand-soft: color-mix(in oklab, var(--page-brand-link) 10%, var(--page-soft-base));
-    --page-brand-focus: 0 0 0 var(--border-width-thick) var(--page-brand-accent);
     --page-accent: var(--page-brand-accent, var(--accent));
     --page-accent-hover: var(--page-brand-accent, var(--accent-hover));
     --page-on-accent: var(--page-brand-on-accent, var(--on-accent));
     --page-link: var(--page-brand-link, var(--link));
     --page-accent-soft: var(--page-brand-soft, var(--accent-soft));
     --page-accent-border: var(--page-brand-accent, var(--accent-border));
-    --page-focus: var(--page-brand-focus, var(--shadow-focus));
+    --page-ring: var(--page-brand-accent, var(--focus-ring));
 
     box-sizing: border-box;
     display: flex;
@@ -365,7 +365,7 @@
     --link: var(--page-link);
     --accent-soft: var(--page-accent-soft);
     --accent-border: var(--page-accent-border);
-    --shadow-focus: var(--page-focus);
+    --focus-ring: var(--page-ring);
   }
 
   /* An editor's draft of one block (spec 0060, AC-16): the page's own ground and look, in a slice. */
@@ -475,12 +475,8 @@
 
   /* The address pill under the bio: the page's own address, pressed to copy. While it loads, its own place, so
      the header never grows when the address arrives. */
-  .pill {
+  .pillLoading {
     display: flex;
-    margin-block-start: var(--space-6);
-  }
-
-  .pill[data-loading] {
     inline-size: var(--size-column-narrow);
     block-size: var(--size-control-sm);
     border-radius: var(--radius-full);
@@ -615,8 +611,8 @@
   }
 
   .lockup[href]:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -627,7 +623,7 @@
 
   .lockupLogo {
     flex: none;
-    block-size: var(--size-tile);
+    block-size: var(--size-icon-lg);
     inline-size: auto;
     max-inline-size: var(--size-column-narrow);
     object-fit: contain;
@@ -691,10 +687,9 @@
     margin: 0;
     padding-inline: var(--space-4);
     color: var(--page-text-quiet);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-kbd);
+    font: var(--text-body-sm-strong);
     font-family: var(--page-body-face);
-    text-transform: uppercase;
+    text-align: center;
     overflow-wrap: anywhere;
   }
 
@@ -846,7 +841,7 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -870,10 +865,11 @@
     box-shadow: var(--page-card-shadow);
     color: var(--page-card-text);
     text-decoration: none;
-    outline: none;
     transition:
       background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out);
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out),
+      transform var(--duration-quick) var(--ease-smooth-out);
   }
 
   /* A place for a block that isn't there yet (a preview of a page still being made): the row's shape, quieter,
@@ -886,13 +882,17 @@
   }
 
   .block:focus-visible {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
+  /* Every row lifts 2px with a soft shadow under the pointer and eases down while held (the prototype's link
+     buttons; the press is the public pages' own `--scale-press`). */
   @media (hover: hover) and (pointer: fine) {
-    .block:not([data-loading], [data-inert]):hover {
-      border-color: var(--page-card-border);
+    .block:not([data-loading], [data-inert], [data-ghost]):hover {
       background: var(--page-card-hover);
+      box-shadow: var(--shadow-sm);
+      transform: translateY(calc(var(--social-lift) * -1));
     }
 
     .block:not([data-loading]):hover .end {
@@ -929,8 +929,8 @@
   }
 
   .siteIcon {
-    inline-size: var(--size-chip);
-    block-size: var(--size-chip);
+    inline-size: var(--size-icon-lg);
+    block-size: var(--size-icon-lg);
     object-fit: contain;
   }
 
@@ -1015,17 +1015,6 @@
     transition: color var(--duration-quick) var(--ease-out);
   }
 
-  /* A booking page's row eases down a touch while held (the v5 mock's 0.99, a public page's own press). */
-  .block[data-row='page'] {
-    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- the mock's row press, no token for 0.99 */
-    --row-press: 0.99;
-
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out),
-      scale var(--duration-quick) var(--ease-smooth-out);
-  }
-
   /* A booking page's row (the v5 mock): its border a step stronger and its chevron nudged on, under the pointer. */
   @media (hover: hover) and (pointer: fine) {
     .block[data-row='page']:hover {
@@ -1035,10 +1024,6 @@
     .block[data-row='page']:hover .end {
       translate: var(--space-2) 0;
     }
-  }
-
-  .block[data-row='page']:active {
-    scale: var(--row-press);
   }
 
   .block[data-row='page'] .end {
@@ -1064,11 +1049,16 @@
     }
   }
 
-  /* Reduced motion: the row neither eases down nor nudges its chevron. */
+  /* After the lift, so a held row drops it and eases down. */
+  .block:not([data-loading], [data-inert]):active {
+    transform: scale(var(--scale-press));
+  }
+
+  /* Reduced motion: no row lifts, eases down or nudges its chevron; the colours still change. */
   @media (prefers-reduced-motion: reduce) {
-    .block[data-row='page']:active,
+    .block:not([data-loading], [data-inert]):is(:hover, :active),
     .block[data-row='page'] .end {
-      scale: none;
+      transform: none;
       translate: none;
     }
   }
@@ -1632,11 +1622,11 @@
     text-decoration: underline;
     text-underline-offset: var(--space-2);
     border-radius: var(--radius-xs);
-    outline: none;
   }
 
   .bannerLink:focus-visible {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   /* The socials row block (AC-6104): the header's round marks, centred, wherever the owner put them. */
@@ -1698,26 +1688,6 @@
     inline-size: 100%;
   }
 
-  /* Every template: rows press in and lift a touch under the pointer (AC-6803). */
-  .root[data-template] .block {
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out),
-      box-shadow var(--duration-quick) var(--ease-out),
-      transform var(--duration-quick) var(--ease-smooth-out);
-  }
-
-  .root[data-template] .block:not([data-loading], [data-inert]):active {
-    transform: scale(var(--scale-press));
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .root[data-template] .block:not([data-loading], [data-inert], [data-ghost]):hover {
-      box-shadow: var(--shadow-md);
-      transform: translateY(calc(var(--social-lift) * -1));
-    }
-  }
-
   /* Studio: an off white paper ground warmed by the page's own accent (a touch of it in the paper, a little more in
      the card edges; with no brand, a warm orange), an editorial serif for the name and headings, image led cards
      with a card's round corners, pill chips. Always light, as a printed menu is. The touch is small enough that the
@@ -1729,7 +1699,6 @@
     --page-card-border: color-mix(in oklab, var(--studio-warmth) 18%, var(--border));
     --page-card-shadow: var(--shadow-xs);
     --page-radius-card: var(--radius-xl);
-    --page-name-text: var(--text-title-lg);
     --page-soft-base: var(--page-surface);
   }
 
@@ -1739,13 +1708,7 @@
     --page-card: var(--surface-subtle);
     --page-card-border: var(--border);
     --page-card-hover: var(--surface-raised);
-    --page-name-text: var(--text-title-lg);
     --page-glow: 0 0 var(--space-16) color-mix(in oklab, var(--page-accent) 45%, transparent);
-    --page-focus: 0 0 0 var(--border-width-thick) var(--page-accent), var(--page-glow);
-  }
-
-  .root[data-template='night'] .name {
-    letter-spacing: var(--tracking-title);
   }
 
   /* Night's words stay the card's own light text (a title in the accent read as a link and, for a dark brand, sank
@@ -1816,16 +1779,6 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .root[data-template] .block {
-      transition: none;
-    }
-
-    .root[data-template] .block:not([data-loading], [data-inert]):is(:hover, :active) {
-      transform: none;
-    }
-  }
-
   /* Split's large miniature shows its two columns: who the page is in a panel, the rows beside it. */
   .root[data-template='split'][data-size='large'] .thumb {
     display: grid;
@@ -1849,12 +1802,6 @@
   @media (forced-colors: active) {
     .block {
       border-color: CanvasText;
-    }
-
-    .block:focus-visible,
-    .bannerLink:focus-visible,
-    .lockup[href]:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }
