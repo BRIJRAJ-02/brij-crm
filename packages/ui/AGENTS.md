@@ -2,17 +2,20 @@
 
 ## Overview
 
-The component library every screen draws with. It holds the root stylesheet (cascade layers, reset and base), the theme controller, the provider every app wraps itself in, and the components, built on React Aria Components. Components are code first: they are built and storied here, then published to the design system artifact (spec 0003). Tokens still flow the other way, from the artifact into code. Component library (#4) is still adding components. Tagged `client`. Build everything here to the `crm-design-system` house rules.
+The component library every screen draws with. It holds the root stylesheet (cascade layers, reset and base), the theme controller, the provider every app wraps itself in, and the components, built on React Aria Components. Components are code first: they are built and storied here, then published to the design system artifact (spec 0003). Tokens flow the other way, from the Timefix design system's source (`design/timefix-design-system/tokens.json`, spec 0071) into `packages/tokens`. Component library (#4) is still adding components. Tagged `client`. Build everything here to the `crm-design-system` house rules.
 
 ## Key files
 
 | File | Owns |
 |---|---|
 | `src/index.ts` | The public surface screens import from `@crm/ui`: components and their types. `src/index.test.ts` pins the list |
-| `src/styles/index.css` | `@crm/ui/styles.css`: the layer order `reset, tokens, base, components, utilities`, then the tokens, the reset and the base styles |
+| `src/styles/index.css` | `@crm/ui/styles.css`: the layer order `reset, tokens, base, components, utilities`, then the tokens (at full size), the Geist fallback faces, the reset and the base styles. Public pages load this alone |
+| `src/styles/app.css` | `@crm/ui/app.css` (spec 0071): `index.css` plus `@crm/tokens/tokens-app.css`, the app's sizes under `<html data-scale="app">`. The app's `main.tsx`, the app's browser tests and the stories load it; public pages never do |
 | `src/styles/reset.css`, `src/styles/base.css` | `@layer reset` and `@layer base`: the page background, and body type and colour, all from tokens, and React Aria's pressable `touch-action` rule |
 | `src/styles/cursors.css` | The one cursor rule, in `@layer base` with no specificity: pointer, text, the arrow, not-allowed, progress, grab and col-resize, by tag, role and React Aria's attributes |
-| `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage`, `createThemeController`, and `THEME_SURFACE` with `themeBarColor` for the phone browser bar |
+| `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage`, `createThemeController`, and `THEME_SURFACE` with `themeBarColor` for the phone browser bar; it also re-exports the scale functions from `scale.ts` |
+| `src/theme/scale.ts` | Which size set the document draws with (spec 0071), no React: `PUBLIC_APP_PATHS` (the public screens inside the app's HTML, which `apps/web/public/theme-boot.js` repeats as text), `scaleForPath`, `currentScale`, `applyScaleForPath` (the router's per path switch) and `holdPublicScale` (holds the page at full size; holds nest, counted on the element) |
+| `src/theme/use-public-scale.ts` | `usePublicScale(on)`, exported from `@crm/ui`: a screen inside the app that shows a guest's view full screen (the form's preview tab) holds the whole document at full size while it is mounted, and the app's scale comes back when the last hold lets go |
 | `src/hue.ts` | `HUES` and `Hue`, the nine data hues used by tags and icon tiles |
 | `src/atoms/Icon/` | The Icon atom, its CSS module, its README, and `icons.ts` (the icon registry) |
 | `src/atoms/<Name>/` | One component: `<Name>.tsx`, its CSS module, `strings.ts` for its built in copy, `README.md` and `<Name>.stories.tsx` |
@@ -25,7 +28,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/provider/` | `UiProvider` (language, time zone, router links, the toast queue and region, the clock, loading timing, the icon registry and brand artwork), `UiProviderBase` (the same without the registry, the artwork and the region, for the hosted form alone), `createToasts()`, `createClock()` and `useDelayedLoading()` |
 | `src/vite.ts` | `@crm/ui/vite`: `uiVite()`, which names CSS module classes `ws-<component>-<local>` (every Vite build that renders the library uses it), `layerOrder()`, which links the layer order ahead of an app's bundled stylesheets, and `preloadFonts()`, which preloads the faces an app's first screen draws with by their built names |
 | `src/workbench/` | `Stage` and `StoryRoot`, used only by stories. Never exported |
-| `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation; `vitest.announcer.ts` clears React Aria's live announcer before every story, so an announcement never outlives its story |
+| `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock and sets the scale: the app's density, or full size for the public parts in `PUBLIC_TITLES` (or a story's `parameters.scale`), put back when the story ends; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation; `vitest.announcer.ts` clears React Aria's live announcer before every story, so an announcement never outlives its story |
 | `vitest.config.ts` | Five test projects: `unit` (Node), `stories` (Chromium, Firefox, WebKit), `browser` (`*.browser.test.tsx`, Chromium), `perf` (`*.perf.test.tsx`, React's production build) and `visual` (screenshots) |
 | `scripts/test-visual.ts` | `pnpm test:visual`: runs the `visual` project in the pinned Playwright Linux image, against `__screenshots__/` |
 | `scripts/artifact/` | `pnpm ui:artifact`: builds the React scripts, the bundle, its stylesheet, its types and one preview per flagged story for the design system artifact |
