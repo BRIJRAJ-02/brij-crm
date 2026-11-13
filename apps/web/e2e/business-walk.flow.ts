@@ -131,7 +131,10 @@ test.describe('the business page with Menu and Table seating', () => {
       await page.getByRole('button', { name: 'Claim', exact: true }).click();
       await expect(page.getByText('Address claimed.')).toBeVisible({ timeout: 10_000 });
       await page.getByRole('button', { name: 'Publish', exact: true }).click();
-      await expect(page.getByText('Published. Guests see it now.')).toBeVisible({ timeout: 10_000 });
+      // A first publish ends on the share sheet (spec 0074, AC-7407).
+      const live = page.getByRole('dialog', { name: 'Your business page is live' });
+      await expect(live).toBeVisible({ timeout: 10_000 });
+      await live.getByRole('button', { name: 'Done' }).click();
       await shot(page, '06-page-published');
     });
 

@@ -51,7 +51,7 @@ test.describe('the form journey', () => {
     await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     expect(await page.getByRole('dialog', { name: 'Publish your form' }).count()).toBe(0);
     await page.keyboard.press('Escape');
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Live: guests see this page').first()).toBeVisible();
     // Nothing left to publish: the one primary goes until there is.
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0);
     // Its public address, from Settings › Details › Link.
@@ -107,14 +107,14 @@ test.describe('the form journey', () => {
     await page.keyboard.press('Escape');
     // The preview's sheet (below the widest screens) closes too, so the header is in reach.
     if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
-    await expect(page.getByText('Live · edited').first()).toBeVisible({ timeout: 15_000 });
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'Discard changes' }).click();
-    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
-    await discard.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.getByText(/not published/).first()).toBeVisible({ timeout: 15_000 });
+    // The publish bar's Discard draft asks first (spec 0074, AC-7408).
+    await page.getByRole('button', { name: 'Discard draft' }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard the draft?' });
+    await discard.getByRole('button', { name: 'Discard draft' }).click();
     await expect(discard).toBeHidden();
     await expect(page.getByText('Changes discarded.')).toBeVisible();
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Live: guests see this page').first()).toBeVisible();
     await page.reload();
     await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     // The button's words are what is live again.

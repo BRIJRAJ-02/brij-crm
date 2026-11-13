@@ -289,14 +289,16 @@ describe('Settings › Business › Page', () => {
       published: { at: '2026-11-03T10:00:00.000Z', version: 1 },
     });
     await show(store);
-    await userEvent.click(page.getByRole('button', { name: 'Discard changes' }));
-    const dialog = page.getByRole('dialog');
+    // The publish bar heads the editor (spec 0074, AC-7407): its Discard draft asks first, the action on its danger
+    // button (AC-7408).
+    await userEvent.click(page.getByRole('button', { name: 'Discard draft' }));
+    const dialog = page.getByRole('alertdialog');
     await expect
-      .element(dialog.getByRole('button', { name: 'Discard changes' }))
+      .element(dialog.getByRole('button', { name: 'Discard draft' }))
       .toHaveAttribute('data-variant', 'danger-solid');
   });
 
-  it('keeps Publish in view on a phone, with View page and Discard as icons', async () => {
+  it('keeps Publish in view on a phone, with Discard draft beside it', async () => {
     const { store } = await editorOf({
       ...BASE,
       handle: 'somewhere',
@@ -309,7 +311,29 @@ describe('Settings › Business › Page', () => {
     await expect.element(publish).toBeVisible();
     const box = publish.element().getBoundingClientRect();
     expect(box.right).toBeLessThanOrEqual(390);
-    await expect.element(page.getByRole('button', { name: 'Discard changes' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Discard draft' })).toBeVisible();
+  });
+
+  it('shares a published page in the one share sheet (spec 0074, AC-7406)', async () => {
+    const { store } = await editorOf({
+      ...BASE,
+      handle: 'somewhere',
+      published: { at: '2026-11-03T10:00:00.000Z', version: 1 },
+    });
+    await show(store);
+    await userEvent.click(page.getByRole('button', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share your business page' });
+    await expect.element(sheet.getByRole('img', { name: 'QR code for @somewhere' })).toBeInTheDocument();
+    await expect
+      .element(sheet.getByRole('link', { name: 'View page' }))
+      .toHaveAttribute('href', expect.stringContaining('/somewhere'));
+  });
+
+  it('offers no Share before the page is published', async () => {
+    const { store } = await editorOf({ ...BASE, handle: 'somewhere' });
+    await show(store);
+    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeVisible();
+    expect(page.getByRole('button', { name: 'Share' }).query()).toBeNull();
   });
 
   it('leads to Brand for the logo and colours', async () => {

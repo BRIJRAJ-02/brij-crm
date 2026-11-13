@@ -76,6 +76,41 @@ export const PausedWithChanges: Story = {
   },
 };
 
+/** A count with no sentences (a menu's draft): the count and Publish, and no Changes to open (spec 0074). */
+export const CountOnly: Story = {
+  args: { changes: [], changeCount: 4 },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('4 changes not published');
+    await expect(canvas.queryByRole('button', { name: 'Changes' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+  },
+};
+
+/** Never published: nothing to go back to, so no Discard draft (spec 0074). */
+export const FirstPublish: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <PublishBar status="draft" changes={['The page goes live for the first time']} onPublish={args.onPublish} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+  },
+};
+
+/** Hidden, for a thing that isn't booked: its own words in place of Paused (spec 0074). */
+export const Hidden: Story = {
+  args: { status: 'live', changes: [], isPaused: true, pausedText: 'Hidden: guests see it isn’t available' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('Hidden: guests see it isn’t available');
+    await expect(canvas.queryByText(/book/)).toBeNull();
+  },
+};
+
 /** One change: the count in the singular. */
 export const OneChange: Story = {
   args: { changes: ['Length 30 min → 45 min'] },

@@ -79,7 +79,8 @@ test.describe('the form journey’s edges', () => {
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
+    // The publish bar says Published, then that the form is live (spec 0074, AC-7407).
+    await expect(page.getByRole('region', { name: 'Publish' })).toContainText(/Published|Live/, { timeout: 30_000 });
 
     const visitor = await visitorOn(browser, page, form);
     await visitor.getByLabel(/Your name/).fill('Ada Lovelace');
@@ -210,7 +211,8 @@ test.describe('the form journey’s edges', () => {
       .getByRole('button', { name: /^Publish/ })
       .first()
       .click();
-    await expect(page.getByText('Published.')).toBeVisible({ timeout: 30_000 });
+    // The publish bar says Published, then that the form is live (spec 0074, AC-7407).
+    await expect(page.getByRole('region', { name: 'Publish' })).toContainText(/Published|Live/, { timeout: 30_000 });
 
     // Spec 0063 (AC-6302): a send is checked and filed as the version the visitor saw, so the new required question
     // never strands someone who started before it existed.

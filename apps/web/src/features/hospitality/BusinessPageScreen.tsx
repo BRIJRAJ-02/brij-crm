@@ -29,18 +29,17 @@ import {
   Card,
   ChoiceChips,
   CopyButton,
-  EditorStatus,
   EmptyState,
   Field,
   FileDrop,
   focusLater,
   Form,
-  Modal,
+  PublishBar,
   SettingsRow,
   SettingsSection,
   Skeleton,
   Switch,
-  useFormatSettings,
+  type PublishBarStatus,
   usePhotoCrop,
   type Toasts,
 } from '@crm/ui';
@@ -58,6 +57,10 @@ import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { pageStrings as words } from './business-page-strings.ts';
 import { PHOTO_PICK_MAX_BYTES, PHOTO_TYPES, pickGalleryPhoto } from './business-photos.ts';
 import { strings } from './strings.ts';
+import { lazyShareSheet } from '../share/LazyShareSheet.tsx';
+
+/** The one share sheet, loaded apart from the screen's first paint (spec 0074, AC-7419). */
+const { ShareSheet, usePreload: usePreloadSheet } = lazyShareSheet(() => import('../share/share-sheet.ts'));
 
 /** The amenities' closed list and their words, in the order the page lists them. */
 const AMENITIES: readonly { readonly id: BusinessAmenity; readonly label: string }[] = [
@@ -81,6 +84,9 @@ const TYPING_SAVE_MS = 600;
 
 /** How long Undo stays on a removed photo's toast. */
 const UNDO_MS = 10_000;
+
+/** How long the bar says Published before it says the page is live (the link page's bar holds it as long). */
+const PUBLISHED_MS = 1600;
 
 /**
  * The screen's typed text that hasn't gone out yet: each field registers how to send its own, so Publish (and leaving
@@ -194,7 +200,17 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   const state = useHospitality(store.held(slug));
   const texts = useDraftTexts();
   const [isPublishing, setPublishing] = useState(false);
-  const [isDiscarding, setDiscarding] = useState(false);
+  // Share (spec 0074, AC-7406), and the end of a first publish (AC-7407): the one share sheet, its code loaded once
+  // the screen is idle.
+  const [isSharing, setSharing] = useState(false);
+  const [isLiveSheet, setLiveSheet] = useState(false);
+  usePreloadSheet();
+  // The bar's moment after a publish (Published), or a refusal it says (spec 0074, batch 3).
+  const [said, setSaid] = useState<
+    { readonly status: 'published' } | { readonly status: 'error'; readonly message: string }
+  >();
+  const saidTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(saidTimer.current), []);
   // A Publish refused on the address (another business's first Publish takes it, spec 0065 H7): said on the field.
   const [addressRefused, setAddressRefused] = useState<string | undefined>(undefined);
   const addressRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
@@ -235,48 +251,97 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   const publish = async () => {
     // What is still being typed goes out first; Publish is queued behind it, so it publishes the last keystroke.
     texts.flushAll();
+    const isFirst = view.published === undefined;
     setPublishing(true);
+    setSaid(undefined);
     const refused = await store.publish(slug);
     setPublishing(false);
+    clearTimeout(saidTimer.current);
     if (refused === undefined) {
       setAddressRefused(undefined);
-      toasts.toast({ tone: 'success', message: words.published });
+      // A first publish ends on the share sheet, "Your business page is live"; later ones say Published in the bar.
+      if (isFirst) setLiveSheet(true);
+      else {
+        setSaid({ status: 'published' });
+        saidTimer.current = setTimeout(() => setSaid(undefined), PUBLISHED_MS);
+      }
     } else if (refused.data?.refusals?.some((each) => each.field === 'handle') === true) {
       setAddressRefused(refused.message);
+      setSaid({ status: 'error', message: refused.message });
       focusLater(() => addressRef.current);
-    } else toasts.toast({ tone: 'danger', message: refused.message });
+    } else setSaid({ status: 'error', message: refused.message });
   };
+  const discard = () => {
+    void store.discard(slug).then((refused) => {
+      toasts.toast(
+        refused === undefined
+          ? { tone: 'success', message: words.discarded }
+          : { tone: 'danger', message: refused.message },
+      );
+    });
+  };
+  // What guests don't see yet: the server's sentences; a page never published goes live whole; typing not yet saved
+  // counts as one change, so Publish (which sends it first) is offered at once.
+  const isWaiting = view.published === undefined || view.hasChanges || texts.isTyping;
+  const changeLines =
+    view.changes.length > 0 ? view.changes : view.published === undefined ? [words.firstPublishChange] : [];
+  const changeCount = isWaiting ? Math.max(changeLines.length, 1) : 0;
+  const barStatus: PublishBarStatus = isPublishing
+    ? 'publishing'
+    : said !== undefined
+      ? said.status
+      : changeCount > 0
+        ? 'draft'
+        : 'live';
   return (
     <SettingsPage
       title={words.title}
       crumbs={crumbs}
-      meta={<PublishStatus view={view} />}
       actions={
         <>
           {address !== undefined && view.published !== undefined && (
-            // On a phone the bar keeps Publish in view: View page and Discard drop their words for their icons.
+            // On a phone View page and Share drop their words for their icons; Publish is in the bar below.
             <ButtonLink href={address} isExternal icon="external-link" label={words.viewNewTab} isLabelCollapsible>
               {words.view}
             </ButtonLink>
           )}
-          {view.published !== undefined && view.hasChanges && (
-            <Button icon="undo-2" label={words.discard} isLabelCollapsible onPress={() => setDiscarding(true)}>
-              {words.discard}
+          {address !== undefined && view.published !== undefined && (
+            <Button icon="share" label={words.share} isLabelCollapsible onPress={() => setSharing(true)}>
+              {words.share}
             </Button>
           )}
-          <Button
-            variant="primary"
-            isDisabled={
-              view.problem !== undefined || (!view.hasChanges && !texts.isTyping && view.published !== undefined)
-            }
-            isPending={isPublishing}
-            onPress={() => void publish()}
-          >
-            {isPublishing ? words.publishing : words.publish}
-          </Button>
         </>
       }
     >
+      {address === undefined || view.handle === undefined ? null : (
+        <ShareSheet
+          isOpen={(isSharing || isLiveSheet) && view.published !== undefined}
+          onOpenChange={(isOpen) => {
+            if (isOpen) return;
+            setSharing(false);
+            setLiveSheet(false);
+          }}
+          title={isLiveSheet ? words.liveTitle : words.shareTitle}
+          url={address}
+          name={`@${view.handle}`}
+          invite={words.shareInvite}
+          extra={
+            <ButtonLink variant="ghost" icon="external-link" href={address} isExternal>
+              {words.view}
+            </ButtonLink>
+          }
+        />
+      )}
+      {/* The head of every editor of a published thing (spec 0074, AC-7407): what guests don't see yet, Changes,
+          Discard draft (asks first) and Publish. */}
+      <PublishBar
+        status={barStatus}
+        changes={changeLines}
+        changeCount={changeCount}
+        {...(said?.status === 'error' ? { problem: { message: said.message } } : {})}
+        onPublish={() => void publish()}
+        {...(view.published === undefined ? {} : { onDiscard: discard })}
+      />
       {view.problem !== undefined && view.handle !== undefined && (
         <Callout
           tone="warning"
@@ -308,11 +373,6 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           }
         >
           {view.problem.message}
-        </Callout>
-      )}
-      {view.hasChanges && view.published !== undefined && view.changes.length > 0 && (
-        <Callout tone="info" title={words.changes(view.changes.length)}>
-          {view.changes.join(' · ')}
         </Callout>
       )}
       <AddressSection
@@ -368,48 +428,7 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           )}
         </>
       )}
-      <Modal
-        title={words.discardAsk}
-        variant="confirm"
-        isOpen={isDiscarding}
-        onOpenChange={setDiscarding}
-        actions={
-          <>
-            <Button slot="close">{words.keepEditing}</Button>
-            <Button
-              variant="danger-solid"
-              onPress={() => {
-                setDiscarding(false);
-                void store.discard(slug).then((refused) => {
-                  toasts.toast(
-                    refused === undefined
-                      ? { tone: 'success', message: words.discarded }
-                      : { tone: 'danger', message: refused.message },
-                  );
-                });
-              }}
-            >
-              {words.discard}
-            </Button>
-          </>
-        }
-      >
-        {words.discardText}
-      </Modal>
     </SettingsPage>
-  );
-}
-
-/** "Published Nov 4", "2 changes not published", "Not published yet", with its dot. */
-function PublishStatus({ view }: { readonly view: BusinessPageView }) {
-  const { locale } = useFormatSettings();
-  // The editors' one status (a StatusDot with a short word on a phone), as the Form and Page editors show theirs.
-  if (view.published === undefined) return <EditorStatus tone="draft" text={words.notPublished} />;
-  const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(view.published.at));
-  return view.hasChanges ? (
-    <EditorStatus tone="changed" text={words.changes(view.changes.length || 1)} />
-  ) : (
-    <EditorStatus tone="live" text={words.publishedOn(date)} />
   );
 }
 

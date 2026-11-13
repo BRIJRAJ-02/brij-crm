@@ -156,17 +156,70 @@ export function publishAttributesOf(
   );
 }
 
-/** The status line's tone and words. */
-export function statusOf(
-  form: Pick<FormView, 'status' | 'liveVersionNumber' | 'hasUnpublished'>,
-  isChanged: boolean,
-): { readonly tone: 'live' | 'changed' | 'draft' | 'paused'; readonly text: string } {
-  if (form.liveVersionNumber === undefined) return { tone: 'draft', text: strings.statusDraft };
-  if (form.status === 'paused') return { tone: 'paused', text: strings.statusPaused };
-  // A draft saved since the last publish (a routing rule added and taken away, say) still has Publish changes beside
-  // it, so the status says edited too rather than the live version alone (Q67).
-  if (isChanged || form.hasUnpublished) return { tone: 'changed', text: strings.statusChanged };
-  return { tone: 'live', text: strings.statusLive };
+/** The parts of a form the publish bar names, in the order the editor shows them (spec 0074, AC-7407). */
+const PART_NAMES: Readonly<Partial<Record<keyof FormDocument, string>>> = {
+  headline: strings.changeParts.headline,
+  subheading: strings.changeParts.subheading,
+  buttonText: strings.changeParts.buttonText,
+  layout: strings.changeParts.layout,
+  steps: strings.changeParts.steps,
+  endings: strings.changeParts.endings,
+  after: strings.changeParts.after,
+  look: strings.changeParts.look,
+  language: strings.changeParts.language,
+  targets: strings.changeParts.targets,
+  scoreFiledOn: strings.changeParts.score,
+  routing: strings.changeParts.routing,
+  confirmation: strings.changeParts.confirmation,
+  saveProgress: strings.changeParts.saveProgress,
+  closing: strings.changeParts.closing,
+  closedMessage: strings.changeParts.closing,
+  spam: strings.changeParts.spam,
+};
+
+/**
+ * What a draft changes against the live form, one plain sentence each, for the publish bar's Changes (spec 0074,
+ * AC-7407): each question added, removed or changed by its label, then each other part changed by its name (two
+ * fields of one part say it once). Read from the two documents the editor already holds, never asked of the server.
+ * `filedBefore` is the server's own memory of earlier mappings and is never a change of the person's.
+ */
+export function formChanges(draft: FormDocument, live: FormDocument): readonly string[] {
+  const label = (question: FormQuestion) => (question.label.trim() === '' ? strings.untitledQuestion : question.label);
+  const before = new Map(live.questions.map((question) => [question.id, question]));
+  const after = new Set(draft.questions.map((question) => question.id));
+  const questions = [
+    ...draft.questions.flatMap((question) => {
+      const was = before.get(question.id);
+      if (was === undefined) return [strings.changeQuestionAdded(label(question))];
+      return sameValue(was, question) ? [] : [strings.changeQuestionChanged(label(question))];
+    }),
+    ...live.questions
+      .filter((question) => !after.has(question.id))
+      .map((question) => strings.changeQuestionRemoved(label(question))),
+  ];
+  // A reorder with nothing else changed is a change too.
+  const reordered =
+    questions.length === 0 &&
+    !sameValue(
+      draft.questions.map((question) => question.id),
+      live.questions.map((question) => question.id),
+    );
+  // The named parts in the editor's order, then anything else either document holds.
+  const keys = new Set([
+    ...(Object.keys(PART_NAMES) as (keyof FormDocument)[]),
+    ...(Object.keys(draft) as (keyof FormDocument)[]),
+    ...(Object.keys(live) as (keyof FormDocument)[]),
+  ]);
+  const parts = new Set<string>();
+  for (const key of keys) {
+    if (key === 'questions' || key === 'filedBefore') continue;
+    if (!sameValue(draft[key], live[key])) parts.add(PART_NAMES[key] ?? strings.changeParts.settings);
+  }
+  return [
+    ...questions,
+    ...(reordered ? [strings.changeQuestionsOrder] : []),
+    ...[...parts].map((part) => strings.changePart(part)),
+  ];
 }
 
 /** Whether two documents say the same thing (key order aside). */

@@ -19,7 +19,6 @@ import { useHospitality } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
-  EditorStatus,
   EmptyState,
   Field,
   focusLater,
@@ -31,17 +30,18 @@ import {
   MenuSection,
   Modal,
   PreviewLayout,
+  PublishBar,
+  type PublishBarStatus,
   SegmentedControl,
   Select,
   SetupChecklist,
-  SplitButton,
   TabPanel,
   Tabs,
   ToggleButton,
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { memo, useDeferredValue, useRef, useState, type ReactNode } from 'react';
+import { memo, useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { useIsNarrow } from './narrow.ts';
@@ -84,7 +84,6 @@ export type Open =
   | { readonly kind: 'item'; readonly item?: Dish; readonly sectionId?: string; readonly newName?: string }
   | { readonly kind: 'section'; readonly menuId: string; readonly sectionId?: string; readonly parentId?: string }
   | { readonly kind: 'group'; readonly groupId?: string }
-  | { readonly kind: 'discard' }
   | { readonly kind: 'publish' }
   | { readonly kind: 'share' }
   | { readonly kind: 'hide' }
@@ -112,6 +111,9 @@ export interface MenusScreenProps {
   readonly view: MenusView;
 }
 
+/** How long the bar says Published before it says the menu is live again (as the link page's bar). */
+const PUBLISHED_MS = 1600;
+
 /** The Menus screen (spec 0065, H1). */
 export function MenusScreen({ store, hospitality, slug, toasts, business, view }: MenusScreenProps) {
   const state = useHospitality(store.draft(slug));
@@ -121,10 +123,14 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   // Add another stays on from one opening of the item sheet to the next, as Create more does.
   const [isAddingMore, setAddingMore] = useState(false);
   const [isPublishing, setPublishing] = useState(false);
+  // The publish bar's moment after a publish from it: Published, then the menu's state again.
+  const [isJustPublished, setJustPublished] = useState(false);
+  const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
   usePreloadShareSheet();
-  // Publish, where focus goes back when the publish dialog closes (the live split button once Publish has gone).
-  const publishRef = useRef<HTMLButtonElement>(null);
+  // Share in the header, where focus goes when the publish dialog closes and the bar's Publish has gone with it.
+  const shareRef = useRef<HTMLButtonElement>(null);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
   // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
@@ -223,9 +229,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
 
   // The live guest menu, once there is one: View and Open in new tab open it (checklabs' split button).
   const liveLink = isLive && place !== undefined ? publicMenuUrl(place.menuKey) : undefined;
-  const openGuest = () => {
-    if (liveLink !== undefined) globalThis.open(liveLink, '_blank', 'noopener');
-  };
   // Publish · N drafts publishes at once, as checklabs' does; with something still in the way, the review says what.
   const publishNow = async () => {
     if (blocker !== undefined) {
@@ -239,7 +242,10 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
       said(refused);
       return;
     }
-    toasts.toast({ tone: 'success', message: strings.publishedToast });
+    // The bar says Published, then Live again (spec 0074, AC-7407).
+    setJustPublished(true);
+    clearTimeout(publishedTimer.current);
+    publishedTimer.current = setTimeout(() => setJustPublished(false), PUBLISHED_MS);
   };
 
   // A first menu comes with a first section, so Add dishes is right there (foolproof from the first click).
@@ -368,13 +374,8 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
         </MenuTrigger>
       </>
     ) : (
-      <>
-        {picker}
-        {/* At a phone's width a draft's status gives its room to the menu picker; Publish says the rest. */}
-        {isNarrow && !isLive ? null : (
-          <EditorStatus tone={isLive && !draft.hidden ? 'live' : 'draft'} text={statusText} />
-        )}
-      </>
+      // The menu's state is the publish bar's to say (spec 0074, AC-7407).
+      picker
     );
 
   // The header's ⋯ (checklabs': Duplicate menu, Discard changes, Delete): only what can be done here. Duplicate menu
@@ -383,49 +384,59 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
     // At a phone's width Design and Settings join ⋯ rather than taking buttons of their own in a full bar.
     ...(isNarrow ? (['design'] as const) : []),
     ...(isNarrow && current !== undefined ? (['settings'] as const) : []),
-    ...(draft.canEdit && isLive && draft.changes > 0 ? (['discard'] as const) : []),
     ...(draft.canEdit && current !== undefined && businesses.others.length > 0 ? (['duplicate'] as const) : []),
     ...(draft.canEdit && current !== undefined ? (['delete'] as const) : []),
   ];
-  const hasDrafts = draft.canEdit && isLive && draft.changes > 0;
-  const publishButton = !isLive ? (
-    draft.canEdit ? (
-      <Button ref={publishRef} variant="primary" onPress={() => setOpen({ kind: 'publish' })}>
-        {isNarrow ? strings.publish : strings.publishGoLive}
-      </Button>
-    ) : null
-  ) : (
-    <SplitButton
-      variant={hasDrafts ? 'primary' : 'secondary'}
-      isPending={isPublishing}
-      onPress={() => {
-        if (hasDrafts) void publishNow();
-        else openGuest();
-      }}
-      menuLabel={strings.shareMenu}
-      menu={
-        <Menu
-          label={strings.shareMenu}
-          onAction={(key) => {
-            if (key === 'open') openGuest();
-            else if (key === 'share') setOpen({ kind: 'share' });
-          }}
+  // A live menu's own ways in the header: View (the guest menu in a new tab) and Share (the one share sheet, spec 0074,
+  // AC-7405). Publish lives in the bar at the editor's head (AC-7407).
+  const liveButtons =
+    liveLink === undefined ? null : (
+      <>
+        <ButtonLink
+          variant="ghost"
+          icon="external-link"
+          href={liveLink}
+          isExternal
+          label={strings.openNewTab}
+          isLabelCollapsible
         >
-          <MenuItem id="open" icon="external-link">
-            {strings.openNewTab}
-          </MenuItem>
-          {/* The one share sheet, with the link and its QR code (spec 0074, AC-7405); none with no place to link to. */}
-          {place === undefined ? null : (
-            <MenuItem id="share" icon="share">
-              {strings.share}
-            </MenuItem>
-          )}
-        </Menu>
-      }
-    >
-      {hasDrafts ? (isNarrow ? strings.publish : strings.publishDrafts(draft.changes)) : strings.view}
-    </SplitButton>
-  );
+          {strings.view}
+        </ButtonLink>
+        <Button
+          ref={shareRef}
+          icon="share"
+          label={strings.share}
+          isLabelCollapsible
+          onPress={() => setOpen({ kind: 'share' })}
+        >
+          {strings.share}
+        </Button>
+      </>
+    );
+  // The bar (spec 0074, AC-7407): a first publish goes through the review and its checks; later ones publish at once
+  // (the review says why when something is in the way); a hidden menu says so; Discard draft asks first (AC-7408).
+  const barStatus: PublishBarStatus = isPublishing
+    ? 'publishing'
+    : isJustPublished
+      ? 'published'
+      : !isLive || draft.changes > 0
+        ? 'draft'
+        : 'live';
+  const publishBar =
+    !draft.canEdit || (draft.menus.length === 0 && !isLive) ? null : (
+      <PublishBar
+        status={barStatus}
+        changes={isLive ? [] : [strings.firstPublishChange]}
+        changeCount={isLive ? draft.changes : 1}
+        isPaused={isLive && draft.hidden}
+        pausedText={strings.hiddenBar}
+        onPublish={() => {
+          if (!isLive || blocker !== undefined) setOpen({ kind: 'publish' });
+          else void publishNow();
+        }}
+        {...(isLive && draft.changes > 0 ? { onDiscard: () => void store.discard(slug).then(said) } : {})}
+      />
+    );
   const actions =
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
@@ -453,7 +464,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
               label={strings.more}
               onAction={(key) => {
                 if (key === 'settings') go({ tab: tab === 'settings' ? 'structure' : 'settings' });
-                else if (key === 'discard') setOpen({ kind: 'discard' });
                 else if (key === 'delete' && current !== undefined)
                   setOpen({ kind: 'deleteMenu', menuId: current.id, name: current.name });
                 else if (key === 'duplicate' && current !== undefined)
@@ -470,11 +480,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                   {tab === 'settings' ? strings.backToMenu : strings.tabSettings}
                 </MenuItem>
               ) : null}
-              {moreItems.includes('discard') ? (
-                <MenuItem id="discard" icon="undo-2">
-                  {strings.discardChanges}
-                </MenuItem>
-              ) : null}
               {moreItems.includes('duplicate') ? (
                 <MenuItem id="duplicate" icon="copy">
                   {hospitalityStrings.copyToBusiness}
@@ -489,7 +494,7 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
             </Menu>
           </MenuTrigger>
         )}
-        {publishButton}
+        {liveButtons}
       </>
     );
 
@@ -567,22 +572,27 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
       previewShare="wide"
       previewSurface="device"
       notices={
-        !isLive && !isSetupHidden ? (
-          <SetupChecklist
-            title={strings.setup}
-            steps={steps}
-            onHide={hideSetup}
-            onAction={(id) => {
-              if (id === 'hours') router.history.push(hoursHref);
-              else if (id === 'menu') newMenu();
-              else if (id === 'publish') setOpen({ kind: 'publish' });
-              else if (id === 'items' && current !== undefined) {
-                const section = draft.sections.find((each) => each.menuId === current.id);
-                setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
-              }
-            }}
-          />
-        ) : undefined
+        publishBar === null && (isLive || isSetupHidden) ? undefined : (
+          <>
+            {publishBar}
+            {!isLive && !isSetupHidden && (
+              <SetupChecklist
+                title={strings.setup}
+                steps={steps}
+                onHide={hideSetup}
+                onAction={(id) => {
+                  if (id === 'hours') router.history.push(hoursHref);
+                  else if (id === 'menu') newMenu();
+                  else if (id === 'publish') setOpen({ kind: 'publish' });
+                  else if (id === 'items' && current !== undefined) {
+                    const section = draft.sections.find((each) => each.menuId === current.id);
+                    setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
+                  }
+                }}
+              />
+            )}
+          </>
+        )
       }
       {...(preview === undefined ? {} : { preview })}
       {...(previewControls === undefined ? {} : { previewControls })}
@@ -768,15 +778,11 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                 blocker={blocker}
                 onClose={() => {
                   setOpen(undefined);
-                  // A first publish swaps Publish for the live split button, so the dialog's own focus return finds
-                  // nothing and lands on the page: hand it to the split's main button instead (spec 0074).
+                  // A first publish takes Publish out of the bar, so the dialog's own focus return finds nothing and
+                  // lands on the page: hand it to the header's Share instead (spec 0074, AC-7428).
                   focusLater(() => {
                     const active = document.activeElement;
-                    if (active !== null && active !== document.body) return undefined;
-                    // Publish before a first publish; after it, the live split button's main half, found by its
-                    // menu half's name (SplitButton takes no ref: its halves sit in the first load's Button chunk).
-                    const menuHalf = document.querySelector(`button[aria-label="${strings.shareMenu}"]`);
-                    return publishRef.current ?? menuHalf?.parentElement?.querySelector('button');
+                    return active === null || active === document.body ? shareRef.current : undefined;
                   });
                 }}
                 onFix={(fix) => {
@@ -814,31 +820,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
               }
             >
               {strings.hideLine}
-            </Modal>
-            <Modal
-              variant="confirm"
-              tone="danger"
-              title={strings.discardQuestion}
-              isOpen={open?.kind === 'discard'}
-              onOpenChange={(isOpen) => {
-                if (!isOpen) setOpen(undefined);
-              }}
-              actions={
-                <>
-                  <Button slot="close">{strings.keepEditing}</Button>
-                  <Button
-                    variant="danger-solid"
-                    onPress={() => {
-                      setOpen(undefined);
-                      void store.discard(slug).then(said);
-                    }}
-                  >
-                    {strings.discardChanges}
-                  </Button>
-                </>
-              }
-            >
-              {strings.discardLine}
             </Modal>
             <Modal
               variant="confirm"

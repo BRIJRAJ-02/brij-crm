@@ -21,6 +21,14 @@ export const pageStrings = {
   discarded: 'Changes discarded.',
   view: 'View page',
   viewNewTab: 'View page (opens in a new tab)',
+  /** Share: the one share sheet for the page (spec 0074, AC-7406). */
+  share: 'Share',
+  shareTitle: 'Share your business page',
+  /** After the first publish (spec 0074, AC-7407). */
+  liveTitle: 'Your business page is live',
+  /** The bar's one change before the first publish. */
+  firstPublishChange: 'The page goes live for the first time',
+  shareInvite: 'Find us here:',
   /** Address. */
   address: 'Address',
   addressText: 'Where guests find the page. An old address keeps working.',

@@ -40,9 +40,23 @@ export interface PublishBarProps {
    * in the bar claims the page is live.
    */
   readonly isPaused?: boolean;
+  /**
+   * What the bar says while `isPaused` with nothing to publish, for a page that isn't booked ("Hidden: guests see
+   * that the menu isn't available"). Default: "Paused: guests can't book this page".
+   */
+  readonly pausedText?: string;
+  /**
+   * How many changes guests don't see, for an editor that knows the count but not each change (a menu's draft). The
+   * count is said and Publish offered; Changes is offered only for the sentences in `changes`. Default:
+   * `changes.length`.
+   */
+  readonly changeCount?: number;
   readonly onPublish: () => void;
-  /** Drops the changes, once the person says so in Discard's confirm. */
-  readonly onDiscard: () => void;
+  /**
+   * Drops the changes, once the person says so in Discard's confirm. Left out, no Discard draft: a page never
+   * published has nothing to go back to.
+   */
+  readonly onDiscard?: () => void;
   /** The draft as a guest would see it, signed in only: a link that opens in a new tab. Left out, no Preview. */
   readonly previewHref?: string;
   /** The last published versions, newest first; undefined while they load. Left out with `onVersions`, no menu. */
@@ -66,6 +80,8 @@ export function PublishBar({
   changes,
   problem,
   isPaused = false,
+  pausedText = strings.paused,
+  changeCount,
   onPublish,
   onDiscard,
   previewHref,
@@ -76,7 +92,9 @@ export function PublishBar({
   const [isShowingChanges, setShowingChanges] = useState(false);
   const [isAsking, setAsking] = useState(false);
   const listId = useId();
-  const hasChanges = changes.length > 0 && status !== 'published';
+  const count = changeCount ?? changes.length;
+  const hasChanges = count > 0 && status !== 'published';
+  const hasList = hasChanges && changes.length > 0;
   const isBusy = status === 'publishing';
   const said = status === 'published' ? 'published' : hasChanges ? 'draft' : isPaused ? 'paused' : 'live';
   return (
@@ -85,7 +103,7 @@ export function PublishBar({
       aria-label={strings.label}
       data-status={status}
       data-said={said}
-      data-open={(isShowingChanges && hasChanges) || undefined}
+      data-open={(isShowingChanges && hasList) || undefined}
     >
       <div className={styles.row}>
         <p className={styles.status} role="status">
@@ -99,12 +117,12 @@ export function PublishBar({
             ) : said === 'draft' ? (
               <>
                 <span className={styles.dot} aria-hidden="true" />
-                <span>{strings.notPublished(changes.length)}</span>
+                <span>{strings.notPublished(count)}</span>
               </>
             ) : said === 'paused' ? (
               <>
                 <Icon name="pause" size="sm" />
-                <span>{strings.paused}</span>
+                <span>{pausedText}</span>
               </>
             ) : (
               <>
@@ -115,7 +133,7 @@ export function PublishBar({
           </span>
         </p>
         <span className={styles.actions}>
-          {hasChanges && (
+          {hasList && (
             <Button
               variant="ghost"
               icon={isShowingChanges ? 'chevron-up' : 'chevron-down'}
@@ -159,7 +177,7 @@ export function PublishBar({
               {strings.preview}
             </ButtonLink>
           )}
-          {hasChanges && (
+          {hasChanges && onDiscard !== undefined && (
             <ModalTrigger isOpen={isAsking} onOpenChange={setAsking}>
               <Button variant="ghost" isDisabled={isBusy}>
                 {strings.discard}
@@ -205,7 +223,7 @@ export function PublishBar({
           )}
         </p>
       )}
-      {hasChanges && (
+      {hasList && (
         <ul className={styles.changes} id={listId} hidden={!isShowingChanges}>
           {changes.map((change) => (
             <li key={change} className={styles.change}>

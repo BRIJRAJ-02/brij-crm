@@ -16,6 +16,8 @@ export const strings = {
   addLinkOnlyPage: 'New link only page',
   newButton: 'New',
   copyLink: 'Copy link',
+  /** The publish bar's change line for a section with unsaved settings (spec 0074, AC-7407). */
+  sectionChanged: (section: string) => `${section} changed`,
   /** Share: the one share sheet for a page (spec 0074, AC-7406). */
   share: 'Share',
   shareSheet: {

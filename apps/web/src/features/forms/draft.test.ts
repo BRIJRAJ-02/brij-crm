@@ -6,6 +6,7 @@ import {
   uploadsOffFor,
   firstPublish,
   firstWords,
+  formChanges,
   changeQuestion,
   draftGap,
   duplicateQuestion,
@@ -21,7 +22,6 @@ import {
   sameDocument,
   sameValue,
   savableDraft,
-  statusOf,
 } from './draft.ts';
 
 const EMAIL = '0199f0a0-0000-7000-8000-00000000000e';
@@ -138,17 +138,6 @@ describe('the builder’s draft changes', () => {
 
   it('keeps the match email question', () => {
     expect(base.questions.map((question) => isMatchQuestion(base, question))).toEqual([false, true]);
-  });
-
-  it('says where the form stands', () => {
-    const form = { status: 'live' as const, liveVersionNumber: 7, hasUnpublished: false };
-    // Plain words: Live, never a version number.
-    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Live' });
-    expect(statusOf(form, true).tone).toBe('changed');
-    expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Paused');
-    expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Draft');
-    // A saved draft the editor's copy matches still waits to be published, as the header's Publish changes says.
-    expect(statusOf({ ...form, hasUnpublished: true }, false).tone).toBe('changed');
   });
 
   it('compares documents whatever their key order', () => {
@@ -493,5 +482,39 @@ describe('the uploads warning (forms fixes 2)', () => {
     expect(uploadsOffFor({ uploadsOff: true }, { questions: [text, file] })).toBe(true);
     expect(uploadsOffFor({ uploadsOff: true }, { questions: [text] })).toBe(false);
     expect(uploadsOffFor({}, { questions: [file] })).toBe(false);
+  });
+});
+
+describe('formChanges (spec 0074, AC-7407)', () => {
+  it('says nothing for the same form, whatever order its keys were written in', () => {
+    expect(formChanges(base, { ...base })).toEqual([]);
+  });
+
+  it('names each question added, changed or removed by its label, then each other part once', () => {
+    const [name, email] = base.questions;
+    if (name === undefined || email === undefined) throw new Error('fixture');
+    const draft: FormDocument = {
+      ...base,
+      questions: [
+        { ...name, label: 'Full name' },
+        { id: 'q-new', key: 'phone', label: '', answerType: 'phone', required: false, update: 'fill' },
+      ],
+      headline: 'Say hello',
+      look: { colour: 'dark', corners: 'square' },
+    };
+    expect(formChanges(draft, base)).toEqual([
+      'Question changed: Full name',
+      'Question added: Untitled question',
+      'Question removed: Work email',
+      'Headline changed',
+      'Look changed',
+    ]);
+  });
+
+  it('says a reorder on its own, and never the server’s memory of earlier filings', () => {
+    const [name, email] = base.questions;
+    if (name === undefined || email === undefined) throw new Error('fixture');
+    const draft: FormDocument = { ...base, questions: [email, name], filedBefore: { [PEOPLE]: { name: NAME } } };
+    expect(formChanges(draft, base)).toEqual(['Questions reordered']);
   });
 });

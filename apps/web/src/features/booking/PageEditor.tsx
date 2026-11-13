@@ -31,6 +31,9 @@ import {
 import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
 import {
   Badge,
+  PublishBar,
+  PublishBarSkeleton,
+  type PublishBarStatus,
   Button,
   ButtonLink,
   Callout,
@@ -39,7 +42,6 @@ import {
   CopyButton,
   DescriptionList,
   EditorStatus,
-  EmptyState,
   Field,
   InfoTip,
   Menu,
@@ -431,8 +433,6 @@ export function PageEditor({
           },
     );
   };
-  const [isVersionsOpen, setVersionsOpen] = useState(false);
-  const [isVersionsFailed, setVersionsFailed] = useState(false);
   // The header's ⋯: where focus goes once an action from it has left.
   const moreRef = useRef<HTMLButtonElement>(null);
   const [versions, setVersions] = useState<readonly PageVersionRow[] | undefined>(undefined);
@@ -795,7 +795,6 @@ export function PageEditor({
   };
   const readVersions = () => {
     setVersions(undefined);
-    setVersionsFailed(false);
     data.bookingPages.versions(slug, page.id).then(
       (list) =>
         setVersions(
@@ -805,7 +804,11 @@ export function PageEditor({
             label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
           })),
         ),
-      () => setVersionsFailed(true),
+      () => {
+        // The bar's Versions menu closes on its own; the failure is said, and the menu reads again next time.
+        setVersions([]);
+        toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed });
+      },
     );
   };
   // A version comes back as the draft (AC-6812), so Save changes puts it live; over unsaved edits it asks first.
@@ -964,6 +967,22 @@ export function PageEditor({
   };
   // Save changes is on while anything is unsaved, or an earlier editor left settings unpublished.
   const canSave = !isLocked && (isDirty || changes.length > 0);
+  // The bar's changes: each section with unsaved settings, by its name, then what an earlier editor left unpublished.
+  const barChanges = [
+    ...new Set([
+      ...Object.keys(dirty).map((key) => tabLabel[FIELD_TABS[key] ?? 'details']),
+      ...(isWeekDirty ? [tabLabel.hours] : []),
+    ]),
+  ]
+    .map((section) => strings.sectionChanged(section))
+    .concat(changes);
+  const barStatus: PublishBarStatus = isSaving
+    ? 'publishing'
+    : failure !== undefined
+      ? 'error'
+      : barChanges.length > 0
+        ? 'draft'
+        : 'live';
   /** Save changes (and ⌘↵): a field that needs a fix says so and shows its section; else everything saves, live. */
   const saveNow = (): Promise<boolean> => {
     if (!canSave) return Promise.resolve(true);
@@ -1128,11 +1147,6 @@ export function PageEditor({
                     setShared(true);
                     setSharing(true);
                   }
-                  if (key === 'versions') {
-                    setVersionsOpen(true);
-                    readVersions();
-                  }
-                  if (key === 'discard') discardChanges();
                   if (key === 'delete') deletePage();
                 }}
               >
@@ -1153,16 +1167,6 @@ export function PageEditor({
                     {sharingStrings.menuItem}
                   </MenuItem>
                 )}
-                {!isLocked && (
-                  <MenuItem id="versions" icon="clock">
-                    {strings.versionHistory}
-                  </MenuItem>
-                )}
-                {!isLocked && (
-                  <MenuItem id="discard" icon="undo-2" isDisabled={!isDirty}>
-                    {strings.discardChanges}
-                  </MenuItem>
-                )}
                 {!isLocked && page.isEditor !== true && <MenuSeparator />}
                 {!isLocked && page.isEditor !== true && (
                   <MenuItem id="delete" icon="trash" isDanger>
@@ -1171,18 +1175,6 @@ export function PageEditor({
                 )}
               </Menu>
             </MenuTrigger>
-            {/* Save changes, the page's one primary: turned off until something changes, which its state says. */}
-            {!isLocked && (
-              <Button
-                variant="primary"
-                {...(canSave ? { kbd: '⌘↵' } : {})}
-                isDisabled={!canSave}
-                isPending={isSaving}
-                onPress={() => void saveNow()}
-              >
-                {strings.saveChanges}
-              </Button>
-            )}
           </TopBar>
         ),
         body: (
@@ -1211,39 +1203,6 @@ export function PageEditor({
                   people={sharingPeople ?? people}
                   toasts={toasts}
                 />
-              )}
-            </Modal>
-            <Modal
-              title={strings.versionHistory}
-              isOpen={isVersionsOpen}
-              onOpenChange={setVersionsOpen}
-              actions={<Button slot="close">{publishStrings.close}</Button>}
-            >
-              {isVersionsFailed ? (
-                <EmptyState tone="error" title={publishStrings.versionsFailed} onRetry={readVersions} />
-              ) : versions === undefined ? (
-                <Skeleton lines={3} />
-              ) : versions.length === 0 ? (
-                <EmptyState title={publishStrings.versionsNone} icon="clock" />
-              ) : (
-                <SettingsStack variant="flush">
-                  {versions.map((one) => (
-                    <SettingsRow key={one.version} title={one.label}>
-                      {one.isCurrent ? (
-                        <Badge text={publishStrings.versionLive} isWhole />
-                      ) : (
-                        <Button
-                          onPress={() => {
-                            setVersionsOpen(false);
-                            askRestore(one.version);
-                          }}
-                        >
-                          {publishStrings.restore}
-                        </Button>
-                      )}
-                    </SettingsRow>
-                  ))}
-                </SettingsStack>
               )}
             </Modal>
             <Modal
@@ -1324,6 +1283,22 @@ export function PageEditor({
                   })}
               notices={
                 <>
+                  {/* The head of every editor of a published thing (spec 0074, AC-7407), in its one step form (owner,
+                      9 November 2026: no draft waits): Publish saves and puts it live at once, Discard draft drops the
+                      unsaved changes (asks first, AC-7408), Versions brings an earlier one back. */}
+                  {!isLocked && (
+                    <PublishBar
+                      status={barStatus}
+                      changes={barChanges}
+                      {...(failure === undefined ? {} : { problem: { message: failure.message } })}
+                      isPaused={page.status !== 'live'}
+                      onPublish={() => void saveNow()}
+                      {...(isDirty ? { onDiscard: discardChanges } : {})}
+                      {...(versions === undefined ? {} : { versions })}
+                      onVersions={readVersions}
+                      onRestore={askRestore}
+                    />
+                  )}
                   {bookingProblem !== undefined && !isLocked && (
                     <Callout
                       tone="warning"
@@ -2170,7 +2145,13 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
               })),
             }}
             {...(tab === 'bookings' || tab === 'insights' ? {} : { preview: <Skeleton shape="block" /> })}
-            {...(notices === undefined ? {} : { notices })}
+            // The publish bar's strip stands where the bar will (spec 0074), then what the route already knows.
+            notices={
+              <>
+                <PublishBarSkeleton />
+                {notices}
+              </>
+            }
           >
             <SettingsStack variant="flush">
               {PENDING_SECTIONS[tab].length === 0 ? (

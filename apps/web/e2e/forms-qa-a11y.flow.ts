@@ -128,7 +128,7 @@ test.describe('forms QA: accessibility', () => {
     const publish = page.getByRole('button', { name: /^Publish/ }).first();
     await tabTo(page, publish, 200);
     await page.keyboard.press('Enter');
-    await expect(page.getByText(/Published\.|Your form is live/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/^Published$|is live/).first()).toBeVisible({ timeout: 30_000 });
   });
 
   for (const layout of ['classic', 'steps', 'conversational'] as const) {

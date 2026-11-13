@@ -260,8 +260,8 @@ test.describe('the Menu app from an empty workspace', () => {
 
     await test.step('preview at a time, then review and publish', async () => {
       await shot(page, '16-preview');
-      // The first publish goes through the review: "Publish & go live", or "Publish" on a phone's bar.
-      await page.getByRole('button', { name: /^Publish( & go live)?$/ }).click();
+      // The first publish is the publish bar's Publish (spec 0074, AC-7407), through the review.
+      await page.getByRole('button', { name: 'Publish', exact: true }).click();
       const review = page.getByRole('dialog', { name: 'Review and publish' });
       await expect(review).toBeVisible();
       // Every check passes, so the review says what goes live instead of a list of ticks.
@@ -275,10 +275,8 @@ test.describe('the Menu app from an empty workspace', () => {
 
     let guestUrl = '';
     await test.step('the guest menu: its name and sections, open an item, pick a size, add to the selection', async () => {
-      // Once live, the header's split button views the guest menu, and its chevron shares it.
-      await page.getByRole('button', { name: 'Share menu' }).click();
-      await expect(page.getByRole('menuitem', { name: 'Show QR code' })).toBeVisible();
-      await page.keyboard.press('Escape');
+      // Once live, the header views the guest menu and shares it (spec 0074, AC-7405).
+      await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
       guestUrl = `/m/${(await draftOf(page, slug)).places[0]?.menuKey ?? ''}`;
       const guest = await context.newPage();
       await guest.goto(guestUrl);
@@ -362,10 +360,10 @@ test.describe('the Menu app from an empty workspace', () => {
       await drawer.getByLabel('Price', { exact: true }).fill('6');
       await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();
-      // Once live, Publish · N drafts publishes at once; with nothing new, the same button is View.
-      await page.getByRole('button', { name: /^Publish( · \d+ drafts?)?$/ }).click();
-      await expect(page.getByText('Published. Guests see your changes now.')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'View', exact: true })).toBeVisible();
+      // Once live, the bar's Publish publishes at once and says so; View stays in the header.
+      await page.getByRole('button', { name: 'Publish', exact: true }).click();
+      await expect(page.getByRole('region', { name: 'Publish' })).toContainText(/Published|Live/);
+      await expect(page.getByRole('link', { name: 'Open in new tab' })).toBeVisible();
       await clearToasts(page);
       if ((page.viewportSize()?.width ?? 0) >= 640) {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -381,9 +379,8 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(page.getByRole('switch', { name: 'Friday', exact: true })).toBeChecked();
       await expect(page.getByRole('button', { name: /Friday from/ }).first()).toContainText(/12:00/);
       await shot(page, '23-settings');
-      await page.getByRole('button', { name: 'More', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Discard changes' }).click();
-      await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+      await page.getByRole('button', { name: 'Discard draft' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Discard draft' }).click();
       await expect(page.getByLabel('Service added')).toHaveValue('0');
     });
 

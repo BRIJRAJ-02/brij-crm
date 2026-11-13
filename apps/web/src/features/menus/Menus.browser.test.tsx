@@ -255,8 +255,9 @@ describe('the Menus editor', () => {
     await expect.element(page.getByText('No price').first()).toBeVisible();
     // Sold out is a quick button on an item's row and in its ⋯ on Structure; the Items tab keeps the switch.
     await expect.element(page.getByRole('button', { name: 'More for Oysters' }).first()).toBeInTheDocument();
-    // The first publish is checklabs' "Publish & go live", through the review.
-    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
+    // The first publish is the bar's Publish (spec 0074, AC-7407), through the review and its checks.
+    await expect.element(page.getByText('1 change not published')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await expect.element(review.getByText(/Give Oysters a price, then publish/)).toBeVisible();
     await expect.element(review.getByRole('button', { name: 'Publish & go live' })).toBeDisabled();
@@ -268,7 +269,7 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
+    await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await userEvent.click(review.getByRole('button', { name: 'Publish & go live' }));
     await expect.poll(() => calls.includes('publish')).toBe(true);
@@ -280,8 +281,8 @@ describe('the Menus editor', () => {
     await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
   });
 
-  it('puts focus on the live split button after a first publish, never on the page (spec 0074)', async () => {
-    // The draft turns live when Publish lands, as the real store's does, so Publish gives way to the split button.
+  it('puts focus on the header’s Share after a first publish, never on the page (spec 0074, AC-7428)', async () => {
+    // The draft turns live when Publish lands, as the real store's does, so the bar's Publish goes.
     const listeners = new Set<() => void>();
     let state: HospitalityHeldState<MenuDraft> = { status: 'ready', value: DRAFT, isSaving: false };
     const held: HospitalityHeld<MenuDraft> = {
@@ -312,17 +313,17 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{}} store={turning} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
+    await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await userEvent.click(review.getByRole('button', { name: 'Publish & go live' }));
     const sheet = page.getByRole('dialog', { name: 'Your menu is live' });
     await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => document.querySelector('[role="dialog"]')).toBeNull();
-    await expect.element(page.getByRole('button', { name: 'View', exact: true })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: 'Share', exact: true })).toHaveFocus();
   });
 
-  it('publishes drafts from the split button at once, its chevron sharing, and keeps Discard and Delete in ⋯', async () => {
+  it('publishes drafts from the bar at once, shares from the header, and asks before Discard draft', async () => {
     await page.viewport(1280, 900);
     const live: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z' };
     const { store, calls } = storeOf(live);
@@ -331,12 +332,12 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Publish · 3 drafts' }));
+    // The bar says what guests don't see yet; a later publish goes at once and says Published (spec 0074, AC-7407).
+    await expect.element(page.getByText('3 changes not published')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
     await expect.poll(() => calls.includes('publish')).toBe(true);
-    await userEvent.click(page.getByRole('button', { name: 'Share menu' }));
-    await expect.element(page.getByRole('menuitem', { name: 'Open in new tab' })).toBeVisible();
-    // Share opens the one share sheet (spec 0074, AC-7405): the link and its code, Open guest menu among its ways.
-    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    // Share opens the one share sheet (AC-7405): the link and its code, Open guest menu among its ways.
+    await userEvent.click(page.getByRole('button', { name: 'Share', exact: true }));
     const sheet = page.getByRole('dialog', { name: 'Share your menu' });
     await expect.element(sheet.getByRole('img', { name: 'QR code for Soho menu' })).toBeInTheDocument();
     await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
@@ -345,25 +346,33 @@ describe('the Menus editor', () => {
       .toHaveAttribute('href', expect.stringContaining('/m/AbCdEfGhIjKlMnOp'));
     await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
     await expect.poll(() => document.querySelector('[role="dialog"]')).toBeNull();
+    // View opens the guest menu in a new tab.
+    await expect
+      .element(page.getByRole('link', { name: 'Open in new tab' }))
+      .toHaveAttribute('href', expect.stringContaining('/m/AbCdEfGhIjKlMnOp'));
+    // Discard draft asks first, the action on its danger button (AC-7408); ⋯ keeps Delete and no Discard.
+    await userEvent.click(page.getByRole('button', { name: 'Discard draft' }));
+    const ask = page.getByRole('alertdialog', { name: 'Discard the draft?' });
+    await expect
+      .element(ask.getByRole('button', { name: 'Discard draft' }))
+      .toHaveAttribute('data-variant', 'danger-solid');
+    await userEvent.click(ask.getByRole('button', { name: 'Discard draft' }));
+    await expect.poll(() => calls.includes('discard')).toBe(true);
     await userEvent.click(page.getByRole('button', { name: 'More', exact: true }));
-    await expect.element(page.getByRole('menuitem', { name: 'Discard changes' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: 'Discard changes' }).query()).toBeNull();
     await expect.element(page.getByRole('menuitem', { name: 'Delete menu' })).toBeVisible();
     await userEvent.keyboard('{Escape}');
-    // Nothing left to publish: the main half is View.
-    shown.unmount();
+  });
+
+  it('says a hidden menu is hidden in the bar, never that guests see it', async () => {
+    const hidden: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z', changes: 0, hidden: true };
+    shown?.unmount();
     shown = await renderInApp(
-      () => (
-        <MenusScreen
-          view={{}}
-          store={storeOf({ ...live, changes: 0 }).store}
-          slug="acme"
-          toasts={toasts}
-          business={BUSINESS}
-        />
-      ),
+      () => <MenusScreen view={{}} store={storeOf(hidden).store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
     );
-    await expect.element(page.getByRole('button', { name: 'View', exact: true })).toBeInTheDocument();
+    await expect.element(page.getByText('Hidden: guests see that the menu isn’t available')).toBeVisible();
+    expect(page.getByText('Live: guests see this page').query()).toBeNull();
   });
 
   it('lists every item in the menu’s order with Available, folds a section, and searches both', async () => {
@@ -728,6 +737,8 @@ describe('the Menus editor', () => {
         );
         applyTheme(theme);
         await expect.element(page.getByRole('heading', { level: 1, name: 'Menus' })).toBeInTheDocument();
+        // The publish bar's words fade in (spec 0074): axe reads their contrast once they have.
+        await settled();
         expect(await axeViolations()).toEqual([]);
         await shoot('editor', theme, width);
       }

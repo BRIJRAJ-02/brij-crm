@@ -365,6 +365,9 @@ export const strings = {
   publishGoLive: 'Publish & go live',
   publishDrafts: (count: number) => `Publish · ${count === 1 ? '1 draft' : `${String(count)} drafts`}`,
   view: 'View',
+  /** The publish bar (spec 0074, AC-7407): a first publish's one change, and a hidden menu's state. */
+  firstPublishChange: 'The menu goes live for the first time',
+  hiddenBar: 'Hidden: guests see that the menu isn’t available',
   shareMenu: 'Share menu',
   openNewTab: 'Open in new tab',
   publishedToast: 'Published. Guests see your changes now.',

@@ -328,7 +328,7 @@ test.describe('forms QA: stress', () => {
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByText(/Deleted “Budget”/).first()).toBeVisible();
     // Publishing it as it is is refused, saying why; the live form is never broken.
-    await expect(page.getByText(/Live · edited|edited/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/not published/).first()).toBeVisible({ timeout: 15_000 });
     await page
       .getByRole('button', { name: /^Publish/ })
       .first()

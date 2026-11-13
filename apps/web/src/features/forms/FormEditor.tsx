@@ -29,7 +29,6 @@ import {
   Button,
   ButtonLink,
   Callout,
-  EditorStatus,
   EmptyState,
   Field,
   SettingsStack,
@@ -37,6 +36,8 @@ import {
   HostedFormPreview,
   type HostedFormPreviewProps,
   PreviewLayout,
+  PublishBar,
+  type PublishBarStatus,
   SegmentedControl,
   type PreviewTextChange,
   TabPanel,
@@ -49,13 +50,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import {
-  DeleteFormDialog,
-  DiscardChangesDialog,
-  PauseFormDialog,
-  RetargetFormDialog,
-  type RetargetAsk,
-} from './FormConfirms.tsx';
+import { DeleteFormDialog, PauseFormDialog, RetargetFormDialog, type RetargetAsk } from './FormConfirms.tsx';
 import { retargetStep } from './retarget.ts';
 import { EditorActions } from '../captures/EditorActions.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
@@ -68,9 +63,9 @@ import {
   publishAttributesOf,
   firstPublish,
   canDiscard,
+  formChanges,
   sameDocument,
   savableDraft,
-  statusOf,
   withFlow,
   mintEndingId,
   withQuestions,
@@ -106,6 +101,9 @@ import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
+
+/** How long the bar says Published before it says the form is live again (as the link page's bar). */
+const PUBLISHED_MS = 1600;
 
 /** Props for the editor: what its route loaded through the data layer. */
 export interface FormEditorProps {
@@ -150,7 +148,7 @@ const LEAD_STEP = '~lead';
 /** How long after the last change the draft saves. */
 const SAVE_AFTER_MS = 1_000;
 
-/** The editor: the TopBar (name, Preview, Publish, menu), then the status line, tabs and the tab. */
+/** The editor: the TopBar (name, Preview, menu), the publish bar, then the tabs and the tab. */
 export function FormEditor(props: FormEditorProps) {
   const { slug, members, objects, tab } = props;
   // The live dialog says where answers go by the object's plural ("Answers go to People"), as the sidebar names it.
@@ -173,8 +171,10 @@ export function FormEditor(props: FormEditorProps) {
   const [justLive, setJustLive] = useState<FormView | undefined>(undefined);
   // What the first publish set up in the CRM, said once in the live dialog rather than in a toast (5 November 2026).
   const [liveFiling, setLiveFiling] = useState<LiveFiling | undefined>(undefined);
-  // Discard changes asks first: it loses every edit since the last publish.
-  const [isDiscarding, setDiscarding] = useState(false);
+  // The publish bar's moment after a later publish (spec 0074, AC-7407): Published, then the form's state again.
+  const [isJustPublished, setJustPublished] = useState(false);
+  const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // Delete asks first; Pause and Resume act at once with Undo (the owner, 22 October 2026).
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
@@ -385,7 +385,6 @@ export function FormEditor(props: FormEditorProps) {
 
   // No answered share on the question cards (forms fixes 3, the design critic: it belongs in Analytics).
   const isChanged = isPublished && !sameDocument(draft, form.live);
-  const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
   // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
@@ -641,11 +640,13 @@ export function FormEditor(props: FormEditorProps) {
           setJustLive(view);
           return;
         }
-        toasts.toast(
-          view.live !== undefined && uploadsOffFor(target, view.live)
-            ? { tone: 'info', message: strings.publishedUploadsOff }
-            : { tone: 'success', message: strings.published },
-        );
+        // The bar says Published (spec 0074, AC-7407); a form asking for files where visitors can't upload says that too.
+        setJustPublished(true);
+        clearTimeout(publishedTimer.current);
+        publishedTimer.current = setTimeout(() => setJustPublished(false), PUBLISHED_MS);
+        if (view.live !== undefined && uploadsOffFor(target, view.live)) {
+          toasts.toast({ tone: 'info', message: strings.publishedUploadsOff });
+        }
         // Where answers are saved changed, and the form saves now: offer to save the earlier submissions the same way.
         if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
           setSyncOffer(wasKeptOnly ? 'connected' : 'published');
@@ -825,12 +826,7 @@ export function FormEditor(props: FormEditorProps) {
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
       // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10); a reader
       // sees the form as it is: one tag by the name, never a note over the editor.
-      meta={
-        <>
-          {!viewOnly && <EditorStatus tone={status.tone} text={status.text} />}
-          {!canManage && <ViewOnlyTag reason={strings.readOnlyText} />}
-        </>
-      }
+      meta={<>{!canManage && <ViewOnlyTag reason={strings.readOnlyText} />}</>}
     >
       <EditorActions
         // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
@@ -855,16 +851,6 @@ export function FormEditor(props: FormEditorProps) {
             {strings.previewOpen}
           </Button>
         }
-        // Forms keep a draft: Publish, the page's one primary, shows while there is something to publish.
-        {...(canManage && (!isPublished || isChanged || form.hasUnpublished)
-          ? {
-              publish: (
-                <Button variant="primary" onPress={publish} isPending={isPublishing}>
-                  {isPublishing ? strings.publishing : strings.publish}
-                </Button>
-              ),
-            }
-          : {})}
         {...(canManage
           ? {
               menu: {
@@ -880,20 +866,6 @@ export function FormEditor(props: FormEditorProps) {
                 onDelete: () => setDeleting(true),
                 deleteLabel: strings.deleteForm,
                 triggerRef: moreRef,
-                extra: [
-                  // Back to what is live, once there is something unpublished to lose (it asks first).
-                  ...(canDiscard(form, isChanged)
-                    ? [
-                        {
-                          id: 'discard',
-                          label: strings.discardChanges,
-                          icon: 'undo-2' as const,
-                          isDanger: true,
-                          onAction: () => setDiscarding(true),
-                        },
-                      ]
-                    : []),
-                ],
               },
             }
           : {})}
@@ -911,8 +883,47 @@ export function FormEditor(props: FormEditorProps) {
     : isPublished || tab === 'settings'
       ? tab
       : 'form';
+  // What guests don't see yet (spec 0074, AC-7407): read from the two documents the editor holds; before the first
+  // publish the whole form is the change, and a draft the server holds apart with no difference here is one change.
+  const changeLines = !isPublished
+    ? [strings.firstPublishChange]
+    : form.live === undefined
+      ? []
+      : formChanges(draft, form.live);
+  const changeCount = !isPublished || isChanged || form.hasUnpublished ? Math.max(changeLines.length, 1) : 0;
+  const barStatus: PublishBarStatus = isPublishing
+    ? 'publishing'
+    : isJustPublished
+      ? 'published'
+      : changeCount > 0
+        ? 'draft'
+        : 'live';
+  const discardDraft = () => {
+    discard().then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.discarded });
+        focusLater(() => moreRef.current);
+      },
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
+  };
   const notices = (
     <>
+      {/* The head of every editor of a published thing (spec 0074, AC-7407): Changes, Discard draft (asks first,
+          AC-7408) and Publish; a first publish ends on the share sheet, "<form> is live". */}
+      {canManage && (
+        <PublishBar
+          status={barStatus}
+          changes={changeLines}
+          changeCount={changeCount}
+          isPaused={form.status === 'paused'}
+          pausedText={strings.pausedBar}
+          onPublish={publish}
+          {...(canDiscard(form, isChanged) ? { onDiscard: discardDraft } : {})}
+        />
+      )}
       {form.status === 'paused' && (
         <Callout
           tone="warning"
@@ -1333,18 +1344,6 @@ export function FormEditor(props: FormEditorProps) {
         onClose={() => {
           setJustLive(undefined);
           // Publish left once the form went live; focus goes to the menu beside where it was.
-          focusLater(() => moreRef.current);
-        }}
-      />
-      <DiscardChangesDialog
-        isOpen={isDiscarding}
-        onDiscard={discard}
-        onClose={() => {
-          setDiscarding(false);
-        }}
-        onDone={() => {
-          setDiscarding(false);
-          toasts.toast({ tone: 'success', message: strings.discarded });
           focusLater(() => moreRef.current);
         }}
       />

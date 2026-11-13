@@ -17,6 +17,8 @@ SaveBar is the floating bar for unsaved edits on one screen: it leaves once they
 
 `PublishBarSkeleton` stands in while the editor loads: the same strip and height with its status as a skeleton line, so the editor under it lands where the loading state put it.
 
+Three options let every editor of a published thing head with this bar (spec 0074, batch 3): `changeCount` says a count where the editor knows only how many changes wait (a menu's draft), with Changes offered only for the sentences in `changes`; `onDiscard` left out draws no Discard draft (a thing never published has nothing to go back to); `pausedText` is what a paused page says when it isn't a booking page ("Hidden: guests see that the menu isn't available").
+
 Publish asks nothing (publishing is reversible through Versions). Discard draft asks first: "Discard the draft?", with Keep the draft and Discard draft. Versions reads when its menu opens (`onVersions`); the live one is marked and can't be picked; picking another calls `onRestore`, which brings it back as the draft. Changes is a disclosure (`aria-expanded` on its button), the status is a polite live region and the refusal an alert. The status crossfades when what it says changes (a fade, which reduced motion keeps).
 
 ## Differences from the artifact

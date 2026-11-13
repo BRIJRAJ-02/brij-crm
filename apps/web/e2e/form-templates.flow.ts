@@ -101,7 +101,7 @@ test.describe('the form template gallery', () => {
     await expect(ready.getByText(/\/f\/(feedback|form-)/)).toBeVisible();
     await shoot(page, 'published');
     await ready.getByRole('button', { name: /^Done/ }).click();
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Live: guests see this page').first()).toBeVisible();
 
     // The words are edited on the preview (T21: press the headline, as Tally), saving themselves to the draft;
     // nothing has a Save, and Publish is the one primary. Below the widest screens the preview is a sheet.
@@ -120,18 +120,18 @@ test.describe('the form template gallery', () => {
     await page.keyboard.press('Escape');
     // The preview's sheet (below the widest screens) closes too, so the header is in reach.
     if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
-    await expect(page.getByText('Live · edited').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/not published/).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
     await shoot(page, 'settings-edited');
 
-    // Discard changes, from ⋯, asks first and puts the live words back.
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'Discard changes' }).click();
-    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    // Discard draft, from the publish bar, asks first and puts the live words back.
+    // The publish bar's Discard draft asks first (spec 0074, AC-7408).
+    await page.getByRole('button', { name: 'Discard draft' }).click();
+    const discard = page.getByRole('alertdialog', { name: 'Discard the draft?' });
     await expect(discard).toBeVisible();
     await shoot(page, 'discard-confirm');
-    await discard.getByRole('button', { name: 'Discard changes' }).click();
+    await discard.getByRole('button', { name: 'Discard draft' }).click();
     await expect(discard).toBeHidden({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0);
     // The live words are back on the preview.
