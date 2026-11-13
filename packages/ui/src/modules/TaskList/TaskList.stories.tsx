@@ -131,12 +131,38 @@ export const Keyboard: Story = {
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}');
     await expect(canvas.getAllByRole('row')[1]).toHaveFocus();
+    await expect(canvas.getAllByRole('row')[1]).toHaveAttribute('data-focus-visible');
     await userEvent.keyboard('{Enter}');
     await expect(args.onAction).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }));
     await userEvent.keyboard('{ArrowRight}');
     await waitFor(() => expect(canvas.getByRole('checkbox', { name: /Book the security review/ })).toHaveFocus());
     await userEvent.keyboard(' ');
     await expect(args.onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }), true);
+  },
+};
+
+/** A row under the pointer washes (the prototype's hover, CSS only); a click on it opens the task. */
+export const RowHover: Story = {
+  args: { onAction: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[1] as HTMLElement;
+    await userEvent.hover(row);
+    await waitFor(() => expect(row).toHaveAttribute('data-hovered'));
+    await userEvent.click(row);
+    await expect(args.onAction).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }));
+  },
+};
+
+/** Pressed (spec 0072): the row says so while the pointer holds it, with a wash and no change of size. */
+export const RowPressed: Story = {
+  args: { onAction: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[1] as HTMLElement;
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: row }]);
+    await waitFor(() => expect(row).toHaveAttribute('data-pressed'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: row }]);
+    await waitFor(() => expect(row).not.toHaveAttribute('data-pressed'));
   },
 };
 

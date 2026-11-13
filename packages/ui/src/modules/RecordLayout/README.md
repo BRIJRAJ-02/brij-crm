@@ -55,3 +55,15 @@ Tab order follows what you see: the header's actions, the tab list (the arrows s
 ## Differences from the artifact
 
 The artifact has no record page layout card yet; this is new in code. Not yet published to the design system artifact (the owner publishes it).
+
+## Timefix prototype (spec 0072)
+
+Takes its look from RecordPanel (spec 0072): the prototype folds RecordLayout's side column into its RecordPanel ("RecordLayout (side)"). The side column is the prototype's panel body: padded `space-16` all round on the page's surface, a `border-subtle` hairline before it, its blocks (Details, then each RelatedRecords section) `space-16` apart. The main column, the header and the tabs are not the prototype RecordPanel's: they keep their layout until the record page's own phase.
+
+**Use it for** a record's full page: its header, tabs and the details beside them. **Don't use it for** a record beside a table (RecordPanel).
+
+**States**: wide, narrow (the details folded in a Disclosure, closed and open), loading, read only. Stories: `Wide`, `Narrow`, `Loading`, `ReadOnly`.
+
+**Differences from the prototype**: the prototype has no record page layout, only the panel; the narrow fold, `notice`, `isLoading` and the controlled `isSidebarExpanded` are kept.
+
+**Repeats from its replacer** (AC-4): the side column's `space-16` padding (RecordPanel's `.content`); it leaves with this export.

@@ -30,3 +30,18 @@ Typing `@` at the start or after a space opens the list: Up and Down move, Enter
 ## Differences from the artifact
 
 The artifact has no composer yet; this is code first, published with the next `pnpm ui:artifact`.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from CommentThread (spec 0072): the prototype folds CommentComposer into its CommentThread's composer. The text field is Field's `composer` variant (ported in tier 2a), which draws the box; this module lays it over Cancel and the send button, `space-6` apart as the prototype's edit actions are, a refusal's Callout between them.
+
+**Use it for** writing a comment, a reply or an edit. **Don't use it for** a long text value (Field `isMultiline`) or a note (the rich text editor).
+
+**States**: as listed above; stories add `MentionDismissed` (Esc closes the @ list, focus and text stay).
+
+**Differences from the prototype**
+- The prototype's composer is one filled box (`surface-subtle`, `radius-lg`) holding the text, a "@ mention · ⌘↵ send" hint and a round send button, turning white with an accent edge while writing; here the box is Field's, and Cancel and Comment (with their `kbd` hints) sit under it. The box's look follows Field.
+- No dim while sending: a new comment clears at once and the thread shows it as sending; an edit shows Save pending.
+- Kept beyond it: `<@member-uuid>` tokens, whole-mention deletion, refusal with Retry, `onEditLast`, the counter near the limit, `fieldRef`, disabled.
+
+**Repeats from its replacer** (AC-4): the actions' `space-6` gap; it leaves with this export.

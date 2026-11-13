@@ -91,3 +91,22 @@ The ⌘ key on a Mac, Ctrl elsewhere (Mod):
 - Column headers are 13px medium (`body-strong`), as the artifact's README asks, not the 11px label they first had (owner decision, 8 Oct 2026).
 
 The artifact's `DataTable` card drew a static table. This is the grid the spec describes: virtualised rows and columns, rows from outside, editing in place through the field set, and column state that leaves through `onColumnsChange`. A select or status opens as its list on the cell, with no popover around it, so one key reaches the choices.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DataGrid, which replaces DataGrid, Table and SampleTable. The header is one grey strip (`surface-subtle`, `radius-md` at its two ends, `size-table-header` tall) of names in `text-body-sm-strong` and `text-secondary`, the text colour under the pointer; the rows are `size-row` tall on the surface, split by `border-subtle` hairlines with no column lines, `space-12` in from each side; a hovered row takes `surface-hover`, a selected one `accent-soft`, the open one `surface-selected`. The focused cell takes the prototype's focus box, an `accent` edge `border-width-focus` wide drawn inside the cell (the grid scrolls and clips anything outside), and a refused value the danger edge in its place. A column's resize edge is a short `border` hairline, `space-8` in from the strip's top and foot, `border-strong` under the pointer and a `border-width-focus` accent line while it drags. The pinned run ends on a `border-subtle` hairline and casts `--pinned-edge` while the grid is scrolled sideways. The foot is the prototype's summary line: the surface under a `border-subtle` hairline, its figures in `text-body-sm`.
+
+**The consumer provides** the columns (each an attribute, its width and pin), the rows as a `ListSource`, the selection, `onCellChange` for an edit, `onRowOpen`, `onSort`, `onFilter`, `onColumnsChange`, `status` with `onRetry`, and the optional foot, groups and add column (see Use above).
+
+**Interaction**: the arrows move between cells, Space ticks a row, Enter or a double click edits the cell (Esc puts it back), a click opens the row; a header opens its column menu, its end edge drags to resize (arrows on a focused edge), a header drags to move its column; Shift with a click or the arrows draws a range, which copies and pastes as a spreadsheet's does (see Keyboard).
+
+**Use it for** every object's table view and the lists of records; read only tables of records too. **Don't use it for** a settings list of a few fixed rows (Table) or a picture of a file's shape (SampleTable).
+
+**States**: rows, hover, selected, open, focused cell, editing (in the cell, in a list, in a popover), refused, a range, pinned and scrolled sideways, grouped and folded, loading (skeleton rows at the columns' widths), empty, failed, no access, resizing, a column on the move.
+
+**Differences from the prototype**
+- Kept beyond the prototype: virtual rows and columns (a million records), ranges, copy and paste, groups, column moves by drag, calculations in the foot, the row's picture, notes and comment counts, every attribute type's own editor, a refused value's floating message.
+- Not built: the "just changed" accent wash on a row and the skeleton's crossfade into content (both need the data layer to say which rows changed and when they arrived), and the header caret that floats over a name's end (the library's column menu button sits after the name).
+- Prop names that differ: the prototype's `onRowAction` is `onRowOpen`, `onSortChange` is `onSort`, its `onColumnAction` is the column menu's own callbacks (`onSort`, `onFilter`, `onColumnsChange` for hide, pin, move and width), and its `columns`' `isReadOnly` is the attribute's own read only reason.
+
+**Folded parts** (AC-4): Table and SampleTable keep their exports and their own modules (decision 14: Table is a React Aria table of a few settings rows, SampleTable a picture that takes no focus; neither can draw the grid without changing what it is), written from these rules: the grey strip, the hairline rows with no column lines, `space-12` cells and the inward ring.

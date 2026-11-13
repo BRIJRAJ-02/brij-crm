@@ -263,14 +263,24 @@ export function CommandPalette(props: CommandPaletteProps) {
       onOpenChange={onOpenChange}
       actions={
         <span className={styles.hint}>
-          <Kbd>{strings.keys.move}</Kbd> {strings.move}
-          <Kbd>{strings.keys.choose}</Kbd> {strings.choose}
-          <Kbd>{strings.keys.close}</Kbd> {strings.close}
+          <span className={styles.key}>
+            <Kbd>{strings.keys.move}</Kbd> {strings.move}
+          </span>
+          <span className={styles.key}>
+            <Kbd>{strings.keys.choose}</Kbd> {strings.choose}
+          </span>
+          <span className={styles.key}>
+            <Kbd>{strings.keys.close}</Kbd> {strings.close}
+          </span>
         </span>
       }
     >
       {/* Only the field's own Enter reaches here; the rows' keys stay with the menu. */}
-      <div className={styles.list} onKeyDownCapture={chooseOnEnter}>
+      <div
+        className={styles.list}
+        data-sections={props.sections === undefined ? undefined : ''}
+        onKeyDownCapture={chooseOnEnter}
+      >
         {list}
         {announcer}
       </div>

@@ -79,6 +79,31 @@ export const SearchAndChoose: Story = {
   },
 };
 
+/** The arrows move the highlight while focus stays in the search, as the prototype's palette does. */
+export const HighlightInTheField: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ userEvent }) => {
+    const found = await dialog();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search records and actions'));
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(found.querySelector('[role="menuitem"]')).toHaveAttribute('data-focused'));
+    await expect(document.activeElement).toHaveAttribute('aria-label', 'Search records and actions');
+  },
+};
+
+/** The foot names the keys, each keycap with its words: move, choose and close. */
+export const KeyHints: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const found = await dialog();
+    await expect(found).toHaveTextContent('↑↓ to move');
+    await expect(found).toHaveTextContent('↵ to choose');
+    await expect(found).toHaveTextContent('ESC to close');
+    const caps = [...found.querySelectorAll('kbd')].map((cap) => cap.textContent);
+    await expect(caps).toEqual(expect.arrayContaining(['↑↓', '↵', 'ESC']));
+  },
+};
+
 /** Nothing matches: the list says so. */
 export const NoResults: Story = {
   parameters: { crm: { screenshot: false } },

@@ -345,3 +345,21 @@ export const ShortFormError: Story = {
     await expect(args.onRetry).toHaveBeenCalled();
   },
 };
+
+/**
+ * The prototype's section fold, by keyboard: Enter on the heading folds the rows away and Space opens them again, the
+ * heading keeping focus and saying its state (`aria-expanded`).
+ */
+export const FoldsByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const heading = canvas.getByRole('button', { name: /^Team/, expanded: true });
+    heading.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(heading).toHaveAttribute('aria-expanded', 'false');
+    await expect(heading).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(heading).toHaveAttribute('aria-expanded', 'true');
+    await expect(heading).toHaveFocus();
+  },
+};

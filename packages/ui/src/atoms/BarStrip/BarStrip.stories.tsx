@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BarStrip } from './BarStrip.tsx';
 
@@ -29,6 +30,27 @@ export const Default: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Week 6: 5')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Hover (spec 0072, Chart's look): the pointer on a week's bar opens its tooltip with the week's line (the other bars
+ * dim, in CSS). The bars stay out of the tab order; the hidden list is what a screen reader hears.
+ */
+export const HoverBar: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <BarStrip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    // The drawn bars, hidden from screen readers; the sixth is week 6.
+    const week = canvasElement.querySelector('[aria-hidden="true"]')?.children[5];
+    if (week === undefined) throw new Error('no bar for week 6');
+    await hoverFresh(userEvent, week);
+    await expect(await shownTooltip()).toHaveTextContent('Week 6: 5');
+    await expect(canvas.getByRole('list')).toHaveTextContent('Week 6: 5');
   },
 };
 

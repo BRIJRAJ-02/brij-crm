@@ -671,3 +671,39 @@ export const Merged: Story = {
     await expect(unnamed).toHaveAccessibleName(/Grace Hopper merged a record into this record/);
   },
 };
+
+/**
+ * The prototype's grey cards: an email's subject and its two line preview, and a comment's text, each read after the
+ * entry's line as its description.
+ */
+export const EmailAndComment: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const email = canvas.getByRole('article', { name: /Grace Hopper sent an email/ });
+    await expect(email).toHaveAccessibleDescription(/Re: Pricing for 40 seats.*the annual plan works for us/);
+    const comment = canvas.getByRole('article', { name: /Grace Hopper commented/ });
+    await expect(comment).toHaveAccessibleDescription(/Their renewal is in March\./);
+  },
+};
+
+/**
+ * Show all lays a run of changes out and its label flips to Show less; pressed again it folds them back, focus staying
+ * on it.
+ */
+export const ShowAllFoldsBack: Story = {
+  ...GroupedChanges,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = canvas.getByRole('button', { name: 'Show all' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    toggle.focus();
+    await userEvent.keyboard('{Enter}');
+    const open = canvas.getByRole('button', { name: 'Show less' });
+    await expect(open).toHaveAttribute('aria-expanded', 'true');
+    await expect(open).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    const folded = canvas.getByRole('button', { name: 'Show all' });
+    await expect(folded).toHaveAttribute('aria-expanded', 'false');
+    await expect(folded).toHaveFocus();
+  },
+};

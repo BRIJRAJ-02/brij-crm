@@ -1077,8 +1077,9 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
   }
   return (
     <div className={styles.entry} data-rail-end={endsRail || undefined}>
-      <span className={styles.marker}>
-        <Icon name={icon} size="xs" tone="muted" />
+      {/* The well takes its colour from the entry's kind (blue marks time); the icon draws in the well's colour. */}
+      <span className={styles.marker} data-kind={entry.kind}>
+        <Icon name={icon} size="xs" />
       </span>
       <span className={styles.main}>
         <span className={styles.line}>

@@ -189,7 +189,7 @@ export function KanbanColumn({
         {onAddCard !== undefined && !isCollapsed && refusal === undefined && (
           <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
         )}
-        {/* Quiet until the head is hovered or focused (a pointer that can hover), so the "+" stays the head's action. */}
+        {/* Quiet until the column is hovered or it is focused (a pointer that can hover), so the "+" stays the head's action. */}
         {onCollapse !== undefined && !isCollapsed && (
           <span className={styles.collapse}>
             <Button

@@ -44,3 +44,15 @@ Tab reaches the heading's toggle (Enter or Space folds the section), Add, then e
 ## Differences from the artifact
 
 Not in the artifact yet.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from RecordPanel (spec 0072): the prototype folds RelatedRecords into its RecordPanel's sections ("Linked records"). The section's heading, chevron, count and fold (transitions.dev 21 accordion) are Disclosure's `label` variant, ported in tier 2b. Each row is the prototype's attribute row height, `size-control`, a RecordChip at its start and its Remove at its end, fading in under a pointer or with focus in the row (shown always on touch). A failed Show more says so in `text-caption`.
+
+**Use it for** a side that holds many records in the record page's sidebar, or its short form on Overview. **Don't use it for** a handful of chips with no actions (RecordChipList) or one record reference (AttributeList).
+
+**States**: as listed above. Stories add `FoldsByKeyboard` (the prototype's sections collapsed or open: Enter folds, Space opens, the heading keeps focus and its `aria-expanded`).
+
+**Differences from the prototype**: the prototype's section lays its chips out wrapping in a line, with Add as an icon button; here they are rows, a row each, so each can carry Remove, and the side pages with Show more, a total, a search to Add (with create) and a lock for read only.
+
+**Repeats from its replacer** (AC-4): the row's `size-control` height, from the prototype's attribute row; it leaves with this export.

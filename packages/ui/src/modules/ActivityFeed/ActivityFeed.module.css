@@ -1,11 +1,12 @@
-/* ActivityFeed: a scrolling feed of entries placed by the virtualiser. Each
-   entry has a size-chip marker on a hairline rail (the rail stops at the last
-   entry), the actor (avatar and name, plain) and verb in text-secondary with the time at the end,
-   and under it the change (old value, an arrow, new value), a task as one
-   quiet row (its icon and its title), or a card with the title and a two
-   line excerpt. A links entry names its records as flat chips
-   in the line. A meeting's card holds its time, its attendees and its video
-   link. Period headings are 11px labels. The inline layout draws a few
+/* ActivityFeed, after the Timefix prototype's ActivityFeed (spec 0072): a scrolling feed of entries placed by the
+   virtualiser. Each entry has a round size-icon-lg well (surface-subtle, its icon text-secondary, ringed in the
+   surface so it parts the rail) on a border-subtle hairline rail (the rail stops at the last entry and the last of a
+   period); a meeting, call or logged meeting's well is blue (accent-soft, accent-text: blue marks time). Beside it the
+   actor (avatar and name, plain) and verb in text-secondary, the time at the end in text-caption with tabular figures,
+   and under it the change (old value, an arrow, new value), a task as one quiet row (its icon and its title), or the
+   prototype's grey comment card (surface-subtle, radius-md, no edge) with the title and a two line excerpt in
+   text-body-sm. A links entry names its records as flat chips in the line. A meeting's card holds its time, its
+   attendees and its video link. Period headings are text-label in text-tertiary. The inline layout draws a few
    entries in place, with no scroll of its own. */
 @layer components {
   .root {
@@ -39,8 +40,10 @@
     outline: none;
   }
 
+  /* The feed is a clipped scroller, so the ring sits inside the entry (a plain div, not React Aria: :focus-visible). */
   .slot:focus-visible {
-    box-shadow: var(--shadow-focus-inset);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* Inline: a few entries in place, each at its own height, with no scroll of the feed's own. */
@@ -72,22 +75,23 @@
     padding-block-start: 0;
   }
 
+  /* The prototype's item: the well's column and the text space-12 apart, space-6 above and below. The inline
+     space-4 keeps the focus ring off the text. */
   .entry {
     position: relative;
     display: grid;
-    grid-template-columns: var(--size-chip) minmax(0, 1fr);
-    column-gap: var(--space-8);
-    padding: var(--space-4);
-    padding-block-end: var(--space-8);
+    grid-template-columns: var(--size-icon-lg) minmax(0, 1fr);
+    column-gap: var(--space-12);
+    padding: var(--space-6) var(--space-4);
   }
 
-  /* The rail: from under this entry's marker all the way to the next entry's, through that entry's top padding,
-     so it runs unbroken down a period; it stops under the last entry and the last of a period. */
+  /* The rail: from space-4 under this entry's well down through the next entry's top padding to its well, whose
+     surface ring parts it; it stops under the last entry and the last of a period. */
   .entry::before {
     position: absolute;
-    inset-block: calc(var(--space-4) + var(--size-chip)) calc(-1 * var(--space-4));
-    inset-inline-start: calc(var(--space-4) + var(--size-chip) / 2);
-    border-inline-start: var(--border-width-hairline) solid var(--border);
+    inset-block: calc(var(--space-6) + var(--size-icon-lg) + var(--space-4)) calc(-1 * var(--space-6));
+    inset-inline-start: calc(var(--space-4) + var(--size-icon-lg) / 2);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     content: '';
   }
 
@@ -95,21 +99,29 @@
     content: none;
   }
 
+  /* The well: grey, round, ringed in the surface; its icon takes the well's colour. */
   .marker {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: var(--size-chip);
-    block-size: var(--size-chip);
-    border: var(--border-width-hairline) solid var(--border);
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-icon-lg);
+    block-size: var(--size-icon-lg);
     border-radius: var(--radius-full);
-    background: var(--surface-raised);
+    background: var(--surface-subtle);
+    box-shadow: 0 0 0 var(--border-width-thick) var(--surface);
+    color: var(--text-secondary);
+  }
+
+  /* Blue marks time: a meeting, and a call or meeting someone logged. */
+  .marker:is([data-kind='meeting'], [data-kind='call'], [data-kind='logged_meeting']) {
+    background: var(--accent-soft);
+    color: var(--accent-text);
   }
 
   .main {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-6);
     min-inline-size: 0;
   }
 
@@ -118,7 +130,7 @@
     display: flex;
     gap: var(--space-8);
     align-items: flex-start;
-    min-block-size: var(--size-chip);
+    min-block-size: var(--size-icon-lg);
   }
 
   .what {
@@ -144,6 +156,7 @@
   .attribute {
     color: var(--text);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   /* Pieces of a links entry's line kept together: a chip and the comma after it, or the attribute and ", and". */
@@ -157,10 +170,11 @@
     display: flex;
     flex: none;
     align-items: center;
-    min-block-size: var(--size-chip);
+    min-block-size: var(--size-icon-lg);
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+    font-variant-numeric: tabular-nums;
   }
 
   .change {
@@ -193,11 +207,19 @@
     min-inline-size: 0;
   }
 
+  /* Shown all, each change's attribute is the prototype's diff label: text-label, text-tertiary, a fixed column. */
+  .changesRow > .attribute {
+    min-inline-size: calc(2 * var(--space-48));
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   /* With a toolbar (the Activity tab's filter): one column filling the slot, the feed taking what it leaves. */
   .framed {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
     inline-size: 100%;
     block-size: 100%;
     min-block-size: 0;
@@ -217,24 +239,25 @@
     min-block-size: 0;
   }
 
+  /* The prototype's comment card: a grey fill with no edge. */
   .card {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-8) var(--space-12);
-    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    background: var(--surface-subtle);
   }
 
   .title {
     color: var(--text);
-    font: var(--text-body-strong);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   /* A task's entry: one quiet row, its icon and its title, its icon level with
      the actor's avatar above; the row opens the task, taking surface-hover
-     under a pointer and the inset ring on keyboard focus. */
+     under a pointer and the outline ring, inset, on keyboard focus. */
   .task {
     display: flex;
     min-inline-size: 0;
@@ -246,13 +269,13 @@
     align-items: center;
     min-inline-size: 0;
     max-inline-size: 100%;
-    min-block-size: var(--size-chip);
+    min-block-size: var(--size-icon-lg);
     margin-inline-start: calc(-1 * var(--space-2));
     padding-inline: var(--space-2) var(--space-6);
     border-radius: var(--radius-sm);
     color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-decoration: none;
     outline: none;
     transition: background-color var(--duration-quick) var(--ease-out);
@@ -264,8 +287,10 @@
     }
   }
 
+  /* Inside the feed's clipped scroller: the ring sits inside the row. */
   .taskFace[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .taskTitle {
@@ -288,16 +313,18 @@
 
   .duration {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+    font-variant-numeric: tabular-nums;
   }
 
+  /* The prototype's preview: text-body-sm in text-secondary, two lines at most. */
   .excerpt {
     display: -webkit-box;
     overflow: hidden;
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -306,8 +333,9 @@
   /* A meeting's time, its attendees (chips, or an address, each with its answer unless yes) and its video link. */
   .when {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+    font-variant-numeric: tabular-nums;
   }
 
   .attendees {
@@ -328,26 +356,22 @@
   .address {
     overflow: hidden;
     color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .response {
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
+  /* An outline shows in forced colours; the well keeps a visible edge there too. */
   @media (forced-colors: active) {
-    .taskFace[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-    }
-
-    .slot:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: calc(-1 * var(--border-width-thick));
+    .marker {
+      outline: var(--border-width-hairline) solid CanvasText;
     }
   }
 }

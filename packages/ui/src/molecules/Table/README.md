@@ -51,3 +51,11 @@ Tab enters the table; the arrow keys move between rows and cells; Enter opens a 
 ## Differences from the artifact
 
 Not in the artifact (the artifact's DataTable becomes DataGrid).
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DataGrid, which replaces Table: one grey header strip (`surface-subtle`, `radius-md` at its two ends; square where the table runs out to a page's or a flush Card's edges) of names in `text-body-sm-strong` and `text-secondary`, over `size-row` rows split by `border-subtle` hairlines, every cell `space-12` in from its sides. A hovered row takes `surface-hover`, a selected one `accent-soft`; a focused row, cell or header takes the prototype's ring (`border-width-focus` in `focus-ring`), drawn inward so the scrolling frame never clips it. `footer` is the prototype's summary line: the surface under a `border-subtle` hairline, in `text-body-sm`. The table draws with separate borders (no cell draws more than its foot), so the strip's ends can round.
+
+**Takes its look from DataGrid (spec 0072).** **Repeats from its replacer** (AC-4): the header strip, the row hairlines, the cell padding, the hover and selected fills, the inward ring and the summary line; they leave with this export when the screens that use it move to the grid or to their own lists.
+
+**Differences from the prototype**: Table is a React Aria table of a few rows (no virtual rows, no editing in place) and keeps every variant listed above: reorder handles, quiet selection, `look="person"`, even layout with today and quiet columns, a total row, phone rows, `edge`, sticky and hidden headers, columns shown on hover.

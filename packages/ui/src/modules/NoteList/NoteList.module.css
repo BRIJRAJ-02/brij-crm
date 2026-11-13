@@ -1,7 +1,8 @@
-/* NoteList: rows of the title (body-strong, one line), the excerpt
-   (text-secondary, two lines) and a label line with the author's xs avatar,
-   name and "Edited …" in text-secondary. Rows are space-8 padded with md
-   corners, take surface-hover under a pointer and the inset ring on focus. */
+/* NoteList: each note is the Timefix prototype's note card (spec 0072): surface, a border-subtle hairline and
+   shadow-xs, radius-lg, space-12 of room. The title in text-body-strong (one line), the excerpt in
+   text-body-sm and text-secondary (two lines), and a text-caption line in text-tertiary with the author's avatar,
+   name and "Edited …". Under a pointer the card's hairline darkens to border and its shadow grows to shadow-sm; a
+   press washes it surface-hover (nothing scales); the keyboard's card takes the outline ring. */
 @layer components {
   .root {
     display: flex;
@@ -13,28 +14,55 @@
     outline: none;
   }
 
+  /* The virtualiser places rows edge to edge, so the card is drawn on ::before, space-8 short of the row's foot:
+     that space-8 is the gap between cards, and the row's height (which the virtualiser measures) includes it. */
   .row {
+    position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-4);
     box-sizing: border-box;
-    padding-block: var(--space-8);
-    padding-inline: var(--space-8);
-    border-radius: var(--radius-md);
+    padding: var(--space-12);
+    padding-block-end: calc(var(--space-12) + var(--space-8));
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     outline: none;
   }
 
+  .row::before {
+    position: absolute;
+    inset: 0 0 var(--space-8);
+    z-index: calc(-1 * var(--z-raised));
+    box-sizing: border-box;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+    content: '';
+    transition:
+      border-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out);
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    .row[data-hovered] {
-      background: var(--surface-hover);
+    .row[data-hovered]::before {
+      border-color: var(--border);
+      box-shadow: var(--shadow-sm);
     }
   }
 
-  .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+  /* The press is a colour, never a scale (the prototype's .98 press is not the app's). */
+  .row[data-pressed]::before {
+    background: var(--surface-hover);
+  }
+
+  /* Inside the list's scroller, which clips at its sides: the ring sits just inside the card. */
+  .row[data-focus-visible]::before {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .title {
@@ -62,6 +90,8 @@
   .excerpt {
     min-inline-size: 0;
     color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .meta {
@@ -69,9 +99,10 @@
     gap: var(--space-6);
     align-items: center;
     min-inline-size: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    margin-block-start: var(--space-4);
+    color: var(--text-tertiary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
   /* The record a note is on (the workspace's Notes page): never wider than half the line. */
@@ -104,7 +135,7 @@
   .frame {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
     inline-size: 100%;
     block-size: 100%;
     min-block-size: 0;
@@ -124,10 +155,15 @@
     min-block-size: 0;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .row::before {
+      transition: none;
+    }
+  }
+
   @media (forced-colors: active) {
-    .row[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: calc(-1 * var(--border-width-thick));
+    .row[data-focus-visible]::before {
+      outline-color: Highlight;
     }
   }
 }

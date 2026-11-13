@@ -50,3 +50,7 @@ missing button never reads as a bug. Guests stay: adding one is not a change to 
 
 - `isOnCalendar`: only a booking with a calendar event behind it is said to "come off both calendars" (critic B-18); otherwise the confirm says the host is told and the invite withdrawn.
 - The dialogs' dismiss buttons show no ESC keycap (critic A26): a guest isn't reading shortcuts.
+
+## Timefix prototype (spec 0072)
+
+The prototype lists BookingChanges in ActivityFeed's `replaces`, so it is folded into ActivityFeed's batch (3a). It is drawn only on guest pages (the public booking manage page), and guest looks are not phase 1's to restyle: it keeps its shipped look, CSS and TSX unchanged, until the booking page's port phase (6) moves it.

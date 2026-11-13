@@ -122,3 +122,19 @@ export const Disabled: Story = {
     await expect(canvas.getByRole('textbox', { name: 'Add a comment' })).toBeDisabled();
   },
 };
+
+/** Esc dismisses the @ list and keeps focus in the text, with what was typed left as it was. */
+export const MentionDismissed: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole('textbox', { name: 'Add a comment' });
+    await userEvent.click(field);
+    await userEvent.keyboard('Thanks @gr');
+    await waitFor(() => expect(field).toHaveAttribute('aria-controls'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(field).not.toHaveAttribute('aria-controls'));
+    await expect(field).not.toHaveAttribute('aria-activedescendant');
+    await expect(field).toHaveFocus();
+    await expect(field).toHaveValue('Thanks @gr');
+  },
+};

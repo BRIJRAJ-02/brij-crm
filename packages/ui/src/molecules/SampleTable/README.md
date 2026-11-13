@@ -35,3 +35,11 @@ None. It takes no focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's DataGrid, which replaces SampleTable: the header row is the grid's grey strip (`surface-subtle`, its names in `text-body-sm-strong` and `text-secondary`), the sample rows sit under it split by `border-subtle` hairlines with no column lines, every cell `space-12` in from its sides in `text-body-sm`, all in a `border-subtle` hairline frame at `radius-md` on the surface. The caption is `text-caption` in `text-tertiary`.
+
+**Takes its look from DataGrid (spec 0072).** **Repeats from its replacer** (AC-4): the header strip's fill and type, the row hairlines and the cell padding.
+
+**Differences from the prototype**: a picture, not a grid: it takes no focus, its cells are hidden from screen readers and its `label` names it as one image.

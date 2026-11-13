@@ -44,3 +44,22 @@ In sections, each key typed moves the highlight to the first row that matches th
 - `items` is a `ListSource` with `onSearch`, rather than a static list; `sectionLabel` and `actionLabel` are gone (the foot names the keys instead of repeating the action).
 - Match highlighting waits until a Menu row can take a highlighted label (spec 0039's follow up).
 - Sections, the status row, the live count and checked rows are new (spec 0039).
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's CommandPalette, through the parts it is made of. In sections (the command menu) the search runs edge to edge with its hairline across the palette, as the prototype's field does, and the rows keep the Menu's inset; a flat list, which the Menu virtualises with no inset of its own, keeps a `space-8` frame. The foot names the keys in `text-caption` and `text-secondary`: each keycap `space-4` from its words, `space-16` between them (the prototype's 11px foot snaps to `text-caption`). The rest is drawn by the parts it holds, which take their own ported looks: the surface, scrim, corners and motion are Modal's `palette` variant, the search field and rows Menu's (`search.size="lg"`), the keycaps Kbd's.
+
+**Use it for** global search and quick actions (⌘K), the command menu's sections, and "Choose record". **Don't use it for** filtering the current table (the toolbar's search) or picking a field's value (Select or a combobox).
+
+**The consumer provides** `isOpen` and `onOpenChange`, `onSearch` (the rows for each change of the text), `onAction`, and either `items` (a `ListSource`, with `searchStatus`) or `sections` (with `onRetry`); `title`, `searchLabel` and `placeholder` name it.
+
+**States**: nothing typed (every section), filtering (empty sections drop out), nothing matches (quoting the text), a section searching or failed, loading rows, a highlighted row, a row with a keycap, a choice's checked option.
+
+**Interaction**: focus starts in the search; the up and down arrows move the highlight while focus stays in the field; Enter chooses and closes; Esc closes. Opened from the keyboard it appears at once (Modal's palette variant); by pointer it grows in.
+
+**Differences from the prototype**
+- Esc closes at once; the prototype's first Esc clears the text. The library keeps its behaviour.
+- "?" in an empty search does not open ShortcutHelp (the prototype's `onShowShortcuts`): the screen opens ShortcutHelp with its own key.
+- Owed to Modal (phase 2): the prototype's palette sits 12vh from the top at `size-measure` wide, at most 70vh tall, with a `surface-subtle` foot; Modal's palette sits two top bars down at `size-palette`, and draws the foot. Owed to Menu (tier 2's look): the prototype's field is `space-64` tall with its type at 18px (no 400 18px token; Menu's `lg` search is a top bar tall in `text-heading-regular`), and its highlighted row washes `surface-selected` where Menu's focused row washes `surface-hover`.
+- Rows are Menu rows with the library's `icon`, `leading`, `description`, `kind` and `kbd`, not the prototype's PersonLine rows; the prototype's `group`, `kind` and `sub` are the library's sections, `leading` and `description`.
+- Kept beyond the prototype: `ListSource` items with skeleton rows, `searchStatus`, section statuses with Try again, the polite result count, choices with checked options, and Enter before the records (`heldEnter`). The foot is read by screen readers here (the prototype hides it).

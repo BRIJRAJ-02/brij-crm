@@ -200,3 +200,19 @@ export const ReadOnly: Story = {
     await expect(canvas.getByRole('button', { name: '👍 3' })).toBeDisabled();
   },
 };
+
+/**
+ * Focusing a comment shows its actions (the prototype's hover bar): Tab reaches the first comment's Add reaction, then
+ * More actions, each inside that comment.
+ */
+export const ActionsOnFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const [first] = canvas.getAllByRole('listitem');
+    if (first === undefined) throw new Error('No comment');
+    await userEvent.tab();
+    await expect(within(first).getByRole('button', { name: 'Add reaction' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(within(first).getByRole('button', { name: 'More actions' })).toHaveFocus();
+  },
+};

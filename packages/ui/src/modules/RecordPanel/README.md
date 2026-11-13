@@ -45,3 +45,21 @@ Focus moves into the panel when it opens. ↑ and ↓ step to the record above o
 ## Differences from the artifact
 
 The artifact's record page has no side panel.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's RecordPanel body: the record's content padded `space-16` all round under the panel's bar (a notice and the stat strip padded `space-16` over the tabs), each tab's content scrolling in its own slot. The panel's surface, `shadow-lg` with its `border-subtle` ring, `radius-lg`, its bar and its motion (transitions.dev 07 panel reveal) are the floating Panel's, which phase 2's Panel part ports; the content swap is instant here, as the library's house rule for a key pressed hundreds of times a day asks (below). The prototype's side column of RecordLayout and its RelatedRecords sections are folded into this part: see their READMEs.
+
+**Use it for** previewing a record from a table, board or search beside the list. **Don't use it for** settings or forms (a Modal or Panel) or as the record's full page (RecordLayout).
+
+**The consumer provides** `record`, `isOpen` and `onClose`, `tabs` (the body: Details through AttributeList, Activity, Tasks), `onPrevious` and `onNext` at each step, and `onOpenPage`.
+
+**States**: closed (not rendered), open, switching records, first and last record (the button at that end disabled), with a notice, unavailable, stepping, loading, failed, no access. Stories: `Default`, `OpenAndClose`, `StepThrough`, `ArrowKeysStep`, `NoLongerAvailable`, `Unavailable`, `Stepping`, `Loading`, `NoAccess`.
+
+**Interaction**: it takes focus as it opens; Esc closes it and hands focus back to what opened it (`OpenAndClose`). ↑ and ↓ step through the list, as Previous and Next do.
+
+**Differences from the prototype**
+- Built on the floating Panel with Tabs, not a bar over one scrolling body: the prototype's `objectName` bar label, its "2 of 4" position and its J/K hint line are not drawn; the header shows the record's avatar and name. Tabs, the stat strip, `notice`, `empty`, `actions`, `isStepping` and `status` are kept beyond it.
+- The prototype steps with J and K as well as ↑ and ↓; the library steps with ↑ and ↓ only (Panel's `onStep`), and swaps the content at once rather than sliding it 8px (no `PageSlide`), so a held key never queues motion.
+- `recordKey` and `position` are the library's `record`, `onPrevious` and `onNext`; `onExpand` is `onOpenPage`; `label` is the record's name.
+- The prototype's `AttributeRow` and `RecordSection` are the library's AttributeList rows and Disclosure (through RelatedRecords).

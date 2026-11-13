@@ -1,6 +1,8 @@
-/* CommandPalette: the Menu's search over its rows, inside the palette
-   variant of Modal, with room for a screen of rows; the foot names the keys
-   in text-secondary. */
+/* CommandPalette, in the look of the Timefix prototype's command palette (spec 0072): the Menu's search over its
+   rows, inside the palette variant of Modal, with room for a screen of rows. In sections (the command menu) the
+   search runs edge to edge, its hairline across the palette, and the rows keep the Menu's own inset; a flat list,
+   which the Menu virtualises with no inset of its own, keeps a space-8 frame. The foot names the keys in
+   text-caption and text-secondary, each key with its words space-4 apart and space-16 between them. */
 @layer components {
   .list {
     display: flex;
@@ -10,13 +12,24 @@
     padding: var(--space-8);
   }
 
+  .list[data-sections] {
+    padding: 0;
+  }
+
   .hint {
     display: inline-flex;
-    gap: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-16);
     align-items: center;
     margin-inline-end: auto;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+  }
+
+  .key {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
   }
 }

@@ -1,9 +1,9 @@
-/* NotificationList: rows of an unread dot (accent, size-check), the actor's
-   sm avatar, a first line of the sentence (body; body-strong while unread),
-   the record's chip and the time (label, text-secondary), and the excerpt
-   (text-secondary, one line), then a quiet menu button. Rows are space-8
-   padded with md corners, take surface-hover under a pointer and the inset
-   ring on focus. */
+/* NotificationList, in the look of the Timefix prototype's inbox rows (spec 0072): an unread dot (accent, space-8
+   round, fading and shrinking away once read), the actor's avatar, the sentence in text-body (text-body-strong while
+   unread), the record's chip and the time (text-caption, text-tertiary, tabular figures), and the excerpt
+   (CommentText's quiet line), then the row's menu, which a pointer finds on hover. Rows pad
+   space-8 (space-6 before the dot) at radius-md with space-12 between their parts, wash surface-hover under a
+   pointer and surface-selected when pressed, and take the outline ring on focus. */
 @layer components {
   .frame {
     display: flex;
@@ -25,16 +25,17 @@
 
   .row {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--space-12);
     align-items: flex-start;
     box-sizing: border-box;
     padding-block: var(--space-8);
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-6) var(--space-8);
     border-radius: var(--radius-md);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     outline: none;
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -43,20 +44,35 @@
     }
   }
 
-  .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+  .row[data-pressed] {
+    background: var(--surface-selected);
   }
 
+  /* Inside the list's scroller, which clips: the ring sits just inside the row. */
+  .row[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
+  }
+
+  /* The unread dot, level with the sentence's first line. Read, it fades and shrinks to half, so marking read (one
+     row or all at once) lets every dot go together. */
   .dot {
     flex: none;
-    inline-size: var(--space-6);
-    block-size: var(--space-6);
-    margin-block-start: var(--space-8);
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    margin-block-start: var(--space-6);
     border-radius: var(--radius-full);
+    background: var(--accent-text);
+    opacity: 0;
+    scale: var(--scale-shrunk);
+    transition:
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      scale var(--duration-fast) var(--ease-smooth-out);
   }
 
   .dot[data-unread] {
-    background: var(--accent-text);
+    opacity: 1;
+    scale: 1;
   }
 
   .main {
@@ -85,12 +101,14 @@
   }
 
   .time {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text-tertiary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
+  /* The excerpt's type and colour are CommentText's quiet line (CommentThread owns them). */
   .excerpt {
     display: block;
     min-inline-size: 0;
@@ -98,6 +116,15 @@
 
   .menu {
     flex: none;
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+
+  /* With a pointer, the row's menu shows on hover or keyboard focus (the prototype's actions bar), and stays while
+     its menu is open; under a finger it is always there. */
+  @media (hover: hover) and (pointer: fine) {
+    .row:not([data-hovered], :focus-within) .menu:not(:has([aria-expanded='true'])) {
+      opacity: 0;
+    }
   }
 
   .skeleton {
@@ -107,10 +134,17 @@
     gap: var(--space-6);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    /* The dot still fades; it no longer shrinks. */
+    .dot {
+      scale: 1;
+      transition: opacity var(--duration-fast) var(--ease-smooth-out);
+    }
+  }
+
   @media (forced-colors: active) {
     .row[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: calc(-1 * var(--border-width-thick));
+      outline-color: Highlight;
     }
 
     .dot[data-unread] {

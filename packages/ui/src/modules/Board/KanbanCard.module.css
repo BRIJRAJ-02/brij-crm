@@ -1,13 +1,13 @@
-/* KanbanCard: the card's content, space-6 apart: a head of the record's
-   avatar, its name in body strong (cut with an ellipsis), and its handle or
-   lock at the end; then its card fields, space-4 apart. The card's surface,
-   border and states belong to its row in KanbanColumn. */
+/* KanbanCard, after the Timefix prototype's board card (spec 0072): a head of the record's avatar, its name in body
+   strong (the prototype's card title, cut with an ellipsis) and its handle or lock at the end; then its card fields
+   space-4 apart in the prototype's description type (body-sm, text-secondary), space-8 under the head. The card's
+   surface, edge and states belong to its row in KanbanColumn. */
 @layer components {
   .root {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-8);
     min-inline-size: 0;
   }
 
@@ -34,6 +34,9 @@
     flex-direction: column;
     gap: var(--space-4);
     min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .field {

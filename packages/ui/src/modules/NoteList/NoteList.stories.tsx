@@ -170,7 +170,6 @@ export const WithActivities: Story = {
   },
 };
 
-/** By keyboard: the arrows move between rows and Enter opens one. */
 /** The workspace's Notes page: each row leads with the record it is on. */
 export const WithRecords: Story = {
   args: { withRecords: true },
@@ -179,12 +178,39 @@ export const WithRecords: Story = {
   },
 };
 
+/** A card under the pointer lifts its shadow (the prototype's hover); it opens on a click. */
+export const CardHover: Story = {
+  args: { onAction: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    const card = canvas.getAllByRole('row')[1] as HTMLElement;
+    await userEvent.hover(card);
+    await waitFor(() => expect(card).toHaveAttribute('data-hovered'));
+    await expect(card).toHaveAccessibleName('Security review');
+    await userEvent.click(card);
+    await expect(args.onAction).toHaveBeenCalledWith('n2');
+  },
+};
+
+/** Pressed (spec 0072): the card says so while the pointer holds it, with a wash and no change of size. */
+export const CardPressed: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[1] as HTMLElement;
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: row }]);
+    await waitFor(() => expect(row).toHaveAttribute('data-pressed'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: row }]);
+    await waitFor(() => expect(row).not.toHaveAttribute('data-pressed'));
+  },
+};
+
+/** By keyboard: the arrows move between cards, the focused one takes the outline ring, and Enter opens it. */
 export const Keyboard: Story = {
   args: { onAction: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.tab();
     await waitFor(() => expect(canvas.getAllByRole('row')[0]).toHaveFocus());
+    await expect(canvas.getAllByRole('row')[0]).toHaveAttribute('data-focus-visible');
     await userEvent.keyboard('{ArrowDown}');
     await waitFor(() => expect(canvas.getAllByRole('row')[1]).toHaveFocus());
     await userEvent.keyboard('{Enter}');

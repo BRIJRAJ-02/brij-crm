@@ -1,7 +1,8 @@
 /* RecordLayout: fills its slot. Wide, the main column (the header, padded
    space-16 at the sides, over the tabs and the chosen panel) beside the
-   sidebar at the Panel molecule's width (size-panel) with a hairline before
-   it; the panel and the sidebar each scroll inside themselves. Narrow (below
+   sidebar at the Panel molecule's width (size-panel) with a border-subtle hairline before
+   it; the panel and the sidebar each scroll inside themselves. The side column takes its look from the Timefix
+   prototype's RecordPanel body (spec 0072): padded space-16 all round, its blocks space-16 apart. Narrow (below
    bp-container-md plus size-panel, measured in script), one scrolling column: the header, the
    sidebar's Disclosure, then the tabs, whose panel keeps the slot's height.
    A notice spans the top. */
@@ -68,7 +69,7 @@
     flex: none;
     box-sizing: border-box;
     inline-size: var(--size-panel);
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-16);
     overflow: auto;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
   }

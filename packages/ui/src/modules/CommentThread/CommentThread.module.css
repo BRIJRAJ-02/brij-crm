@@ -1,10 +1,11 @@
-/* CommentThread: a raised card (hairline, radius-lg) holding the comments
-   in order, each an sm avatar beside its name (body-strong), time and
-   "edited" (text-secondary labels), its text (body, line breaks kept) and its
-   reaction chips; the reaction and more buttons show under a pointer or with
-   focus inside the comment. A sending comment is faded; a deleted one is a
-   quiet line. Reply sits under the last comment. A highlighted thread (opened
-   from a link) takes the accent's soft fill for a moment. */
+/* CommentThread, after the Timefix prototype's CommentThread (spec 0072): one thread on Card's surface (surface, a
+   border-subtle hairline, radius-lg), its comments in order. Each comment is the prototype's row: an avatar beside
+   its name (text-body-strong), its time and "edited" (text-caption, text-tertiary), its text (text-body, line breaks
+   kept) and its reaction chips, padded space-8 with radius-md corners, washing surface-hover under a pointer or with
+   focus inside. Its reaction and more buttons float in a small raised bar at its top right (surface-raised,
+   radius-full, shadow-sm and a border-subtle ring) that fades and rises a micro distance in under a pointer or with
+   focus inside; on touch the bar sits in the head's line, always shown. A deleted comment is a quiet line. Reply
+   sits under the last comment. A highlighted thread (opened from a link) takes the accent's soft fill for a moment. */
 @layer components {
   .root {
     display: flex;
@@ -12,10 +13,10 @@
     gap: var(--space-4);
     box-sizing: border-box;
     min-inline-size: 0;
-    padding: var(--space-12);
+    padding: var(--space-8);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
+    background: var(--surface);
     transition: background-color var(--duration-fast) var(--ease-smooth-out);
   }
 
@@ -29,39 +30,43 @@
     gap: var(--space-6);
     align-items: center;
     margin: 0;
+    padding: var(--space-4) var(--space-8) 0;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
   .comments {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
   .comment {
+    position: relative;
     display: flex;
-    gap: var(--space-8);
+    gap: var(--space-12);
     align-items: flex-start;
     min-inline-size: 0;
+    padding: var(--space-8);
+    border-radius: var(--radius-md);
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   .main {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-2);
     min-inline-size: 0;
   }
 
   .head {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-6);
+    gap: var(--space-8);
     align-items: center;
     min-block-size: var(--size-control-sm);
   }
@@ -77,12 +82,13 @@
   }
 
   .meta {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text-tertiary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
     white-space: nowrap;
   }
 
+  /* On touch the actions sit at the head's end, always shown. */
   .tools {
     display: flex;
     gap: var(--space-2);
@@ -90,19 +96,37 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    .comment:not([data-deleted]):hover,
+    .comment:not([data-deleted]):focus-within {
+      background: var(--surface-hover);
+    }
+
+    /* The prototype's hover bar: raised, round, at the comment's top right; it fades and rises in. It keeps taking the
+       pointer while faded (the prototype drops it): the bar lies inside the comment, so a pointer over it shows it. */
     .tools {
+      position: absolute;
+      inset-block-start: var(--space-4);
+      inset-inline-end: var(--space-4);
+      margin: 0;
+      padding: var(--space-2);
+      border-radius: var(--radius-full);
+      background: var(--surface-raised);
+      box-shadow:
+        var(--shadow-sm),
+        0 0 0 var(--border-width-hairline) var(--border-subtle);
       opacity: 0;
-      transition: opacity var(--duration-quick) var(--ease-out);
+      transform: translateY(var(--distance-micro));
+      transition:
+        opacity var(--duration-quick) var(--ease-out),
+        transform var(--duration-quick) var(--ease-out);
     }
 
-    /* Its menu is open: the tools stay while the pointer is in the menu. */
-    .tools:has([aria-expanded='true']) {
-      opacity: 1;
-    }
-
+    /* Its menu is open: the bar stays while the pointer is in the menu. */
+    .tools:has([aria-expanded='true']),
     .comment:hover .tools,
     .comment:focus-within .tools {
       opacity: 1;
+      transform: none;
     }
   }
 
@@ -128,32 +152,35 @@
   .muted {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
+  /* As wide as a comment's avatar, so the deleted line's words sit where a comment's text starts. */
   .deletedMark {
     flex: none;
-    inline-size: var(--size-icon);
+    inline-size: var(--space-20);
   }
 
   .reactions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4);
+    margin-block-start: var(--space-4);
   }
 
-  .earlier {
+  /* Lined up with the comments' text: their padding, the avatar and the gap, less the ghost button's own padding. */
+  .earlier,
+  .replyBar {
     padding-inline-start: var(--space-32);
   }
 
   .reply {
-    padding-block-start: var(--space-8);
+    padding: var(--space-8) var(--space-8) 0;
   }
 
   .replyBar {
     display: flex;
-    padding-inline-start: var(--space-24);
   }
 
   .versions {
@@ -170,7 +197,7 @@
   .versionList {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -182,9 +209,21 @@
     gap: var(--space-2);
   }
 
+  /* An earlier wording: the prototype's history line, text-body-sm-tight in text-secondary. */
+  .version > .text {
+    color: var(--text-secondary);
+    font: var(--text-body-sm-tight);
+    letter-spacing: var(--tracking-body-sm-tight);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .root {
       transition: none;
+    }
+
+    /* The bar keeps its fade and drops the rise. */
+    .tools {
+      transform: none;
     }
   }
 }

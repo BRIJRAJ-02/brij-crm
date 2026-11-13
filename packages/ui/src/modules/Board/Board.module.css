@@ -1,5 +1,6 @@
-/* Board: a row of columns space-12 apart, filling its slot and scrolling
-   sideways, then "+ Add stage" and the hidden columns button, each at the top of its own slot. */
+/* Board, after the Timefix prototype's Board (spec 0072): a row of columns space-12 apart in body type, filling its
+   slot and scrolling sideways, then "+ Add stage" and the hidden columns button, each level with a column's head.
+   A column is 272px full (size-board-column less space-8, as KanbanColumn draws it). */
 @layer components {
   .root {
     display: flex;
@@ -8,32 +9,43 @@
     inline-size: 100%;
     block-size: 100%;
     min-block-size: 0;
+    padding-block-end: var(--space-4);
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    box-sizing: border-box;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
+  /* A loading column: the grey shell with a skeleton title and a block of cards. */
   .column {
     display: flex;
     flex: none;
     flex-direction: column;
     gap: var(--space-8);
-    inline-size: var(--size-board-column);
+    box-sizing: border-box;
+    inline-size: calc(var(--size-board-column) - var(--space-8));
+    padding: var(--space-6);
+    border-radius: var(--radius-xl);
+    background: var(--surface-shell);
   }
 
-  /* "+ Add stage": a column's width at the board's end, its button or name field at the top. */
+  /* "+ Add stage": a column's width at the board's end, its button or name field level with a column's head
+     (the column's space-6 inset, plus half the head's room around a control). */
   .add {
     display: flex;
     flex: none;
     flex-direction: column;
     box-sizing: border-box;
-    inline-size: var(--size-board-column);
-    padding-block: var(--space-8);
+    inline-size: calc(var(--size-board-column) - var(--space-8));
+    padding-block: calc(var(--space-6) + var(--space-4));
   }
 
   .hidden {
     display: flex;
     flex: none;
     align-items: flex-start;
-    padding-block: var(--space-8);
+    padding-block: calc(var(--space-6) + var(--space-4));
   }
 }

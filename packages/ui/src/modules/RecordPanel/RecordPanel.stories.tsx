@@ -14,6 +14,7 @@ import {
   sampleDetails,
   sampleEditorProps,
 } from '../../workbench/record-samples.ts';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ActivityFeed } from '../ActivityFeed/ActivityFeed.tsx';
 import { AttributeList } from '../AttributeList/AttributeList.tsx';
@@ -308,5 +309,27 @@ export const NoAccess: Story = {
   args: { status: 'no-access' },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You can’t see this record')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Closed, then opened from its trigger: the panel takes focus as it arrives (the prototype's panel reveal; from the
+ * keyboard it appears at once), and Esc closes it and hands focus back to what opened it.
+ */
+export const OpenAndClose: Story = {
+  args: { startOpen: false, stats: 'none' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole('dialog')).not.toBeInTheDocument();
+    const opener = canvas.getByRole('button', { name: 'Open Northwind' });
+    // Opened from the keyboard, so the opener holds focus in every engine (WebKit doesn't focus a clicked button).
+    opener.focus();
+    await userEvent.keyboard('{Enter}');
+    await settleAnimations();
+    const panel = await canvas.findByRole('dialog', { name: 'Northwind Traders' });
+    await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
   },
 };

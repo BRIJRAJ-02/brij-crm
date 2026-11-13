@@ -1,7 +1,8 @@
-/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-heading over a label
-   line (the object, then any detail, space-8 apart in text-secondary), and at
-   the end who else is viewing and the actions. Below 480px wide the end wraps
-   under the name. The stat strip, when there is one, takes the line below. */
+/* RecordHeader, after the Timefix prototype's RecordHeader (spec 0072): in body type, a 48px avatar (size-toolbar),
+   space-12 from the name in text-title-lg (the prototype's 22px name, snapped) over the sub line (the object, then
+   any detail, space-8 apart, in text-body-sm and text-secondary), and at the end who else is viewing and the
+   actions, space-6 apart. Below 480px wide the end wraps under the name. The stat strip, when there is one, takes
+   the line below, space-12 under the top row. */
 @layer components {
   .root {
     display: flex;
@@ -10,6 +11,9 @@
     align-items: center;
     inline-size: 100%;
     padding-block: var(--space-16);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
     container-type: inline-size;
   }
 
@@ -17,7 +21,6 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-2);
     min-inline-size: 0;
   }
 
@@ -25,8 +28,8 @@
     margin: 0;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -36,9 +39,10 @@
     flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
+    min-inline-size: 0;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* Loading: the avatar's and each line's own height, so the page under the header lands where it will stay. */
@@ -56,24 +60,23 @@
   .stats {
     flex-basis: 100%;
     min-inline-size: 0;
-    margin-block-start: var(--space-4);
   }
 
   .lineSlot {
     display: flex;
     align-items: center;
     block-size: 1lh;
-    font: var(--text-label);
+    font: var(--text-body-sm);
   }
 
   .lineSlot[data-line='name'] {
-    font: var(--text-title);
+    font: var(--text-title-lg);
   }
 
   .end {
     display: flex;
     flex: none;
-    gap: var(--space-8);
+    gap: var(--space-6);
     align-items: center;
   }
 

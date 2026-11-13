@@ -1,12 +1,13 @@
-/* Chart: its head (the table switch) and the frame the drawing, the figure or
-   a state stands in. The frame is 240px tall (`size-menu`) for bars and a
-   line, the drawing's height, so loading, empty and error states hold the
-   chart's place. The drawing's own styles are ChartPlot.module.css. */
+/* Chart, after the Timefix prototype's ChartCard body (spec 0072): its head (the legend and the table switch,
+   size-control-sm tall) space-12 over the frame the drawing, the figure or a state stands in. The legend names each
+   series in the prototype's legend type (text-body-sm-strong, text-secondary) beside a round 8px dot of its data
+   colour. The frame is 240px tall (`size-menu`) for bars and a line, the drawing's height, so loading, empty and
+   error states hold the chart's place. The drawing's own styles are ChartPlot.module.css. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
     min-inline-size: 0;
   }
 
@@ -15,6 +16,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-12);
+    min-block-size: var(--size-control-sm);
   }
 
   /* Two series name themselves in a legend at the head's start; text stays in text colours, the swatch carries the
@@ -34,14 +36,15 @@
     align-items: center;
     gap: var(--space-6);
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   .swatch {
+    flex: none;
     inline-size: var(--space-8);
     block-size: var(--space-8);
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-full);
     background: var(--dot-blue);
   }
 

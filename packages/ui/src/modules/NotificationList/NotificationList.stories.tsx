@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -217,6 +218,65 @@ export const Keyboard: Story = {
     await expect(args.onMark).toHaveBeenCalledWith('n1', { read: true });
     await userEvent.keyboard('e');
     await expect(args.onMark).toHaveBeenCalledWith('n1', { done: true });
+  },
+};
+
+/** Marking a row read lets its unread dot fade and shrink away; the row stops reading "Unread". */
+export const MarkReadFadesTheDot: Story = {
+  args: { onMark: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.tab();
+    const row = canvas.getAllByRole('row')[0] as HTMLElement;
+    await waitFor(() => expect(row).toHaveFocus());
+    await expect(row).toHaveAttribute('data-unread');
+    await expect(row).toHaveTextContent('Unread');
+    await userEvent.keyboard('u');
+    await expect(args.onMark).toHaveBeenCalledWith('n1', { read: true });
+    await waitFor(() => expect(row).not.toHaveAttribute('data-unread'));
+    await expect(row).not.toHaveTextContent('Unread');
+  },
+};
+
+/** The row's menu shows on keyboard focus (the prototype's actions bar), as it does under the pointer. */
+export const MenuOnFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    // The assigned task: no record chip, so the menu is the row's one control.
+    const row = canvas.getAllByRole('row')[2] as HTMLElement;
+    await waitFor(() => expect(row).toHaveFocus());
+    await expect(row).toHaveAttribute('data-focus-visible');
+    // Focused, the row shows its menu, as it does under the pointer.
+    await settleAnimations();
+    const holder = within(row).getByRole('button', { name: 'More actions' }).parentElement;
+    await expect(holder === null ? '' : getComputedStyle(holder).opacity).toBe('1');
+  },
+};
+
+/** Pressed (spec 0072): the row says so while the pointer holds it, with a wash and no change of size. */
+export const RowPressed: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[1] as HTMLElement;
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: row }]);
+    await waitFor(() => expect(row).toHaveAttribute('data-pressed'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: row }]);
+    await waitFor(() => expect(row).not.toHaveAttribute('data-pressed'));
+  },
+};
+
+/** Under the pointer the row's menu shows (spec 0072): it waits, quiet, until the row is hovered or focused. */
+export const MenuOnHover: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getAllByRole('row')[2] as HTMLElement;
+    await userEvent.hover(row);
+    await waitFor(() => expect(row).toHaveAttribute('data-hovered'));
+    await settleAnimations();
+    // The menu's holder fades it; hovered, it is whole.
+    const holder = within(row).getByRole('button', { name: 'More actions' }).parentElement;
+    await expect(holder === null ? '' : getComputedStyle(holder).opacity).toBe('1');
   },
 };
 

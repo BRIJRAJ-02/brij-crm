@@ -100,9 +100,29 @@ export const Default: Story = {
   },
 };
 
-/** A person has a round avatar. */
+/** A person has a round avatar. Its name is a plain heading (the prototype's read only name), its job on the sub line. */
 export const Person: Story = {
   args: { isPerson: true },
+  play: async ({ canvas }) => {
+    const name = canvas.getByRole('heading', { level: 2, name: 'Margaret Hamilton' });
+    await expect(within(name).queryByRole('button')).not.toBeInTheDocument();
+    await expect(canvas.getByText('Director of engineering')).toBeInTheDocument();
+  },
+};
+
+/** By keyboard (spec 0072): Tab reaches the domain link, then each action in order, each showing the focus ring. */
+export const KeyboardOrder: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: /northwindtraders\.com/ })).toHaveFocus();
+    await userEvent.tab();
+    const star = canvas.getByRole('button', { name: 'Add to favorites' });
+    await expect(star).toHaveFocus();
+    await expect(star).toHaveAttribute('data-focus-visible');
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Record actions' })).toHaveFocus();
+  },
 };
 
 /** The record is still coming. */

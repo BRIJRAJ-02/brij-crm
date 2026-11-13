@@ -1,6 +1,7 @@
-/* GridHeaderCell: a size-table-header tall header in text-secondary and
-   body-strong (13px medium), with the type icon, the name, the menu button and a resize
-   edge. Pinned headers stick to the start edge like their cells. */
+/* GridHeaderCell, after the Timefix prototype's DataGrid header (spec 0072): a size-table-header tall piece of the grey
+   strip, its name in text-body-sm-strong and text-secondary (the text colour under the pointer) after its type icon,
+   the menu button and a resize edge: a short hairline that darkens under the pointer and turns accent while it
+   drags. Pinned headers stick to the start edge like their cells. */
 @layer components {
   .root {
     /* Set inline per cell; these are the defaults. */
@@ -15,15 +16,20 @@
     inline-size: var(--col-width);
     block-size: var(--size-table-header);
     min-inline-size: 0;
-    padding-inline: var(--space-8) var(--space-4);
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface);
+    padding-inline: var(--space-12) var(--space-4);
+    background: var(--surface-subtle);
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     white-space: nowrap;
     outline: none;
+    transition: color var(--duration-quick) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:hover {
+      color: var(--text);
+    }
   }
 
   .root[data-sticky] {
@@ -33,7 +39,6 @@
   }
 
   .root[data-last-pinned] {
-    border-inline-end-color: var(--border);
     box-shadow: var(--pinned-edge, 0 0 transparent);
   }
 
@@ -47,16 +52,16 @@
     gap: var(--space-6);
     align-items: center;
     box-sizing: border-box;
-    max-inline-size: calc(6 * var(--size-chip));
+    max-inline-size: calc(6 * var(--space-20));
     block-size: var(--size-table-header);
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--surface-raised);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     white-space: nowrap;
     cursor: grabbing;
   }
@@ -79,13 +84,9 @@
     inset-inline-end: 0;
   }
 
-  .root[data-focused]:focus-visible,
-  .root[data-resizing] {
-    box-shadow: var(--shadow-focus-inset);
-  }
-
-  .root[data-last-pinned]:is([data-focused]:focus-visible, [data-resizing]) {
-    box-shadow: var(--shadow-focus-inset), var(--pinned-edge, 0 0 transparent);
+  .root[data-focused]:focus-visible {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* The type icon and the name on one line: the name comes first in the markup and the row is reversed, so the
@@ -107,30 +108,45 @@
     min-inline-size: 0;
   }
 
-  /* Centred on the column's end edge, above the next header, so all of it takes the pointer. */
+  /* Centred on the column's end edge, above the next header, so all of it takes the pointer; space-8 in from the
+     strip's top and foot, so it reads as a short divider between names. */
   .resize {
     position: absolute;
     z-index: var(--z-raised);
-    inset-block: 0;
+    inset-block: var(--space-8);
     inset-inline-end: calc(-1 * var(--space-4));
     inline-size: var(--space-8);
     cursor: col-resize;
     touch-action: none;
   }
 
-  /* The line it draws on hover, on the edge itself. */
+  /* The line it draws, on the edge itself: a hairline at rest, border-strong under the pointer, accent while it drags. */
   .resize::after {
     position: absolute;
     inset-block: 0;
     inset-inline: 0;
-    inline-size: var(--border-width-thick);
+    inline-size: var(--border-width-hairline);
     margin-inline: auto;
+    background: var(--border);
     content: '';
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .resize:hover::after {
-      background: var(--accent-border);
+      background: var(--border-strong);
+    }
+  }
+
+  .root[data-resizing] .resize::after {
+    inline-size: var(--border-width-focus);
+    background: var(--accent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root,
+    .resize::after {
+      transition: none;
     }
   }
 

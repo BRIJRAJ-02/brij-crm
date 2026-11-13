@@ -37,12 +37,33 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 
 ## States
 
-Default (rows), with records, untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own), with a toolbar, failed (with Try again), no access. Hover on a row (pointer only), focus (the inset ring).
+Default (cards), with records, untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own), with a toolbar, failed (with Try again), no access. Hover on a card (pointer only: its edge and shadow lift), pressed (a wash), focus (the outline ring).
 
 ## Keyboard
 
-Tab enters the list. The up and down arrows move between rows; Enter opens the note.
+Tab enters the list. The up and down arrows move between cards; Enter opens the note.
 
 ## Differences from the artifact
 
 Not in the artifact before spec 0019.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's NoteCard: each note is a card on `surface` with a `border-subtle` hairline, `shadow-xs` and `radius-lg`, `space-12` of room inside and `space-8` between cards. The title is `text-body-strong` on one line, the excerpt `text-body-sm` in `text-secondary` on two, and the line under them `text-caption` in `text-tertiary` (`space-6` apart, `space-4` further down). Under a pointer the hairline turns `border` and the shadow `shadow-sm` over `duration-quick` on `ease-out`; a press washes the card `surface-hover`; the keyboard's card takes the outline ring just inside its edge, since the list's scroller clips at its sides. With a toolbar, the toolbar sits `space-12` above the cards. Reduced motion drops the transitions.
+
+**Use it for** a record's Notes tab, the workspace's Notes page, meeting notes logged as calls or meetings. **Don't use it for** comments (CommentThread) or a record's history (ActivityFeed).
+
+**The consumer provides** `notes` (a `ListSource` of `{ id, title, excerpt, author, updatedAt, record?, activity? }`), `onAction` to open one, `status` with `onRetry`, the empty words and action, and `toolbar` (New note). The note's own page (the prototype's NotePage with its editor and save line) is the screen's.
+
+**States**: cards with a two line excerpt, untitled ("Untitled note" in `text-secondary`), a logged call or meeting, with records, hover, pressed, keyboard focus, loading, rows still loading, empty, failed, no access.
+
+**Interaction**: a click or Enter opens the note; the arrows move between cards; hover lifts the card's edge and shadow (CSS only).
+
+**Differences from the prototype**
+- One column of cards, not the prototype's `auto-fill` grid of 220px columns: the list is a virtualised React Aria `GridList` with `ListLayout` (AC-14), whose rows are placed edge to edge, so the card is drawn on the row's `::before` with the gap as the row's own foot. A grid layout is owed to a screen that needs one.
+- No press scale (the prototype's .98): the press is the `surface-hover` wash (house rule).
+- The excerpt keeps no two line minimum height: an empty excerpt draws no line, as before, since cards in one column need not line up.
+- The author's avatar stays `xs` (16px); the prototype's is 20px (the library's `sm`). Changing it is a prop value in the TSX, left for the lead.
+- The empty state is the library's EmptyState (row), not the prototype's dashed card with a sticky note glyph; a dashed EmptyState is not in the library.
+- Not here: the prototype's head ("Notes 4" and New note: the library's `toolbar` slot), `freshIds` (the drop in), `NotePage`, `NoteCard` and `SaveIndicator` (the note page and its autosave line, owed to the notes screen phase).
+- Kept beyond the prototype: `ListSource` paging with skeleton rows and `onRangeChange`, `status` (loading, failed, no access), `activity` (calls and meetings with their outcome tag), `record` chips, `emptyTitle`, `emptyBody`, `emptyActions`, `toolbar`; `excerpt` and `updatedAt` are the prototype's `body` and `updated`, `onAction` its `onOpen`.

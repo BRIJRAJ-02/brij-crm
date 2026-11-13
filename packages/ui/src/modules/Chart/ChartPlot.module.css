@@ -1,7 +1,8 @@
-/* ChartPlot: one series in the first data colour on a hairline grid, thin
-   marks (a bar at most 24px, a line 2px), recessive axes in secondary text,
-   and a tooltip under the pointer. The drawing is 240px tall (`size-menu`).
-   Text is never the data colour; the mark beside it carries identity. */
+/* ChartPlot, after the Timefix prototype's BarChart (spec 0072): one series in the first data colour (dot-blue), bars
+   at most 24px with rounded ends and square feet on a hairline border base, no gridlines, a 2px line whose points
+   are hollow dots, and ticks in text-caption and text-secondary. Under the pointer the other bars dim to
+   opacity-disabled over duration-quick, and the inverse tooltip rises in 4px (transitions.dev 17). The drawing is
+   240px tall (size-menu). Text is never the data colour; the mark beside it carries identity. */
 @layer components {
   .plot {
     position: relative;
@@ -14,19 +15,20 @@
     touch-action: pan-y;
   }
 
+  /* No gridlines: the ticks name the scale, and only the base is drawn. */
   .grid {
-    stroke: var(--border-subtle);
-    stroke-width: var(--border-width-hairline);
+    stroke: none;
   }
 
   .grid[data-base] {
     stroke: var(--border);
+    stroke-width: var(--border-width-hairline);
   }
 
   .tick,
   .xlabel {
     fill: var(--text-secondary);
-    font: var(--text-label);
+    font: var(--text-caption);
     font-variant-numeric: tabular-nums;
   }
 
@@ -36,22 +38,29 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* The slot under the pointer: a wash the width of the bar's slot, so the target is bigger than the mark. */
+  /* The slot under the pointer: the whole slot is the target, bigger than the mark; it draws nothing. */
   .band {
     fill: transparent;
   }
 
-  .band[data-hovered] {
-    fill: var(--surface-hover);
-  }
-
   .bar {
     fill: var(--dot-blue);
+    transition: opacity var(--duration-quick) var(--ease-out);
   }
 
   /* The second series of a pair: the next data colour, the same axis. */
   .bar[data-series='compare'] {
     fill: var(--dot-orange);
+  }
+
+  /* A slot under the pointer: every other bar dims, the hovered one (or pair) stays whole. CSS only; the :where()
+     keeps the dim weaker than the hovered slot's own rule. */
+  .svg:has(:where(.band[data-hovered])) .bar {
+    opacity: var(--opacity-disabled);
+  }
+
+  .band[data-hovered] ~ .bar {
+    opacity: 1;
   }
 
   .line {
@@ -67,10 +76,10 @@
     fill: var(--tag-blue-bg);
   }
 
-  /* An end dot carries a ring in the surface colour, so it stays whole where it crosses the line. */
+  /* A point: hollow, the surface inside a 2px ring of the data colour. */
   .dot {
-    fill: var(--dot-blue);
-    stroke: var(--surface);
+    fill: var(--surface);
+    stroke: var(--dot-blue);
     stroke-width: var(--border-width-thick);
   }
 
@@ -79,6 +88,8 @@
     stroke-width: var(--border-width-hairline);
   }
 
+  /* The tooltip: the prototype's ink label on the inverse surface, value first in label type, its name under it
+     a step quieter. It rises 4px into place over duration-quick, as Tooltip does. */
   .tip {
     --x: 0;
     --y: 0;
@@ -86,40 +97,65 @@
     position: absolute;
     inset-inline-start: var(--x);
     inset-block-start: var(--y);
+    z-index: var(--z-tooltip);
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-6) var(--space-8);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    padding: var(--space-4) var(--space-8);
+    border-radius: var(--radius-sm);
+    background: var(--surface-inverse);
     box-shadow: var(--shadow-md);
+    color: var(--on-inverse);
     transform: translate(-50%, calc(-100% - var(--space-8)));
     white-space: nowrap;
     pointer-events: none;
+    animation: chart-tip-in var(--duration-quick) var(--ease-out);
+  }
+
+  @keyframes chart-tip-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--distance-micro);
+    }
   }
 
   /* Values lead, labels follow. */
   .tipValue {
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }
 
   .tipLabel {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+    opacity: var(--opacity-busy);
+  }
+
+  @keyframes chart-tip-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* The tooltip fades in without the rise; the dim stays a fade. */
+    .tip {
+      animation-name: chart-tip-fade;
+    }
   }
 
   @media (forced-colors: active) {
-    .bar,
-    .dot {
+    .bar {
       fill: Highlight;
     }
 
     .bar[data-series='compare'] {
       fill: CanvasText;
+    }
+
+    .dot {
+      fill: Canvas;
+      stroke: Highlight;
     }
 
     .line {
@@ -130,7 +166,7 @@
       fill: none;
     }
 
-    .grid,
+    .grid[data-base],
     .crosshair {
       stroke: GrayText;
     }
@@ -139,6 +175,10 @@
     .xlabel,
     .value {
       fill: CanvasText;
+    }
+
+    .tip {
+      outline: var(--border-width-hairline) solid CanvasText;
     }
   }
 }

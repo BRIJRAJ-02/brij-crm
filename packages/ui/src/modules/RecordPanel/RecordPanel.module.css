@@ -1,6 +1,7 @@
-/* RecordPanel: a notice and the stat strip (when given) over the tabs; each tab's content fills the floating panel's height under the
-   tabs, padded space-16 on the sides and space-12 above, and scrolls itself, so
-   a feed or task list inside scrolls in its own slot. */
+/* RecordPanel, after the Timefix prototype's RecordPanel body (spec 0072): a notice and the stat strip (when given) over
+   the tabs; each tab's content fills the floating panel's height under the tabs, padded space-16 all round as the
+   prototype's body is, and scrolls itself, so a feed or task list inside scrolls in its own slot. The panel's surface,
+   edge, bar and motion are the floating Panel's (phase 2's Panel part). */
 @layer components {
   /* The stat strip over the tabs, then the tabs filling what is left. */
   .body {
@@ -23,7 +24,7 @@
   .notice,
   .stats {
     flex: none;
-    padding: var(--space-12) var(--space-16) 0;
+    padding: var(--space-16) var(--space-16) 0;
   }
 
   .tabs {
@@ -38,7 +39,8 @@
     flex-direction: column;
     box-sizing: border-box;
     block-size: 100%;
-    padding: var(--space-12) var(--space-16);
+    min-block-size: 0;
+    padding: var(--space-16);
     overflow: auto;
   }
 }

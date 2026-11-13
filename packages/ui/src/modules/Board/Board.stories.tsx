@@ -195,6 +195,39 @@ export const MoveByKeyboard: Story = {
   },
 };
 
+/** Tabbed to, a card takes the focus ring (spec 0072): the first card of the first column is focused and focus visible. */
+export const FocusedCard: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const lead = canvas.getByRole('grid', { name: /Lead/ });
+    await userEvent.tab();
+    const first = within(lead).getAllByRole('row')[0];
+    await expect(first).toHaveFocus();
+    await expect(first).toHaveAttribute('data-focus-visible');
+  },
+};
+
+/** Lifted (spec 0072): the card picked up leaves its slot marked as moving, and Esc puts it back. */
+export const LiftedCard: Story = {
+  args: { onMove: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const lead = canvas.getByRole('grid', { name: /Lead/ });
+    const name = String(sampleRowAt(0).values.name);
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(handle).not.toHaveFocus());
+    const slot = within(lead).getAllByRole('row')[0];
+    await waitFor(() => expect(slot).toHaveAttribute('data-dragging'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(within(lead).getAllByRole('row')[0]).not.toHaveAttribute('data-dragging'));
+    await expect(args.onMove).not.toHaveBeenCalled();
+  },
+};
+
 /** Each column's head has a "+" naming its column; the archived column has none. */
 export const AddCard: Story = {
   args: { onAddCard: fn() },

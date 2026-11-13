@@ -20,10 +20,9 @@
     inline-size: var(--col-width);
     block-size: var(--size-row);
     min-inline-size: 0;
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-12);
     overflow: hidden;
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
     background: inherit;
     white-space: nowrap;
     outline: none;
@@ -40,8 +39,9 @@
     inset-inline-start: var(--col-offset);
   }
 
+  /* The pinned run ends on a hairline, as the prototype's pinned name column does. */
   .root[data-last-pinned] {
-    border-inline-end-color: var(--border);
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
     box-shadow: var(--pinned-edge, 0 0 transparent);
   }
 
@@ -78,26 +78,19 @@
   /* The active cell: ringed while the grid holds focus, however it got there.
      A list or popover editor keeps the ring on the cell it edits, so the panel
      reads as that cell's. */
+  /* The prototype's focus box, an edge inside the cell (the grid clips anything outside it), in focus-ring: the
+     prototype's accent is under 3:1 on an open row in dark. */
   .root[data-active],
   .root[data-focused]:focus-visible,
   .root[data-focused]:focus-within,
   .root[data-editing='list'],
   .root[data-editing='popover'] {
-    box-shadow: var(--shadow-focus-inset);
-  }
-
-  .root[data-last-pinned]:is(
-      [data-active],
-      [data-focused]:focus-visible,
-      [data-focused]:focus-within,
-      [data-editing='list'],
-      [data-editing='popover']
-    ) {
-    box-shadow: var(--shadow-focus-inset), var(--pinned-edge, 0 0 transparent);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* A refused value, from the data layer or the editor's own check, takes the
-     danger edge in place of the focus ring: one ring on the cell, never two. */
+     danger edge in place of the focus box: one ring on the cell, never two. */
   .root[data-invalid],
   .root[data-editing]:has([aria-invalid='true']) {
     outline: var(--border-width-thick) solid var(--danger);
@@ -106,7 +99,7 @@
 
   .root[data-focused][data-invalid]:is(:focus-visible, :focus-within, [data-active]),
   .root[data-focused][data-editing]:has([aria-invalid='true']):focus-within {
-    box-shadow: none;
+    outline-color: var(--danger);
   }
 
   /* An editor in the cell fills it; a popover editor leaves the value where it was. */

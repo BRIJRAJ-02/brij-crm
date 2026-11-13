@@ -1,5 +1,7 @@
-/* SampleTable: a picture of a small table. A hairline frame on the raised surface, rows of equal cells, the header
-   row tinted a step off the page and heavier. Never interactive. */
+/* SampleTable, after the Timefix prototype's DataGrid (spec 0072, the prototype folds SampleTable into it): a picture of
+   a small table drawn as the grid draws one, in a hairline frame on the surface: the header row the grid's grey strip
+   (surface-subtle, its names in text-body-sm-strong and text-secondary), the sample rows under it split by
+   border-subtle hairlines with no column lines, every cell space-12 in from its sides. Never interactive. */
 @layer components {
   .root {
     display: flex;
@@ -15,7 +17,7 @@
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
+    background: var(--surface);
     color: var(--text);
     pointer-events: none;
     user-select: none;
@@ -33,31 +35,29 @@
   }
 
   .row[data-header] {
+    border-block-end: 0;
     background: var(--surface-subtle);
+    color: var(--text-secondary);
   }
 
   .cell {
     overflow: hidden;
     padding-block: var(--space-6);
     padding-inline: var(--space-12);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .cell + .cell {
-    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
   .cell[data-header] {
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   .caption {
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 }

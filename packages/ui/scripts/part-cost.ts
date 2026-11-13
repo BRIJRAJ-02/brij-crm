@@ -97,6 +97,27 @@ const TIERS: Readonly<Record<string, readonly string[]>> = {
     'SocialLinks',
     'SocialLinksEditor',
   ],
+  '3a': [
+    'DataGrid',
+    'Table',
+    'SampleTable',
+    'Board',
+    'Chart',
+    'BarStrip',
+    'RecordHeader',
+    'RecordPanel',
+    'RecordLayout',
+    'RelatedRecords',
+    'ActivityFeed',
+    'BookingChanges',
+    'CommentThread',
+    'CommentComposer',
+    'NoteList',
+    'TaskList',
+    'NotificationList',
+    'CommandPalette',
+    'ShortcutHelp',
+  ],
 };
 
 interface LightningCss {
