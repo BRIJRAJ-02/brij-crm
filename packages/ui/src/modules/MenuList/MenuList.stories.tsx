@@ -4,6 +4,7 @@ import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { MENU_PRESET_LOOKS, MENU_PRESETS, menuLookColours, menuLookShape, presetLook } from '@crm/contracts/menu';
 import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
+import { lengthIn } from '../../workbench/guest-bars.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { id, sampleMenu, samplePhotoHref } from '../../workbench/menu-samples.ts';
 import { MenuList, type GuestPick } from './MenuList.tsx';
@@ -142,6 +143,29 @@ export const SheetOpen: Story = {
     await settleAnimations();
     const dialog = await screen.findByRole('dialog', { name: 'Etna Rosso, Benanti 2022' });
     await expect(within(dialog).getByRole('radio', { name: /Glass/ })).toBeChecked();
+  },
+};
+
+/**
+ * A dish's sheet (spec 0074, AC-7426) opens in the menu's popup host and reads the menu's own bar height: the same
+ * `size-topbar` the menu's bars read, the guest pages' `size-bar` (46px), never the app's.
+ */
+export const SheetBarHeight: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <WithPicks openItemId={id(103)} />
+    </Stage>
+  ),
+  play: async () => {
+    const sheet = await screen.findByRole('dialog', { name: 'Etna Rosso, Benanti 2022' });
+    await settleAnimations();
+    const host = sheet.closest('[data-popup-host]');
+    await expect(host).not.toBeNull();
+    const page = (host as Element).parentElement ?? document.body;
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(lengthIn(page, 'var(--size-topbar)'));
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(lengthIn(page, 'var(--size-bar)'));
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(46);
   },
 };
 

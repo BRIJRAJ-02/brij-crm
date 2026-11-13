@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
+import { GuestSheetTrigger, lengthIn } from '../../workbench/guest-bars.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingChatGhost } from '../BookingChat/BookingChatGhost.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
@@ -162,6 +163,33 @@ const ORANGE_BRAND = [
 const LOGO = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="24" fill="#e8590c"/><rect x="66" y="18" width="160" height="24" rx="6" fill="#e8590c"/></svg>',
 )}`;
+
+/**
+ * A sheet opened on the booking page (spec 0074, AC-7426) opens in the frame's popup host and reads the guest pages'
+ * bar height, `size-bar` (46px), never the app's `size-topbar`.
+ */
+export const SheetBarHeight: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingFrame {...args}>
+        <GuestSheetTrigger opener="Open a sheet" title="A sheet">
+          Words in the sheet.
+        </GuestSheetTrigger>
+      </BookingFrame>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Open a sheet' }));
+    const sheet = await screen.findByRole('dialog', { name: 'A sheet' });
+    await settleAnimations();
+    const host = sheet.closest('[data-popup-host]');
+    await expect(host).not.toBeNull();
+    const page = (host as Element).parentElement ?? document.body;
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(lengthIn(page, 'var(--size-bar)'));
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(46);
+  },
+};
 
 /**
  * The workspace's brand kit (spec 0060, AC-4): its logo heads the rail, and its accent marks the chosen day, the

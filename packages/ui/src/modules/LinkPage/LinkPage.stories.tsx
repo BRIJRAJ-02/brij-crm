@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFoot.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
+import { GuestSheetTrigger, lengthIn } from '../../workbench/guest-bars.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage, LinkPageThumbnail, LinkPageTile, type LinkPageBlock, type PageLook } from './LinkPage.tsx';
 
@@ -217,6 +218,33 @@ export const OneBlock: Story = {
   args: {
     person: { name: 'Ada Lovelace', id: 'ada' },
     blocks: [{ kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'green' }],
+  },
+};
+
+/**
+ * A sheet opened on the link page (spec 0074, AC-7426) opens in the page's popup host and reads the guest pages' bar
+ * height, `size-bar` (46px), never the app's `size-topbar`.
+ */
+export const SheetBarHeight: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada' },
+    blocks: [{ kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'green' }],
+    foot: (
+      <GuestSheetTrigger opener="Open a sheet" title="A sheet">
+        Words in the sheet.
+      </GuestSheetTrigger>
+    ),
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Open a sheet' }));
+    const sheet = await screen.findByRole('dialog', { name: 'A sheet' });
+    await settleAnimations();
+    const host = sheet.closest('[data-popup-host]');
+    await expect(host).not.toBeNull();
+    const page = (host as Element).parentElement ?? document.body;
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(lengthIn(page, 'var(--size-bar)'));
+    await expect(lengthIn(sheet, 'var(--size-topbar)')).toBe(46);
   },
 };
 
