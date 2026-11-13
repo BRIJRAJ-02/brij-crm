@@ -132,10 +132,17 @@ export const NotPublishedYet: Story = {
   },
 };
 
-/** A discard that fails: the confirm stays open, says why, and Discard draft can be pressed again (spec 0074). */
+/**
+ * A discard refused with a reason (the house's `{ code, message }`): the confirm stays open, says why, and Discard
+ * draft can be pressed again (spec 0074).
+ */
 export const DiscardFails: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { onDiscard: fn(() => Promise.reject(new Error('Someone else changed it. Load theirs first.'))) },
+  args: {
+    onDiscard: fn(() =>
+      Promise.reject(Object.assign(new Error('Someone else changed it. Load theirs first.'), { code: 'STALE' })),
+    ),
+  },
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Discard draft' }));
     await settleAnimations();
@@ -143,6 +150,22 @@ export const DiscardFails: Story = {
     await userEvent.click(within(ask).getByRole('button', { name: 'Discard draft' }));
     await expect(await within(ask).findByText('Someone else changed it. Load theirs first.')).toBeInTheDocument();
     await expect(within(ask).getByRole('button', { name: 'Discard draft' })).toBeEnabled();
+  },
+};
+
+/** A discard that fails for no reason it can say (a fault, not a refusal): the plain line, never the fault's text. */
+export const DiscardFaults: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    onDiscard: fn(() => Promise.reject(new TypeError("Cannot read properties of undefined (reading 'revision')"))),
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Discard draft' }));
+    await settleAnimations();
+    const ask = within(document.body).getByRole('alertdialog');
+    await userEvent.click(within(ask).getByRole('button', { name: 'Discard draft' }));
+    await expect(await within(ask).findByText('The draft wasn’t discarded. Try again.')).toBeInTheDocument();
+    await expect(within(ask).queryByText(/Cannot read properties/)).toBeNull();
   },
 };
 
@@ -191,6 +214,26 @@ export const Refused: Story = {
     await expect(canvas.getByRole('button', { name: 'Publish' })).toBeEnabled();
     await userEvent.click(canvas.getByRole('button', { name: 'Go to Hours' }));
     await expect(args.problem?.fix?.onFix).toHaveBeenCalled();
+  },
+};
+
+/**
+ * A problem known before Publish (the business page's "Add a service first"): Publish shows, disabled, and the way to
+ * fix stays beside the reason.
+ */
+export const ProblemKnown: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    status: 'error',
+    isPublishDisabled: true,
+    problem: { message: 'Add a service first.', fix: { label: 'Open Services', onFix: fn() } },
+  },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Add a service first.');
+    await userEvent.click(canvas.getByRole('button', { name: 'Open Services' }));
+    await expect(args.problem?.fix?.onFix).toHaveBeenCalled();
+    await expect(args.onPublish).not.toHaveBeenCalled();
   },
 };
 

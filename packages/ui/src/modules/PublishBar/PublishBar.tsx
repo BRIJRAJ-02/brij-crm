@@ -64,12 +64,18 @@ export interface PublishBarProps {
    */
   readonly draftText?: string;
   readonly onPublish: () => void;
+  /**
+   * Publish shows but can't be pressed: the page has a problem the server would refuse (say it, with its fix, in
+   * `problem`). Left out, Publish is offered whenever there is something to publish.
+   */
+  readonly isPublishDisabled?: boolean;
   /** Publish's keys, shown on it and pressed from anywhere in the editor by the caller ("⌘↵"). */
   readonly publishKbd?: string;
   /**
    * Drops the changes, once the person says so in Discard's confirm. Left out, no Discard draft: a page never
-   * published has nothing to go back to. A promise keeps the confirm open and busy until it settles; a rejection's
-   * message is said inside it, so Discard can be tried again.
+   * published has nothing to go back to. A promise keeps the confirm open and busy until it settles; a rejection is
+   * said inside it, so Discard can be tried again: its message when it is an expected failure (an error carrying a
+   * `code`, the house's `{ code, message }` shape), else a plain "couldn't discard" line, never a stray error's text.
    */
   readonly onDiscard?: () => void | Promise<void>;
   /** Discard's confirm in the editor's own words: its question and the line under it. Default: the draft's. */
@@ -84,6 +90,12 @@ export interface PublishBarProps {
   readonly onVersions?: () => void;
   /** A version picked to bring back as the draft. */
   readonly onRestore?: (version: number) => void;
+}
+
+/** What a refused discard says: an expected failure's own message (it carries a `code`), else the plain line. */
+function discardFailureOf(error: unknown): string {
+  const isExpected = error instanceof Error && 'code' in error && typeof error.code === 'string';
+  return isExpected && error.message !== '' ? error.message : strings.discardFailed;
 }
 
 /**
@@ -115,6 +127,7 @@ export function PublishBar({
   draftText,
   changeCount,
   onPublish,
+  isPublishDisabled = false,
   publishKbd,
   onDiscard,
   discardWords,
@@ -159,7 +172,7 @@ export function PublishBar({
       },
       (error: unknown) => {
         setDiscarding(false);
-        setDiscardFailure(error instanceof Error && error.message !== '' ? error.message : strings.discardFailed);
+        setDiscardFailure(discardFailureOf(error));
       },
     );
   };
@@ -294,7 +307,7 @@ export function PublishBar({
             <Button
               variant="primary"
               isPending={isBusy}
-              isDisabled={status === 'published'}
+              isDisabled={status === 'published' || isPublishDisabled}
               {...(publishKbd === undefined || status === 'published' ? {} : { kbd: publishKbd })}
               onPress={() => {
                 publishPressed.current = true;

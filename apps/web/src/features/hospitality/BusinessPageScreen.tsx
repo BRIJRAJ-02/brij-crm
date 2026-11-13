@@ -314,11 +314,13 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           : view.problem?.placeId === undefined
             ? words.fixInBusiness
             : words.fixPlace;
+  // A known problem wins over a refusal the bar said: it is what holds Publish back now, and it carries the way to fix
+  // it, which a refusal's message alone doesn't. Publish is disabled while it holds (below), as the server would refuse.
   const problem =
-    said?.status === 'error'
-      ? { message: said.message }
-      : view.problem !== undefined && view.handle !== undefined && fixHref !== undefined
-        ? { message: view.problem.message, fix: { label: fixLabel, onFix: () => void navigate({ href: fixHref }) } }
+    view.problem !== undefined && view.handle !== undefined && fixHref !== undefined
+      ? { message: view.problem.message, fix: { label: fixLabel, onFix: () => void navigate({ href: fixHref }) } }
+      : said?.status === 'error'
+        ? { message: said.message }
         : undefined;
   const barStatus: PublishBarStatus = isPublishing
     ? 'publishing'
@@ -381,6 +383,7 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
         {...(liveSince === undefined ? { draftText: words.notPublished } : { liveText: words.liveSince(liveSince) })}
         {...(problem === undefined ? {} : { problem })}
         onPublish={() => void publish()}
+        isPublishDisabled={view.problem !== undefined}
         {...(view.published !== undefined && view.hasChanges
           ? { onDiscard: discard, discardWords: { title: words.discardAsk, text: words.discardText } }
           : {})}

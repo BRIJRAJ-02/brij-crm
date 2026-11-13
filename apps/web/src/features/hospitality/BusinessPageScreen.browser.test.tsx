@@ -34,8 +34,11 @@ const BASE: BusinessPageView = {
   showsReserve: true,
 };
 
-/** An api answering a moment later, as the network does, recording each call. */
-function fakeApi(first: BusinessPageView) {
+/**
+ * An api answering a moment later, as the network does, recording each call. With `refusePublish`, Publish is refused
+ * and the page gains that problem from then on (another tab removed the last service).
+ */
+function fakeApi(first: BusinessPageView, refusePublish?: BusinessPageView['problem']) {
   const calls: { readonly kind: string; readonly draft?: BusinessPageContent; readonly handle?: string }[] = [];
   let current = first;
   const later = <T,>(value: () => T) =>
@@ -65,6 +68,10 @@ function fakeApi(first: BusinessPageView) {
     setPlaceSlug: () => later(() => current),
     publish: () => {
       calls.push({ kind: 'publish', draft: current.draft });
+      if (refusePublish !== undefined) {
+        current = { ...current, problem: refusePublish };
+        return later(() => undefined).then(() => Promise.reject(new Error(refusePublish.message)));
+      }
       return later(() => {
         current = { ...current, hasChanges: false, published: { at: '2026-11-04T10:00:00.000Z', version: 1 } };
         return current;
@@ -76,8 +83,8 @@ function fakeApi(first: BusinessPageView) {
 }
 
 /** The real store over the fake api, its first read landed. */
-async function editorOf(first: BusinessPageView) {
-  const { api, calls } = fakeApi(first);
+async function editorOf(first: BusinessPageView, refusePublish?: BusinessPageView['problem']) {
+  const { api, calls } = fakeApi(first, refusePublish);
   let id = 0;
   const store = openBusinessPage({
     api,
@@ -296,6 +303,40 @@ describe('Settings › Business › Page', () => {
     await expect
       .element(dialog.getByRole('button', { name: 'Discard draft' }))
       .toHaveAttribute('data-variant', 'danger-solid');
+  });
+
+  it('holds Publish back while the page has a problem, with the way to fix it beside the reason', async () => {
+    const { store, calls } = await editorOf({
+      ...BASE,
+      handle: 'somewhere',
+      hasChanges: true,
+      changes: ['About changed'],
+      published: { at: '2026-11-03T10:00:00.000Z', version: 1 },
+      problem: { message: 'Add a service first.', fix: 'services' },
+    });
+    await show(store);
+    await expect.element(page.getByRole('alert').getByText('Add a service first.')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Open Services' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(calls.filter((call) => call.kind === 'publish')).toEqual([]);
+  });
+
+  it('keeps the way to fix after a refused Publish, once the page knows its problem', async () => {
+    const { store } = await editorOf(
+      { ...BASE, handle: 'somewhere', published: { at: '2026-11-03T10:00:00.000Z', version: 1 } },
+      { message: 'Add a service first.', fix: 'services' },
+    );
+    await show(store);
+    const about = page.getByRole('textbox', { name: 'About text' });
+    await userEvent.type(about, 'Late');
+    await userEvent.click(page.getByRole('button', { name: 'Publish' }));
+    await expect.element(page.getByRole('alert')).toBeVisible();
+    // The next save's answer carries the problem the server refused on: the bar says it with its fix, not the bare
+    // refusal, and Publish waits for it.
+    await userEvent.type(about, ' on weekends.');
+    await expect.element(page.getByRole('button', { name: 'Open Services' })).toBeVisible();
+    await expect.element(page.getByRole('alert').getByText('Add a service first.')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
   });
 
   it('keeps Publish in view on a phone, with Discard draft beside it', async () => {
