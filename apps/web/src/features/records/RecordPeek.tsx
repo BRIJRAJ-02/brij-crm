@@ -4,7 +4,7 @@
 // Leaves out: Overview, the stat strip and the record's menu (delete, copy link), all on its full page one press away.
 import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, RecordView } from '@crm/data';
 import { useCommentCount, useNoteTotal, useRecord, useRecordFileCount, useTaskTotal } from '@crm/data/react';
-import { Callout, EmptyState, RecordPanel, Skeleton, type RecordPanelTab } from '@crm/ui';
+import { Callout, EmptyState, RecordPanel, Skeleton, useFormatSettings, type RecordPanelTab } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentsTab } from '../comments/CommentsTab.tsx';
@@ -285,6 +285,7 @@ function LoadedPeek(
   const waiting = (section: PeekSection) => (
     <PeekSectionWaiting isFailed={parts?.failed?.has(section) === true} onRetry={props.onRetryPart} />
   );
+  const { locale } = useFormatSettings();
   const link = useMemo(() => recordLinks(slug, sources.objects), [slug, sources.objects]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
@@ -321,7 +322,13 @@ function LoadedPeek(
     ...(props.steps === undefined
       ? {}
       : {
-          place: strings.place(object.pluralName, props.steps.at, props.steps.of, props.steps.isOfAtLeast === true),
+          place: strings.place(
+            object.pluralName,
+            props.steps.at,
+            props.steps.of,
+            props.steps.isOfAtLeast === true,
+            locale,
+          ),
         }),
     onOpenPage: openPage,
     isStepping: props.isStepping,

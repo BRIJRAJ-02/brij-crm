@@ -8,9 +8,14 @@ export const strings = {
   linkedElsewhere: 'Linked elsewhere',
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available',
-  /** The record panel's place in the list beside it (spec 0074, AC-7412): "People · 3 of 120". */
-  place: (objects: string, at: number, of: number, isOfAtLeast: boolean) =>
-    `${objects} · ${at.toLocaleString()} of ${of.toLocaleString()}${isOfAtLeast ? '+' : ''}`,
+  /**
+   * The record panel's place in the list beside it (spec 0074, AC-7412): "People · 3 of 120", its numbers in the app's
+   * locale (`useFormatSettings`), never the browser's default.
+   */
+  place: (objects: string, at: number, of: number, isOfAtLeast: boolean, locale: string) => {
+    const number = new Intl.NumberFormat(locale);
+    return `${objects} · ${number.format(at)} of ${number.format(of)}${isOfAtLeast ? '+' : ''}`;
+  },
   /** A panel section whose read failed. */
   sectionFailed: 'This didn’t load',
   /** Under it: what to do next. */
