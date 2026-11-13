@@ -125,11 +125,6 @@
     --shadow-focus: var(--form-focus);
     --text-label: var(--text-body);
     --tracking-label: var(--tracking-body);
-    /* Field's label, hint and error read text-body-sm(-strong) since spec 0072's tier 2: the same body size here. */
-    --text-body-sm: var(--text-body);
-    --text-body-sm-strong: var(--text-body);
-    --tracking-body-sm: var(--tracking-body);
-    --tracking-body-sm-strong: var(--tracking-body);
     /* A question's name in the text colour: in grey it read weaker than the placeholder under it. */
     --label-colour: var(--text);
 
