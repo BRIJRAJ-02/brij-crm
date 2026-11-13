@@ -71,6 +71,27 @@ export const Opened: Story = {
   },
 };
 
+/** By keyboard, several areas open at once (the prototype's folds): Enter or Space opens one, and again closes it. */
+export const SeveralOpenByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const records = canvas.getByRole('button', { name: /Records/ });
+    const capture = canvas.getByRole('button', { name: /Forms and booking/ });
+    await userEvent.tab();
+    await expect(records).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.tab();
+    await expect(capture).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(records).toHaveAttribute('aria-expanded', 'true');
+    await expect(capture).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard(' ');
+    await expect(capture).toHaveAttribute('aria-expanded', 'false');
+    await expect(records).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
 /** No summary line: only the areas. */
 export const WithoutSummary: Story = {
   args: { summary: undefined },

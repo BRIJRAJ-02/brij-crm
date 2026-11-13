@@ -337,6 +337,21 @@ export const Folding: Story = {
   },
 };
 
+/** Folding from the keyboard (spec 0072): the title takes the outline ring, and Enter opens it with the accordion motion. */
+export const FoldByKeyboard: Story = {
+  ...Folding,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const support = canvas.getByRole('button', { name: 'Support' });
+    for (let step = 0; step < 12 && document.activeElement !== support; step += 1) await userEvent.tab();
+    await expect(support).toHaveFocus();
+    await expect(support.matches(':focus-visible')).toBe(true);
+    await userEvent.keyboard('{Enter}');
+    await expect(support).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByText('Help session')).toBeVisible();
+  },
+};
+
 /**
  * A menu's sections: `density="media"` rows under titles inset to their tiles, with a sub section as a `groups` list
  * inside its section's Card, so a card never holds a card. Edit waits with the grip for the pointer or focus.

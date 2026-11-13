@@ -1,5 +1,6 @@
-/* SectionBar: the start controls, the heading, and the end controls pushed to
-   the end, wrapping on a narrow container. */
+/* SectionBar: the start controls, the heading (SettingsLayout's section
+   head: text-body-lg-strong over a text-body-sm line), and the end controls
+   pushed to the end, wrapping on a narrow container. */
 @layer components {
   .root {
     display: flex;
@@ -31,8 +32,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-body-lg-strong);
+    letter-spacing: var(--tracking-body-lg-strong);
   }
 
   /* A quiet heading: a place in time (the week's dates), so the controls round it lead. */
@@ -53,8 +54,8 @@
   .description {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* A switch wider than a phone scrolls inside the bar rather than past the page's edge; its thin scrollbar says so. */

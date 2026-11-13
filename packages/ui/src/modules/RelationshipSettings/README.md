@@ -54,3 +54,22 @@ Focus starts on the first thing still to choose. Tab moves through the settings 
 ## Differences from the artifact
 
 Not in the artifact yet. It takes `isOpen` and `onOpenChange` (as AttributeSettings does) rather than spec 0014's `onCancel`, and `isBusy` rather than `isPending`, matching Form and AttributeSettings.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's relationship pair: the two objects sit on one `surface-shell` tray (`space-6` in, `radius-xl`), each as a Card in its default look (the surface, a `border-subtle` hairline, `radius-lg`, `shadow-xs`; it was `sunken` before), `space-8` apart with the link's arrow between them in `accent` (`space-4` either side). The Card's eyebrow is the object's tile, its title the side's object. A fixed side's question reads in `text-body` and `text-secondary`, its answer in `text-body-strong`. Under 480px of dialog the cards stack and the arrow turns to run between them. The rest is its parts' look: Modal's `form` dialog, Select with faces, RadioGroup, Field, FieldGroup and Callout.
+
+**Use it for** creating a relationship (from Add attribute or the schema map) and renaming an existing one's sides. **Don't use it for** a record reference to a fixed list of people (a Member attribute) or one attribute's settings (AttributeSettings).
+
+**The consumer provides** `isOpen` and `onOpenChange`, `mode` (`create` or `edit`), `objects` (`{ id, singularName, pluralName, icon, hue }`), `from` and `to` (`{ objectId, title? }`), `cardinality` (edit), `isBusy`, `refusals`, `onSubmit(values)`, and as needed `readOnlyReason`, `focusSide`, `newObject` with `chosenTo`, and `onBack`. `relationshipStep` gives the same dialog as a step of AttributeSettings.
+
+**States**: create with one end chosen, both preset or neither, each of the four cardinalities, a typed name kept, a self relationship (a reverse name that must differ), edit (the shape fixed, names editable), read only, busy, refused on a name or above the settings, narrow (stacked). Stories: Create, EveryCardinality, ChoiceByArrows, TypedName, SelfRelation, BothEndsChoosable, BothEndsPreset, Edit, EditSelf, ReadOnly, Busy, RefusedName, RefusedNearName, RefusedLimit.
+
+**Interaction**: on a card the arrows choose One or Many (a RadioGroup); names follow the objects and the choice (singular for one, plural for many) until someone types one.
+
+**Differences from the prototype**
+- Each card asks its own side's question (One company or Many companies) where the prototype has three cardinality cards with diagrams under the pair; the library's way came from owner ask A99 (22 October 2026), so the cards, the diagram that swaps between them (icon swap) and its sentence are not ported. The arrow between the objects stays one `arrow-left-right` mark, so it has no swap to animate.
+- No sentence under the names restating the choice (the owner, 30 October 2026: less text), so no crossfade.
+- The cards' title is Card's title type, not the prototype's 15px object name, and a card is `space-16` in (Card's padding), not `space-12`.
+- On a narrow dialog the arrow turns a quarter rather than lying in a row between the stacked cards.
+- Kept beyond the prototype: choosing either side's object, "New object…", Back, refusals on their setting, read only with its reason, the self relationship's own questions, `relationshipStep`. The prototype's `value`, `onChange` and `canChooseFrom` are this part's `from`, `to`, `cardinality` and `onSubmit`.

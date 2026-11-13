@@ -1,8 +1,9 @@
-/* OptionsEditor: the group's label and its "N of 500" over a list of
-   size-input tall rows, space-4 apart: the drag handle, the colour, the
-   label (and for a stage its outcome and target days), the row's menu.
-   A row being dragged fades; the drop target takes the inset ring. Add
-   option sits under the list; archived options under it, muted. */
+/* OptionsEditor, in the look of the Timefix prototype's options editor (spec 0072): the group's label in
+   text-body-sm-strong and its "N of 500" over the rows on one surface-subtle tray (space-6 in, radius-md), rows
+   size-control tall and space-2 apart: the drag handle, the colour, the label (whose Field sits flush on the tray at
+   rest, as the prototype's name does, and turns white with its accent edge when typed in), for a stage its outcome
+   and target days, the row's menu. A row being dragged lifts; the keyboard's row takes the outline ring just inside
+   it. Add option sits under the tray; archived options under it, muted. */
 @layer components {
   .root {
     display: flex;
@@ -19,9 +20,9 @@
   }
 
   .title {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   .usage {
@@ -41,7 +42,10 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-6);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
     outline: none;
   }
 
@@ -52,13 +56,15 @@
     gap: var(--space-4) var(--space-8);
     align-items: center;
     min-block-size: var(--size-control);
-    padding-inline: var(--space-4);
+    padding-inline: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
     outline: none;
   }
 
+  /* Inside: the rows sit space-2 apart, where a ring outside one would cover the next. */
   .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
@@ -73,7 +79,7 @@
   .label {
     display: grid;
     flex: 1;
-    min-inline-size: calc(5 * var(--size-chip));
+    min-inline-size: calc(5 * var(--space-20));
   }
 
   .label[data-static] {
@@ -98,20 +104,20 @@
   .outcome {
     display: grid;
     flex: none;
-    inline-size: calc(4 * var(--size-chip) + var(--size-control-sm));
+    inline-size: calc(4 * var(--space-20) + var(--size-control-sm));
   }
 
   .days {
     display: grid;
     flex: none;
-    inline-size: calc(3 * var(--size-chip) + var(--size-control-sm));
+    inline-size: calc(3 * var(--space-20) + var(--size-control-sm));
   }
 
   /* A choice's number (`scores`): two digits and its unit, at the row's end before remove. */
   .score {
     display: grid;
     flex: none;
-    inline-size: calc(2 * var(--size-chip) + var(--size-control-sm));
+    inline-size: calc(2 * var(--space-20) + var(--size-control-sm));
   }
 
   .meta {
@@ -131,8 +137,8 @@
   .note,
   .error {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
   .error {
@@ -157,14 +163,12 @@
     padding-inline: var(--space-4);
   }
 
+  /* In forced colours the ring takes Highlight, and a lifted row, its shadow and surface gone, an outline. */
   @media (forced-colors: active) {
     .row[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: calc(-1 * var(--border-width-thick));
+      outline-color: Highlight;
     }
-  }
-  /* Lifted, in forced colours, where the shadow and surface are gone. */
-  @media (forced-colors: active) {
+
     .row[data-dragging] {
       outline: var(--border-width-thick) solid Highlight;
     }

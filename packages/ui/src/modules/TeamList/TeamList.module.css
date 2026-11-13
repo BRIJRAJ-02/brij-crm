@@ -1,10 +1,11 @@
-/* TeamList: one row per member, the avatar beside two lines (the name, then
-   the presence and a quiet detail), rows on the list's row rhythm. */
+/* TeamList, in the look of the Timefix prototype's member rows (spec 0072): one row per member, at least size-row
+   tall, a border-subtle hairline between rows, the avatar beside two lines: the name in text-body-strong, then the
+   presence and a quiet detail in text-body-sm, the detail in text-secondary. The rows are read only: no wash, no
+   focus. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -15,8 +16,11 @@
     align-items: center;
     gap: var(--space-12);
     min-block-size: var(--size-row);
-    padding-block: var(--space-4);
-    padding-inline: var(--space-8);
+    padding: var(--space-8);
+  }
+
+  .row + .row {
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   .text {
@@ -40,13 +44,13 @@
     align-items: center;
     gap: var(--space-2) var(--space-8);
     min-inline-size: 0;
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .detail {
     min-inline-size: 0;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     overflow-wrap: anywhere;
   }
 }

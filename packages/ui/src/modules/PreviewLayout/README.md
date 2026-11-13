@@ -65,3 +65,16 @@ Not in the artifact. Pressing a region of the preview to scroll the editor to it
 ## previewSurface="device" (6 November 2026)
 
 For an editor whose preview is what guests see, beside a long list (a menu). Why a surface rather than changing the phone everywhere: the other editors' shots and fits stay as they are; it can become the default once they have been looked at. The phone gets a phone's corners and a bezel (drawn by shadows in the stage's padding, so it takes nothing from the fit), no scrollbar of its own, and a scroll that stops at its ends instead of carrying on into the page. While there is more below, the page fades out at its foot rather than stopping on a hard edge mid item. The column is the phone's width and no wider (at most two fifths), so no band sits empty beside it, and the editor takes the rest. Under the Tabs' `bar` variant, its top lines up under the bar and its foot sits a gutter above the window's. Too narrow for both, Preview floats at the foot of the view, after the body in tab order, rather than holding a row over the body.
+
+## Timefix prototype (spec 0072)
+
+Folded into AppShell (its aside beside the page) and AuthLayout (its preview half) in the prototype; it keeps its own module (decision 14), since none of its props line up with either. Its look already follows theirs: the preview column behind a `border-subtle` hairline, the phone with a hairline, `radius-xl` and `shadow-xs`. Spec 0072 changes one rule: a long preview's screen, focused, shows the outline ring (`border-width-focus`, `focus-ring`, `space-2` out) round the phone, in place of the accent edge and halo; in forced colours the ring shows as the system colour.
+
+Repeats from AppShell and AuthLayout: the hairline before a side column (AppShell's `.panel`, AuthLayout's `.side`). Those leave with this export when the editors move to AppShell's aside (phase 2's AsideLayout) in their screen phases.
+
+**Use it for** an editor beside its live preview (the booking page editor, the form editor's tabs), `PhonePreview` for a phone on its own, `PreviewPage` for a draft opened to try. **Don't use it for** settings pages (SettingsLayout) or a record's side panel (Panel).
+
+**The consumer provides** `preview`, `previewControls`, `previewNote`, `notices`, `footer`, `nav`, `heading`, `bodyWidth`, `bodyLayout`, `previewShare`, `previewSurface`, `previewDevice`, and the body as `children`.
+
+**Differences from the prototype**: the prototype's aside is a 440px panel that slides in (transitions.dev 07); this column is always there and holds a phone, with every behaviour above (scrolling the framed page, the sheet under `bp-container-sm`, the shares and surfaces) kept.
+

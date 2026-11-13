@@ -3,8 +3,9 @@
    boxes with their refusal, why verifying is off when it is, "Checking the
    code" with a spinner while it is checked, then the foot: the resend and
    back buttons in a row, a refused resend's danger Callout and the resend
-   wait under them, space-8 apart. The lines are text-secondary, and the
-   parts space-16 apart. */
+   wait under them, space-8 apart. The lines are text-secondary, the wait a
+   step quieter (text-body-sm, text-tertiary, tabular figures, as SignInForm's
+   prototype counts it), and the parts space-16 apart. */
 @layer components {
   .root {
     display: flex;
@@ -22,6 +23,8 @@
   }
 
   .wait {
+    color: var(--text-tertiary);
+    font: var(--text-body-sm);
     font-variant-numeric: tabular-nums;
   }
 

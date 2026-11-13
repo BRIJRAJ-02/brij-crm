@@ -58,3 +58,15 @@ Not in the artifact yet.
 
 - `description` puts a line under a section's title, the Card's own (a menu section's "5 items", after checklabs' category card, 5 November 2026).
 - A section's `isExpanded` with `onExpandedChange` folds it: the title and a chevron before it are one disclosure button named by the title, read as expanded or collapsed. The chevron turns as it opens, what the section holds slides shut over `duration-move`, then leaves the tab order (reduced motion: at once), and a folded section draws its header alone. The caller keeps which are open (UI state). Why a variant: a menu's Structure folds its categories as checklabs' editor does (5 November 2026), and a Disclosure inside the Card would repeat its title; Card itself never folds. The fold is a plain `button` in this module rather than the Button atom, as Card's pressable title and Disclosure's trigger are: it is a heading that presses, in the heading's own type, with no control's frame. The chevron moved from the header's end to before the title, where a fold is looked for (6 November 2026: at the end, drawn as a held button, it read as focused all the time).
+
+## Timefix prototype (spec 0072)
+
+Takes its look from SettingsLayout's sections (decision 14: its own module): a section's title is `text-body-lg-strong` (`text-body-strong` in the `groups` variant), its count `text-label` in `text-tertiary`. Folding is the prototype's accordion (transitions.dev 21): the chevron turns and the body's height eases over `duration-fast` on `ease-smooth-out`. The fold's focus is the outline ring, `space-2` out. Repeats SettingsLayout's section title type, one rule, which leaves with this export when its last caller moves.
+
+**Use it for** sections a person orders (a profile's booking pages, a menu's categories). **Don't use it for** settings sections that don't move (SettingsSection) or rows (LinkList, QuestionList).
+
+**The consumer provides** `label`, `sections` (`id`, `title`, `description`, `actions`, `quietActions`, `content`, `isExpanded` with `onExpandedChange`, `isTitleLoading`), `onMove`, `variant`, `isTitleInset`, `emptyState`.
+
+**States**: default, folding by pointer (`Folding`) and keyboard (`FoldByKeyboard`), moving by keyboard, row and menu, read only, narrow, title loading, empty.
+
+**Differences from the prototype**: not a part of the prototype; reordering, the grip and the `groups` variant are the library's own.

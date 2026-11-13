@@ -52,6 +52,25 @@ export const Default: Story = {
   },
 };
 
+/**
+ * On a narrow card (spec 0072): rows with a hairline between them and no wash, since nothing opens; a long detail
+ * wraps under the status rather than pushing the row wide, and every row keeps its name and its status in words.
+ */
+export const NarrowCard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <TeamList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const rows = canvas.getAllByRole('listitem');
+    await expect(rows).toHaveLength(3);
+    await expect(rows[0]).toHaveTextContent('In a meeting');
+    await expect(canvas.getByText('Until 3:30 PM · Next: Pipeline review, 4:00 PM')).toBeVisible();
+  },
+};
+
 /** No rows: nothing at all. */
 export const Empty: Story = {
   args: { rows: [] },

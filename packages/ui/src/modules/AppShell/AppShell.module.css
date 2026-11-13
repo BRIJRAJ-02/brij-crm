@@ -1,8 +1,9 @@
-/* AppShell: the sidebar, then the main column filling the rest: the bars
-   stacked over the view, and the side panel at the end with a hairline before
-   it. The view is a size container, so what sits in it adapts to its width;
-   the panel takes its content's width. The skip link shows while it has
-   focus. */
+/* AppShell: the sidebar straight on the canvas, then the main column, one
+   surface inset space-8 (none on the sidebar's side) with a border-subtle
+   hairline, radius-lg and shadow-xs: the bars stacked over the view, and the
+   side panel at the end with a hairline before it. The view is a size
+   container, so what sits in it adapts to its width; the panel takes its
+   content's width. The skip link shows while it has focus. */
 @layer components {
   .root {
     position: relative;
@@ -10,7 +11,7 @@
     inline-size: 100%;
     block-size: 100%;
     min-block-size: 0;
-    background: var(--surface);
+    background: var(--canvas);
     color: var(--text);
     container: app-shell / inline-size;
   }
@@ -30,9 +31,8 @@
   }
 
   .skip:focus-visible {
-    box-shadow: var(--shadow-md), var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   .sidebar {
@@ -47,7 +47,18 @@
     flex-direction: column;
     min-inline-size: 0;
     min-block-size: 0;
+    margin: var(--space-8);
+    overflow: clip;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
     outline: none;
+  }
+
+  /* The sidebar's own space-8 inset is the gap before the surface. */
+  .sidebar + .main {
+    margin-inline-start: 0;
   }
 
   /* A Panel that pushes the page is open: the main column, bars and all, gives up the panel's width at once (the
@@ -97,6 +108,14 @@
   /* A phone (the shell under 480px, `bp-container-md`), when the screen asks (`phoneSidebar`): the page alone, its
      TopBar's back the way up (`hidden`), or the sidebar alone as the whole screen's list (`full`). */
   @container app-shell (width < 480px) {
+    /* The page takes the whole screen beside the rail, edge to edge. */
+    .main {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
     .root[data-phone-sidebar='hidden'] > .sidebar {
       display: none;
     }
@@ -107,12 +126,6 @@
 
     .root[data-phone-sidebar='full'] > .main {
       display: none;
-    }
-  }
-
-  @media (forced-colors: active) {
-    .skip:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

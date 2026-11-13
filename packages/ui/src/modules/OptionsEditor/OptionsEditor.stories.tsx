@@ -225,6 +225,21 @@ export const Rename: Story = {
   },
 };
 
+/** The keyboard's row (spec 0072): Tab enters the list on a row, the arrows move between rows, each says so. */
+export const RowFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const rows = canvas.getAllByRole('row');
+    await waitFor(() => expect(rows[0]).toHaveFocus());
+    await expect(rows[0]).toHaveAttribute('data-focus-visible');
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(rows[1]).toHaveFocus());
+    await expect(rows[1]).toHaveAttribute('data-focus-visible');
+    await expect(rows[0]).not.toHaveAttribute('data-focus-visible');
+  },
+};
+
 /** By keyboard: Enter on a grip lifts the option, the arrows move it, Enter drops it. */
 export const ReorderByKeyboard: Story = {
   args: { onMove: fn() },

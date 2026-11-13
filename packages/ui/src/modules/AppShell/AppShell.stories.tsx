@@ -14,16 +14,19 @@ function SampleShell({
   withPanel = false,
   withBanner = false,
   withPushingPanel = false,
+  isRail = false,
 }: {
   readonly withPanel?: boolean;
   readonly withBanner?: boolean;
   readonly withPushingPanel?: boolean;
+  /** The sidebar folded to its rail. */
+  readonly isRail?: boolean;
 }) {
   return (
     <Stage height="page">
       <AppShell
         sidebar={
-          <Sidebar workspace="Brightline" onQuickActions={() => undefined}>
+          <Sidebar workspace="Brightline" onQuickActions={() => undefined} isCollapsed={isRail}>
             <NavItem icon="square-check" href="/tasks">
               Tasks
             </NavItem>
@@ -102,6 +105,17 @@ export const Default: Story = {
   },
 };
 
+/** The sidebar folded to its rail (spec 0072): the page's surface, inset on the canvas, takes the room it leaves. */
+export const Rail: Story = {
+  args: { isRail: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.getByRole('main')).toContainElement(
+      canvas.getByRole('heading', { level: 1, name: 'Companies' }),
+    );
+  },
+};
+
 /** The skip link is the first Tab stop, shows while focused, and jumps to the main column. */
 export const SkipLink: Story = {
   parameters: { crm: { screenshot: false } },
@@ -109,6 +123,7 @@ export const SkipLink: Story = {
     await userEvent.tab();
     const skip = canvas.getByRole('link', { name: 'Skip to content' });
     await expect(skip).toHaveFocus();
+    await expect(skip.matches(':focus-visible')).toBe(true);
     await expect(skip.getBoundingClientRect().width).toBeGreaterThan(1);
     await expect(skip).toHaveAttribute('href', `#${canvas.getByRole('main').id}`);
   },

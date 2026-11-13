@@ -41,3 +41,13 @@ The screen puts focus in the email field. Tab follows the page: Continue with Go
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's SignInForm, which also replaces VerifyEmail (whose code boxes are CodeInput's, already). Its own module is the column `space-16` apart and the closed sign up note in `text-body` `text-secondary`, which already match; everything else it draws is its parts' (Button, Separator, Field, Callout).
+
+**Use it for** the sign in page, inside AuthLayout. **Don't use it for** re-checking a signed in person or passwords.
+
+**The consumer provides** `onContinue`, `onGoogle`, `status`, `error`, `notice` and `noticeTone`, `defaultEmail`, `isDisabled` with `disabledReason`, `isSignUpClosed`.
+
+**Differences from the prototype**: the code step is VerifyEmail, a page of its own the app routes to (the prototype's three pages slide inside one form); the "or" is Separator (phase 2); signed in is the app opening, with no success check. The shake on a refused address is Field's (owed to it).

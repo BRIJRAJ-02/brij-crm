@@ -153,6 +153,24 @@ export const EveryCardinality: Story = {
   },
 };
 
+/** On a card, the arrows choose (the prototype's radio group): the side's name follows the new choice. */
+export const ChoiceByArrows: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { to: { objectId: COMPANIES } },
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    const near = question(dialog, 'Each person has');
+    const one = within(near).getByRole('radio', { name: 'One company' });
+    await userEvent.click(one);
+    await expect(one).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    const many = within(near).getByRole('radio', { name: 'Many companies' });
+    await waitFor(() => expect(many).toBeChecked());
+    await expect(many).toHaveFocus();
+    await expect(inDialog(dialog, 'Name on People')).toHaveValue('Companies');
+  },
+};
+
 /** A name typed over stays when the choice changes, and is marked changed. */
 export const TypedName: Story = {
   parameters: { crm: { screenshot: false } },

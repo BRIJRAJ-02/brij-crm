@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, screen } from 'storybook/test';
+import { expect, screen, waitFor } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -168,6 +168,19 @@ export const GroupedNav: Story = {
     await expect(nav).toBeInTheDocument();
     await expect(canvas.getByRole('group', { name: 'People' })).toBeInTheDocument();
     await expect(canvas.getByText('Connections')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'Teams' })).toHaveAttribute('aria-current', 'page');
+  },
+};
+
+/** The navigation's pills (spec 0072): one under the pointer washes (CSS only), the current one keeps its soft grey pill. */
+export const NavHover: Story = {
+  ...GroupedNav,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const brand = canvas.getByRole('link', { name: 'Brand' });
+    await userEvent.hover(brand);
+    await waitFor(() => expect(brand).toHaveAttribute('data-hovered'));
+    await expect(brand).not.toHaveAttribute('aria-current');
     await expect(canvas.getByRole('link', { name: 'Teams' })).toHaveAttribute('aria-current', 'page');
   },
 };

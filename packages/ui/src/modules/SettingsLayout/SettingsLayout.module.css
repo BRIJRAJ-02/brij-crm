@@ -1,7 +1,9 @@
-/* SettingsLayout: the settings navigation (a size-menu column of nav items on
-   the canvas, a hairline at its end) beside the page, whose header (a tile,
-   the title in text-heading with a badge, a line of description in
-   text-secondary, and the actions at the end) sits over the body. The page
+/* SettingsLayout: the settings navigation (a size-menu column of nav pills,
+   space-16 by space-12 in, a hairline at its end) beside the page, whose
+   header (a tile, the title in text-title-lg with a badge, a line of
+   description in text-secondary, and the actions at the end) sits over the
+   body. Sections head their cards in text-body-lg-strong over a text-body-sm
+   line; a row's description is text-body-sm. The page
    takes the view's whole width inside the space-16 gutter, like every other
    page (20 Oct 2026): sections put their heading above their cards, one
    column across the width (21 Oct 2026), and lists run the full width. One
@@ -49,7 +51,7 @@
   }
 
   .nav {
-    padding: var(--space-12) var(--space-8);
+    padding: var(--space-16) var(--space-12);
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
@@ -148,8 +150,8 @@
     outline: none;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -159,7 +161,7 @@
     display: flex;
     align-items: center;
     block-size: 1lh;
-    font: var(--text-title);
+    font: var(--text-title-lg);
   }
 
   .description {
@@ -168,6 +170,11 @@
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* A row's description is a step quieter than the page's. */
+  .rowText > .description {
+    font: var(--text-body-sm);
   }
 
   .actions {
@@ -228,7 +235,7 @@
   /* Never wider than a column's most, so a description keeps a readable line on a wide page. */
   .rowMain {
     display: flex;
-    flex: 1 1 var(--size-measure-sm);
+    flex: 1 1 calc(var(--size-column-wide) - var(--space-20));
     gap: var(--space-12);
     max-inline-size: var(--size-column-max);
     min-inline-size: 0;
@@ -447,15 +454,15 @@
   .sectionTitle {
     margin: 0;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-body-lg-strong);
+    letter-spacing: var(--tracking-body-lg-strong);
   }
 
   .sectionDescription {
     margin: 0;
     color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .sectionBody {

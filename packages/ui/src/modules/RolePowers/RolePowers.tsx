@@ -52,6 +52,7 @@ export function RolePowers({ label, id, header, summary, areas, isLoading = fals
     return (
       <div className={styles.root} id={id} aria-label={strings.loading} aria-busy="true" role="group">
         {header}
+        {/* Static placeholders that never reorder, so keyed by place. */}
         {[0, 1, 2, 3].map((index) => (
           <Skeleton key={index} width="long" />
         ))}

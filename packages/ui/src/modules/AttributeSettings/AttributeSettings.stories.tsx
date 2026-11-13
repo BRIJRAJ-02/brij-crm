@@ -168,6 +168,36 @@ export const Edit: Story = {
   },
 };
 
+/**
+ * Editing, Archive sits at the start of the footer, away from Cancel and Save (the prototype's order): it hands the
+ * screen the archive question, which asks first, and the dialog stays until the screen answers.
+ */
+export const ArchiveAtTheStart: Story = {
+  args: {
+    onArchive: fn(),
+    attribute: {
+      type: 'text',
+      isMulti: false,
+      title: 'Job title',
+      apiSlug: 'job_title',
+      isRequired: false,
+      isUnique: false,
+    },
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    const buttons = within(dialog).getAllByRole('button');
+    const archive = within(dialog).getByRole('button', { name: 'Archive' });
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+    // Archive comes before Save in the footer's reading order.
+    await expect(buttons.indexOf(archive)).toBeLessThan(buttons.indexOf(save));
+    await userEvent.click(archive);
+    await expect(args.onArchive).toHaveBeenCalledTimes(1);
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};
+
 /** A Member's default: none, the member who creates the record, or a chosen member. */
 export const MemberDefault: Story = {
   args: {

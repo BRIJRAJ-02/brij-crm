@@ -44,3 +44,20 @@ Tab reaches each area's title; Enter or Space opens and closes it.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's role powers, on the library's one-role shape: the summary is the prototype's note (`text-body-sm` in `text-tertiary`), the areas are Disclosure folds `space-12` apart, and each opened fold lists its powers as the prototype's power rows: at least `size-row` tall (`space-4` above and below a wrapped one), `text-body`, a `border-subtle` hairline between them, the ones held at full contrast after a success check, the ones not held in `text-tertiary` after a minus. The folds open with Disclosure's accordion motion (transitions.dev 21), and several may be open.
+
+**Use it for** what a role lets someone do: Settings › Members' role guide and the Invite dialog. **Don't use it for** one person's access (show their role) or picking a role (Select with described options).
+
+**The consumer provides** `label`, `areas` (`{ id, title, standing, held, withheld }`, from `rolePowers(role)`), and as needed `summary`, `header` (the role switch), `id` and `isLoading`.
+
+**States**: folds closed or open (several at once), each area's standing (All, Some, None, in a mark and a Badge), loading. Stories: Closed, Opened, SeveralOpenByKeyboard, WithoutSummary, Loading.
+
+**Interaction**: Tab reaches each area's title; Enter or Space opens and closes it.
+
+**Differences from the prototype**
+- The prototype is a matrix: every role a column, a checkbox in every cell, Owner locked, "Custom role" adding a column and deleting one asking first. The library part explains one role read only (the owner, 27 October 2026), so the matrix, its checkboxes, the locked Owner column, the new column's fade and the add and delete dialogs are not ported; an editable roles matrix is owed to the roles screen phase, as a part of its own if the owner wants custom roles.
+- Each area carries a standing mark and a Badge (All, Some, None), and a power not held is listed with "Can’t:" read before it, where the prototype's empty checkbox says it.
+- A power has no grey description line: the library's powers are one plain sentence each.

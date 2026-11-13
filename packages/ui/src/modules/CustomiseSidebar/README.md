@@ -40,3 +40,13 @@ Tab moves through the switches in order, then Reset to default and Done. Space t
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Sidebar (decision 14: its own module): a section's label is `text-label` in `text-tertiary`, and each row (`size-nav-item` tall, hairlines between) sets its icon `space-12` from its name in `text-body-strong`, as a sidebar item does. Repeats Sidebar's group label and item type, two rules, which leave with this export when its last caller moves (the prototype customises the sidebar in place, owed to the shell phase).
+
+**Use it for** choosing what the sidebar shows. **Don't use it for** reordering (the sidebar's own grips).
+
+**The consumer provides** `sections` (each `id`, `title` and `items` of `id`, `name`, `icon`, `hue`, `isShown`), `onShownChange`, `onReset`, `isOpen` with `onOpenChange`.
+
+**Differences from the prototype**: the prototype has no customise dialog (Flow 12 customises in place); the library's dialog stays until the shell phase moves its caller.

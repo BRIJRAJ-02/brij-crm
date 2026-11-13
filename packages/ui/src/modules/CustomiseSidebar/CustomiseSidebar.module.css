@@ -1,5 +1,7 @@
 /* CustomiseSidebar: the dialog's sections, each a quiet label over rows of an
-   icon, the name and a switch at the end. The reset's confirm is a Modal of its own. */
+   icon, the name and a switch at the end, in the Sidebar's words: the label in
+   text-label text-tertiary, the row's name in text-body-strong space-12 after
+   its icon. The reset's confirm is a Modal of its own. */
 @layer components {
   .empty {
     margin: 0 0 var(--space-12);
@@ -14,7 +16,7 @@
 
   .heading {
     margin: 0 0 var(--space-4);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
@@ -29,7 +31,7 @@
 
   .row {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--space-12);
     align-items: center;
     min-block-size: var(--size-nav-item);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
@@ -44,8 +46,8 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

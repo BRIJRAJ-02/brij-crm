@@ -47,3 +47,13 @@ The code field is first: type or paste the code, Backspace deletes the last digi
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into SignInForm in the prototype (its code page). It already renders CodeInput, so its boxes are the prototype's; its own module draws the lines: where the code went in `text-body` `text-secondary` with the address in `text-body-strong`, the resend wait a step quieter in `text-body-sm` `text-tertiary` with tabular figures, as the prototype's countdown. Repeats no rules of SignInForm's.
+
+**Use it for** the code step of sign in. **Don't use it for** re-checking a signed in person (a Dialog with CodeInput).
+
+**The consumer provides** `email`, `onVerify`, `isVerifying`, `error`, `isCodeSpent`, `onResend`, `resendWait`, `isResending`, `resendError`, `onUseAnotherEmail`, `isDisabled`, `disabledReason`.
+
+**Differences from the prototype**: Resend code and Use a different email sit together under the boxes (resend first, as the tab order has it), rather than back at the start and resend at the end; the wait is a line under them rather than replacing the button, and its words don't crossfade. Kept: the spent code, the refused resend, the disabled reason and every announcement.

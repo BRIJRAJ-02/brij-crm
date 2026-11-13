@@ -60,14 +60,14 @@
     margin-inline-start: auto;
   }
 
-  /* Said in place of "+ Add another" once the rows are full. */
+  /* Said in place of "+ Add another" once the rows are full: the prototype's note, in text-body-sm. */
   .limit {
     display: flex;
     align-items: center;
     grid-column: 1 / -1;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* The remove button, level with the field beside it. */

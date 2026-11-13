@@ -39,6 +39,7 @@ export function TeamList({ label, rows, isLoading = false }: TeamListProps) {
   if (isLoading) {
     return (
       <ul className={styles.root} aria-label={label} aria-busy="true">
+        {/* Static placeholders that never reorder, so keyed by place. */}
         {[0, 1, 2].map((index) => (
           <li key={index} className={styles.row}>
             <Skeleton shape="circle" />

@@ -42,3 +42,18 @@ The skip link is the first Tab stop; Enter moves focus to the main column. Then 
 ## Differences from the artifact
 
 Not in the artifact: its screens laid the shell pieces out by hand.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's AppShell, which also replaces PreviewLayout (see its README). The shell stands on `canvas`; the sidebar sits straight on it, and the main column is one `surface` inset `space-8` from the window (none on the sidebar's side, whose own inset is the gap), with a `border-subtle` hairline, `radius-lg` and `shadow-xs`, clipping what it holds to its corners. On a phone (the shell under 480px) the page takes the screen edge to edge, with no inset, edge or corner. The skip link's focus is the outline ring, `space-2` out.
+
+**Use it for** every screen inside the app. **Don't use it for** the public pages, the pages before the app (AuthLayout) or a dialog.
+
+**The consumer provides** `sidebar`, `topBar`, `viewBar`, `toolbar`, `banner`, `panel`, `viewKey`, `phoneSidebar` and the view as `children`.
+
+**States**: sidebar open (`Default`) or a rail (`Rail`); without a sidebar (`WithoutSidebar`); a side panel (`WithPanel`) and a panel pushing the page (`PushedByPanel`); a banner; a phone's page and list (`PhonePage`, `PhoneList`); the skip link focused (`SkipLink`).
+
+**Differences from the prototype**
+- Kept library behaviour: the skip link, `viewBar`, `banner`, `AppShellSlot`, `viewKey`, `phoneSidebar`, `AppShellContext`, the compact fold below `bp-page-compact`, and a Panel's push (`pushesPage`).
+- The phone's inset drops at the shell's 480px container width, the library's phone line (the prototype's is a 40rem media query).
+- Not here, owed to phase 2's and the shell phase's parts: the TopBar's and Toolbar's look (their own modules), the phone tab bar (`mobileNav`, which the library doesn't have), `PageBody`'s padding, and the aside's panel reveal (AsideLayout, phase 2; the library's side panel is `panel`, or a Panel).

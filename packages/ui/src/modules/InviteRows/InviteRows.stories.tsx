@@ -89,6 +89,24 @@ export const Several: Story = {
   },
 };
 
+/** Removing a row (the prototype's collapse) sends focus to the row before it, so the keyboard never loses its place. */
+export const RemoveFocusesRowBefore: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    rows: [
+      { id: 'r1', email: 'ada@acme.com', roleId: 'admin' },
+      { id: 'r2', email: 'grace@acme.com', roleId: 'member' },
+      { id: 'r3', email: 'alan@acme.com', roleId: 'member' },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove alan@acme.com' }));
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: 'Email 3' })).toBeNull());
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Email 2' })).toHaveFocus());
+    await expect(canvas.getByRole('textbox', { name: 'Email 2' })).toHaveValue('grace@acme.com');
+  },
+};
+
 /** A row's problem under its address. */
 export const WithErrors: Story = {
   args: {

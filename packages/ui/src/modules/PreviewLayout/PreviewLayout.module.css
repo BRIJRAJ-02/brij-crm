@@ -317,8 +317,8 @@
 
   /* A long preview's screen, or a long page's frame, takes focus to be scrolled: the phone's outline shows it. */
   .phone:has(.screen:focus-visible, .viewport:focus-visible) {
-    border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   /* PreviewPage: the bar and the banner, then the page in exactly the height they leave, so a page that fills its
@@ -552,11 +552,6 @@
   @media (forced-colors: active) {
     .phone {
       border-color: CanvasText;
-    }
-
-    .phone:has(.screen:focus-visible, .viewport:focus-visible) {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: var(--border-width-hairline);
     }
   }
 }

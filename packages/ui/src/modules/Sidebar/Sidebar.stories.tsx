@@ -151,10 +151,38 @@ export const Keyboard: Story = {
     await expect(canvas.getByRole('button', { name: /Quick actions/ })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     await expect(args.onQuickActions).toHaveBeenCalled();
+    // The next stop is the first item, its outline ring drawn just inside it (the body clips).
+    await userEvent.tab();
+    const notifications = canvas.getByRole('link', { name: 'Notifications' });
+    await expect(notifications).toHaveFocus();
+    await expect(notifications).toHaveAttribute('data-focus-visible');
     const records = canvas.getByRole('button', { name: 'Records' });
     records.focus();
     await userEvent.keyboard('{Enter}');
     await expect(records).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/** An item under the pointer washes and comes up to the text colour (spec 0072, CSS only); the current page keeps its pill. */
+export const ItemHover: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const people = canvas.getByRole('link', { name: 'People' });
+    await userEvent.hover(people);
+    await waitFor(() => expect(people).toHaveAttribute('data-hovered'));
+    await expect(people).not.toHaveAttribute('aria-current');
+    await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
+  },
+};
+
+/** Pressed (spec 0072): the item says so while the pointer holds it, a wash and no change of size. */
+export const ItemPressed: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const help = canvas.getByRole('button', { name: 'Help and shortcuts' });
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: help }]);
+    await waitFor(() => expect(help).toHaveAttribute('data-pressed'));
+    await userEvent.pointer([{ keys: '[/MouseLeft]', target: help }]);
+    await waitFor(() => expect(help).not.toHaveAttribute('data-pressed'));
   },
 };
 
@@ -219,7 +247,8 @@ export const CollapsedWorkspaceTip: Story = {
 /** The workspace menu: the workspaces with the role under the open one, and Sign out; the trash and shortcuts live in the foot. */
 export const WorkspaceMenu: Story = {
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Brightline, workspace menu' }));
+    const trigger = canvas.getByRole('button', { name: 'Brightline, workspace menu' });
+    await userEvent.click(trigger);
     const menu = await waitFor(() => {
       const found = document.querySelector('[role="menu"]');
       if (found === null) throw new Error('the menu did not open');
@@ -229,6 +258,8 @@ export const WorkspaceMenu: Story = {
     await expect(menu.querySelector('header')).toBeNull();
     await expect(menu).not.toHaveTextContent('Trash');
     await expect(menu).not.toHaveTextContent('Keyboard shortcuts');
+    // The switcher stays pressed (surface-selected) while its menu is open.
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   },
 };
 

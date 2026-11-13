@@ -51,3 +51,21 @@ Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
 ## Guest rows (10 November 2026)
 
 `guests` turns the rows into a booking's guests, every word the screen's own: rows may run down to none (each row ends in its ×; with none only the add button shows, under `first`, and focus goes back to it when the last row goes), the column is named `label` with `aside` beside it ("Guests (up to 10)"), the add button says `another` under a row and carries the user-plus icon, `rowLabel` names each row for screen readers, `full` replaces the button at `max`, and `action` draws at the end of the add row (the guest page's Invite). `fieldSize="lg"` draws the public pages' taller fields with the × level with them. Why a variant: the booking form and the guest page add guests exactly as the invite form adds people. Story: BookingGuests.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's invite rows, which it already drew: one grid for the column names and every row, `space-8` apart, the email taking the room, the role its picker's width, and from two rows a `size-control-sm` remove column. The column names are FieldLabel's (`text-body-sm-strong`), the fields Field's filled box and Select's compact trigger, "+ Add another" a ghost Button with the plus under the rows. The note that replaces it at `max` ("Up to 20 at a time.") is the prototype's note, in `text-body-sm`. On guest pages the same rows draw at Field's `lg` size, the × level with them.
+
+**Use it for** inviting people by email (the Invite people dialog, first run's team step) and a booking's guests (`guests`). **Don't use it for** adding records (a form) or picking existing members (a multi Select).
+
+**The consumer provides** `rows` and `onChange` (made with `createInviteRow`), and as needed `roles` with `rolesInfo`, `errors`, `max`, `onSubmit`, `onBlurRow`, `onOverflow`, `autoFocus`, `isDisabled`, `fieldSize` and `guests`.
+
+**States**: one empty row, several rows, a pasted list, an invalid row (its error under its address), full, disabled while sending, without roles, a phone's width, a booking's guests. Stories: Default, WithoutRoles, Several, RemoveFocusesRowBefore, WithErrors, PasteList, EnterSends, Full, Disabled, Narrow, BookingGuests.
+
+**Interaction**: Enter moves to the next row, adds one from the last filled row, and sends from an empty last row; a pasted list splits into rows; removing a row sends focus to the row before.
+
+**Differences from the prototype**
+- Rows appear and leave at once: the prototype's drop in (0fr to 1fr with a 12px rise, pasted rows 40ms apart) and collapse need a wrapper per row, and the rows are `display: contents` so their cells share one grid with the column names. Owed to the members screen phase.
+- No shake on a bad address: the screen judges addresses and puts the error under the row (`errors`), and `ref.focusRow(id)` moves focus to it.
+- The role column takes its picker's width rather than the prototype's fixed four controls, so long custom role names fit; the note stays `text-secondary` rather than `text-tertiary`, since a guest page sets its own surface under it.
+- No Send button of its own: the dialog's or the page's primary sends (the prototype's `showSend` off).

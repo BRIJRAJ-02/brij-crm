@@ -35,3 +35,13 @@ Tab moves through the start controls, then the end controls, in order.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from SettingsLayout's section head (spec 0072, decision 14: its own module, no rules shared): the heading is `text-body-lg-strong` in `text`, its quiet line `text-body-sm` in `text-secondary`; the `quiet` title stays `text-body-strong`. Repeats SettingsLayout's `.sectionTitle` and `.sectionDescription` type, two rules, which leave with this export when its last caller moves (phases 4 to 9).
+
+**Use it for** a heading with controls round it on a page (Home's sections, the week's bar). **Don't use it for** a settings section (SettingsSection) or a page's main toolbar (Toolbar).
+
+**The consumer provides** `title`, `description`, `start`, `after`, `end`, `variant` (`bar`), `isTitleQuiet`.
+
+**Differences from the prototype**: not in the prototype as a part. The `bar` variant keeps the library Toolbar's height, padding and edge until phase 2 ports Toolbar.

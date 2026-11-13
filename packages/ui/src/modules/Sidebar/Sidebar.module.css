@@ -1,11 +1,12 @@
-/* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
-   edge: the workspace row (size-bar tall, a hairline under it on the same
-   pixel row as the page's TopBar's), Quick actions, a scrolling body of
-   size-nav-item items and folding sections, and a footer. Collapsed, it is a
-   size-sidebar-collapsed rail of centred plain icons in size-nav-item
-   squares: Expand and Quick actions under the head, a hairline only where
-   the open sidebar has a section label, and the footer's items alike. The
-   current item takes surface-selected, hover surface-hover. */
+/* Sidebar: a size-sidebar column straight on the canvas: the workspace row,
+   Quick actions, a scrolling body of size-nav-item pills and folding
+   sections, and a footer. Collapsed, it is a size-sidebar-collapsed rail of
+   centred plain icons in size-nav-item squares: Expand and Quick actions
+   under the head, a hairline only where the open sidebar has a section label,
+   and the footer's items alike. Items rest in text-secondary; hover washes
+   surface-hover, a press surface-selected; the current page is a surface
+   pill lifted by shadow-xs and a border-subtle hairline (surface-selected for
+   a NavItem outside the sidebar, SettingsNav's in a page). */
 @layer components {
   .root {
     display: flex;
@@ -13,8 +14,9 @@
     inline-size: var(--size-sidebar);
     max-inline-size: 100%;
     block-size: 100%;
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--canvas);
+    --nav-current: var(--surface);
+    --nav-lift: var(--shadow-xs), 0 0 0 var(--border-width-hairline) var(--border-subtle);
   }
 
   .head {
@@ -24,7 +26,6 @@
     align-items: center;
     block-size: var(--size-topbar);
     padding-inline: var(--space-8) var(--space-12);
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   .workspace,
@@ -37,11 +38,11 @@
     block-size: var(--size-nav-item);
     padding-inline: var(--space-4);
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--text);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     text-align: start;
     outline: none;
   }
@@ -49,8 +50,8 @@
   /* A labelled group's label: a folding section's quiet label, with no chevron
      and no fold. Keep it in step with Disclosure's label variant (its title). */
   .groupLabel {
-    padding: var(--space-4) var(--space-8);
-    color: var(--text-secondary);
+    padding: var(--space-4) var(--space-12);
+    color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
@@ -120,44 +121,54 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  /* The first group sits under the head's hairline, so two rules never stack. */
-  .rail:first-child {
-    border-block-start: none;
-  }
-
   .item {
     position: relative;
     display: flex;
-    gap: var(--space-8);
+    gap: var(--space-12);
     align-items: center;
     inline-size: 100%;
     block-size: var(--size-nav-item);
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-12) var(--space-8);
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-full);
     background: transparent;
-    color: var(--text);
+    color: var(--text-secondary);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     text-align: start;
     text-decoration: none;
     outline: none;
-  }
-
-  .item[aria-current='page'] {
-    background: var(--surface-selected);
+    transition:
+      background-color var(--duration-quick) var(--ease-smooth-out),
+      color var(--duration-quick) var(--ease-smooth-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .switcher[data-hovered],
     .item[data-hovered] {
+      color: var(--text);
       background: var(--surface-hover);
     }
   }
 
+  /* A press, and the workspace switcher while its menu is open. */
+  .switcher[aria-expanded='true'],
+  .item[data-pressed] {
+    background: var(--surface-selected);
+  }
+
+  /* After hover and press, so the current page keeps its pill under the pointer. */
+  .item[aria-current='page'] {
+    color: var(--text);
+    background: var(--nav-current, var(--surface-selected));
+    box-shadow: var(--nav-lift, none);
+  }
+
+  /* Inside, since the body clips. */
   .switcher[data-focus-visible],
   .item[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* An item with its grip and menu after the link (spec 0034): they wait for the pointer or focus. The link ends
@@ -168,17 +179,19 @@
     display: flex;
     gap: var(--space-4);
     align-items: center;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-full);
   }
 
   .row > .item {
     flex: 1;
     min-inline-size: 0;
     background: transparent;
+    box-shadow: none;
   }
 
   .row:has(> .item[aria-current='page']) {
-    background: var(--surface-selected);
+    background: var(--nav-current, var(--surface-selected));
+    box-shadow: var(--nav-lift, none);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -242,9 +255,9 @@
 
   .meta {
     flex: none;
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    color: var(--text-tertiary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
   .loading {
@@ -259,8 +272,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: calc(var(--size-nav-item) - var(--size-tile));
-    padding-block: calc((var(--size-nav-item) - var(--size-tile)) / 2);
+    gap: calc(var(--size-nav-item) - var(--space-20));
+    padding-block: calc((var(--size-nav-item) - var(--space-20)) / 2);
   }
 
   .empty {
@@ -325,12 +338,6 @@
     .item[aria-current='page'] {
       outline: var(--border-width-hairline) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-hairline));
-    }
-
-    .switcher[data-focus-visible],
-    .item[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: calc(-1 * var(--border-width-thick));
     }
   }
   /* Lifted, in forced colours, where the shadow and surface are gone. */

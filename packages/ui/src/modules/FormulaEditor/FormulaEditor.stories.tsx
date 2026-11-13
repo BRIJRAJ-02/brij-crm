@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FormulaEditor, type FormulaCheck, type FormulaEditorAttribute } from './FormulaEditor.tsx';
 
@@ -91,5 +91,51 @@ export const SuggestingFunctions: Story = {
     await userEvent.keyboard('ROU');
     const list = await within(document.body).findByRole('listbox', { name: 'Functions' });
     await expect(within(list).getByText('ROUND(x, digits)')).toBeInTheDocument();
+  },
+};
+
+/** The keyboard picks (the prototype's Up, Down and Enter): Down moves the highlight, Enter puts it in, focus stays. */
+export const PickByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <Editor start="" check={undefined} />,
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByLabelText('Formula');
+    await userEvent.click(field);
+    await userEvent.keyboard('{{{{');
+    await within(document.body).findByRole('listbox', { name: 'Attributes' });
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() => expect(field).toHaveValue('{{probability}}'));
+    await expect(field).toHaveFocus();
+    await waitFor(() => expect(within(document.body).queryByRole('listbox')).toBeNull());
+  },
+};
+
+/** Escape closes the list and leaves the text and the focus where they were. */
+export const EscapeCloses: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <Editor start="" check={undefined} />,
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByLabelText('Formula');
+    await userEvent.click(field);
+    await userEvent.keyboard('{{{{va');
+    await within(document.body).findByRole('listbox', { name: 'Attributes' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(within(document.body).queryByRole('listbox')).toBeNull());
+    await expect(field).toHaveValue('{{va');
+    await expect(field).toHaveFocus();
+  },
+};
+
+/** Nothing matching what follows `{{`: the list gives way to a line that says so, read out politely. */
+export const NothingMatching: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <Editor start="" check={undefined} />,
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByLabelText('Formula');
+    await userEvent.click(field);
+    await userEvent.keyboard('{{{{zzz');
+    const line = await within(document.body).findByRole('status', { name: 'Attributes' });
+    await expect(line).toHaveTextContent('Nothing matches');
+    await expect(field).toHaveFocus();
   },
 };

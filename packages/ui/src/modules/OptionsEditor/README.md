@@ -48,3 +48,23 @@ Tab enters the list on a row; the up and down arrows move between rows, and Tab 
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's options editor: the group's label in `text-body-sm-strong` and `text`, "N of 500" beside it in quiet `text-label` with tabular figures, then the rows on one `surface-subtle` tray (`space-6` in, `radius-md`), `space-2` apart, each `size-control` tall and `space-2`/`space-4` in from its ends. A row's label Field sits flush on the tray at rest (Field's fill is the tray's colour), deepens under the pointer and turns white with its `accent-text` edge and `accent-border` ring when typed in, as the prototype's name input does. The keyboard's row takes the outline ring just inside it (the rows sit `space-2` apart, where a ring outside one would cover the next); a row being dragged lifts (`surface-raised`, `shadow-md`). The notes and errors under the list are `text-caption`. In forced colours the ring is Highlight and a lifted row is outlined.
+
+**Use it for** a select's or multi select's options and a status's stages (in AttributeSettings, or on their own), and a form question's choices (`kind="choice"`). **Don't use it for** reordering fixed choices (SortBuilder, ViewSettings).
+
+**The consumer provides** `label`, `kind` (`select`, `status` or `choice`), `options` (`{ id, label, hue, isArchived, outcome?, targetDays? }`), `limit`, `newId`, `onAdd`, `onChange`, `onMove`, `onArchive` and `onRestore` (or `onRemove` for drafts and choices), and as needed `pending`, `errors`, `recordCounts` with `canMoveRecords`, `startsWithBlank`, `hint`, `labelMaxLength`, `scores`, `isReadOnly` and `onInvalidChange`.
+
+**States**: rows at rest, a row focused (the ring), a name typed in, a repeated name refused on its row, dragging (lifted), a new row (typed in, Enter adds the next), archived (in the Archived fold with Restore), empty, full, pending, read only. Stories: Default, Stages, AddByTyping, LabelTaken, Rename, RowFocus, ReorderByKeyboard, MenuMoveAndArchive, Draft, Full, PendingAndRefused, Empty, ReadOnly, Choices and the rest above.
+
+**Interaction**: Add option opens a blank row with its field focused; Enter adds it and opens the next; Esc puts a name back or leaves the blank row. The colour opens HuePicker's nine hues. Drag by the grip, or Space or Enter on it, the arrows, Space or Enter to drop, Esc to put it back, each step announced.
+
+**Differences from the prototype**
+- The rows are not white strips on the tray: a row's label is the library's Field, whose filled box would sit inside the strip as a box inside a box (the prototype's own rule is one field, never a box in a box). The Field sits on the tray instead, where its rest, hover and typed-in looks are the prototype's name input's. Field has no "bare at rest" option; adding one is Field's, not this part's.
+- A status's stages are one list with an outcome (Open, Won, Lost) and target days per stage, not the prototype's three groups (Not started, In progress, Done) with a stage dragged between them, so there are no group heads, counts or "Drop a stage here" boxes.
+- The archive is in each row's menu (with Move up, Move down and moving its records), not a hover-revealed button, and an archived option goes to a closed Archived fold with Restore rather than "Gold archived · Undo" in place; so no collapse after 5 seconds.
+- Rows do not drop in with the prototype's height and rise animation: the GridList's rows are drawn by React Aria's collection, and the motion would need a wrapper per row. Owed to the settings screen phase.
+- The swatch is HuePicker's compact trigger (a phase 2 part), not the prototype's own round button.
+- Kept beyond the prototype: `limit` and "N of 500", choices with scores, `pending` spinners, `errors` from the server, record counts and moving records on archive, read only tags, `onInvalidChange`.

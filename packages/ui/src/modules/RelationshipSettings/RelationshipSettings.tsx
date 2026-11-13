@@ -416,7 +416,6 @@ function RelationshipForm({
           <div className={styles.shape}>
             <div className={styles.preview}>
               <Card
-                tone="sunken"
                 title={near.title}
                 {...(fromObject === undefined
                   ? {}
@@ -447,7 +446,6 @@ function RelationshipForm({
                 <Icon name="arrow-left-right" />
               </span>
               <Card
-                tone="sunken"
                 title={far.title}
                 {...(toObject === undefined ? {} : { eyebrow: <Icon name={toObject.icon} tile={toObject.hue} /> })}
               >

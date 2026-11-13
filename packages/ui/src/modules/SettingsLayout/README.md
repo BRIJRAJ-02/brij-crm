@@ -99,3 +99,19 @@ Tab moves through the navigation's links, then the header's actions, then the bo
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's SettingsLayout, which also replaces SectionBar and SectionList (see theirs). The navigation is a column `space-16` by `space-12` in with a `border-subtle` hairline at its end, its entries Sidebar's NavItem pills (`text-secondary` at rest, `surface-hover` under the pointer over `duration-quick`, the current page a `surface-selected` pill with `text`, the outline ring inside on focus) under group labels in `text-label` `text-tertiary`. The header's title is `text-title-lg` with its line of description in `text-body` `text-secondary`. A section's heading is `text-body-lg-strong` over a `text-body-sm` line in `text-secondary`; a row's title is `text-body-strong` and its description `text-body-sm` in `text-secondary`, rows parted by `border-subtle` hairlines.
+
+**Use it for** every page under Settings, and an object's page. **Don't use it for** per-record or per-view options (a Popover or a Panel) or an editor beside its preview (PreviewLayout).
+
+**The consumer provides** `title`, `description`, `icon` and `hue`, `badge`, `actions`, `trail`, `header`, `nav` with `currentNavId` and `navLabel`, `footer` (a SaveBar), `status` with `onRetry`, `readOnlyReason`, and children: `SettingsSection` (`title`, `description`, `actions`), `SettingsStack`, `SettingsRow` (`title`, `description`, `leading`, `control`, `info`, `isNew`), `SettingsRowGroup`, `SettingsGrid`.
+
+**States**: nav item rest, hover (`NavHover`), current (`GroupedNav`); loading, failed, read only (`ViewOnlyTag`), narrow (the navigation above the page); a new row's wash; with a SaveBar (`WithSaveBar`: its disabled, pending and Saved states are the bar's).
+
+**Differences from the prototype**
+- Sections head their Cards (the owner, 21 October 2026) rather than being a card with a head, body and foot; the prototype's section foot with its note and Save is the page's SaveBar (`footer`), and its danger zone is a Card's tone. The page keeps the app's `space-16` gutter (one content edge with PageColumn, 22 October 2026) rather than the prototype's `space-32`; owed to the screen phase that moves every page's gutter together.
+- The navigation column stays `size-menu` wide (the prototype's is `space-16` narrower) and stacks above the page in a narrow slot, where the prototype's `narrowPane` shows one or the other.
+- Kept: the header's tile, badge, trail and actions, the bar header (`header="bar"`), `SettingsStack` variants, `SettingsGrid`, row groups, input row widths, `isNew`, the sticky SaveBar slot, loading and failed states. `SettingsField` is the library's Field.
+- Not here: "Show advanced settings" (a Disclosure the screen places) and the Save label's crossfade (SaveBar's).

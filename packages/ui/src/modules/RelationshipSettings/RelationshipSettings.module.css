@@ -1,7 +1,7 @@
-/* RelationshipSettings: the two objects as two sunken Cards side by side,
-   space-8 apart with the link's arrow between them, each holding its side's
-   question; on a narrow dialog they stack, the arrow turned to run between
-   them. */
+/* RelationshipSettings, in the look of the Timefix prototype's relationship pair (spec 0072): the two objects as two
+   Cards (the surface, a hairline, radius-lg, shadow-xs) on a surface-shell tray, space-6 in at radius-xl, space-8
+   apart with the link's arrow between them in the accent, each holding its side's question; on a narrow dialog
+   they stack, the arrow turned to run between them. */
 @layer components {
   /* The slot the cards measure, so they stack by the dialog's width, not the window's. */
   .shape {
@@ -13,12 +13,16 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: var(--space-8);
     align-items: stretch;
+    padding: var(--space-6);
+    border-radius: var(--radius-xl);
+    background: var(--surface-shell);
   }
 
   .link {
     display: flex;
     align-items: center;
-    color: var(--text-tertiary);
+    padding-inline: var(--space-4);
+    color: var(--accent);
   }
 
   /* A fixed side's question and its answer, in the body type, the answer a step stronger. */

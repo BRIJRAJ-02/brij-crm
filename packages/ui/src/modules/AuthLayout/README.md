@@ -37,3 +37,18 @@ Only its content takes focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's AuthLayout, which also replaces PreviewLayout's sign in use. The centred card stands on `canvas`, so the page card's `surface` lifts off it. The split is `5fr` to `6fr` from `bp-page-compact` up (the task's half a little narrower than the preview's), its task panel `space-24` by `space-32` in, the task's column `size-dialog` wide at most, and the preview's half on `canvas` behind a `border-subtle` hairline. Who is signed in reads in `text-body-sm`, `text-secondary`.
+
+**Use it for** sign in, verify, join, invite and first run. **Don't use it for** anything inside the app (AppShell) or a dialog's content.
+
+**The consumer provides** `productName`, `logo`, `title`, `description`, `eyebrow`, `children` (SignInForm, VerifyEmail, a Form), `footer`, `account`, `preview` (WorkspacePreview), `isBusy`.
+
+**States**: centred card (`Default`), split (`Split`), busy (`Loading`), narrow (`Narrow`), with a wordmark, with a footer.
+
+**Differences from the prototype**
+- The heading and its card are Card's (`placement="page"`, `size="sm"`): its `text-title` heading, its padding and radius, and the staggered heading reveal (transitions.dev 18) are owed to Card's page look; the prototype's `AuthHeading` is a Card title here.
+- The mark and name sit centred above the card (the prototype puts the logo at the top start), the footer inside the card, and the card holds still at an offset from the window's height (the owner, 27 October 2026) rather than centring on its own height.
+- The preview half keeps WorkspacePreview's own anchoring (cropped at its end and foot); the prototype centres its sketch, owed to WorkspacePreview (phase 2). `AuthPages`' side by side slide is not here: the app routes between steps.

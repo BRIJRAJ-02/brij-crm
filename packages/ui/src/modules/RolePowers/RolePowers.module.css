@@ -1,19 +1,20 @@
-/* RolePowers: one quiet line of what everyone can do, then an area per row
-   (its standing's mark, title and word), each opening to its powers, the
-   ones held at full contrast and the ones not held quieter. */
+/* RolePowers, in the look of the Timefix prototype's role powers (spec 0072): one quiet line of what everyone can
+   do (text-body-sm in text-tertiary, the prototype's note), then an area per fold (its standing's mark, title and
+   word), space-12 apart, each opening to its powers as the prototype's power rows: size-row tall, text-body, a
+   border-subtle hairline between them, the ones held at full contrast and the ones not held in text-tertiary. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
     min-inline-size: 0;
   }
 
   .summary {
     margin: 0;
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+    color: var(--text-tertiary);
   }
 
   .mark {
@@ -29,15 +30,14 @@
     }
   }
 
-  /* Under the area's own mark: past the Disclosure's chevron (an sm icon) and its gap, which Disclosure owns;
-     change this with them. */
+  /* Under the area's own mark: past the Disclosure's chevron (an sm icon, size-icon less space-2) and its space-6
+     gap, which Disclosure owns; change this with them. */
   .powers {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
     margin: 0;
     padding: 0;
-    padding-inline-start: calc(var(--size-icon-sm) + var(--space-6));
+    padding-inline-start: calc(var(--size-icon) + var(--space-4));
     list-style: none;
   }
 
@@ -45,9 +45,15 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     color: var(--text);
+
+    & + & {
+      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    }
 
     &[data-withheld] {
       color: var(--text-tertiary);

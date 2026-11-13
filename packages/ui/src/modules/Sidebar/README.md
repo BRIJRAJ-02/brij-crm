@@ -62,7 +62,7 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 </Sidebar>
 ```
 
-- The head (the workspace row, or the settings variant's back link and title) is `size-bar` tall with a `border-subtle` hairline under it, the same height and line as the page's `TopBar`, so the two read as one line across the sidebar and the page (owner, 20 October 2026).
+- The head (the workspace row, or the settings variant's back link and title) is `size-topbar` tall. It drew a `border-subtle` hairline level with the page's `TopBar` (owner, 20 October 2026) until spec 0072: the page now sits on its own inset surface (AppShell), so the sidebar has no rules of its own, as the prototype draws it.
 - `heading` with `back` replaces the workspace row: a ghost `ButtonLink` (arrow left, named by `back.label`, which is also its tooltip) back to where the person came from, then the title as plain text (not a heading: it comes before the page's h1, and `label` names the landmark). On the rail, the back link alone. The `workspace*` props don't apply.
 - `NavGroup` with `isLabelShown` puts its label on screen in a section label's type, with no fold: settings groups are short and always open. On the rail it draws as a group under a hairline, its label left to its name.
 - `find` puts a field under the head, the sidebar's width, where Quick actions sits in the app's variant: the settings variant's "Find a setting" (a `Field` with `variant="search"`, 5 November 2026, as Vercel's and Linear's settings). The screen filters its own items as the person types; the sidebar places the field, moves focus from it to the list's first item on Down, and leaves it off on the rail. Why a prop: the head and the body are the sidebar's, and a field dropped into the body would scroll away with the items it filters.
@@ -79,7 +79,7 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 
 ## States
 
-The current item takes `surface-selected`; hover (pointer only) `surface-hover`; focus the inset ring. Sections: open, folded, loading (skeleton rows, or tile marks on the rail) and empty. Reordering: an item or section lifted (its grip in the accent, the order previewed), and the drop line while dragging. Menus: shown on hover, focus or while open. Collapsed. Workspace busy (a spinner on the workspace button, in place of the mark on the rail). In forced colours, the current item is outlined in `Highlight`.
+The current item is a `surface` pill lifted by `shadow-xs` and a hairline (`surface-selected` for a NavItem outside a Sidebar, SettingsNav's); hover (pointer only) `surface-hover`; pressed `surface-selected`; focus the outline ring just inside the item. The workspace switcher stays `surface-selected` while its menu is open. Sections: open, folded, loading (skeleton rows, or tile marks on the rail) and empty. Reordering: an item or section lifted (its grip in the accent, the order previewed), and the drop line while dragging. Menus: shown on hover, focus or while open. Collapsed. Workspace busy (a spinner on the workspace button, in place of the mark on the rail). In forced colours, the current item is outlined in `Highlight`.
 
 ## Keyboard
 
@@ -92,3 +92,18 @@ Tab moves through the workspace switcher, the collapse button, Quick actions, ea
 - `search` became `onQuickActions`: the row shows only when the screen opens a palette.
 - `current` became `isCurrent`, and `NavItem` takes `href` or `onPress`.
 - New: `NavGroup` (with `isLabelShown`), the settings variant (`heading`, `back`, `keyboard`), `NavItem`'s `kbd`, the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's Sidebar, which also replaces CustomiseSidebar. The column sits straight on `canvas` with no edge of its own; the page beside it is AppShell's inset surface. Items are `size-nav-item` pills (`radius-full`), `space-12` in at the start and `space-8` at the end, icon and label `space-12` apart, the label `text-body-strong` in `text-secondary`. Hover (pointer only) washes `surface-hover` and brings the label up to `text`; a press washes `surface-selected`; the current page is a `surface` pill with `text`, lifted by `shadow-xs` and a `border-subtle` hairline ring. Colour moves over `duration-quick` on `ease-smooth-out` (a fade, so it stays under reduced motion). Focus is the outline ring (`border-width-focus`, `focus-ring`), offset inward by its own width because the body clips. The workspace switcher is `radius-md`, its name `text-body-strong`, and stays `surface-selected` while its menu is open. A group's label is `text-label` in `text-tertiary`, `space-12` in; an item's `meta` is `text-caption` in `text-tertiary`. In forced colours the current item keeps its `Highlight` outline and the ring shows as the system colour.
+
+**Use it for** the one app navigation inside AppShell, and the settings variant (`heading`, `back`). **Don't use it for** in-page sections (Tabs) or an editor's list of its own sections (SettingsLayout's `SettingsNav`, which draws these same NavItems with a `surface-selected` current pill).
+
+**The consumer provides** `workspace`, `workspaceMenu`, `mark` or `logo`, `onQuickActions`, `isCollapsed` with `onCollapsedChange` and `collapseKbd`, `footer`, and the children: `NavItem` (`icon`, `hue`, `href` with `isCurrent`, or `onPress`, `badge`, `meta`, `kbd`, `alert`, `menu`, `id`), `NavSection` (`title`, `add`, `menu`, `isFolded` with `onFoldChange`, `onReorder`, `onMoveSection`) and `NavGroup`.
+
+**States**: item rest, hover (`ItemHover`), pressed (`ItemPressed`), current, focus visible (`Keyboard`), unread count (`Default`'s Tasks), section folded (`KeptFold`, `SectionMenuAndFold`), menu open with the switcher pressed (`WorkspaceMenu`, `ItemMenu`), rail (`Collapsed`), loading, empty, busy, reordering.
+
+**Differences from the prototype**
+- Kept library behaviour the prototype lacks: the settings variant, `NavGroup`, `find`, `keyboard="arrows"`, reordering items and sections, item and section menus, the workspace logo and busy state, loading and empty sections, `alert`, `meta`, and `footer` as a function of the rail. A NavItem outside a Sidebar keeps a `surface-selected` current pill, the prototype's SettingsLayout nav.
+- Prop names: the prototype's `WorkspaceSwitcher` is `workspace` with `workspaceMenu`; `onSearch` is `onQuickActions`; `count` and `badge` are both `badge` (a Badge count; the prototype's quiet count and its accent unread dot are one part here); `shortcut` is `kbd`; `dot` is `hue` (a tile) or `leading`; `NavSection`'s `onAdd` is `add`.
+- Owed to the shell phase (4): the 56px rail (the library's `size-sidebar-collapsed` is 48) and its width tween with labels fading in place (the library swaps the rail's markup); the search pill (Quick actions is a `lg` secondary Button); the switcher's `size-row` height with the plan line under the name (no `plan` prop); the unread badge's slide and pop (transitions.dev 03, Badge's); the scroll edge hairlines (they need a scroll listener); Getting started and the person row (the footer is the screen's); a section's chevron that shows on hover (Disclosure's label variant draws the section titles).

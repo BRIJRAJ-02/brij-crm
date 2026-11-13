@@ -43,3 +43,18 @@ None: the rows are read only and take no focus.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's member rows: one row per member, at least `size-row` tall and `space-8` in, a `border-subtle` hairline between rows, the avatar `space-12` from two lines: the name in `text-body-strong`, then the presence (StatusDot) and a quiet detail in `text-body-sm`, the detail in `text-secondary`. The rows are read only, so they take no wash under the pointer and no focus.
+
+**Use it for** who is around today: Home's Team today. **Don't use it for** managing members (Settings › Members draws a Table) or picking people (a multi Select).
+
+**The consumer provides** `label`, `rows` (`{ id, name, avatarSrc?, presence, status, detail? }`) and `isLoading`.
+
+**States**: rows, a narrow card (the detail wraps under the status), loading (three skeleton rows), empty (draws nothing). Stories: Default, NarrowCard, Empty, Loading.
+
+**Differences from the prototype**
+- The prototype's TeamList is Settings › Members: a search, a role Select and a menu per row (Resend, Change role, Copy email, Remove), selection for bulk changes, a changed row's wash, a removed row's collapse and columns that leave as the card narrows. The library's TeamList is Home's read only presence list, so none of that is ported; the members screen draws its own Table, owed to the settings screen phase.
+- No white card with an edge round the rows: the list sits in Home's Card, which draws it.
+- No hover wash: a row opens nothing, and a wash would promise an action that isn't there.
