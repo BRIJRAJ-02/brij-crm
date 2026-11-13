@@ -1,13 +1,27 @@
 /* Callout's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Callout.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* Callout: a message with an icon, an optional bold title and the next step, in the Timefix prototype's look (spec
    0072). Info is a plain grey line with no fill or edge (a passing state, never a box: the owner's call); success,
    warning and danger sit on their soft ground with no edge, radius-lg, the words in the text colour and the icon in
    the tone's colour. As a banner, full width under a view's bars. */
 @layer utilities.app-look {
-  .ws-callout-root:where([data-scale='app'] *) {
+  .ws-callout-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     --callout-tone: var(--text-tertiary);
 
     display: flex;
@@ -24,49 +38,161 @@
 
   /* Banner: full width under a view's bars, which already draw the line above it. Square, a hairline
      below, its content in line with the bars' content. */
-  .ws-callout-root[data-placement='banner']:where([data-scale='app'] *) {
+  .ws-callout-root[data-placement='banner']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-block-end-color: var(--border-subtle);
     border-radius: 0;
   }
 
   /* Info: quiet. Grey words beside a tertiary icon, no fill and no edge, in line with the content around it. */
-  .ws-callout-root[data-tone='info']:where([data-scale='app'] *) {
+  .ws-callout-root[data-tone='info']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     padding-inline: 0;
     background: transparent;
     color: var(--text-secondary);
   }
 
   /* An info banner keeps its inset, so its words line up with the bars'. */
-  .ws-callout-root[data-tone='info'][data-placement='banner']:where([data-scale='app'] *) {
+  .ws-callout-root[data-tone='info'][data-placement='banner']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     padding-inline: var(--space-16);
   }
 
-  .ws-callout-root[data-tone='success']:where([data-scale='app'] *) {
+  .ws-callout-root[data-tone='success']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --callout-tone: var(--success);
 
     background: var(--success-soft);
   }
 
-  .ws-callout-root[data-tone='warning']:where([data-scale='app'] *) {
+  .ws-callout-root[data-tone='warning']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --callout-tone: var(--warning);
 
     background: var(--warning-soft);
   }
 
-  .ws-callout-root[data-tone='danger']:where([data-scale='app'] *) {
+  .ws-callout-root[data-tone='danger']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --callout-tone: var(--danger);
 
     background: var(--danger-soft);
   }
 
-  .ws-callout-icon:where([data-scale='app'] *) {
+  .ws-callout-icon:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     flex: none;
     padding-block-start: var(--space-2);
     color: var(--callout-tone);
   }
 
-  .ws-callout-body:where([data-scale='app'] *) {
+  .ws-callout-body:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -74,22 +200,80 @@
     min-inline-size: 0;
   }
 
-  .ws-callout-title:where([data-scale='app'] *) {
+  .ws-callout-title:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }
 
   /* Under a title, the words step back to the secondary colour (as the prototype's body under its title); info's
      title is the body's colour over its secondary words. */
-  .ws-callout-title:where([data-scale='app'] *) + .ws-callout-text {
+  .ws-callout-title:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    + .ws-callout-text {
     color: var(--text-secondary);
   }
 
-  .ws-callout-root[data-tone='info']:where([data-scale='app'] *) .ws-callout-title {
+  .ws-callout-root[data-tone='info']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-callout-title {
     color: var(--text);
   }
 
-  .ws-callout-actions:where([data-scale='app'] *) {
+  .ws-callout-actions:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-8);
@@ -97,7 +281,21 @@
   }
 
   @media (forced-colors: active) {
-    .ws-callout-root:where([data-scale='app'] *) {
+    .ws-callout-root:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       border-color: CanvasText;
     }
   }

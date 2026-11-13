@@ -1,44 +1,128 @@
 /* FieldLabel's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw FieldLabel.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* FieldLabel: a control's name in the text colour at text-body-sm-strong (the Timefix prototype's field label, spec
    0072), an aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
 @layer utilities.app-look {
   /* `--label-colour` lets a surface give its labels another colour (a branded hosted form); the default is the text
      colour, as the prototype's labels are. */
-  .ws-field-label-label:where([data-scale='app'] *) {
+  .ws-field-label-label:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--label-colour, var(--text));
     font: var(--text-body-sm-strong);
     letter-spacing: var(--tracking-body-sm-strong);
   }
 
   /* A section's heading over labelled values: a step above the terms under it in size. */
-  .ws-field-label-label[data-tone='heading']:where([data-scale='app'] *) {
+  .ws-field-label-label[data-tone='heading']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .ws-field-label-label[data-disabled]:where([data-scale='app'] *) {
+  .ws-field-label-label[data-disabled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: var(--opacity-disabled);
     cursor: not-allowed;
   }
 
   /* "(optional)" after a label: the same line, a step quieter. */
-  .ws-field-label-aside:where([data-scale='app'] *) {
+  .ws-field-label-aside:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text-tertiary);
     font-weight: normal;
   }
 
   /* With an InfoTip: the tip's chip sized button overhangs the label's line, so the row keeps the label's height. */
-  .ws-field-label-row:where([data-scale='app'] *) {
+  .ws-field-label-row:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     align-items: center;
     gap: var(--space-2);
   }
 
-  .ws-field-label-info:where([data-scale='app'] *) {
+  .ws-field-label-info:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     margin-block: calc(var(--space-2) * -1);
   }

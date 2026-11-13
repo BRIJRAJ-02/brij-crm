@@ -1,6 +1,6 @@
 /* SegmentedControl's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw SegmentedControl.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* SegmentedControl: the Timefix prototype's (spec 0072): equal segments on a grey pill track with a hairline, and a
    white raised pill that slides to the chosen one over duration-fast on the smooth-out curve (transitions.dev 16; at
@@ -9,7 +9,21 @@
    only ones fit the folded sidebar's rail, and each is a full size-control
    square, so a stacked segment is still a 24 px or larger touch target. */
 @layer utilities.app-look {
-  .ws-segmented-control-root:where([data-scale='app'] *) {
+  .ws-segmented-control-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: relative;
     display: inline-grid;
     grid-auto-columns: 1fr;
@@ -22,39 +36,138 @@
 
   /* With a visible label: the label (as a Field's) over the track, which
      keeps its own width at the start. */
-  .ws-segmented-control-labelled:where([data-scale='app'] *) {
+  .ws-segmented-control-labelled:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-6);
   }
 
-  .ws-segmented-control-title:where([data-scale='app'] *) {
+  .ws-segmented-control-title:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text);
     font: var(--text-body-sm-strong);
     letter-spacing: var(--tracking-body-sm-strong);
   }
 
-  .ws-segmented-control-labelled[data-disabled]:where([data-scale='app'] *) .ws-segmented-control-title {
+  .ws-segmented-control-labelled[data-disabled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-segmented-control-title {
     opacity: var(--opacity-disabled);
   }
 
   /* Stacked, the track can't be a pill (it is taller than one line): a rounded column of round segments. */
-  .ws-segmented-control-root[data-orientation='vertical']:where([data-scale='app'] *) {
+  .ws-segmented-control-root[data-orientation='vertical']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     grid-auto-flow: row;
     border-radius: var(--radius-lg);
   }
 
   /* Fitted: each segment as wide as its words (Bookings' calendars), not the widest one's width. */
-  .ws-segmented-control-root[data-fitted]:where([data-scale='app'] *) {
+  .ws-segmented-control-root[data-fitted]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     grid-auto-columns: auto;
   }
 
-  .ws-segmented-control-field:where([data-scale='app'] *) {
+  .ws-segmented-control-field:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
   }
 
-  .ws-segmented-control-segment:where([data-scale='app'] *) {
+  .ws-segmented-control-segment:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its inset focus halo (focus is the ring). */
     box-shadow: none;
 
@@ -76,7 +189,22 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .ws-segmented-control-root[data-orientation='vertical']:where([data-scale='app'] *) .ws-segmented-control-segment {
+  .ws-segmented-control-root[data-orientation='vertical']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-segmented-control-segment {
     block-size: var(--size-control-sm);
     min-inline-size: var(--size-control-sm);
     padding-inline: var(--space-4);
@@ -84,7 +212,22 @@
 
   /* Compact: the whole control, track and hairline included, is a button's
      size-control tall, so it shares a bar's line with the buttons beside it. */
-  .ws-segmented-control-root[data-size='compact']:where([data-scale='app'] *) .ws-segmented-control-segment {
+  .ws-segmented-control-root[data-size='compact']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-segmented-control-segment {
     block-size: calc(var(--size-control-sm) - 2 * var(--space-2) - 2 * var(--border-width-hairline));
     padding-inline: var(--space-8);
     gap: var(--space-4);
@@ -94,7 +237,21 @@
 
   /* A coloured segment names a calendar, often an email address: an address stays whole, and only a name past
      size-column is cut with an ellipsis (whole in a tooltip, and for screen readers). */
-  .ws-segmented-control-label[data-hue]:where([data-scale='app'] *) {
+  .ws-segmented-control-label[data-hue]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: flex;
     min-inline-size: 0;
     max-inline-size: var(--size-column);
@@ -103,46 +260,173 @@
   /* A collapsible label in a narrow bar: the icon alone, its name kept by a
      hidden copy. */
   @container (inline-size < 480px) {
-    .ws-segmented-control-label[data-collapsible]:where([data-scale='app'] *) {
+    .ws-segmented-control-label[data-collapsible]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       display: none;
     }
 
-    .ws-segmented-control-root[data-collapsible]:where([data-scale='app'] *) .ws-segmented-control-segment {
+    .ws-segmented-control-root[data-collapsible]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-segmented-control-segment {
       padding-inline: var(--space-6);
     }
   }
 
-  .ws-segmented-control-label:where([data-scale='app'] *),
-  .ws-segmented-control-icon:where([data-scale='app'] *) {
+  .ws-segmented-control-label:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ),
+  .ws-segmented-control-icon:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: relative;
     z-index: var(--z-raised);
     display: inline-flex;
   }
 
-  .ws-segmented-control-segment[data-selected]:where([data-scale='app'] *) {
+  .ws-segmented-control-segment[data-selected]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .ws-segmented-control-segment[data-hovered]:where([data-scale='app'] *) {
+    .ws-segmented-control-segment[data-hovered]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       color: var(--text);
     }
   }
 
   /* The prototype's outline ring, flush with the segment: the track's padding holds it, and an outline draws over
      the thumb, so it shows on the chosen segment too. */
-  .ws-segmented-control-segment[data-focus-visible]:where([data-scale='app'] *) {
+  .ws-segmented-control-segment[data-focus-visible]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: 0;
   }
 
-  .ws-segmented-control-segment[data-disabled]:where([data-scale='app'] *) {
+  .ws-segmented-control-segment[data-disabled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: var(--opacity-disabled);
   }
 
   /* The chosen segment's pill takes the control edge (control-border, 3:1 and more on the grey track in both themes,
      WCAG 1.4.11): white on surface-subtle alone is 1.1:1, too faint to say which segment is chosen. */
-  .ws-segmented-control-thumb:where([data-scale='app'] *) {
+  .ws-segmented-control-thumb:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: absolute;
     inset: 0;
     border: var(--border-width-hairline) solid var(--control-border);
@@ -153,33 +437,119 @@
     transition-timing-function: var(--ease-smooth-out);
   }
 
-  .ws-segmented-control-root[data-instant]:where([data-scale='app'] *) .ws-segmented-control-thumb {
+  .ws-segmented-control-root[data-instant]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-segmented-control-thumb {
     transition: none;
   }
 
   /* Asked for less motion, the thumb jumps; the labels' colour still fades. */
   @media (prefers-reduced-motion: reduce) {
-    .ws-segmented-control-thumb:where([data-scale='app'] *) {
+    .ws-segmented-control-thumb:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       transition: none;
     }
   }
 
   @media (forced-colors: active) {
-    .ws-segmented-control-root:where([data-scale='app'] *) {
+    .ws-segmented-control-root:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       border-color: CanvasText;
     }
 
-    .ws-segmented-control-thumb:where([data-scale='app'] *) {
+    .ws-segmented-control-thumb:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       border-color: Highlight;
     }
 
-    .ws-segmented-control-segment[data-focus-visible]:where([data-scale='app'] *) {
+    .ws-segmented-control-segment[data-focus-visible]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
     }
 
     /* Under the thumb the outline can't show: the chosen segment's edge thickens. */
-    .ws-segmented-control-segment[data-focus-visible]:where([data-scale='app'] *) .ws-segmented-control-thumb {
+    .ws-segmented-control-segment[data-focus-visible]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-segmented-control-thumb {
       border-width: var(--border-width-thick);
     }
   }

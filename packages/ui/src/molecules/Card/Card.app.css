@@ -1,12 +1,26 @@
 /* Card's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Card.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* Card: the Timefix prototype's card (spec 0072): the surface with a border-subtle hairline, radius-lg and shadow-xs;
    a header with the title (text-heading) over a grey text-body-sm line and its actions, the body, and a footer on the
    card's own surface under a hairline. */
 @layer utilities.app-look {
-  .ws-card-root:where([data-scale='app'] *) {
+  .ws-card-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
@@ -19,20 +33,62 @@
   }
 
   /* size-page-card at most, with the page gutter kept on a phone. */
-  .ws-card-root[data-placement='page']:where([data-scale='app'] *) {
+  .ws-card-root[data-placement='page']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: min(var(--size-page-card), calc(100% - 2 * var(--space-16)));
     margin-block: var(--space-32);
     margin-inline: auto;
   }
 
-  .ws-card-root[data-tone='sunken']:where([data-scale='app'] *) {
+  .ws-card-root[data-tone='sunken']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     background: var(--surface-subtle);
     box-shadow: none;
   }
 
   /* No frame: the layout around it is the frame. A bare page card takes its slot's width and no margin, and its
      content starts at its edges, so the heading lines up with what the layout puts above it (the logo). */
-  .ws-card-root[data-tone='bare']:where([data-scale='app'] *) {
+  .ws-card-root[data-tone='bare']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     overflow: visible;
     border: 0;
     border-radius: 0;
@@ -40,14 +96,42 @@
     box-shadow: none;
   }
 
-  .ws-card-root[data-placement='page'][data-tone='bare']:where([data-scale='app'] *) {
+  .ws-card-root[data-placement='page'][data-tone='bare']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     margin: 0;
   }
 
   /* A pressable card (onPress): the title's button stretches over the whole card, so any press on it opens; the
      card draws the ring and the hover, and its own buttons sit above the stretch. */
   /* Its edge is control-border, not border-subtle: the edge is a pressable card's only boundary (3:1). */
-  .ws-card-root[data-pressable]:where([data-scale='app'] *) {
+  .ws-card-root[data-pressable]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     position: relative;
     border-color: var(--control-border);
     transition:
@@ -55,7 +139,21 @@
       background-color var(--duration-quick) var(--ease-out);
   }
 
-  .ws-card-press:where([data-scale='app'] *) {
+  .ws-card-press:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     padding: 0;
     border: 0;
     background: none;
@@ -66,30 +164,100 @@
     cursor: pointer;
   }
 
-  .ws-card-press:where([data-scale='app'] *)::after {
+  .ws-card-press:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )::after {
     position: absolute;
     inset: 0;
     content: '';
   }
 
-  .ws-card-press:focus-visible:where([data-scale='app'] *) {
+  .ws-card-press:focus-visible:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: none;
   }
 
   /* The prototype's outline ring, outside the card's own edge. */
-  .ws-card-root[data-pressable]:has(.ws-card-press:focus-visible):where([data-scale='app'] *) {
+  .ws-card-root[data-pressable]:has(.ws-card-press:focus-visible):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: var(--border-width-focus);
   }
 
   /* Under the pointer, the prototype's tile hover: the fill washes (the edge is already control-border). */
   @media (hover: hover) and (pointer: fine) {
-    .ws-card-root[data-pressable]:hover:where([data-scale='app'] *) {
+    .ws-card-root[data-pressable]:hover:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       background: var(--surface-hover);
     }
   }
 
-  .ws-card-head:where([data-scale='app'] *) {
+  .ws-card-head:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     align-items: flex-start;
     gap: var(--space-12);
@@ -99,11 +267,39 @@
 
   /* A card that is its header alone (a form's email question in Analytics: its count, never its answers) keeps the
      same room under the header as above it, rather than its description against the bottom edge. */
-  .ws-card-head:last-child:where([data-scale='app'] *) {
+  .ws-card-head:last-child:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     padding-block-end: var(--space-16);
   }
 
-  .ws-card-heading:where([data-scale='app'] *) {
+  .ws-card-heading:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -114,7 +310,21 @@
   /* A page card's title takes focus by script after a route change, so it draws no ring. */
   /* A line above the title (first run's Back and step count): a control's height, so the title holds its place
      whether the line holds a button or only words. */
-  .ws-card-eyebrow:where([data-scale='app'] *) {
+  .ws-card-eyebrow:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     gap: var(--space-4);
     align-items: center;
@@ -122,14 +332,42 @@
     margin-block-end: var(--space-4);
   }
 
-  .ws-card-title:where([data-scale='app'] *) {
+  .ws-card-title:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
     outline: none;
   }
 
-  .ws-card-description:where([data-scale='app'] *) {
+  .ws-card-description:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text-secondary);
     font: var(--text-body-sm);
     letter-spacing: var(--tracking-body-sm);
@@ -140,7 +378,21 @@
      rather than hanging below it, and the header keeps the title's height. Under a title with a description
      they centre on the two lines instead, as a setting's control does. */
   /* Positioned, so a pressable card's stretched title never covers its buttons. */
-  .ws-card-actions:where([data-scale='app'] *) {
+  .ws-card-actions:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: relative;
     display: inline-flex;
     flex: none;
@@ -151,19 +403,62 @@
     letter-spacing: var(--tracking-heading);
   }
 
-  .ws-card-head:has(.ws-card-description):where([data-scale='app'] *) .ws-card-actions {
+  .ws-card-head:has(.ws-card-description):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-actions {
     align-self: center;
   }
 
   /* What the actions hold reads in the body's type, whatever box they stand in. */
-  .ws-card-actions-type:where([data-scale='app'] *) {
+  .ws-card-actions-type:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: contents;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
   /* --body-top: the room above what the body holds, which the child after a hidden marker takes as its margin. */
-  .ws-card-body:where([data-scale='app'] *) {
+  .ws-card-body:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     --body-top: var(--space-16);
     --after-marker: var(--space-16);
 
@@ -174,38 +469,125 @@
   }
 
   /* Under a header, the prototype's body starts space-12 below it. */
-  .ws-card-head:where([data-scale='app'] *) + .ws-card-body {
+  .ws-card-head:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    + .ws-card-body {
     --body-top: var(--space-12);
   }
 
   /* What runs to the Card's edges itself (a Table with edge="card"). */
-  .ws-card-body[data-flush]:where([data-scale='app'] *) {
+  .ws-card-body[data-flush]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --body-top: 0;
 
     padding: 0;
   }
 
   /* What a card holds stacks with a form's rhythm: a field, its hint, then air before the next. */
-  .ws-card-body:where([data-scale='app'] *) > :not(:first-child) {
+  .ws-card-body:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > :not(:first-child) {
     margin-block-start: var(--space-16);
   }
 
   /* React Aria puts a hidden template (empty, with no class) or hidden markers before a Select or a Table.
      When one comes first, the shown child after it takes the air above it as its margin, so the body's own
      top padding steps aside rather than doubling it. */
-  .ws-card-body:has(> :first-child:is([hidden], :empty:not([class]))):where([data-scale='app'] *) {
+  .ws-card-body:has(> :first-child:is([hidden], :empty:not([class]))):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --after-marker: var(--body-top);
 
     padding-block-start: 0;
   }
 
-  .ws-card-body:where([data-scale='app'] *) > :nth-child(2) {
+  .ws-card-body:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > :nth-child(2) {
     margin-block-start: var(--after-marker);
   }
 
   /* The footer's quiet line: it takes the room the buttons leave and wraps rather than pushing them, and on its
      own line (a narrow card) it reads before them. */
-  .ws-card-foot-note:where([data-scale='app'] *) {
+  .ws-card-foot-note:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     flex: 1 1 var(--size-menu);
     margin: 0;
     min-inline-size: 0;
@@ -216,7 +598,21 @@
   }
 
   /* Pushed to the card's end, so cards stretched to one row's height (a dense TileGrid) end on one line. */
-  .ws-card-foot:where([data-scale='app'] *) {
+  .ws-card-foot:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-wrap: wrap;
     margin-block-start: auto;
@@ -233,21 +629,80 @@
   /* The small page card: size-panel at most, for a page whose task is one
      short form (sign in, the code). It is the page's one thing, so it has
      space-24 around its content and its title is in heading type. */
-  .ws-card-root[data-placement='page'][data-size='sm']:where([data-scale='app'] *) {
+  .ws-card-root[data-placement='page'][data-size='sm']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: min(var(--size-panel), calc(100% - 2 * var(--space-16)));
   }
 
-  .ws-card-root[data-placement='page'][data-size='sm']:where([data-scale='app'] *) .ws-card-head {
+  .ws-card-root[data-placement='page'][data-size='sm']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-head {
     padding-block-start: var(--space-24);
     padding-inline: var(--space-24);
   }
 
-  .ws-card-root[data-placement='page'][data-size='sm']:where([data-scale='app'] *) .ws-card-title {
+  .ws-card-root[data-placement='page'][data-size='sm']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-title {
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
   }
 
-  .ws-card-root[data-placement='page'][data-size='sm']:where([data-scale='app'] *) .ws-card-body {
+  .ws-card-root[data-placement='page'][data-size='sm']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-body {
     --body-top: var(--space-20);
 
     padding-block-end: var(--space-24);
@@ -255,22 +710,80 @@
   }
 
   /* After the sizes, and as specific as the sm one, so a bare page card of either size takes its slot's width. */
-  .ws-card-root[data-placement='page'][data-size][data-tone='bare']:where([data-scale='app'] *) {
+  .ws-card-root[data-placement='page'][data-size][data-tone='bare']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: 100%;
   }
 
-  .ws-card-root[data-placement='page'][data-tone='bare']:where([data-scale='app'] *) .ws-card-head {
+  .ws-card-root[data-placement='page'][data-tone='bare']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-head {
     padding-block-start: 0;
     padding-inline: 0;
   }
 
-  .ws-card-root[data-placement='page'][data-tone='bare']:where([data-scale='app'] *) .ws-card-body {
+  .ws-card-root[data-placement='page'][data-tone='bare']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-card-body {
     padding-inline: 0;
     padding-block-end: 0;
   }
 
   @media (forced-colors: active) {
-    .ws-card-root:where([data-scale='app'] *) {
+    .ws-card-root:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       border-color: CanvasText;
     }
   }

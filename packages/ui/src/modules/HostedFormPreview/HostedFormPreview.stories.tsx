@@ -74,6 +74,34 @@ export const Default: Story = {
   },
 };
 
+/**
+ * A brand kit in the app (Settings › Brand's preview), at the app's scale: the preview draws the guest's look, so the
+ * brand's colour reaches the Send button there too (spec 0072, decision 16: the app look stays out of a guest page the
+ * app previews).
+ */
+export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: CONTACT,
+    brand: {
+      variables: [
+        ['--brand-accent', '#e65708'],
+        ['--brand-on-accent', '#000000'],
+        ['--brand-link', '#b74300'],
+        ['--brand-accent-dark', '#e8590c'],
+        ['--brand-on-accent-dark', '#000000'],
+        ['--brand-link-dark', '#fd6c2b'],
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(document.documentElement).toHaveAttribute('data-scale', 'app');
+    await expect(getComputedStyle(canvas.getByRole('button', { name: 'Send' })).backgroundColor).toBe(
+      'rgb(230, 87, 8)',
+    );
+  },
+};
+
 /** An ending open in the builder: its words in the form's place, as the visitor reads them after sending. */
 export const Ending: Story = {
   args: { form: CONTACT, ending: { heading: 'Thanks, we’ll call you', line: 'Usually within a day.' } },

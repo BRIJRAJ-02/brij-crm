@@ -1,12 +1,26 @@
 /* FileItem's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw FileItem.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* FileItem: takes its look from FileDrop's file row in the Timefix prototype (spec 0072): the type icon on a grey
    tile a control tall, the name over its size (or progress, or the error in danger, the tile turning danger-soft),
    and remove at the end, on no box of its own. The chip variant is a record chip's 24px chip. */
 @layer utilities.app-look {
-  .ws-file-item-root:where([data-scale='app'] *) {
+  .ws-file-item-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its hairline box on the raised surface (the prototype's row is bare). */
     border: 0;
     background: none;
@@ -20,7 +34,21 @@
     border-radius: var(--radius-md);
   }
 
-  .ws-file-item-icon:where([data-scale='app'] *) {
+  .ws-file-item-icon:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: grid;
     flex: none;
     place-items: center;
@@ -31,11 +59,40 @@
     color: var(--text-secondary);
   }
 
-  .ws-file-item-root[data-state='failed']:where([data-scale='app'] *) .ws-file-item-icon {
+  .ws-file-item-root[data-state='failed']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-file-item-icon {
     background: var(--danger-soft);
   }
 
-  .ws-file-item-root[data-variant='chip']:where([data-scale='app'] *) {
+  .ws-file-item-root[data-variant='chip']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: inline-flex;
     gap: var(--space-4);
     max-inline-size: 100%;
@@ -47,7 +104,21 @@
     background: var(--surface);
   }
 
-  .ws-file-item-text:where([data-scale='app'] *) {
+  .ws-file-item-text:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -55,7 +126,21 @@
     min-inline-size: 0;
   }
 
-  .ws-file-item-name:where([data-scale='app'] *) {
+  .ws-file-item-name:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     overflow: hidden;
     color: var(--text);
     font: var(--text-body-strong);
@@ -64,26 +149,83 @@
     white-space: nowrap;
   }
 
-  .ws-file-item-root[data-variant='chip']:where([data-scale='app'] *) .ws-file-item-name {
+  .ws-file-item-root[data-variant='chip']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-file-item-name {
     font: var(--text-body-sm-strong);
     letter-spacing: var(--tracking-body-sm-strong);
   }
 
-  .ws-file-item-size:where([data-scale='app'] *) {
+  .ws-file-item-size:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text-secondary);
     font: var(--text-body-sm);
     letter-spacing: var(--tracking-body-sm);
     font-variant-numeric: tabular-nums;
   }
 
-  .ws-file-item-error:where([data-scale='app'] *) {
+  .ws-file-item-error:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--danger);
     font: var(--text-body-sm);
     letter-spacing: var(--tracking-body-sm);
   }
 
   @media (forced-colors: active) {
-    .ws-file-item-root[data-variant='chip']:where([data-scale='app'] *) {
+    .ws-file-item-root[data-variant='chip']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       border-color: CanvasText;
     }
   }

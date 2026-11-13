@@ -1,11 +1,25 @@
 /* FieldError's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw FieldError.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* FieldError: the alert mark and the message, in the danger colour at text-body-sm (the Timefix prototype's field
    error, spec 0072); a message that wraps keeps the mark on its first line. */
 @layer utilities.app-look {
-  .ws-field-error-root:where([data-scale='app'] *) {
+  .ws-field-error-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     gap: var(--space-6);
     align-items: flex-start;
@@ -15,7 +29,21 @@
     letter-spacing: var(--tracking-body-sm);
   }
 
-  .ws-field-error-root[data-inset='check']:where([data-scale='app'] *) {
+  .ws-field-error-root[data-inset='check']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     padding-inline-start: calc(var(--size-icon) + var(--space-8));
   }
 }

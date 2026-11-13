@@ -1,6 +1,6 @@
 /* Avatar's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Avatar.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* Avatar and AvatarStack, after the prototype's Avatar (spec 0072): initials or a picture on a soft hue tile
    (tag-<hue>-bg, the initials in its text shade, semibold at 36% of the diameter), circles for people and rounded
@@ -8,15 +8,57 @@
    surface, and "+N" is a grey face of its own. It does not fan out on hover: a library stack opens nothing, and a lift
    would promise that it does (spec 0072, rationale). */
 @layer utilities.app-look {
-  .ws-avatar-root:where([data-scale='app'] *),
-  .ws-avatar-more:where([data-scale='app'] *) {
+  .ws-avatar-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ),
+  .ws-avatar-more:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its label tracking. */
     letter-spacing: revert;
 
     --avatar: var(--avatar-sm);
   }
 
-  .ws-avatar-root:where([data-scale='app'] *) {
+  .ws-avatar-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its label tracking (the prototype's initials keep the inherited tracking). */
     letter-spacing: revert;
 
@@ -41,104 +83,398 @@
     user-select: none;
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='xs']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='xs']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-xs);
     --avatar-initials: calc(var(--avatar) * 0.45);
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='md']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='md']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-md);
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='lg']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='lg']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-lg);
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='title']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='title']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-title);
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='xl']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='xl']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-xl);
   }
 
-  :is(.ws-avatar-root, .ws-avatar-more)[data-size='hero']:where([data-scale='app'] *) {
+  :is(.ws-avatar-root, .ws-avatar-more)[data-size='hero']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar: var(--avatar-hero);
   }
 
-  .ws-avatar-root:not([data-size='sm'], [data-size='xs']):where([data-scale='app'] *) {
+  .ws-avatar-root:not([data-size='sm'], [data-size='xs']):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-initials: calc(var(--avatar) * 0.36);
   }
 
-  .ws-avatar-root[data-shape='square']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-shape='square']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-radius: calc(var(--avatar) * 0.28);
   }
 
   /* A link page's rounded face (spec 0060, AC-13): the largest square takes the card corner. */
-  .ws-avatar-root[data-shape='square'][data-size='hero']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-shape='square'][data-size='hero']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-radius: var(--radius-xl);
   }
 
-  .ws-avatar-root[data-hue='red']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='red']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-red-bg);
     --avatar-text: var(--tag-red-text);
   }
 
-  .ws-avatar-root[data-hue='orange']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='orange']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-orange-bg);
     --avatar-text: var(--tag-orange-text);
   }
 
-  .ws-avatar-root[data-hue='yellow']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='yellow']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-yellow-bg);
     --avatar-text: var(--tag-yellow-text);
   }
 
-  .ws-avatar-root[data-hue='lime']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='lime']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-lime-bg);
     --avatar-text: var(--tag-lime-text);
   }
 
-  .ws-avatar-root[data-hue='green']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='green']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-green-bg);
     --avatar-text: var(--tag-green-text);
   }
 
-  .ws-avatar-root[data-hue='sky']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='sky']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-sky-bg);
     --avatar-text: var(--tag-sky-text);
   }
 
-  .ws-avatar-root[data-hue='blue']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='blue']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-blue-bg);
     --avatar-text: var(--tag-blue-text);
   }
 
-  .ws-avatar-root[data-hue='purple']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='purple']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--tag-purple-bg);
     --avatar-text: var(--tag-purple-text);
   }
 
-  .ws-avatar-root[data-hue='ink']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='ink']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--primary);
     --avatar-text: var(--on-primary);
   }
 
   /* A public page's brand colour (its brand stylesheet sets the accent): a business with no logo reads as its own. */
-  .ws-avatar-root[data-hue='accent']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-hue='accent']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --avatar-bg: var(--accent);
     --avatar-text: var(--on-accent);
   }
 
   /* A loaded picture's plate, after every hue so it wins: the near white on-accent in both themes, so a favicon's
      clear parts and a dark logo read in dark mode too; a hairline edge holds it on a light page. */
-  .ws-avatar-root[data-picture='loaded']:where([data-scale='app'] *) {
+  .ws-avatar-root[data-picture='loaded']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-hairline) solid var(--border-subtle);
     outline-offset: calc(var(--border-width-hairline) * -1);
     background: var(--on-accent);
   }
 
-  .ws-avatar-image:where([data-scale='app'] *) {
+  .ws-avatar-image:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: absolute;
     inset: 0;
     inline-size: 100%;
@@ -147,7 +483,22 @@
   }
 
   /* A workspace's logo (spec 0060): the whole picture inside the tile, a hair in from its edge. */
-  .ws-avatar-root[data-fit='contain']:where([data-scale='app'] *) > .ws-avatar-image {
+  .ws-avatar-root[data-fit='contain']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > .ws-avatar-image {
     box-sizing: border-box;
     padding: var(--space-2);
     object-fit: contain;
@@ -155,7 +506,21 @@
 
   /* With its picture, loaded or on the way, a logo sits on a light plate in both themes with a hairline round it, the
      letter held back, so the head never flashes from a dark tile to a light one. */
-  .ws-avatar-root[data-fit='contain']:has(> .ws-avatar-image):where([data-scale='app'] *) {
+  .ws-avatar-root[data-fit='contain']:has(> .ws-avatar-image):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-hairline) solid var(--border);
     outline-offset: calc(-1 * var(--border-width-hairline));
     background: var(--on-accent);
@@ -164,29 +529,115 @@
 
   /* Waiting, the initials show and the picture is held back; the big sizes' picture then fades in. A fade, never a
      move, so reduced motion keeps it. */
-  .ws-avatar-image[data-fade='waiting']:where([data-scale='app'] *) {
+  .ws-avatar-image[data-fade='waiting']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: 0;
   }
 
-  .ws-avatar-image[data-fade='in']:where([data-scale='app'] *) {
+  .ws-avatar-image[data-fade='in']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: 1;
     transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
 
-  .ws-avatar-stack:where([data-scale='app'] *) {
+  .ws-avatar-stack:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     align-items: center;
   }
 
-  .ws-avatar-stack:where([data-scale='app'] *) > * {
+  .ws-avatar-stack:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > * {
     outline: var(--border-width-thick) solid var(--surface);
   }
 
-  .ws-avatar-stack:where([data-scale='app'] *) > :not(:first-child) {
+  .ws-avatar-stack:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > :not(:first-child) {
     margin-inline-start: calc(var(--avatar) * -0.22);
   }
 
-  .ws-avatar-more:where([data-scale='app'] *) {
+  .ws-avatar-more:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -202,7 +653,21 @@
 
   @media (forced-colors: active) {
     /* The fill is gone in forced colours, so a hairline draws the tile. */
-    .ws-avatar-root:where([data-scale='app'] *) {
+    .ws-avatar-root:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       outline: var(--border-width-hairline) solid CanvasText;
       outline-offset: calc(-1 * var(--border-width-hairline));
     }

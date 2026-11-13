@@ -1,11 +1,25 @@
 /* Kbd's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Kbd.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* The Kbd atom, after the prototype's Kbd (spec 0072): a 20px keycap with a hairline edge on the surface, in the
    tertiary text. Inside an ink button or a tooltip it turns clear, with a faint edge of its own colour. */
 @layer utilities.app-look {
-  .ws-kbd-root:where([data-scale='app'] *) {
+  .ws-kbd-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its control shadow. */
     box-shadow: none;
 
@@ -26,26 +40,82 @@
   }
 
   /* Inside a secondary button or a menu item: a filled cap with no edge. */
-  .ws-kbd-root[data-tone='soft']:where([data-scale='app'] *) {
+  .ws-kbd-root[data-tone='soft']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-color: transparent;
     background: var(--surface-subtle);
     color: var(--text-secondary);
   }
 
   /* Inside an ink button (onAccent) or a tooltip (onInverse): clear, in the label's colour. */
-  .ws-kbd-root:is([data-tone='onAccent'], [data-tone='onInverse']):where([data-scale='app'] *) {
+  .ws-kbd-root:is([data-tone='onAccent'], [data-tone='onInverse']):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-color: color-mix(in srgb, currentcolor 30%, transparent);
     background: transparent;
     color: inherit;
   }
 
-  .ws-kbd-root[data-tone='onInverse']:where([data-scale='app'] *) {
+  .ws-kbd-root[data-tone='onInverse']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     min-inline-size: calc(var(--space-16) + var(--space-2));
     block-size: calc(var(--space-16) + var(--space-2));
   }
 
   @media (forced-colors: active) {
-    .ws-kbd-root:where([data-scale='app'] *) {
+    .ws-kbd-root:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       border-color: CanvasText;
     }
   }

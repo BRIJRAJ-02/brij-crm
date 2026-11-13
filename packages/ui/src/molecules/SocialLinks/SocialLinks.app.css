@@ -1,6 +1,6 @@
 /* SocialLinks's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw SocialLinks.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* SocialLinks: the Timefix prototype's social row (spec 0072): icon only ghost link Buttons in the tier 1 pill look,
    space-4 apart so the hit areas meet without overlapping, pulled in by half a box less half a mark so the first mark
@@ -22,7 +22,21 @@
 }
 
 @layer utilities.app-look {
-  .ws-social-links-root:where([data-scale='app'] *) {
+  .ws-social-links-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4);
@@ -37,7 +51,21 @@
      compound selector, past the house limit), all of it CSS (no work per
      item in script): up on the smooth-out curve, back down with the strong bounce. The app sets no lift, so its
      settings stay still. */
-  .ws-social-links-item:where([data-scale='app'] *) {
+  .ws-social-links-item:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     transition: translate var(--duration-medium) var(--ease-bounce-strong);
     animation: ws-social-links-app-social-in var(--social-arrive) var(--ease-smooth-out) backwards;
@@ -45,27 +73,141 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .ws-social-links-item:hover:where([data-scale='app'] *) {
+    .ws-social-links-item:hover:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       translate: 0 calc(-1 * var(--social-lift));
       transition-timing-function: var(--ease-smooth-out);
     }
 
-    .ws-social-links-item:hover:where([data-scale='app'] *) + .ws-social-links-item,
-    .ws-social-links-item:has(+ .ws-social-links-item:hover):where([data-scale='app'] *) {
+    .ws-social-links-item:hover:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      + .ws-social-links-item,
+    .ws-social-links-item:has(+ .ws-social-links-item:hover):where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       translate: 0 calc(-0.45 * var(--social-lift));
       transition-timing-function: var(--ease-smooth-out);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ws-social-links-item:where([data-scale='app'] *) {
+    .ws-social-links-item:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       animation-name: ws-social-links-app-social-fade;
     }
 
-    .ws-social-links-item:where([data-scale='app'] *),
-    .ws-social-links-item:hover:where([data-scale='app'] *),
-    .ws-social-links-item:hover:where([data-scale='app'] *) + .ws-social-links-item,
-    .ws-social-links-item:has(+ .ws-social-links-item:hover):where([data-scale='app'] *) {
+    .ws-social-links-item:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ),
+    .ws-social-links-item:hover:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ),
+    .ws-social-links-item:hover:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      + .ws-social-links-item,
+    .ws-social-links-item:has(+ .ws-social-links-item:hover):where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       translate: none;
     }
   }
@@ -84,7 +226,21 @@
   }
 
   /* Round (a link page): centred outlined circles, space-8 apart, from the page's own centre line. */
-  .ws-social-links-root[data-variant='round']:where([data-scale='app'] *) {
+  .ws-social-links-root[data-variant='round']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     justify-content: center;
     gap: var(--space-8);
     margin-inline: 0;

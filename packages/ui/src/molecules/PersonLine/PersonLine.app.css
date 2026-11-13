@@ -1,11 +1,25 @@
 /* PersonLine's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw PersonLine.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* PersonLine, after the prototype's PersonLine (spec 0072, folded into Avatar's look): a picture, the name, and one quiet line under it whose parts are joined by a middle dot; the line is
    cut at its end, so the first part (what it is about) always shows. Room at the end for a chip or a menu. */
 @layer utilities.app-look {
-  .ws-person-line-root:where([data-scale='app'] *) {
+  .ws-person-line-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     align-items: center;
     gap: var(--space-12);
@@ -13,19 +27,61 @@
     min-inline-size: 0;
   }
 
-  .ws-person-line-picture:where([data-scale='app'] *) {
+  .ws-person-line-picture:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: none;
   }
 
-  .ws-person-line-who:where([data-scale='app'] *) {
+  .ws-person-line-who:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-inline-size: 0;
   }
 
-  .ws-person-line-name:where([data-scale='app'] *) {
+  .ws-person-line-name:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -35,7 +91,21 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .ws-person-line-meta:where([data-scale='app'] *) {
+  .ws-person-line-meta:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     min-inline-size: 0;
     overflow: hidden;
     color: var(--text-secondary);
@@ -47,27 +117,98 @@
   }
 
   /* A line that wraps instead of cutting its last part (isMetaWrapped). */
-  .ws-person-line-root[data-wrap]:where([data-scale='app'] *) .ws-person-line-meta {
+  .ws-person-line-root[data-wrap]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-person-line-meta {
     white-space: normal;
   }
 
   /* Time off: the Team week's Away colour, strong, the one state that changes what can be done with this person. */
-  .ws-person-line-lead[data-tone='away']:where([data-scale='app'] *) {
+  .ws-person-line-lead[data-tone='away']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--tag-yellow-text);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
   /* A calendar head's day: free in the success colour, off quieter still. */
-  .ws-person-line-lead[data-tone='free']:where([data-scale='app'] *) {
+  .ws-person-line-lead[data-tone='free']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--success);
   }
 
-  .ws-person-line-lead[data-tone='off']:where([data-scale='app'] *) {
+  .ws-person-line-lead[data-tone='off']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text-tertiary);
   }
 
-  .ws-person-line-end:where([data-scale='app'] *) {
+  .ws-person-line-end:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: none;
     align-items: center;
@@ -76,7 +217,22 @@
 
   /* A phone's narrow column gives the picture's room to the name. */
   @container (inline-size < 320px) {
-    .ws-person-line-root[data-size='md']:where([data-scale='app'] *) .ws-person-line-picture {
+    .ws-person-line-root[data-size='md']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-person-line-picture {
       display: none;
     }
   }

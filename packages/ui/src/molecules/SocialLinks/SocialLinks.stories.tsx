@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { SettingsRow } from '../../modules/SettingsLayout/SettingsLayout.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { tokenLength } from '../../workbench/token-length.ts';
 import { SocialLinks, type SocialLinkItem } from './SocialLinks.tsx';
 
 const ALL: readonly SocialLinkItem[] = [
@@ -114,6 +115,8 @@ export const Round: Story = {
     const linkedin = canvas.getByRole('link', { name: 'LinkedIn, ada-lovelace' });
     await expect(linkedin).toHaveAttribute('rel', 'me nofollow noopener noreferrer');
     // The touch size on a public page, at full size (spec 0071): size-control, space-12 and space-2, past 44.
-    await expect(linkedin.getBoundingClientRect().height).toBe(50);
+    await expect(linkedin.getBoundingClientRect().height).toBe(
+      tokenLength('size-control') + tokenLength('space-12') + tokenLength('space-2'),
+    );
   },
 };

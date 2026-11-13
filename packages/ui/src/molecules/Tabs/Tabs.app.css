@@ -1,12 +1,26 @@
 /* Tabs's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Tabs.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* Tabs: the Timefix prototype's tabs (spec 0072). size-control-lg tabs in text-secondary on a hairline, the chosen
    one in text over a 2px accent line that slides to it (transitions.dev 16: duration-fast on ease-smooth-out). The
    `feature` variant is a home page's row of a product's areas, `pills` a guest menu's categories (see below). */
 @layer utilities.app-look {
-  .ws-tabs-root:where([data-scale='app'] *) {
+  .ws-tabs-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -16,7 +30,21 @@
 
   /* Under a page's second bar, which stays at the top of the view, what sticks in a panel sticks below it: the
      bar's height reaches the panel's sticky parts (a form's Questions header) as --sticky-top. */
-  .ws-tabs-root:has(> .ws-tabs-bar[data-variant='bar']):where([data-scale='app'] *) {
+  .ws-tabs-root:has(> .ws-tabs-bar[data-variant='bar']):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --sticky-top: calc(var(--size-topbar) + var(--border-width-hairline));
     --sticky-top-gap: calc(var(--size-topbar) + var(--border-width-hairline) + var(--space-16));
   }
@@ -24,13 +52,41 @@
   /* A page layout's panel (PreviewLayout: a form's or a booking page's editor) is as tall as what it holds, and the
      tabs with it, so the bar stays stuck at the top of the view however far the page scrolls. Held to the view's
      height, the panel overflowed the tabs' box and the bar left with it after a screen or so (T15). */
-  .ws-tabs-root:has(> .ws-tabs-panel[data-variant='fill']):where([data-scale='app'] *) {
+  .ws-tabs-root:has(> .ws-tabs-panel[data-variant='fill']):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     flex: 1 0 auto;
   }
 
   /* The tab list and, at its far end, the chosen tab's tools, on one hairline. When both don't fit
      (a phone), the tools wrap to a row of their own under the tabs, so the tabs never get squeezed. */
-  .ws-tabs-bar:where([data-scale='app'] *) {
+  .ws-tabs-bar:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-wrap: wrap;
     gap: 0 var(--space-12);
@@ -39,7 +95,21 @@
 
   /* A page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface with
      the page's hairline, held at the top of the view while the page under it scrolls. */
-  .ws-tabs-bar[data-variant='bar']:where([data-scale='app'] *) {
+  .ws-tabs-bar[data-variant='bar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     position: sticky;
     inset-block-start: 0;
     z-index: var(--z-sticky);
@@ -51,11 +121,40 @@
   }
 
   /* Tabs drawn under their panels: the bar goes last, the markup order unchanged. */
-  .ws-tabs-root[data-placement='bottom']:where([data-scale='app'] *) .ws-tabs-bar {
+  .ws-tabs-root[data-placement='bottom']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-bar {
     order: 1;
   }
 
-  .ws-tabs-list:where([data-scale='app'] *) {
+  .ws-tabs-list:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     align-items: flex-end;
@@ -68,19 +167,75 @@
 
   /* Tabs past an end fade over space-24 there, so the row shows it scrolls (only the mask's alpha counts, so the
      surface token stands in for opaque); keyboard scrolling stops a focused tab clear of the band. As Table's frame. */
-  .ws-tabs-list[data-fade]:where([data-scale='app'] *) {
+  .ws-tabs-list[data-fade]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     scroll-padding-inline: var(--space-24);
   }
 
-  .ws-tabs-list[data-fade='end']:where([data-scale='app'] *) {
+  .ws-tabs-list[data-fade='end']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
   }
 
-  .ws-tabs-list[data-fade='start']:where([data-scale='app'] *) {
+  .ws-tabs-list[data-fade='start']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     mask-image: linear-gradient(to left, var(--surface) calc(100% - var(--space-24)), transparent);
   }
 
-  .ws-tabs-list[data-fade='both']:where([data-scale='app'] *) {
+  .ws-tabs-list[data-fade='both']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     mask-image: linear-gradient(
       to right,
       transparent,
@@ -92,7 +247,21 @@
 
   /* A grid, not a row: each tool (or a screen's portal slot holding them) may shrink below its
      content, so a search field narrows on a phone instead of running off the edge. */
-  .ws-tabs-end:where([data-scale='app'] *) {
+  .ws-tabs-end:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: grid;
     grid-auto-columns: minmax(0, auto);
     grid-auto-flow: column;
@@ -108,11 +277,39 @@
 
   /* An end with nothing in it yet (a tab with no tools of its own, its portal slot empty) takes no room: on a phone
      it wrapped under the tabs as an empty band (Bookings' Roster and Round robin, the bookings critique A14). */
-  .ws-tabs-end:not(:has(> :not(:empty))):where([data-scale='app'] *) {
+  .ws-tabs-end:not(:has(> :not(:empty))):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: none;
   }
 
-  .ws-tabs-tab:where([data-scale='app'] *) {
+  .ws-tabs-tab:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its focus halos (focus is the ring). */
     box-shadow: none;
 
@@ -134,21 +331,81 @@
   /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. Tabs sit a little
      closer than elsewhere (space-6 each side, space-2 apart), so six of them and a tab's tools share one row on a
      1280 screen (Bookings, 31 October 2026: the Roster made six, and List's tools wrapped under them). */
-  .ws-tabs-bar[data-variant='bar']:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-bar[data-variant='bar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     block-size: calc(var(--size-topbar) - var(--border-width-hairline));
     padding-inline: var(--space-6);
   }
 
   /* No inset (a settings page): the first tab's label lines up with the table's first column, the tools end
      at its edge. */
-  .ws-tabs-bar[data-inset='none']:where([data-scale='app'] *) .ws-tabs-list,
-  .ws-tabs-bar[data-inset='none']:where([data-scale='app'] *) .ws-tabs-end {
+  .ws-tabs-bar[data-inset='none']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list,
+  .ws-tabs-bar[data-inset='none']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-end {
     padding-inline: 0;
   }
 
   /* The tabs keep their whole width (up to the row's), so a lone search, which can shrink, wraps under them on
      a phone rather than squeezing the last tab out of sight. */
-  .ws-tabs-bar[data-inset='none']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-inset='none']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     flex: 1 0 auto;
     max-inline-size: 100%;
   }
@@ -157,7 +414,21 @@
      edges, the bar's height, so its hairline meets the sidebar's like the TopBar's above it, and the first tab's
      label (its own space-8 padding makes up the rest) and the tools' end sit on the content edge. Like Bookings'
      second bar, it stays at the top of the view on the surface while the page under it scrolls. */
-  .ws-tabs-bar[data-edge='page']:where([data-scale='app'] *) {
+  .ws-tabs-bar[data-edge='page']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     position: sticky;
     inset-block-start: 0;
     z-index: var(--z-sticky);
@@ -165,34 +436,123 @@
     background: var(--surface);
   }
 
-  .ws-tabs-bar[data-edge='page']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-edge='page']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     flex: 1 0 auto;
     max-inline-size: 100%;
     padding-inline: calc(var(--space-16) - var(--space-8));
   }
 
-  .ws-tabs-bar[data-edge='page']:where([data-scale='app'] *) .ws-tabs-end {
+  .ws-tabs-bar[data-edge='page']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-end {
     padding-inline: var(--space-16);
   }
 
-  .ws-tabs-bar[data-edge='page']:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-bar[data-edge='page']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
-  .ws-tabs-bar[data-variant='bar']:where([data-scale='app'] *) .ws-tabs-end {
+  .ws-tabs-bar[data-variant='bar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-end {
     min-block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
   /* An end a page fills through a portal, empty on this tab (a form's Settings): it takes no room, so on a phone it
      never wraps under the tabs as a blank bar's height (lane 3c). */
-  .ws-tabs-end:has(> :only-child:empty):where([data-scale='app'] *) {
+  .ws-tabs-end:has(> :only-child:empty):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: none;
   }
 
   /* In the bar, the first tab's label starts at the page's gutter, under the TopBar's title (the tab's own
      padding makes up the rest), and the tabs keep their whole width: on a phone the tools wrap under them
      rather than cutting the last tab (Tasks, Bookings; the owner, 21 October 2026). */
-  .ws-tabs-bar[data-variant='bar']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-variant='bar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     flex: 1 0 auto;
     gap: var(--space-2);
     max-inline-size: 100%;
@@ -202,46 +562,174 @@
   /* A module's tabs inside its TopBar (Bookings): the bar's height and no line of their own, the underline on the
      TopBar's hairline, so the page has one header and one line under it (the owner, 9 November 2026). The first
      label sits a tab's padding from the title's end; on a narrow bar the row scrolls inside itself. */
-  .ws-tabs-root:has(> .ws-tabs-bar[data-variant='topbar']):where([data-scale='app'] *) {
+  .ws-tabs-root:has(> .ws-tabs-bar[data-variant='topbar']):where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     flex: 0 1 auto;
   }
 
-  .ws-tabs-bar[data-variant='topbar']:where([data-scale='app'] *) {
+  .ws-tabs-bar[data-variant='topbar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     flex: 1;
     flex-wrap: nowrap;
     border-block-end: none;
   }
 
-  .ws-tabs-bar[data-variant='topbar']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-variant='topbar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     padding-inline: 0;
   }
 
-  .ws-tabs-bar[data-variant='topbar']:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-bar[data-variant='topbar']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     block-size: calc(var(--size-topbar) - var(--border-width-hairline));
   }
 
-  .ws-tabs-tab[data-selected]:where([data-scale='app'] *) {
+  .ws-tabs-tab[data-selected]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .ws-tabs-tab[data-hovered]:where([data-scale='app'] *) {
+    .ws-tabs-tab[data-hovered]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       color: var(--text);
     }
   }
 
   /* The ring inside the tab, clear of the strip's scroller and its hairline. */
-  .ws-tabs-tab[data-focus-visible]:where([data-scale='app'] *) {
+  .ws-tabs-tab[data-focus-visible]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: calc(-1 * var(--space-4));
   }
 
-  .ws-tabs-tab[data-disabled]:where([data-scale='app'] *) {
+  .ws-tabs-tab[data-disabled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: var(--opacity-disabled);
   }
 
   /* The accent line: blue marks the chosen tab (the prototype's one use of blue in navigation). */
-  .ws-tabs-indicator:where([data-scale='app'] *) {
+  .ws-tabs-indicator:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     position: absolute;
     inset-block-end: calc(-1 * var(--border-width-hairline));
     inset-inline: 0;
@@ -253,7 +741,22 @@
     transition-timing-function: var(--ease-smooth-out);
   }
 
-  .ws-tabs-list[data-instant]:where([data-scale='app'] *) .ws-tabs-indicator {
+  .ws-tabs-list[data-instant]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-indicator {
     transition: none;
   }
 
@@ -261,11 +764,40 @@
      an icon tile, a label and a line on what it does, quiet until chosen; the chosen one bright, with the line that
      slides along the columns' top hairline. On a page under the compact breakpoint the lines go and the tabs
      shrink to their tile and label. */
-  .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) {
+  .ws-tabs-bar[data-variant='feature']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-block-end: none;
   }
 
-  .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-variant='feature']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
@@ -274,7 +806,22 @@
     padding-inline: 0;
   }
 
-  .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-bar[data-variant='feature']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     display: block;
     block-size: auto;
     padding: var(--space-16) var(--space-4);
@@ -284,39 +831,140 @@
     white-space: normal;
   }
 
-  .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-tab[data-selected] {
+  .ws-tabs-bar[data-variant='feature']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab[data-selected] {
     color: var(--text);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-tab[data-hovered] {
+    .ws-tabs-bar[data-variant='feature']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab[data-hovered] {
       color: var(--text);
     }
   }
 
-  .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-indicator {
+  .ws-tabs-bar[data-variant='feature']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-indicator {
     inset-block: calc(-1 * var(--border-width-hairline)) auto;
   }
 
-  .ws-tabs-feature-body:where([data-scale='app'] *) {
+  .ws-tabs-feature-body:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
     gap: var(--space-12);
   }
 
-  .ws-tabs-feature:where([data-scale='app'] *) {
+  .ws-tabs-feature:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: grid;
     gap: var(--space-4);
     min-inline-size: 0;
   }
 
-  .ws-tabs-feature-label:where([data-scale='app'] *) {
+  .ws-tabs-feature-label:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
   }
 
-  .ws-tabs-feature-description:where([data-scale='app'] *) {
+  .ws-tabs-feature-description:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -326,7 +974,22 @@
      lines inside it: what sits beside them lines up with their first line, not between the two (Bookings ›
      Availability's My hours · Roster beside Working hours and My schedules, 5 November 2026). */
   @media (width < 700px) {
-    .ws-tabs-bar[data-variant='bar']:where([data-scale='app'] *) .ws-tabs-end {
+    .ws-tabs-bar[data-variant='bar']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-end {
       align-items: start;
       padding-block: var(--space-6);
     }
@@ -336,25 +999,97 @@
      wide as its tile and label on one line, no description, the line still along the top. A page query, as
      Modal's: a column's own width at 1440 is under the 320px container step. */
   @media (width < 1024px) {
-    .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-list {
+    .ws-tabs-bar[data-variant='feature']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-list {
       grid-auto-columns: max-content;
       gap: var(--space-4);
     }
 
-    .ws-tabs-bar[data-variant='feature']:where([data-scale='app'] *) .ws-tabs-tab {
+    .ws-tabs-bar[data-variant='feature']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab {
       padding: var(--space-12) var(--space-8);
     }
 
-    .ws-tabs-feature-body:where([data-scale='app'] *) {
+    .ws-tabs-feature-body:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       align-items: center;
       gap: var(--space-8);
     }
 
-    .ws-tabs-feature-label:where([data-scale='app'] *) {
+    .ws-tabs-feature-label:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       white-space: nowrap;
     }
 
-    .ws-tabs-feature-description:where([data-scale='app'] *) {
+    .ws-tabs-feature-description:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       display: none;
     }
   }
@@ -362,7 +1097,21 @@
   /* A guest page's categories (the guest menu, after checklabs): outlined pills, size-bar tall less a little, in a
      row that scrolls sideways; the chosen one filled in the text colour, the fill (the indicator) sliding between
      them under the words. No hairline under the row, and no space of its own under it: the page spaces it. */
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     margin-block-end: 0;
     border-block-end: none;
   }
@@ -371,7 +1120,22 @@
      scroller. A page
      that runs the row to the window's edges sets --pills-inset to its gutter, so the pills start in line with its
      words and scroll out to the edge (the guest menu). */
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-list {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-list {
     align-items: center;
     gap: var(--space-8);
     padding-block: var(--space-2);
@@ -379,7 +1143,22 @@
     scroll-padding-inline: var(--pills-inset, var(--border-width-thick));
   }
 
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     block-size: calc(var(--size-topbar) - var(--space-8));
     padding-inline: var(--space-16);
     border: var(--border-width-hairline) solid var(--text);
@@ -394,7 +1173,22 @@
       scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-pressed] {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab[data-pressed] {
     scale: var(--scale-press);
   }
 
@@ -402,7 +1196,22 @@
      duration): mid slide only the indicator shows, at rest the words sit on their own pill's fill. A contrast check
      reads a label's own ground, never an absolutely placed sibling's, so WebKit's axe read the light words on the
      page's ground (MenuList's sections). Moved by the keyboard, the fill is there at once, as the indicator is. */
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-selected] {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab[data-selected] {
     background: var(--text);
     color: var(--surface-raised);
     transition:
@@ -412,46 +1221,181 @@
   }
 
   /* Moved by the keyboard, the indicator jumps (below), and every tab's colour and fill change at once with it. */
-  .ws-tabs-list[data-instant]:where([data-scale='app'] *) .ws-tabs-tab {
+  .ws-tabs-list[data-instant]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab {
     transition: none;
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-hovered]:not([data-selected]) {
+    .ws-tabs-bar[data-variant='pills']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab[data-hovered]:not([data-selected]) {
       background: var(--surface-hover);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab,
-    .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-selected] {
+    .ws-tabs-bar[data-variant='pills']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab,
+    .ws-tabs-bar[data-variant='pills']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab[data-selected] {
       transition: none;
     }
 
-    .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-pressed] {
+    .ws-tabs-bar[data-variant='pills']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab[data-pressed] {
       scale: none;
     }
   }
 
   @media (forced-colors: active) {
-    .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-selected] {
+    .ws-tabs-bar[data-variant='pills']:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      )
+      .ws-tabs-tab[data-selected] {
       background: Highlight;
       color: HighlightText;
     }
   }
 
   /* On the pill's edge, not outside it: the scroller clips anything past the list's thin padding. */
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-tab[data-focus-visible] {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-tab[data-focus-visible] {
     outline-offset: 0;
   }
 
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-label {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-label {
     position: relative;
     z-index: var(--z-raised);
   }
 
   /* The chosen pill's fill lifts off the ground a little (checklabs' shadow under the chosen category). */
-  .ws-tabs-bar[data-variant='pills']:where([data-scale='app'] *) .ws-tabs-indicator {
+  .ws-tabs-bar[data-variant='pills']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-tabs-indicator {
     inset: calc(-1 * var(--border-width-hairline));
     block-size: auto;
     border-radius: var(--radius-full);
@@ -460,7 +1404,21 @@
   }
 
   /* In a slot with a height (the record panel), the chosen panel fills what the tabs leave. */
-  .ws-tabs-panel:where([data-scale='app'] *) {
+  .ws-tabs-panel:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its inset focus halo (focus is the ring). */
     box-shadow: none;
 
@@ -470,14 +1428,42 @@
   }
 
   /* A page layout inside (PreviewLayout): a flex column, so it can grow to the view's foot and put its footer there. */
-  .ws-tabs-panel[data-variant='fill']:where([data-scale='app'] *) {
+  .ws-tabs-panel[data-variant='fill']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
   }
 
   /* A tab of fields with no Card around them: the Form's rhythm, at most a readable column wide, from the start. */
-  .ws-tabs-panel[data-variant='fields']:where([data-scale='app'] *) {
+  .ws-tabs-panel[data-variant='fields']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
@@ -486,7 +1472,21 @@
   }
 
   /* A field on this tab holds an error: a small danger dot after the label. Its text is for screen readers. */
-  .ws-tabs-alert:where([data-scale='app'] *) {
+  .ws-tabs-alert:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     flex: none;
     inline-size: var(--space-6);
     block-size: var(--space-6);
@@ -494,24 +1494,80 @@
     background: var(--danger);
   }
 
-  .ws-tabs-panel[data-focus-visible]:where([data-scale='app'] *) {
+  .ws-tabs-panel[data-focus-visible]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     border-radius: var(--radius-sm);
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ws-tabs-indicator:where([data-scale='app'] *) {
+    .ws-tabs-indicator:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       transition: none;
     }
   }
 
   @media (forced-colors: active) {
-    .ws-tabs-indicator:where([data-scale='app'] *) {
+    .ws-tabs-indicator:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       background: Highlight;
     }
 
-    .ws-tabs-alert:where([data-scale='app'] *) {
+    .ws-tabs-alert:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       background: CanvasText;
     }
   }

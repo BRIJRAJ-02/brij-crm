@@ -1,6 +1,6 @@
 /* Menu's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Menu.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* Menu: the Timefix prototype's menu (spec 0072). Rows a control tall (size-control), radius-md, a regular body
    label and a quiet icon, inside the popover's inset. A focused row washes surface-hover (a row washes, never
@@ -9,7 +9,21 @@
    Section headings are quiet labels. A searchable menu puts its field above the list, under a hairline, and a
    header row (a record search's object) above that. */
 @layer utilities.app-look {
-  .ws-menu-menu:where([data-scale='app'] *) {
+  .ws-menu-menu:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     box-sizing: border-box;
     display: block;
     max-block-size: inherit;
@@ -21,12 +35,40 @@
   /* A virtualised list needs a bounded scroll box (at most ten rows, fewer
      when fewer results came back, so one result never sits in an empty
      panel) with no padding: React Aria's layout places every row itself. */
-  .ws-menu-menu[data-virtualized]:where([data-scale='app'] *) {
+  .ws-menu-menu[data-virtualized]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     max-block-size: calc(var(--size-control) * 10);
     padding: 0;
   }
 
-  .ws-menu-item:where([data-scale='app'] *) {
+  .ws-menu-item:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its inset focus halo (a focused row takes the wash). */
     box-shadow: none;
 
@@ -47,60 +89,229 @@
     transition: background-color var(--duration-quick) var(--ease-out);
   }
 
-  .ws-menu-item[data-focused]:where([data-scale='app'] *),
-  .ws-menu-item[data-open]:where([data-scale='app'] *) {
+  .ws-menu-item[data-focused]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ),
+  .ws-menu-item[data-open]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     background: var(--surface-hover);
   }
 
-  .ws-menu-item[data-pressed]:where([data-scale='app'] *) {
+  .ws-menu-item[data-pressed]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     background: var(--surface-selected);
   }
 
   /* Inside the list, which clips: the ring sits just inside the row. */
-  .ws-menu-item[data-focus-visible]:where([data-scale='app'] *) {
+  .ws-menu-item[data-focus-visible]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: calc(-1 * var(--border-width-focus));
   }
 
-  .ws-menu-item[data-danger]:where([data-scale='app'] *) {
+  .ws-menu-item[data-danger]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--danger);
   }
 
-  .ws-menu-item[data-danger][data-focused]:where([data-scale='app'] *) {
+  .ws-menu-item[data-danger][data-focused]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     background: var(--danger-soft);
   }
 
-  .ws-menu-item[data-disabled]:where([data-scale='app'] *) {
+  .ws-menu-item[data-disabled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: var(--opacity-disabled);
   }
 
-  .ws-menu-item[data-pending]:where([data-scale='app'] *) {
+  .ws-menu-item[data-pending]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     opacity: 1;
     color: var(--text-secondary);
   }
 
-  .ws-menu-check:where([data-scale='app'] *) {
+  .ws-menu-check:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     flex: none;
     inline-size: var(--size-icon);
     color: var(--accent-text);
   }
 
-  .ws-menu-text:where([data-scale='app'] *) {
+  .ws-menu-text:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-inline-size: 0;
   }
 
-  .ws-menu-label:where([data-scale='app'] *) {
+  .ws-menu-label:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   /* A picked choice: its label medium, beside the accent-text check. */
-  .ws-menu-item[data-selected]:where([data-scale='app'] *) .ws-menu-label {
+  .ws-menu-item[data-selected]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-menu-label {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }
@@ -108,7 +319,21 @@
   /* A description wraps within the menu's width and never sets it (no width of its own, then the full width):
      the labels and the menu's minimum size the menu, so a long reason on a disabled item ("This is the default
      view for People. Make another view the default first.") never stretches it across the page. */
-  .ws-menu-description:where([data-scale='app'] *) {
+  .ws-menu-description:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     inline-size: 0;
     min-inline-size: 100%;
     color: var(--text-secondary);
@@ -117,14 +342,42 @@
     overflow-wrap: anywhere;
   }
 
-  .ws-menu-meta:where([data-scale='app'] *) {
+  .ws-menu-meta:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     flex: none;
     color: var(--text-tertiary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  .ws-menu-heading:where([data-scale='app'] *) {
+  .ws-menu-heading:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     padding-block: var(--space-8) var(--space-4);
     padding-inline: var(--popover-item-inline);
     color: var(--text-tertiary);
@@ -132,13 +385,42 @@
     letter-spacing: var(--tracking-label);
   }
 
-  .ws-menu-section:where([data-scale='app'] *) + .ws-menu-section {
+  .ws-menu-section:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    + .ws-menu-section {
     margin-block-start: var(--space-4);
   }
 
   /* Pinned to the menu's foot (a picker's Create), the list scrolling behind it: flush with the menu's edges, over a
      hairline, on the menu's own surface. */
-  .ws-menu-section[data-pinned]:where([data-scale='app'] *) {
+  .ws-menu-section[data-pinned]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     position: sticky;
     inset-block-end: calc(-1 * var(--popover-inset));
     margin-block: var(--space-4) calc(-1 * var(--popover-inset));
@@ -149,11 +431,39 @@
   }
 
   /* More of the group above (a choice inside it), so no gap between them. */
-  .ws-menu-section[data-joined]:where([data-scale='app'] *) {
+  .ws-menu-section[data-joined]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     margin-block-start: 0;
   }
 
-  .ws-menu-separator:where([data-scale='app'] *) {
+  .ws-menu-separator:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     block-size: var(--border-width-hairline);
     margin-block: var(--space-6);
     margin-inline: calc(-1 * var(--popover-inset));
@@ -161,7 +471,21 @@
     background: var(--border-subtle);
   }
 
-  .ws-menu-empty:where([data-scale='app'] *) {
+  .ws-menu-empty:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: block;
     padding-block: var(--space-8);
     padding-inline: var(--popover-item-inline);
@@ -170,14 +494,42 @@
     letter-spacing: var(--tracking-body-sm);
   }
 
-  .ws-menu-searchable:where([data-scale='app'] *) {
+  .ws-menu-searchable:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-direction: column;
     max-block-size: inherit;
   }
 
   /* A row above the search (a record search's object), under its own hairline. */
-  .ws-menu-header:where([data-scale='app'] *) {
+  .ws-menu-header:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: none;
     align-items: center;
@@ -190,7 +542,21 @@
     letter-spacing: var(--tracking-label);
   }
 
-  .ws-menu-search:where([data-scale='app'] *) {
+  .ws-menu-search:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex: none;
     align-items: center;
@@ -201,7 +567,21 @@
     color: var(--text-tertiary);
   }
 
-  .ws-menu-input:where([data-scale='app'] *) {
+  .ws-menu-input:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     flex: 1;
     min-inline-size: 0;
     padding: 0;
@@ -213,39 +593,139 @@
     outline: none;
   }
 
-  .ws-menu-input:where([data-scale='app'] *)::placeholder {
+  .ws-menu-input:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )::placeholder {
     color: var(--text-tertiary);
   }
 
-  .ws-menu-input:where([data-scale='app'] *)::-webkit-search-cancel-button {
+  .ws-menu-input:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )::-webkit-search-cancel-button {
     display: none;
   }
 
   /* The command palette's search: a bar's height, the title's size, and roomier rows under it. */
-  .ws-menu-searchable[data-size='lg']:where([data-scale='app'] *) .ws-menu-search {
+  .ws-menu-searchable[data-size='lg']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-menu-search {
     gap: var(--space-12);
     block-size: var(--size-topbar);
     padding-inline: var(--space-16);
   }
 
-  .ws-menu-searchable[data-size='lg']:where([data-scale='app'] *) .ws-menu-input {
+  .ws-menu-searchable[data-size='lg']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-menu-input {
     font: var(--text-heading-regular);
     letter-spacing: var(--tracking-heading-regular);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ws-menu-item:where([data-scale='app'] *) {
+    .ws-menu-item:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       transition: none;
     }
   }
 
   @media (forced-colors: active) {
-    .ws-menu-item[data-focused]:where([data-scale='app'] *) {
+    .ws-menu-item[data-focused]:where(
+        [data-scale='app']
+          *:not(
+            :is(
+                .ws-form-parts-root,
+                .ws-booking-frame-root,
+                .ws-booking-receipt-root,
+                .ws-link-page-root,
+                .ws-business-page-root,
+                .ws-menu-list-root,
+                .ws-guest-look-root
+              )
+              *
+          )
+      ) {
       background: Highlight;
       color: HighlightText;
     }
 
-    .ws-menu-separator:where([data-scale='app'] *) {
+    .ws-menu-separator:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
       background: CanvasText;
     }
   }

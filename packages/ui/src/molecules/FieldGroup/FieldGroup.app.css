@@ -1,11 +1,25 @@
 /* FieldGroup's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw FieldGroup.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* FieldGroup: a Field's label (and a quiet action at its row's end) over read
    only content, then a hint line, in the Field's rhythm. */
 @layer utilities.app-look {
-  .ws-field-group-root:where([data-scale='app'] *) {
+  .ws-field-group-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
@@ -13,7 +27,21 @@
   }
 
   /* As tall as a Field's label row; the action's control overhangs it rather than pushing the content down. */
-  .ws-field-group-head:where([data-scale='app'] *) {
+  .ws-field-group-head:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -22,38 +50,137 @@
   }
 
   /* A section's heading stands a step further from what it heads. */
-  .ws-field-group-root[data-tone='heading']:where([data-scale='app'] *) {
+  .ws-field-group-root[data-tone='heading']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     gap: var(--space-8);
   }
 
   /* The label's line keeps the label's own height, the meta after it on the same line. */
-  .ws-field-group-title:where([data-scale='app'] *) {
+  .ws-field-group-title:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     font: var(--text-body-sm-strong);
     letter-spacing: var(--tracking-body-sm-strong);
   }
 
   /* The label's fact: the label's size, a step quieter. */
-  .ws-field-group-meta:where([data-scale='app'] *) {
+  .ws-field-group-meta:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text-tertiary);
     font: var(--text-body-sm);
     letter-spacing: var(--tracking-body-sm);
   }
 
-  .ws-field-group-action:where([data-scale='app'] *) {
+  .ws-field-group-action:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-flex;
     margin-block: calc(var(--space-4) * -1);
   }
 
-  .ws-field-group-content:where([data-scale='app'] *) {
+  .ws-field-group-content:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     min-inline-size: 0;
   }
 
   /* A long chip ellipses inside the row rather than running past it. */
-  .ws-field-group-content[data-layout='row']:where([data-scale='app'] *) > * {
+  .ws-field-group-content[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    > * {
     max-inline-size: 100%;
   }
 
-  .ws-field-group-content[data-layout='row']:where([data-scale='app'] *) {
+  .ws-field-group-content[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -62,14 +189,42 @@
 
   /* A step more room above the hint than between the label and the content, so the hint reads as the group's
      note, not one more row of the content. */
-  .ws-field-group-hint:where([data-scale='app'] *) {
+  .ws-field-group-hint:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     margin: var(--space-4) 0 0;
     color: var(--text-secondary);
     font: var(--text-body-sm);
     letter-spacing: var(--tracking-body-sm);
   }
 
-  .ws-field-group-error:where([data-scale='app'] *) {
+  .ws-field-group-error:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     align-items: flex-start;
     gap: var(--space-6);

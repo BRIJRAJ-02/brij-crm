@@ -37,7 +37,38 @@ function selectorsOf(list: string): string[] {
   return [...parts, list.slice(start)];
 }
 
+/** Guest pages an editor draws inside the app (a preview): the app look stays out of them, so they show the guest look. */
+const GUEST_ROOTS: Readonly<Record<string, string>> = {
+  'ws-form-parts-root': 'public-form/FormParts.module.css',
+  'ws-booking-frame-root': 'modules/BookingFrame/BookingFrame.module.css',
+  'ws-booking-receipt-root': 'modules/BookingReceipt/BookingReceipt.module.css',
+  'ws-link-page-root': 'modules/LinkPage/LinkPage.module.css',
+  'ws-business-page-root': 'modules/BusinessPage/BusinessPage.module.css',
+  'ws-menu-list-root': 'modules/MenuList/MenuList.module.css',
+  'ws-guest-look-root': 'modules/GuestLook/GuestLook.module.css',
+};
+
+/** The scope every app look selector carries: in the app, and not inside a guest page the app previews. */
+const SCOPE = `:where([data-scale='app'] *:not(:is(${Object.keys(GUEST_ROOTS)
+  .map((name) => `.${name}`)
+  .join(', ')}) *))`;
+
+/** A stylesheet without comments, each selector on one line (Prettier may wrap a long scope over several). */
+function flat(look: string): string {
+  return readFileSync(path.join(SRC, look), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\( /g, '(')
+    .replace(/ \)/g, ')');
+}
+
 describe('the app look', () => {
+  it('keeps out of the guest pages the app previews, whose roots are named as their modules name them', () => {
+    for (const [name, module] of Object.entries(GUEST_ROOTS)) {
+      expect(moduleClasses(module.replace(/\.module\.css$/, '.app.css'))).toContain(name);
+    }
+  });
+
   it('exists for the parts guests draw that phase 1 restyled', () => {
     expect(APP_LOOKS).toEqual([
       'atoms/Avatar/Avatar.app.css',
@@ -75,6 +106,20 @@ describe('the app look', () => {
     ]);
   });
 
+  it("is loaded only by app-look.ts, which only the app's layouts import (and the stories, outside src)", () => {
+    const sources = readdirSync(SRC, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !entry.name.endsWith('.test.ts'))
+      .map((entry) => path.relative(SRC, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
+    const importers = (pattern: RegExp) =>
+      sources.filter((file) => pattern.test(readFileSync(path.join(SRC, file), 'utf8'))).sort();
+    expect(importers(/import\s+['"][^'"]+\.app\.css['"]/)).toEqual(['app-look.ts']);
+    expect(importers(/import\s+['"][^'"]*app-look(\.ts)?['"]/)).toEqual([
+      'modules/AppShell/AppShell.tsx',
+      'modules/AuthLayout/AuthLayout.tsx',
+      'modules/PreviewLayout/PreviewLayout.tsx',
+    ]);
+  });
+
   it('is loaded, every file of it, by app-look.ts', () => {
     const loader = readFileSync(path.join(SRC, 'app-look.ts'), 'utf8');
     for (const look of APP_LOOKS) expect(loader).toContain(`import './${look}';`);
@@ -82,22 +127,22 @@ describe('the app look', () => {
 
   it.each(APP_LOOKS)('%s styles only classes its module names', (look) => {
     const known = moduleClasses(look);
-    const css = readFileSync(path.join(SRC, look), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = flat(look).replaceAll(SCOPE, '');
     const used = new Set([...css.matchAll(/\.(ws-[a-z0-9-]+)/g)].map((match) => match[1] ?? ''));
     expect(used.size).toBeGreaterThan(0);
     expect([...used].filter((name) => !known.has(name))).toEqual([]);
   });
 
-  it.each(APP_LOOKS)('%s applies only in the app, in the app-look layer', (look) => {
-    const css = readFileSync(path.join(SRC, look), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  it.each(APP_LOOKS)('%s applies only in the app, outside its guest previews, in the app-look layer', (look) => {
+    const css = flat(look);
+    // Every rule that names a class (keyframe steps and at-rules name none).
     const selectors = [...css.matchAll(/([^{};]+)\{/g)]
-      // One line each, as Prettier may wrap a long scope over three.
-      .map((match) => (match[1] ?? '').replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim())
-      .filter((selector) => selector.startsWith('.') || selector.includes(',.') || selector.includes(', .'));
+      .map((match) => (match[1] ?? '').trim())
+      .filter((selector) => selector.includes('.ws-'));
     expect(selectors.length).toBeGreaterThan(0);
     for (const group of selectors) {
       for (const selector of selectorsOf(group)) {
-        expect(selector).toContain(":where([data-scale='app'] *)");
+        expect(selector).toContain(SCOPE);
       }
     }
     expect(css).toMatch(/@layer utilities\.app-look \{/);

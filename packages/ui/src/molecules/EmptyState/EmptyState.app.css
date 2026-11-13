@@ -1,6 +1,6 @@
 /* EmptyState's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw EmptyState.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* EmptyState. The row (the default) is one quiet line at a list row's height, at the start, in the list's place:
    the title in secondary text and the action after it, with no mark. The block is the Timefix prototype's empty state
@@ -9,7 +9,21 @@
    block to its slot's height. An error looks different from emptiness in every layout: its alert mark and its title in
    the danger colour, with Try again. A lock shows its mark in the secondary grey. */
 @layer utilities.app-look {
-  .ws-empty-state-root:where([data-scale='app'] *) {
+  .ws-empty-state-root:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its gap (the prototype spaces each line by its own margin). */
     gap: normal;
 
@@ -23,7 +37,21 @@
 
   /* A block's glyph sits in the prototype's well: a round raised tile a large control wide, a soft drop and a
      hairline ring, the glyph in the secondary grey. A row's mark (below) stays bare. */
-  .ws-empty-state-icon:where([data-scale='app'] *) {
+  .ws-empty-state-icon:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-grid;
     flex: none;
     place-items: center;
@@ -39,7 +67,21 @@
   }
 
   /* The illustration slot: a picture over the title, centred, at most size-column wide. */
-  .ws-empty-state-illustration:where([data-scale='app'] *) {
+  .ws-empty-state-illustration:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: grid;
     place-content: center;
     max-inline-size: var(--size-column);
@@ -47,13 +89,41 @@
     color: var(--text-tertiary);
   }
 
-  .ws-empty-state-title:where([data-scale='app'] *) {
+  .ws-empty-state-title:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     color: var(--text);
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
   }
 
-  .ws-empty-state-text:where([data-scale='app'] *) {
+  .ws-empty-state-text:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     max-inline-size: calc(var(--size-measure) / 2);
     margin-block-start: var(--space-4);
     color: var(--text-secondary);
@@ -63,19 +133,77 @@
   }
 
   /* An error is not emptiness: its mark and its title in the danger colour (4.5:1 in both themes). */
-  .ws-empty-state-root[data-tone='error']:where([data-scale='app'] *) .ws-empty-state-icon,
-  .ws-empty-state-root[data-tone='error']:where([data-scale='app'] *) .ws-empty-state-title {
+  .ws-empty-state-root[data-tone='error']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-icon,
+  .ws-empty-state-root[data-tone='error']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-title {
     color: var(--danger);
   }
 
   /* Loading: skeleton lines where the title and text go, a line's measure wide. */
-  .ws-empty-state-lines:where([data-scale='app'] *) {
+  .ws-empty-state-lines:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     inline-size: min(calc(var(--size-measure) / 2), 100%);
     padding-block: var(--space-4);
   }
 
-  .ws-empty-state-actions:where([data-scale='app'] *) {
+  .ws-empty-state-actions:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -84,7 +212,21 @@
   }
 
   /* Fill: the block grown to its slot's height, centred in it (an empty view with the whole area). */
-  .ws-empty-state-root[data-layout='fill']:where([data-scale='app'] *) {
+  .ws-empty-state-root[data-layout='fill']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     flex: 1;
     justify-content: center;
     min-block-size: 100%;
@@ -92,7 +234,21 @@
 
   /* A row: one quiet line at a list row's height, at the start, its action straight after the words. It keeps its
      own height in a slot taller than it (a grid cell, a panel), at the top where the first row would be. */
-  .ws-empty-state-root[data-layout='row']:where([data-scale='app'] *) {
+  .ws-empty-state-root[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     flex-direction: row;
     align-self: start;
     flex-wrap: wrap;
@@ -105,7 +261,22 @@
   }
 
   /* A row's mark is bare: no well, at the row's icon size. */
-  .ws-empty-state-root[data-layout='row']:where([data-scale='app'] *) .ws-empty-state-icon {
+  .ws-empty-state-root[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-icon {
     display: inline-flex;
     inline-size: auto;
     block-size: auto;
@@ -115,25 +286,83 @@
     color: var(--text-tertiary);
   }
 
-  .ws-empty-state-root[data-layout='row']:where([data-scale='app'] *) .ws-empty-state-title {
+  .ws-empty-state-root[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-title {
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  .ws-empty-state-root[data-layout='row'][data-tone='error']:where([data-scale='app'] *)
+  .ws-empty-state-root[data-layout='row'][data-tone='error']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
     :is(.ws-empty-state-icon, .ws-empty-state-title) {
     color: var(--danger);
   }
 
-  .ws-empty-state-root[data-layout='row']:where([data-scale='app'] *) .ws-empty-state-actions {
+  .ws-empty-state-root[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-actions {
     justify-content: start;
     margin-block-start: 0;
   }
 
   /* A row with a line of text: the text sits under the title (and the actions under the text), rather than
      wrapping into a block beside it. A mark, when there is one (an error, a lock), stays level with the title. */
-  .ws-empty-state-root[data-layout='row'][data-has-text]:where([data-scale='app'] *) {
+  .ws-empty-state-root[data-layout='row'][data-has-text]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--space-2);
@@ -142,19 +371,62 @@
     padding-block: var(--space-6);
   }
 
-  .ws-empty-state-root[data-layout='row'][data-has-text][data-has-mark]:where([data-scale='app'] *) {
+  .ws-empty-state-root[data-layout='row'][data-has-text][data-has-mark]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: var(--space-8);
   }
 
   /* In the grid with a mark, the words and actions take the second column; a flex row ignores this. */
-  .ws-empty-state-root[data-layout='row'][data-has-mark]:where([data-scale='app'] *)
+  .ws-empty-state-root[data-layout='row'][data-has-mark]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
     :is(.ws-empty-state-title, .ws-empty-state-text, .ws-empty-state-actions) {
     grid-column: 2;
   }
 
   /* A row's line of help runs the width of its slot: a measure wraps it early inside a wide card. */
-  .ws-empty-state-root[data-layout='row']:where([data-scale='app'] *) .ws-empty-state-text {
+  .ws-empty-state-root[data-layout='row']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    )
+    .ws-empty-state-text {
     max-inline-size: none;
     margin-block-start: 0;
     color: var(--text-tertiary);

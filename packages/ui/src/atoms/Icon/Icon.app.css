@@ -1,11 +1,25 @@
 /* Icon's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Icon.module.css
    alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
-   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   layer, under <html data-scale="app">, outside a guest page drawn inside the app (an editor's preview). Its classes are the module's own names (ws-<part>-<local>). Write it as the
    module was written; app-look.test.ts checks every class here exists in the module. */
 /* The Icon atom, after the prototype's Icon (spec 0072): a Lucide glyph at one stroke and four sizes, 16 by default, 14 in
    small controls and chips, 12 in footers and meta lines, 20 in empty states and tiles. Variants are data attributes. */
 @layer utilities.app-look {
-  .ws-icon-icon:where([data-scale='app'] *) {
+  .ws-icon-icon:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     display: inline-block;
     flex: none;
     inline-size: var(--size-icon);
@@ -15,48 +29,188 @@
     vertical-align: middle;
   }
 
-  .ws-icon-icon[data-size='lg']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-size='lg']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: var(--size-icon-lg);
     block-size: var(--size-icon-lg);
   }
 
   /* 14: a step under size-icon. */
-  .ws-icon-icon[data-size='sm']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-size='sm']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: calc(var(--size-icon) - var(--space-2));
     block-size: calc(var(--size-icon) - var(--space-2));
   }
 
-  .ws-icon-icon[data-size='xs']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-size='xs']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     inline-size: var(--space-12);
     block-size: var(--space-12);
   }
 
-  .ws-icon-icon[data-filled]:where([data-scale='app'] *) {
+  .ws-icon-icon[data-filled]:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     fill: currentcolor;
   }
 
-  .ws-icon-icon[data-tone='muted']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-tone='muted']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text-secondary);
   }
 
-  .ws-icon-icon[data-tone='faint']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-tone='faint']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--text-tertiary);
   }
 
-  .ws-icon-icon[data-tone='ai']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-tone='ai']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--ai);
   }
 
-  .ws-icon-icon[data-tone='success']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-tone='success']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--success);
   }
 
-  .ws-icon-icon[data-tone='danger']:where([data-scale='app'] *) {
+  .ws-icon-icon[data-tone='danger']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     color: var(--danger);
   }
 
   /* An object's icon on its hue, with no outline (the prototype's tags and tiles have none). */
-  .ws-icon-tile:where([data-scale='app'] *) {
+  .ws-icon-tile:where(
+    [data-scale='app']
+      *:not(
+        :is(
+            .ws-form-parts-root,
+            .ws-booking-frame-root,
+            .ws-booking-receipt-root,
+            .ws-link-page-root,
+            .ws-business-page-root,
+            .ws-menu-list-root,
+            .ws-guest-look-root
+          )
+          *
+      )
+  ) {
     /* Over the shipped module: its tag edge (the prototype's tiles have none). */
     border: 0;
 
@@ -73,42 +227,154 @@
     color: var(--tile-fg);
   }
 
-  .ws-icon-tile[data-hue='red']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='red']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-red-bg);
     --tile-fg: var(--tag-red-text);
   }
 
-  .ws-icon-tile[data-hue='orange']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='orange']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-orange-bg);
     --tile-fg: var(--tag-orange-text);
   }
 
-  .ws-icon-tile[data-hue='yellow']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='yellow']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-yellow-bg);
     --tile-fg: var(--tag-yellow-text);
   }
 
-  .ws-icon-tile[data-hue='lime']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='lime']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-lime-bg);
     --tile-fg: var(--tag-lime-text);
   }
 
-  .ws-icon-tile[data-hue='green']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='green']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-green-bg);
     --tile-fg: var(--tag-green-text);
   }
 
-  .ws-icon-tile[data-hue='sky']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='sky']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-sky-bg);
     --tile-fg: var(--tag-sky-text);
   }
 
-  .ws-icon-tile[data-hue='blue']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='blue']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-blue-bg);
     --tile-fg: var(--tag-blue-text);
   }
 
-  .ws-icon-tile[data-hue='purple']:where([data-scale='app'] *) {
+  .ws-icon-tile[data-hue='purple']:where(
+      [data-scale='app']
+        *:not(
+          :is(
+              .ws-form-parts-root,
+              .ws-booking-frame-root,
+              .ws-booking-receipt-root,
+              .ws-link-page-root,
+              .ws-business-page-root,
+              .ws-menu-list-root,
+              .ws-guest-look-root
+            )
+            *
+        )
+    ) {
     --tile-bg: var(--tag-purple-bg);
     --tile-fg: var(--tag-purple-text);
   }
