@@ -25,7 +25,13 @@ export const Default: Story = {
         <RemoteCursor name="Jonas" hue="lime" /> before then.
       </span>
     </Stage>
-  ),
+  ), // The flag's edge is the caret's own dot colour (the prototype's Presence), not a legacy tag border token.
+  play: async ({ canvas }) => {
+    const flag = canvas.getByText('Maya');
+    const caret = flag.parentElement;
+    if (caret === null) throw new Error('no caret');
+    await expect(getComputedStyle(flag).borderTopColor).toBe(getComputedStyle(caret).borderInlineStartColor);
+  },
 };
 
 /** Where each pointer is drawn: its element, its arrow and its name pill. */
@@ -76,6 +82,8 @@ export const Pointers: Story = {
     await expect(Number(getComputedStyle(jonas.arrow).opacity)).toBeLessThan(1);
     await expect(getComputedStyle(maya.pill).opacity).toBe('1');
     await expect(getComputedStyle(maya.arrow).opacity).toBe('1');
+    // The pill's edge is the arrow's dot colour, as the prototype's Presence draws it.
+    await expect(getComputedStyle(maya.pill).borderTopColor).toBe(getComputedStyle(maya.arrow).backgroundColor);
     // A new point glides: a transition on translate starts from the old point, and nothing else moves. Under
     // reduced motion (RemoteCursor.browser.test.tsx runs this story so) it jumps, and idle keeps only the fade.
     await userEvent.click(canvas.getByRole('button', { name: 'Move' }));

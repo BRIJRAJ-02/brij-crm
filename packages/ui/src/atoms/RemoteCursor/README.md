@@ -13,7 +13,7 @@ Ported from the artifact's RemoteCursor card. Live notes (#27) show each collabo
 ```
 
 - `hue` is the person's presence hue, the same as their avatar's.
-- The flag uses the hue's tag colours, so the name holds 4.5:1 in every hue.
+- The flag uses the hue's tag colours, so the name holds 4.5:1 in every hue. Its edge, and the pointer's pill's, is a hairline in the dot colour, as the prototype's Presence draws it (the legacy `tag-<hue>-border` tokens are gone from it, the port merge, 13 November 2026).
 
 ## Pointer
 
