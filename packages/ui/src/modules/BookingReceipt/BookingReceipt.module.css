@@ -19,6 +19,11 @@
        at the public reveal (under 500ms). */
     --reveal-duration: var(--duration-public-reveal);
     --panel-duration: var(--duration-public-reveal);
+    /* Button's primary is ink in the app (spec 0072); the manage booking page has no BookingFrame round it to name its
+       accent, so its one action wears the page's accent here, as LinkPage and GuestLook remap it. */
+    --primary: var(--accent);
+    --primary-hover: var(--accent-hover);
+    --on-primary: var(--on-accent);
 
     box-sizing: border-box;
     display: flex;

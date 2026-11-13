@@ -122,9 +122,17 @@
     --accent-soft: var(--form-accent-soft);
     --accent-border: var(--form-accent-border);
     --accent-text: var(--form-accent-line);
+    /* The outline ring in the brand too (spec 0072's ported parts draw it), as BookingFrame's and LinkPage's are. */
+    --focus-ring: var(--form-accent-line);
+    /* Read by the parts not yet ported to the outline ring (Rating, the rating question). */
     --shadow-focus: var(--form-focus);
     --text-label: var(--text-body);
     --tracking-label: var(--tracking-body);
+    /* Field's label, hint and error read text-body-sm(-strong) since spec 0072's tier 2: the same body size here. */
+    --text-body-sm: var(--text-body);
+    --text-body-sm-strong: var(--text-body);
+    --tracking-body-sm: var(--tracking-body);
+    --tracking-body-sm-strong: var(--tracking-body);
     /* A question's name in the text colour: in grey it read weaker than the placeholder under it. */
     --label-colour: var(--text);
 

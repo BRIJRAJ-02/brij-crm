@@ -93,6 +93,8 @@
     --accent-soft: var(--frame-accent-soft);
     --accent-border: var(--frame-accent-border);
     --accent-text: var(--frame-accent-line);
+    /* The outline ring (spec 0072's ported parts: DayStrip, BookingChat, Button) in the brand as well. */
+    --focus-ring: var(--frame-accent-line);
     --shadow-focus: var(--frame-focus);
 
     display: flex;
@@ -125,8 +127,8 @@
   }
 
   .brandLink:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   /* The workspace's logo at the head of the rail (spec 0060, AC-4): a control's height, as wide as it needs up to a

@@ -488,6 +488,16 @@ export const Branded: Story = {
     await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
     const send = canvas.getByRole('button', { name: 'Send' });
     await expect(getComputedStyle(send).backgroundColor).toBe('rgb(230, 87, 8)');
+    // A question's name reads at the form's body size, not the app's dense label step (spec 0072, FormParts' card).
+    const form = send.closest('form');
+    await expect(form).not.toBeNull();
+    await expect(getComputedStyle(canvas.getByText('Your name')).fontSize).toBe(
+      getComputedStyle(form ?? send).fontSize,
+    );
+    // Reached from the keyboard, Send's outline ring wears the brand too (spec 0072's ring, through --focus-ring).
+    for (let step = 0; step < 40 && document.activeElement !== send; step += 1) await userEvent.tab();
+    await expect(send).toHaveFocus();
+    await expect(getComputedStyle(send).outlineColor).toBe('rgb(230, 87, 8)');
   },
 };
 

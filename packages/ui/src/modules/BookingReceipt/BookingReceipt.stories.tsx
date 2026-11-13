@@ -68,7 +68,10 @@ export const BookedMoment: Story = {
     await settleAnimations();
     await expect(canvas.getByText('We sent the details to grace@example.com.')).toBeVisible();
     await expect(canvas.getByText('Friday 9 October, 9:30 – 10:00 AM')).toBeVisible();
-    await expect(canvas.getByRole('link', { name: /Join the call/ })).toBeVisible();
+    const join = canvas.getByRole('link', { name: /Join the call/ });
+    await expect(join).toBeVisible();
+    // The one action wears the page's accent (the light theme's #2457e6 here), not the app's ink primary (spec 0072).
+    await expect(getComputedStyle(join).backgroundColor).toBe('rgb(36, 87, 230)');
     await userEvent.click(canvas.getByRole('button', { name: 'Add to calendar' }));
     await expect(await screen.findByRole('menuitem', { name: /Apple Calendar/ })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');

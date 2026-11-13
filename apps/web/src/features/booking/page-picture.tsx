@@ -7,7 +7,7 @@ import { strings } from './strings.ts';
 /** The weekdays in a page's weekly hours, Monday first. */
 const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
-/** The page's picture: its title and lengths over a month whose open days are the ones its weekly hours book. */
+/** The page's picture: its title and lengths over a week whose open days are the ones its weekly hours book. */
 export function pagePicture(page: BookingPageView) {
   return (
     <BookingPagePicture

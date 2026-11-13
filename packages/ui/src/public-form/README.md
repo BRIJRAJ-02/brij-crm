@@ -71,7 +71,7 @@ Tab follows the questions. A letter key picks a lettered choice (and, One at a t
 
 ## Brand kit
 
-A live form wears its workspace's kit (spec 0060, AC-4). `formBrand(form)` turns the read's `brand.logo` version into the logo's path on our own origin (`/api/public/forms/<key>/logo?v=`), drawn over the form at a control's height; the page's brand stylesheet brings the accent, which `FormGround` points the library's own names at inside the card, exactly as BookingFrame does, with every name falling back to its token. An app preview passes `brand` (`PageBrand`: a logo and the accent's `variables`) instead.
+A live form wears its workspace's kit (spec 0060, AC-4). `formBrand(form)` turns the read's `brand.logo` version into the logo's path on our own origin (`/api/public/forms/<key>/logo?v=`), drawn over the form at a control's height; the page's brand stylesheet brings the accent, which `FormGround` points the library's own names at inside the card, exactly as BookingFrame does, the outline ring's `--focus-ring` among them, with every name falling back to its token. The card also maps Field's label, hint and error type (`text-body-sm` and its strong step, spec 0072) to the body size, so they read at 16px as a question's name always has. An app preview passes `brand` (`PageBrand`: a logo and the accent's `variables`) instead.
 
 A form that wears its kit wears its workspace's template too (spec 0068): `formBrand` carries `brand.template` and `FormGround` sets `data-template` (and Night's or Studio's `data-theme`, which wins over the form's own Colour) with the ground and the headline's face. A plain form names no kit and so no template.
 

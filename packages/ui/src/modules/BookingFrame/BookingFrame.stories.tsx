@@ -176,6 +176,10 @@ export const Branded: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     const book = canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' });
     await expect(getComputedStyle(book).backgroundColor).toBe('rgb(230, 87, 8)');
+    // Reached from the keyboard, Book's outline ring wears the brand too (spec 0072's ring, through --focus-ring).
+    for (let step = 0; step < 40 && document.activeElement !== book; step += 1) await userEvent.tab();
+    await expect(book).toHaveFocus();
+    await expect(getComputedStyle(book).outlineColor).toBe('rgb(230, 87, 8)');
   },
 };
 

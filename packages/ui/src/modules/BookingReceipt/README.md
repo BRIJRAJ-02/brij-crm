@@ -30,6 +30,8 @@ The heading and its warm line rise out of a soft blur one after the other, then 
 
 The heading takes focus on arrival; Tab reaches Join the call, each calendar and the book again link.
 
+The one action (Join the call, Book again) wears the page's accent, not the app's ink primary (spec 0072): the root points Button's `--primary` at `--accent`, since the manage booking page has no BookingFrame round it to name one; inside GuestLook that is the look's ink.
+
 ## Differences from the artifact
 
 Not in the artifact.
