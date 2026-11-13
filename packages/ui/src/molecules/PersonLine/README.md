@@ -40,6 +40,5 @@ for a row whose last fact is the point (a request's "Expires …"). Column heads
 
 Folded into the prototype's Avatar (spec 0072): avatar, name (`body-strong`) over a grey sub line (`body-sm-tight`, 400 13/18), 12px apart, the one way a person or record is drawn in a row.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw PersonLine too (a booking, form, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `PersonLine.module.css` is the shipped look, which every page loads, and the prototype's look described here is `PersonLine.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Differences from the prototype**: the tone leads (`away`, `free`, `off`), `isMetaWrapped` and the narrow container rule are kept.

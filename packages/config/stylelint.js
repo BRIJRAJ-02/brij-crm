@@ -121,17 +121,6 @@ export const stylelintConfig = {
     ],
   },
   overrides: [
-    // A part's app look (packages/ui `<Part>.app.css`, spec 0072 decision 16) writes its module's selectors with the
-    // app's scope after the first compound, `:where([data-scale='app'] *:not(:is(<guest roots>) *))`: in the app, and
-    // not inside a guest page an editor previews. That scope is two more compounds, never a reach into another
-    // component's insides, so the limit is the module's plus two. Element selectors stay refused.
-    {
-      files: ['**/*.app.css'],
-      rules: {
-        'selector-max-compound-selectors': 4,
-        'selector-max-type': [0, { message: 'Style a class, not an element, so the style stays in this component.' }],
-      },
-    },
     {
       files: ['**/*.module.css'],
       rules: {

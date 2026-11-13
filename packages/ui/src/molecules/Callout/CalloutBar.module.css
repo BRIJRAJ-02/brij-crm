@@ -1,7 +1,5 @@
 /* CalloutBar: a Callout in a toolbar (the app's view bars). Its own file, so a public page never loads it. */
-/* In @layer utilities, not components: it overrides Callout's look, the shipped module's on a guest page and the app look's
-   (utilities.app-look, spec 0072 decision 16) in the app, and a sublayer always gives way to its own layer's rules. */
-@layer utilities {
+@layer components {
   /* In a bar: one quiet line (its tone's icon and text, no fill or edge, so it never reads as a button) at a
      control's height, so it fits beside the bar's buttons and never moves the view; a long one is cut short. */
   .root[data-placement='bar'] {

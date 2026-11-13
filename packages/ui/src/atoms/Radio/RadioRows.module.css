@@ -36,7 +36,8 @@
   }
 
   .choices[data-variant='rows'] .field:has(.radio[data-focus-visible]) {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (hover: hover) and (pointer: fine) {

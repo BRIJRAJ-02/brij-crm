@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
-// The app's look for parts guests also draw (spec 0072, decision 16): every app screen sits in one of the layouts.
-import '../../app-look.ts';
 import styles from './AuthLayout.module.css';
 import { strings } from './strings.ts';
 

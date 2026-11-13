@@ -34,6 +34,5 @@ Space toggles it.
 
 Folded into the prototype's Checkbox (spec 0072): a 36 by 20 track (`size-control` by `space-20`) and a 16px thumb with `shadow-sm`. The thumb stretches 4px while pressed (leftward when on) and travels with the bounce ease's small overshoot over `--duration-medium` (transitions.dev 27).
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Switch too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Switch.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Switch.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Differences from the prototype**: the off track is `control-border`, not the prototype's `border-strong`, which falls under the 3:1 a control's outline needs against the surface (WCAG 1.4.11). The prototype's keyframed double bounce needs a "touched" state, so the transition's single overshoot stands in for it. `offStatus`, `labelContext` and a hidden label's larger hit area are kept.

@@ -1,7 +1,8 @@
-/* Popover: the raised surface every menu, select and picker opens in. It grows
-   from its trigger (React Aria's --trigger-anchor-point), exits faster, and
-   skips the animation when opened from the keyboard. Its gap to the trigger is
-   a margin on the placed side, so it comes from a token. */
+/* Popover: the Timefix prototype's overlay surface (spec 0072), the raised surface every menu, select and picker
+   opens in: radius-xl, a hairline and shadow-md. It grows from its trigger (React Aria's --trigger-anchor-point,
+   transitions.dev 05: scale-medium to 1 over duration-fast), leaves faster to scale-tiny with a fade, and skips the
+   animation when opened from the keyboard. Its gap to the trigger is a margin on the placed side, so it comes from a
+   token. */
 @layer components {
   .root {
     /* Fallbacks; React Aria sets both inline while the popover is open. */
@@ -14,7 +15,7 @@
        the width a virtualised menu measures, and loop. */
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     color: var(--text);
@@ -84,6 +85,7 @@
 
   .root[data-exiting] {
     animation: shrink var(--duration-quick) var(--ease-smooth-out) forwards;
+    pointer-events: none;
   }
 
   .root[data-opened-by='keyboard'][data-entering],
@@ -101,7 +103,7 @@
   @keyframes shrink {
     to {
       opacity: 0;
-      scale: var(--scale-medium);
+      scale: var(--scale-tiny);
     }
   }
 

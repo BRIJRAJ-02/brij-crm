@@ -40,7 +40,6 @@ Not in the artifact.
 
 Takes its look from the prototype's DescriptionList (read only): every row a control tall, the term in `text-body-sm` and `text-secondary` at the top of its row, level with the value's first line in the body type, so a taller value never moves its term. `compact` is the prototype's fixed name column (136 at full size, `4 * size-control - space-8`) with rows a small control tall; `stacked` puts each term over its value.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw DescriptionList too (a booking, form, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `DescriptionList.module.css` is the shipped look, which every page loads, and the prototype's look described here is `DescriptionList.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Use it for** read only label and value pairs: a booking's or a submission's details, a summary. **Don't use it for** a record's editable attributes (AttributeList) or tabular data (DataGrid).
 

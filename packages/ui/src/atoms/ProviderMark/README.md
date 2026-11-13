@@ -51,6 +51,5 @@ Not in the artifact.
 
 Folded into the prototype's Icon (spec 0072): a brand's own mark at the Icon atom's sizes, 14 (`sm`), 16 (`md`) and 20 (`lg`, `size-icon-lg`), never recoloured, except `mono` which draws the shape in the text colour so a row of social marks reads as one set. Black marks swap their light and dark files by theme.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw ProviderMark too (a booking, form, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `ProviderMark.module.css` is the shipped look, which every page loads, and the prototype's look described here is `ProviderMark.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Differences from the prototype**: the prototype draws ProviderMark from Icon's file; the library keeps it a component of its own, sharing Icon's sizes. Artwork is unchanged.

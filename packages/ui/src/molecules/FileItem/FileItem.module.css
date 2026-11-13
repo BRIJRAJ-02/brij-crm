@@ -1,36 +1,42 @@
-/* FileItem: a row with the type icon, the name over its size (or progress, or
-   the error in danger), and remove at the end. */
+/* FileItem: takes its look from FileDrop's file row in the Timefix prototype (spec 0072): the type icon on a grey
+   tile a control tall, the name over its size (or progress, or the error in danger, the tile turning danger-soft),
+   and remove at the end, on no box of its own. The chip variant is a record chip's 24px chip. */
 @layer components {
   .root {
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--space-12);
     min-inline-size: 0;
     padding-block: var(--space-6);
-    padding-inline: var(--space-8);
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    padding-inline: var(--space-8) var(--space-4);
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
   }
-  /* The file mark's holder: the app look draws a tile round it (spec 0072, decision 16); here it adds no box, so the
-     mark sits in the row as it always has. */
+
   .icon {
-    display: contents;
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  .root[data-state='failed'] .icon {
+    background: var(--danger-soft);
   }
 
   .root[data-variant='chip'] {
     display: inline-flex;
     gap: var(--space-4);
     max-inline-size: 100%;
-    block-size: var(--size-chip);
+    block-size: var(--space-24);
     padding-block: 0;
     padding-inline: var(--space-6);
-    border-color: var(--border);
+    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-sm);
-  }
-
-  .root[data-state='failed'] {
-    border-color: var(--danger);
+    background: var(--surface);
   }
 
   .text {
@@ -50,20 +56,26 @@
     white-space: nowrap;
   }
 
+  .root[data-variant='chip'] .name {
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
+  }
+
   .size {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+    font-variant-numeric: tabular-nums;
   }
 
   .error {
     color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   @media (forced-colors: active) {
-    .root {
+    .root[data-variant='chip'] {
       border-color: CanvasText;
     }
   }

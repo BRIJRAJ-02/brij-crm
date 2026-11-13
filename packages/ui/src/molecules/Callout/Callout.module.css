@@ -1,72 +1,65 @@
-/* Callout: a message with an icon, an optional bold title and the next step. Info is a plain grey line with no
-   fill or edge (a passing state, never a box); success, warning and danger are bordered in their tag colours
-   (green, yellow, red), which hold 4.5:1 for the text in both themes. As a banner, full width under a view's bars. */
+/* Callout: a message with an icon, an optional bold title and the next step, in the Timefix prototype's look (spec
+   0072). Info is a plain grey line with no fill or edge (a passing state, never a box: the owner's call); success,
+   warning and danger sit on their soft ground with no edge, radius-lg, the words in the text colour and the icon in
+   the tone's colour. As a banner, full width under a view's bars. */
 @layer components {
   .root {
+    --callout-tone: var(--text-tertiary);
+
     display: flex;
     align-items: flex-start;
-    gap: var(--space-8);
-    padding-block: var(--space-8);
-    padding-inline: var(--space-12);
-    border: var(--border-width-hairline) solid;
-    border-radius: var(--radius-md);
+    gap: var(--space-12);
+    padding-block: var(--space-12);
+    padding-inline: var(--space-16);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-lg);
+    color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
-  /* The words beside the title: the app look steps them back (spec 0072, decision 16); they draw nothing here, so the
-     rule is empty and the class is only named. */
-  /* stylelint-disable-next-line block-no-empty -- named for the app look, which styles it */
-  .text {
-  }
 
   /* Banner: full width under a view's bars, which already draw the line above it. Square, a hairline
-     below in the tone's border colour, its content in line with the bars' content. */
+     below, its content in line with the bars' content. */
   .root[data-placement='banner'] {
-    padding-inline: var(--space-16);
-    border-block-start-style: none;
-    border-inline-style: none;
+    border-block-end-color: var(--border-subtle);
     border-radius: 0;
   }
-
-  /* A phone: a bar's line wraps rather than cutting its words short (a reason no one could read whole), its icon
-     beside the first line. */
 
   /* Info: quiet. Grey words beside a tertiary icon, no fill and no edge, in line with the content around it. */
   .root[data-tone='info'] {
     padding-inline: 0;
-    border-color: transparent;
     background: transparent;
     color: var(--text-secondary);
   }
 
-  /* An info banner keeps its inset and a neutral hairline below, so the view's edge still reads. */
+  /* An info banner keeps its inset, so its words line up with the bars'. */
   .root[data-tone='info'][data-placement='banner'] {
     padding-inline: var(--space-16);
-    border-block-end-color: var(--border-subtle);
   }
 
   .root[data-tone='success'] {
-    border-color: var(--tag-green-border);
-    background: var(--tag-green-bg);
-    color: var(--tag-green-text);
+    --callout-tone: var(--success);
+
+    background: var(--success-soft);
   }
 
   .root[data-tone='warning'] {
-    border-color: var(--tag-yellow-border);
-    background: var(--tag-yellow-bg);
-    color: var(--tag-yellow-text);
+    --callout-tone: var(--warning);
+
+    background: var(--warning-soft);
   }
 
   .root[data-tone='danger'] {
-    border-color: var(--tag-red-border);
-    background: var(--tag-red-bg);
-    color: var(--tag-red-text);
+    --callout-tone: var(--danger);
+
+    background: var(--danger-soft);
   }
 
   .icon {
     display: inline-flex;
     flex: none;
     padding-block-start: var(--space-2);
+    color: var(--callout-tone);
   }
 
   .body {
@@ -82,9 +75,10 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* Info's icon is tertiary and its title the body's colour, under the secondary words. */
-  .root[data-tone='info'] .icon {
-    color: var(--text-tertiary);
+  /* Under a title, the words step back to the secondary colour (as the prototype's body under its title); info's
+     title is the body's colour over its secondary words. */
+  .title + .text {
+    color: var(--text-secondary);
   }
 
   .root[data-tone='info'] .title {

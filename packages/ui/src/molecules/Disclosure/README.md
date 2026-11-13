@@ -43,7 +43,6 @@ Not in the artifact.
 
 Takes its look from the prototype's Disclosure (accordion, `plain`): a `size-row` title row in `text-body-strong` with `radius-md` that washes `surface-hover` under the pointer over `duration-quick`; a `text-tertiary` chevron pointing down that flips through a flat line to point up as the section opens; the panel's height tweens over `duration-fast` on `ease-smooth-out` while its content fades in, and fades out as it closes (transitions.dev 21, accordion). Focus is the outline ring just inside the row, so the panel's clip never cuts it.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Disclosure too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Disclosure.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Disclosure.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Use it for** a block of settings or details someone opens when they need it ("Advanced", a role's powers, an archived list). **Don't use it for** the main content of a page, or a choice between views (Tabs).
 

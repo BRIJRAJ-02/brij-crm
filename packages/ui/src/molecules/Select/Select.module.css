@@ -1,30 +1,29 @@
-/* Select: the Field's label above a flat 30px trigger outlined like a Field
-   (field-border, 3:1 on surface-raised), showing
-   the value as a tag, a dot or text, then a chevron. Its list opens in the
-   Popover at the trigger's width, with Menu sized options and a check on the
-   chosen one. */
+/* Select: the Timefix prototype's Select (spec 0072). The Field's label above a trigger drawn as a Field's filled box
+   (surface-subtle, no edge at rest, the fill deepening under the pointer; open or focused, white with the accent edge
+   and the accent-border ring, the chevron turned), showing the value as a tag, a dot or text. Its list opens in the
+   Popover at the trigger's width, with the prototype's menu rows (size-control tall, radius-md, a wash on the
+   focused one, never a scale) and a check on the chosen one. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-6);
     min-inline-size: 0;
   }
 
   .trigger {
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-8);
     box-sizing: border-box;
     inline-size: 100%;
     block-size: var(--size-control);
     /* Not the button's UA 1px: the height comes from block-size, the words centred in it. */
     padding-block: 0;
-    padding-inline: var(--space-8);
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-control);
+    background: var(--surface-subtle);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
@@ -32,17 +31,38 @@
     outline: none;
     transition:
       border-color var(--duration-quick) var(--ease-out),
-      background-color var(--duration-quick) var(--ease-out);
+      background-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
-  .trigger[data-focus-visible],
-  .trigger[data-pressed] {
+  @media (hover: hover) and (pointer: fine) {
+    .root:not([data-variant='inline'], [data-variant='cell'], [data-variant='prefix'], [data-disabled])
+      .trigger:not([data-pressed], [aria-expanded='true'])[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  /* Open, pressed or reached by the keyboard: a typed in Field's white fill, accent edge and accent-border ring. */
+  .trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
     border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  }
+
+  /* The chevron turns over while the list is open (the prototype's, duration-fast on the smooth curve). It is the
+     trigger's last child, the Icon Select draws there: no holder of its own, so the markup stays as it shipped. */
+  .trigger > :last-child {
+    transition: rotate var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .trigger[aria-expanded='true'] > :last-child {
+    rotate: 180deg;
   }
 
   .root[data-size='sm'] .trigger {
     block-size: var(--size-control-sm);
+    padding-inline: var(--space-8);
+    gap: var(--space-6);
   }
 
   .root[data-invalid] .trigger {
@@ -53,14 +73,10 @@
     opacity: var(--opacity-disabled);
   }
 
-  /* Locked, not a different control: the same outlined box, quieted. A filled block with no edge read as a third
-     kind of control beside the selects above and below it in a table of the same job (owner, 1 November 2026,
-     the form's publish dialog). The hairline steps down to border-subtle and the lift goes, so it is plainly not
-     something to press, and the value keeps the text colour so it stays as readable as its neighbours. */
+  /* Locked, not a different control: the same filled box with no chevron and no hover, so it is plainly not
+     something to press, and the value keeps the text colour so it stays as readable as its neighbours (owner,
+     1 November 2026: a locked select reads as the same kind of control as the selects beside it). */
   .root[data-readonly] .trigger {
-    border-color: var(--border-subtle);
-    background: var(--surface-raised);
-    box-shadow: none;
     cursor: default;
   }
 
@@ -108,16 +124,6 @@
     letter-spacing: inherit;
   }
 
-  .root[data-variant='inline'] .trigger[data-pressed] {
-    border-color: transparent;
-    box-shadow: none;
-  }
-
-  .root[data-variant='inline'] .trigger[data-focus-visible] {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-thick);
-  }
-
   /* A time of day (weekly hours): one width for every time, wide enough for the longest ("12:00 AM",
      "Midnight"), and figures of one width, so a row's "to" and buttons never move when a time changes. */
   .root[data-variant='time'] {
@@ -130,35 +136,50 @@
   }
 
   /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
-     the error edge; this draws only a hairline after itself. The flag, the code and a small chevron sit close
+     the error edge; this draws a chip and a rule after itself. The flag, the code and a small chevron sit close
      together, the code at its own width: a width kept for the longest code ("+998") left a hole before the
      chevron for every short one (the owner, 21 October 2026). */
   .root[data-variant='prefix'] {
+    flex-direction: row;
     align-self: stretch;
+    align-items: center;
+    gap: var(--space-4);
+    /* The prototype's chip sits space-4 from the box's edge, whatever Field's padding at its size and variant. */
+    margin-inline-start: calc(var(--space-4) - var(--field-pad-inline, var(--space-12)));
   }
 
+  /* The rule between the code and the number: half the box's height, border-strong. */
+  .root[data-variant='prefix']::after {
+    content: '';
+    flex: none;
+    inline-size: var(--border-width-hairline);
+    block-size: 50%;
+    background: var(--border-strong);
+  }
+
+  /* The prototype's code chip: a small rounded button inside the box, filled surface-selected under the pointer and
+     while its list is open, its code in medium weight, tabular figures. */
   .root[data-variant='prefix'] .trigger {
     gap: var(--space-4);
     inline-size: auto;
-    block-size: 100%;
-    padding-inline: 0 var(--space-6);
+    block-size: calc(100% - var(--space-12));
+    padding-inline: var(--space-8) var(--space-6);
     border: none;
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: transparent;
     box-shadow: none;
-  }
-
-  /* The code button's own mark when the keyboard reaches it: the Field's ring takes in the number too, and with
-     no caret on the button nothing else said which part had focus. */
-  .root[data-variant='prefix'] .trigger[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    font-variant-numeric: tabular-nums;
   }
 
   .short {
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  .root[data-variant='prefix'] .short {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   .value {
@@ -181,14 +202,14 @@
     display: inline-flex;
     flex: none;
     align-items: center;
-    block-size: var(--size-chip);
+    /* The prototype's 22px small tag: three space-2 steps under a small control. */
+    block-size: calc(var(--size-control-sm) - 3 * var(--space-2));
     padding-inline: var(--space-6);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-raised);
+    border-radius: var(--radius-full);
+    background: var(--surface-selected);
     color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .placeholder {
@@ -217,8 +238,8 @@
 
   .hint {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* Searchable: the search field over the list, which scrolls under it. */
@@ -252,8 +273,8 @@
     display: block;
     padding: var(--popover-item-block) var(--popover-item-inline);
     color: var(--text-tertiary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .list {
@@ -283,22 +304,29 @@
     align-items: center;
     gap: var(--space-8);
     box-sizing: border-box;
-    min-block-size: var(--size-nav-item);
+    min-block-size: var(--size-control);
     padding-block: var(--popover-item-block);
     padding-inline: var(--popover-item-inline);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     outline: none;
+    transition: background-color var(--duration-quick) var(--ease-out);
   }
 
+  /* Options wash, never scale: the focused one surface-hover, a pressed one surface-selected. */
   .option[data-focused] {
     background: var(--surface-hover);
   }
 
+  .option[data-pressed] {
+    background: var(--surface-selected);
+  }
+
   .option[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* A disabled option fades what it shows, not itself, so the keyboard's ring on it keeps its full contrast. */
@@ -326,8 +354,8 @@
 
   /* A group's heading over its options (`group`): quiet, as a Menu section's. */
   .groupHeading {
-    padding-block: var(--space-4) var(--space-2);
-    padding-inline: var(--space-8);
+    padding-block: var(--space-8) var(--space-4);
+    padding-inline: var(--popover-item-inline);
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
@@ -339,8 +367,8 @@
 
   .description {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* Why it can't be chosen stays readable; only the option itself fades. */
@@ -351,7 +379,7 @@
   .check {
     display: inline-flex;
     margin-inline-start: auto;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   /* A quiet value at the option's end (`trailing`), before the check, in figures of one width. */
@@ -373,7 +401,7 @@
 
   /* The rest keep the check's room, so every option's trailing value lines up in one column. */
   .option[data-chosen-look='filled']:not([data-selected]) {
-    padding-inline-end: calc(var(--popover-item-inline) + var(--size-icon-sm) + var(--space-8));
+    padding-inline-end: calc(var(--popover-item-inline) + var(--size-icon) - var(--space-2) + var(--space-8));
   }
 
   /* optionDescription="below": the label, its line under it (wrapping), and the check centred at the end. */
@@ -392,6 +420,42 @@
   .option[data-description='below'] .check {
     grid-row: 1 / span 2;
     grid-column: 2;
+  }
+
+  /* The inline and prefix triggers' own pressed, open and focused looks, after every rest look they outrank. */
+  .root[data-variant='inline'] .trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .root[data-variant='inline'] .trigger[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  .root[data-variant='prefix'] .trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    background: var(--surface-selected);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-variant='prefix']:not([data-disabled]) .trigger[data-hovered] {
+      background: var(--surface-selected);
+    }
+  }
+
+  /* The code button's own mark when the keyboard reaches it: the Field's ring takes in the number too, and with
+     no caret on the button nothing else said which part had focus. */
+  .root[data-variant='prefix'] .trigger[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: 0;
+  }
+
+  /* Refused: the danger edge keeps a danger-soft ring while open or focused. */
+  .root[data-invalid]:not([data-variant='cell'], [data-variant='inline'], [data-variant='prefix'])
+    .trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft);
   }
 
   /* In a popover the popover's own edge frames the trigger: focus is the accent edge alone, as a Field's there;
@@ -419,6 +483,12 @@
     .option[data-disabled][data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trigger > :last-child {
+      transition: none;
     }
   }
 }

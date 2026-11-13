@@ -1,6 +1,13 @@
-/* Radio and RadioGroup: 16px circles (space-16, since spec 0072's tier 1 retired size-check) in control-border; the
-   chosen one fills with the accent and a dot grows in. Choices stack, or sit in a row. */
+/* Radio and RadioGroup, after the prototype's Radio (spec 0072, folded into Checkbox's look): 18px circles with a
+   1.5px control-border edge; the chosen one fills with the accent and an 8px dot scales in. Choices stack, or sit in
+   a row 24px apart. */
 @layer components {
+  /* The circle's side, on the group and on a radio alone (RadioMark draws one with no group). */
+  .group,
+  .radio {
+    --check: calc(var(--space-16) + var(--space-2));
+  }
+
   .group {
     display: flex;
     flex-direction: column;
@@ -21,7 +28,7 @@
   /* Cards: a grid two wide down to a phone, each choice a bordered box the whole of which picks it. */
   .choices[data-variant='cards'] {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--size-measure-sm), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--size-menu) + var(--space-32) + var(--space-8)), 1fr));
     gap: var(--space-8);
   }
 
@@ -66,7 +73,7 @@
 
   .choices[data-orientation='horizontal'] {
     flex-flow: row wrap;
-    column-gap: var(--space-16);
+    column-gap: var(--space-24);
   }
 
   /* Positioned, so the visually hidden input stays inside the control. */
@@ -105,16 +112,14 @@
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: var(--space-16);
-    block-size: var(--space-16);
-    margin-block-start: var(--space-2);
-    border: var(--border-width-hairline) solid var(--control-border);
+    inline-size: var(--check);
+    block-size: var(--check);
+    margin-block-start: calc((1lh - var(--check)) / 2);
+    border: calc((var(--border-width-hairline) + var(--border-width-thick)) / 2) solid var(--control-border);
     border-radius: var(--radius-full);
-    background: var(--radio-rest, var(--surface-raised));
-    box-shadow: var(--shadow-xs);
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out);
+    background: var(--radio-rest, var(--surface));
+    transition: var(--duration-quick) var(--ease-smooth-out);
+    transition-property: background-color, border-color;
   }
 
   .choices[data-variant='letters'] .circle {
@@ -137,22 +142,22 @@
   }
 
   .dot {
-    inline-size: var(--space-6);
-    block-size: var(--space-6);
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
     border-radius: var(--radius-full);
     background: var(--on-accent);
     opacity: 0;
-    scale: var(--scale-shrunk);
-    transition:
-      opacity var(--duration-quick) var(--ease-smooth-out),
-      scale var(--duration-quick) var(--ease-smooth-out);
+    scale: 0;
+    transition-property: opacity, scale;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-smooth-out);
   }
 
   .choices[data-variant='letters'] .dot {
     display: none;
   }
 
-  /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
+  /* The edge is accent-text, as a checked box's is, so it reads on any surface in both themes. */
   .radio[data-selected] .circle {
     border-color: var(--accent-text);
     background: var(--accent);
@@ -174,18 +179,12 @@
   }
 
   .radio[data-focus-visible] .circle {
-    border-color: var(--accent-text);
-    box-shadow: var(--radio-focus, var(--shadow-focus));
+    outline: var(--radio-focus, var(--border-width-focus) solid var(--focus-ring));
+    outline-offset: var(--border-width-focus);
   }
 
   .radio[data-invalid] .circle {
     border-color: var(--danger);
-  }
-
-  /* An invalid circle keeps its red edge, so focus shows as the accent ring just outside (as Button's danger does). */
-  .radio[data-invalid][data-focus-visible] .circle {
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
   }
 
   /* The control and its label fade; a description under it stays readable. */
@@ -206,16 +205,16 @@
   }
 
   .description {
-    padding-inline-start: calc(var(--space-16) + var(--space-8));
+    padding-inline-start: calc(var(--check) + var(--space-8));
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-tight);
+    letter-spacing: var(--tracking-body-sm-tight);
   }
 
   /* A card's value (a merge's side): the body's type and colour, cut to the card, under the label's line. */
   .preview {
     min-inline-size: 0;
-    padding-inline-start: calc(var(--space-16) + var(--space-8));
+    padding-inline-start: calc(var(--check) + var(--space-8));
     /* Cut to the card, but not a chip's edge or ring: the display truncates long text itself. */
     overflow: clip;
     overflow-clip-margin: var(--space-4);
@@ -224,6 +223,7 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Reduced motion keeps the dot's fade and drops its growth. */
   @media (prefers-reduced-motion: reduce) {
     .dot {
       scale: none;
@@ -240,8 +240,7 @@
     }
 
     .radio[data-focus-visible] .circle {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: var(--border-width-hairline);
+      outline-color: Highlight;
     }
   }
 }

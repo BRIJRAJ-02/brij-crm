@@ -1,8 +1,6 @@
 /* TOUCH_TARGET: Button drawn small, pressed across 44px (size-control-lg), and a guest sheet's 48px size. Its own file,
    so a page with no such button never loads it. */
-/* In @layer utilities, not components: it overrides Button's look, the shipped module's on a guest page and the app look's
-   (utilities.app-look, spec 0072 decision 16) in the app, and a sublayer always gives way to its own layer's rules. */
-@layer utilities {
+@layer components {
   /* Drawn small, pressed across 44px: an invisible area round the button. Nothing drawn changes. The inset counts from
      inside the border, so the hairline comes off too. */
   .root[data-touch-target]:is([data-size='md'], [data-size='lg'], [data-size='xl']) {

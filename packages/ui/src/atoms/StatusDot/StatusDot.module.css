@@ -1,5 +1,5 @@
-/* StatusDot: an 8px dot in the status's dot-<hue>, then its label. The colour
-   is never the only cue: the label always shows. */
+/* StatusDot, after the prototype's StatusDot (spec 0072, folded into Tag's look): an 8px dot in the status's dot-<hue>,
+   then its label in the strong small body type. The colour is never the only cue: the label always shows. */
 @layer components {
   .root {
     display: inline-flex;
@@ -7,8 +7,8 @@
     gap: var(--space-6);
     min-inline-size: 0;
     color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     white-space: nowrap;
   }
 
@@ -35,7 +35,6 @@
   }
 
   @container (inline-size < 480px) {
-    /* The short word is whole: the dot and its word never shrink under a name beside them. */
     .root[data-short] {
       flex: none;
     }
@@ -50,11 +49,45 @@
   }
 
   .dot {
+    --dot: var(--dot-gray);
+
     flex: none;
     inline-size: var(--space-8);
     block-size: var(--space-8);
     border-radius: var(--radius-full);
-    background: var(--dot-gray);
+    background: var(--dot);
+  }
+
+  .dot[data-hue='red'] {
+    --dot: var(--dot-red);
+  }
+
+  .dot[data-hue='orange'] {
+    --dot: var(--dot-orange);
+  }
+
+  .dot[data-hue='yellow'] {
+    --dot: var(--dot-yellow);
+  }
+
+  .dot[data-hue='lime'] {
+    --dot: var(--dot-lime);
+  }
+
+  .dot[data-hue='green'] {
+    --dot: var(--dot-green);
+  }
+
+  .dot[data-hue='sky'] {
+    --dot: var(--dot-sky);
+  }
+
+  .dot[data-hue='blue'] {
+    --dot: var(--dot-blue);
+  }
+
+  .dot[data-hue='purple'] {
+    --dot: var(--dot-purple);
   }
 
   /* Animated (a Live or Hidden trigger): the new hue fades in with the words' swap. */
@@ -62,45 +95,8 @@
     transition: background-color var(--duration-fast) var(--ease-smooth-out);
   }
 
-  /* The swap's words keep their own cell, so the label isn't cut mid swap. */
   .root[data-animated] .label {
     overflow: visible;
-  }
-
-  .dot[data-hue='gray'] {
-    background: var(--dot-gray);
-  }
-
-  .dot[data-hue='red'] {
-    background: var(--dot-red);
-  }
-
-  .dot[data-hue='orange'] {
-    background: var(--dot-orange);
-  }
-
-  .dot[data-hue='yellow'] {
-    background: var(--dot-yellow);
-  }
-
-  .dot[data-hue='lime'] {
-    background: var(--dot-lime);
-  }
-
-  .dot[data-hue='green'] {
-    background: var(--dot-green);
-  }
-
-  .dot[data-hue='sky'] {
-    background: var(--dot-sky);
-  }
-
-  .dot[data-hue='blue'] {
-    background: var(--dot-blue);
-  }
-
-  .dot[data-hue='purple'] {
-    background: var(--dot-purple);
   }
 
   @media (forced-colors: active) {

@@ -1,6 +1,6 @@
-/* Tooltip: one line on the inverse surface, 11px, above its trigger by
-   default. It fades in after React Aria's delay; from the keyboard it appears
-   and goes at once. */
+/* Tooltip, after the prototype's Tooltip (spec 0072): a short ink label on the inverse surface, 4px from its trigger.
+   It rises in from 4px off over --duration-quick after React Aria's delay and fades out over --duration-micro; from
+   the keyboard it appears and goes at once. */
 @layer components {
   /* Shrinks in a flex row (a cell, a chip), so text inside can be cut. */
   .trigger {
@@ -17,15 +17,15 @@
 
   .trigger[data-focus-visible] {
     border-radius: var(--radius-xs);
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   .root {
-    max-inline-size: var(--size-measure-sm);
-    padding-block: var(--space-2);
-    padding-inline: var(--space-6);
+    --tip-y: 0;
+
+    max-inline-size: var(--size-menu);
+    padding: var(--space-4) var(--space-8);
     border-radius: var(--radius-sm);
     background: var(--surface-inverse);
     box-shadow: var(--shadow-md);
@@ -40,14 +40,19 @@
   .root[data-kbd] {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-8);
   }
 
+  /* A 4px gap from the trigger, on its side. */
   .root[data-placement='top'] {
+    --tip-y: var(--distance-micro);
+
     margin-block-end: var(--space-4);
   }
 
   .root[data-placement='bottom'] {
+    --tip-y: calc(-1 * var(--distance-micro));
+
     margin-block-start: var(--space-4);
   }
 
@@ -60,11 +65,11 @@
   }
 
   .root[data-entering] {
-    animation: fade-in var(--duration-fast) var(--ease-smooth-out);
+    animation: tip-in var(--duration-quick) var(--ease-out);
   }
 
   .root[data-exiting] {
-    animation: fade-out var(--duration-quick) var(--ease-smooth-out) forwards;
+    animation: tip-out var(--duration-micro) var(--ease-out) forwards;
   }
 
   /* Opened from the keyboard, it comes and goes at once: tabbing on never leaves it fading over the next control. */
@@ -72,15 +77,23 @@
     animation: none;
   }
 
-  @keyframes fade-in {
+  @keyframes tip-in {
     from {
+      opacity: 0;
+      translate: 0 var(--tip-y);
+    }
+  }
+
+  @keyframes tip-out {
+    to {
       opacity: 0;
     }
   }
 
-  @keyframes fade-out {
-    to {
-      opacity: 0;
+  /* Reduced motion keeps the fade and drops the rise. */
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-placement] {
+      --tip-y: 0;
     }
   }
 

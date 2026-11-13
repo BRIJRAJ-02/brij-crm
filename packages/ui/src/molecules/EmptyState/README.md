@@ -46,7 +46,6 @@ Only its buttons take focus.
 
 Takes its look from the prototype's EmptyState for `block` and `fill`: `space-48` and `space-24` of room, the glyph (or an error's alert, a lock's lock) in a round raised well a large control wide (`surface-raised`, `shadow-sm` and a hairline `border-subtle` ring, the glyph in `text-secondary`), the title in `text-heading`, one line in `text-secondary` at most half a measure wide, and the actions `space-16` under it. `row` stays the library's quiet line with a bare mark.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw EmptyState too (a booking, form, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `EmptyState.module.css` is the shipped look, which every page loads, and the prototype's look described here is `EmptyState.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Use it for** a first run (`block`, a whole surface with nothing yet), a whole view's empty, failed or locked state (`fill`), and a list's or a panel's empty line (`row`). **Don't use it for** loading data (pass `isLoading`, which draws skeleton lines), and don't give it two primary actions.
 

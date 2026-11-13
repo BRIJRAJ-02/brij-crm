@@ -46,7 +46,6 @@ The tooltips load on their own (`SocialLinksTips.tsx`, `lazy`), so a booking pag
 
 Takes its look from the prototype's SocialLinks: each mark a link Button in the tier 1 pill look, in a row whose hit areas meet. On a public page (which sets `--social-lift`) the hovered mark lifts and its neighbours rise by the prototype's 0.45 falloff, up on the smooth-out curve and back with the strong bounce (transitions.dev 11, avatar group hover), all CSS; the app sets no lift.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw SocialLinks too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `SocialLinks.module.css` is the shipped look, which every page loads, and the prototype's look described here is `SocialLinks.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
 
 **States**: none drawn when empty; rest, hover (lift on public pages), focus (Button's outline ring), the tooltip on hover or focus.
 

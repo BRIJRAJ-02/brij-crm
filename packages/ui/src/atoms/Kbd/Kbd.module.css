@@ -1,46 +1,40 @@
-/* The Kbd atom: a keycap with a hairline edge. Its tones are declared once, here. */
+/* The Kbd atom, after the prototype's Kbd (spec 0072): a 20px keycap with a hairline edge on the surface, in the
+   tertiary text. Inside an ink button or a tooltip it turns clear, with a faint edge of its own colour. */
 @layer components {
   .root {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-inline-size: var(--space-16);
-    block-size: var(--space-16);
-    padding-block: 0;
-    padding-inline: var(--space-4);
+    min-inline-size: var(--space-20);
+    block-size: var(--space-20);
+    padding: 0 var(--space-4);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-xs);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-control);
-    color: var(--text-secondary);
+    background: var(--surface);
+    color: var(--text-tertiary);
     font: var(--text-kbd);
     letter-spacing: var(--tracking-kbd);
     white-space: nowrap;
   }
 
+  /* Inside a secondary button or a menu item: a filled cap with no edge. */
   .root[data-tone='soft'] {
     border-color: transparent;
-    background: var(--surface-hover);
-    box-shadow: none;
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
   }
 
-  /* Edged, not filled: on-accent text holds 4.6:1 on the accent itself, but
-     only 3.3:1 on the on-accent-kbd tint over it. */
-  .root[data-tone='onAccent'] {
-    border-color: color-mix(in srgb, currentcolor 20%, transparent);
+  /* Inside an ink button (onAccent) or a tooltip (onInverse): clear, in the label's colour. */
+  .root:is([data-tone='onAccent'], [data-tone='onInverse']) {
+    border-color: color-mix(in srgb, currentcolor 30%, transparent);
     background: transparent;
-    box-shadow: none;
-    color: var(--on-accent);
+    color: inherit;
   }
 
-  /* Inside a tooltip, on surface-inverse: edged with border-inverse (3.9:1), the label in on-inverse (17:1 light,
-     15:1 dark). */
   .root[data-tone='onInverse'] {
-    border-color: var(--control-border);
-    background: transparent;
-    box-shadow: none;
-    color: var(--on-inverse);
+    min-inline-size: calc(var(--space-16) + var(--space-2));
+    block-size: calc(var(--space-16) + var(--space-2));
   }
 
   @media (forced-colors: active) {

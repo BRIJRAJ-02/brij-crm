@@ -42,6 +42,5 @@ Not in the artifact.
 
 Takes its look from the prototype's DragHandle: a six dot grip drawn 20 by 28 in `text-tertiary`, washed (`surface-hover`) and `text-secondary` under the pointer, the outline ring flush on keyboard focus, the grab cursor, and the accent while lifted. Its hit area reaches past 24px wide (wider under a finger).
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw DragHandle too (a hosted form's ranking or signature question), and guest pages keep their shipped look and cost until their own port phase (7). So `DragHandle.module.css` is the shipped look, which every page loads, and the prototype's look described here is `DragHandle.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **Differences from the prototype**: the grip is always shown. The prototype hides it until its row is hovered or focused (`reveal="hover"`); that needs every row to be the grip's direct parent, so it is owed as an opt in prop to the phase that ports each list. The drag feel itself is `lib/drag`'s, unchanged.

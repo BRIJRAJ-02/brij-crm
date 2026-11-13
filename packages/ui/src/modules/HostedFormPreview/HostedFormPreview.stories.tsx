@@ -75,9 +75,8 @@ export const Default: Story = {
 };
 
 /**
- * A brand kit in the app (Settings › Brand's preview), at the app's scale: the preview draws the guest's look, so the
- * brand's colour reaches the Send button there too (spec 0072, decision 16: the app look stays out of a guest page the
- * app previews).
+ * A brand kit in the app (Settings › Brand's preview), at the app's scale: the primary button takes the form's accent
+ * inside a guest page, so the brand's colour reaches Send there too (spec 0072).
  */
 export const Branded: Story = {
   parameters: { crm: { screenshot: false } },

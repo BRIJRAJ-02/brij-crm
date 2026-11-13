@@ -46,7 +46,6 @@ A choice's `dot` (a `Hue`, named as Badge names its dot) puts a colour dot befor
 
 Takes its rhythm from the prototype's ChoiceChips: a `text-body-sm-strong` label in the text colour, then the chips `space-8` apart, wrapping, with `end` after them; a scale's end words in `text-body-sm`. Each chip is the library's ToggleButton, so its pill, hover (`surface-hover`, the edge stepping up to `border-strong`), focus ring and disabled look are Button's, ported in tier 1.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw ChoiceChips too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `ChoiceChips.module.css` is the shipped look, which every page loads, and the prototype's look described here is `ChoiceChips.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
 
 **Use it for** two to eight short options that should all be seen at once: a meeting length, a guest's interests, a quick filter, a form's scale. **Don't use it for** long lists (Select), actions (Button) or switching views (SegmentedControl, Tabs).
 

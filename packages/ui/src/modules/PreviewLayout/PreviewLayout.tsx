@@ -14,8 +14,6 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { SettingsNav, type SettingsNavEntry } from '../SettingsLayout/SettingsLayout.tsx';
-// The app's look for parts guests also draw (spec 0072, decision 16): every app screen sits in one of the layouts.
-import '../../app-look.ts';
 import styles from './PreviewLayout.module.css';
 import { strings } from './strings.ts';
 

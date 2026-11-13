@@ -39,7 +39,6 @@ Not in the artifact.
 
 Takes its look from the prototype's Link: link coloured words, an underline that strengthens over `--duration-quick` on hover, and the outline focus ring. `tone="quiet"` is the prototype's `muted` (the text's own colour, a faint underline). `weight="strong"` is its `strong`.
 
-**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Link too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Link.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Link.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
 
 **States**: rest, hover (underline to the text colour), focus visible (the ring), external (opens in a new tab with `rel="noopener noreferrer"`), refused address (plain text, never a link).
 
