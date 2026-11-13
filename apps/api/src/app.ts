@@ -798,6 +798,17 @@ export function createApp({
   });
   // The business page (spec 0066, B4 lite): the published page, its pictures and its brand, by the business handle.
   mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
+  // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a
+  // handle through the public booking door, which only that folder may open; the route itself is private.
+  // Mounted before the public booking routes: their `/public/handles/:handle/:slug` would otherwise take
+  // `pass.pkpass` for a page's slug and answer that no such page exists (found live, 13 Nov 2026).
+  mountWalletPass(app, {
+    db,
+    auth,
+    pass: createApplePass(walletSettings),
+    // A partner's own card (13 Nov 2026): the registry's read, for the door's `readPassBrand`.
+    partners: { partnerWalletCard: (partnerIds) => identity.partnerWalletCard(partnerIds) },
+  });
   mountPublicBooking(app, {
     db,
     draftPreview: (session, entry) => mayPreviewDraft({ db, rules }, entry, session.user.id, doorSession(session)),
@@ -951,16 +962,6 @@ export function createApp({
   mountStaffPhotos(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
-
-  // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a
-  // handle through the public booking door, which only that folder may open; the route itself is private.
-  mountWalletPass(app, {
-    db,
-    auth,
-    pass: createApplePass(walletSettings),
-    // A partner's own card (13 Nov 2026): the registry's read, for the door's `readPassBrand`.
-    partners: { partnerWalletCard: (partnerIds) => identity.partnerWalletCard(partnerIds) },
-  });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {
