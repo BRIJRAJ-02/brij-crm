@@ -62,7 +62,7 @@ it('opens a dropdown inside the form’s themed root, dark and square, never on 
   const card = root?.querySelector('.ws-form-parts-card');
   expect(card).not.toBeNull();
   const cardStyle = getComputedStyle(card as Element);
-  for (const name of ['--accent', '--on-accent', '--shadow-focus']) {
+  for (const name of ['--accent', '--on-accent', '--focus-ring', '--shadow-focus']) {
     expect(listStyle.getPropertyValue(name).trim(), name).toBe(cardStyle.getPropertyValue(name).trim());
   }
   // AC-7426: inside the host, the guest pages' bar height, 46px, never the app's 56px top bar.

@@ -54,7 +54,7 @@ Takes its look from the prototype's RecordPanel body: the record's content padde
 
 **The consumer provides** `record`, `isOpen` and `onClose`, `tabs` (the body: Details through AttributeList, Activity, Tasks), `onPrevious` and `onNext` at each step, and `onOpenPage`.
 
-**States**: closed (not rendered), open, switching records, first and last record (the button at that end disabled), with a notice, unavailable, stepping, loading, failed, no access. Stories: `Default`, `OpenAndClose`, `StepThrough`, `ArrowKeysStep`, `NoLongerAvailable`, `Unavailable`, `Stepping`, `Loading`, `NoAccess`.
+**States**: closed (not rendered), open, switching records, first and last record (the button at that end disabled), with a notice, unavailable, stepping, loading, failed, no access. Stories: `Default`, `OpenAndClose`, `StepThrough`, `ArrowKeysStep`, `JAndKStep`, `NoLongerAvailable`, `Unavailable`, `Stepping`, `Loading`, `NoAccess`.
 
 **Interaction**: it takes focus as it opens; Esc closes it and hands focus back to what opened it (`OpenAndClose`). ↑ and ↓ (and J and K) step through the list, as Previous and Next do.
 
@@ -68,4 +68,4 @@ Takes its look from the prototype's RecordPanel body: the record's content padde
 
 - `place` says where the record is in the list beside it, under its name ("People · 3 of 120", AC-7412), as the Panel's subtitle; left out where the panel wasn't opened from a list.
 - J and K step as ↓ and ↑ do (`lib/step-keys.ts`), never from a field, a listbox or a grid; the keys sit in one quiet line at the panel's foot ("J K next and previous · Esc close", J and K only where there is a list to step through).
-- The floating Panel sits over the content area at its full height, below the top bar and `space-8` in from the other edges, never pushing the table or board; `size-panel` wide (the record panel no longer asks for `lg`); it enters over `duration-slow` and leaves over `duration-medium` on `ease-smooth-out`, and reduced motion keeps only the fade (AC-7411).
+- The floating Panel sits over the content area at its full height, below the top bar and `space-8` in from the other edges, never pushing the table or board; `size-panel` wide (the record panel no longer asks for `lg`); it enters over `duration-slow` and leaves over `duration-quick` (the house's exit) on `ease-smooth-out`, and reduced motion keeps only the fade (AC-7411).
