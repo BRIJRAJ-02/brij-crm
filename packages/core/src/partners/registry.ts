@@ -11,7 +11,14 @@ import type {
 } from '@crm/contracts';
 import type { PartnerAudit, PartnerChange, PartnerIdentity, PartnerRow } from '@crm/db';
 import { refuse, refuseOn } from '../engine/refusals.ts';
-import { frameOriginProblem, partnerLogoPath, readPartnerLogo, redirectUriProblem } from './addresses.ts';
+import {
+  frameOriginProblem,
+  partnerLogoPath,
+  partnerWalletLogoPath,
+  readPartnerLogo,
+  readPartnerWalletLogo,
+  redirectUriProblem,
+} from './addresses.ts';
 import { newClientId, newPartnerSecret, partnerSecretHash, partnerSecretHint } from './tokens.ts';
 
 /** What the registry needs: the identity store's partner rows. */
@@ -37,6 +44,10 @@ export function toPartnerView(row: PartnerRow): PartnerView {
     createdAt: row.createdAt.toISOString(),
     ...(row.secretReplacedAt === undefined ? {} : { secretReplacedAt: row.secretReplacedAt.toISOString() }),
     isTest: row.isTest,
+    ...(row.walletColour === undefined ? {} : { walletColour: row.walletColour }),
+    ...(row.walletLogoVersion === undefined
+      ? {}
+      : { walletLogoUrl: partnerWalletLogoPath(row.clientId, row.walletLogoVersion) }),
   };
 }
 
@@ -58,6 +69,20 @@ function checkedAddresses(
 function checkedLogo(upload: NonNullable<RegisterPartnerInput['logo']>) {
   const read = readPartnerLogo(upload);
   if ('problem' in read) throw refuseOn('CONFIG_INVALID', read.problem, 'logo');
+  return read;
+}
+
+/** A Wallet card's colour as it is kept (lowercase), or a refusal on `walletColour`. */
+function checkedWalletColour(value: string): string {
+  const colour = value.trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(colour)) throw refuseOn('CONFIG_INVALID', 'Use a colour like #13265b.', 'walletColour');
+  return colour;
+}
+
+/** A Wallet logo upload's three files, or a refusal on `walletLogo`. */
+function checkedWalletLogo(upload: NonNullable<RegisterPartnerInput['walletLogo']>) {
+  const read = readPartnerWalletLogo(upload);
+  if ('problem' in read) throw refuseOn('CONFIG_INVALID', read.problem, 'walletLogo');
   return read;
 }
 
@@ -92,13 +117,15 @@ export async function registerPartner(
       secretHint: partnerSecretHint(secret),
       createdBy: audit.userId,
       ...(input.isTest === true ? { isTest: true } : {}),
+      ...(input.walletColour === undefined ? {} : { walletColour: checkedWalletColour(input.walletColour) }),
+      ...(input.walletLogo === undefined ? {} : { walletLogo: checkedWalletLogo(input.walletLogo) }),
     },
     audit,
   );
   return { partner: toPartnerView(row), secret };
 }
 
-/** Changes a partner's name, logo or addresses; a connect already under way is checked against the new ones. */
+/** Changes a partner's name, logo, addresses or Wallet card; a connect already under way is checked against the new ones. */
 export async function updatePartner(
   deps: PartnerRegistryDeps,
   input: UpdatePartnerInput,
@@ -114,6 +141,12 @@ export async function updatePartner(
       : { redirectUris: checkedAddresses(input.redirectUris, redirectUriProblem, 'redirectUris') }),
     ...(input.logo === undefined ? {} : { logo: input.logo === null ? null : checkedLogo(input.logo) }),
     ...(input.isTest === undefined ? {} : { isTest: input.isTest }),
+    ...(input.walletColour === undefined
+      ? {}
+      : { walletColour: input.walletColour === null ? null : checkedWalletColour(input.walletColour) }),
+    ...(input.walletLogo === undefined
+      ? {}
+      : { walletLogo: input.walletLogo === null ? null : checkedWalletLogo(input.walletLogo) }),
   };
   if (change.redirectUris?.length === 0) {
     throw refuseOn('CONFIG_INVALID', 'Keep at least one address that receives a connection.', 'redirectUris');

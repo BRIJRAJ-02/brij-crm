@@ -83,6 +83,8 @@ export type {
   PartnerIdentity,
   PartnerLogo,
   PartnerRow,
+  PartnerWalletCard,
+  PartnerWalletLogo,
   PartnerWithSecret,
 } from './identity/partners.ts';
 export { isManagedAddress, MANAGED_DOMAIN } from './identity/partners.ts';

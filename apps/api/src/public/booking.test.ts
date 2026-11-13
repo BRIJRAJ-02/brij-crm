@@ -675,6 +675,13 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     }
     expect((await press(site.id, { 'user-agent': CHROME, cookie: m.cookie })).status).toBe(204);
     expect((await press(site.id, { 'user-agent': 'facebookexternalhit/1.1' })).status).toBe(204);
+    // The pass's address is the pass route's, never a page's slug (13 Nov 2026: `:handle/:slug` used to take it and
+    // answer "This page is no longer available."). This app has no Apple certificate, so the route says there is no pass.
+    const passAsked = await app.request('/api/public/handles/nobody-here-1/pass.pkpass', {
+      headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': ip, 'user-agent': CHROME },
+    });
+    expect(passAsked.status).toBe(404);
+    expect(await passAsked.json()).toMatchObject({ code: 'NOT_FOUND', message: 'There’s no pass here.' });
     const nobody = await app.request('/api/public/handles/nobody-here-1/press', {
       method: 'POST',
       headers: {

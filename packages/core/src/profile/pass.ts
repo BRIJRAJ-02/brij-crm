@@ -85,6 +85,15 @@ export interface PassInput {
   readonly serialNumber: string;
   readonly identity: PassIdentity;
   readonly images: PassImages;
+  /**
+   * The colours to write the pass in when they aren't the hue's (13 November 2026): a brand's own card
+   * (`pass-brand.ts`), whose ground is drawn from any colour at all. The images must carry the matching ground.
+   */
+  readonly look?: {
+    readonly background: Channels;
+    readonly text: Channels;
+    readonly label: Channels;
+  };
 }
 
 /**
@@ -165,7 +174,7 @@ export function passJson(input: PassInput): string {
   const emails = contactValuesOf(card, 'email');
   const phones = contactValuesOf(card, 'phone');
   const websites = contactValuesOf(card, 'website');
-  const colours = coloursOf(input.theme.hue);
+  const colours = input.look ?? coloursOf(input.theme.hue);
   const pass = {
     formatVersion: 1,
     passTypeIdentifier: input.identity.passTypeIdentifier,

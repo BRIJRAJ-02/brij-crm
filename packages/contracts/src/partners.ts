@@ -59,6 +59,34 @@ export const PartnerLogoUpload = z.object({
 /** A logo as the console uploads it. */
 export type PartnerLogoUpload = z.infer<typeof PartnerLogoUpload>;
 
+/** The largest file of a partner's Wallet logo, in bytes, at each of its three scales. */
+export const PARTNER_WALLET_LOGO_MAX_BYTES = 100 * 1024;
+/** The largest a Wallet pass's logo may be, in points (Apple's bound); each scale's file is that many times bigger. */
+export const PARTNER_WALLET_LOGO_POINTS = { width: 160, height: 50 } as const;
+
+/** One scale's file of a Wallet logo: a PNG as base64. */
+const WalletLogoFile = z
+  .string()
+  .min(1)
+  .max(Math.ceil((PARTNER_WALLET_LOGO_MAX_BYTES * 4) / 3) + 4, 'Use a smaller logo.');
+
+/**
+ * A partner's logo for its people's Apple Wallet cards (13 Nov 2026), as the console sends it: three PNGs the
+ * browser drew from the picked file, one for each scale Wallet asks for, so the server never resizes a picture.
+ */
+export const PartnerWalletLogoUpload = z.object({ x1: WalletLogoFile, x2: WalletLogoFile, x3: WalletLogoFile });
+/** A partner's logo for its people's Apple Wallet cards. */
+export type PartnerWalletLogoUpload = z.infer<typeof PartnerWalletLogoUpload>;
+
+/** The colour of a partner's Apple Wallet card: `#` and six hex digits, kept lowercase. */
+export const PartnerWalletColour = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^#[0-9a-f]{6}$/, 'Use a colour like #13265b.');
+/** The colour of a partner's Apple Wallet card. */
+export type PartnerWalletColour = z.infer<typeof PartnerWalletColour>;
+
 /** A partner's name. */
 const PartnerName = z.string().trim().min(1, 'Give the partner a name.').max(80, 'Keep the name under 80 characters.');
 /** Frame origins as typed; the server checks each is an origin. */
@@ -85,6 +113,10 @@ export const PartnerView = z.object({
   secretReplacedAt: Timestamp.optional(),
   /** A sandbox partner (AC-7035): its connections are test ones, never billed, and can be wiped in one go. */
   isTest: z.boolean(),
+  /** The colour its people's Apple Wallet cards are drawn in, when it has its own (13 Nov 2026). */
+  walletColour: z.string().optional(),
+  /** Our own address for the logo those cards carry, when it has its own. */
+  walletLogoUrl: z.string().optional(),
 });
 /** One partner as the console shows it. */
 export type PartnerView = z.infer<typeof PartnerView>;
@@ -102,6 +134,10 @@ export const RegisterPartnerInput = z.object({
   redirectUris: RedirectUris,
   /** A sandbox partner (AC-7035): its connections are made as test ones. */
   isTest: z.boolean().optional(),
+  /** Its own colour for its people's Apple Wallet cards; none keeps Timefix's. */
+  walletColour: PartnerWalletColour.optional(),
+  /** Its own logo on those cards; none keeps the Timefix wordmark. */
+  walletLogo: PartnerWalletLogoUpload.optional(),
 });
 /** Registers a partner. */
 export type RegisterPartnerInput = z.infer<typeof RegisterPartnerInput>;
@@ -111,7 +147,7 @@ export const PartnerWithSecret = z.object({ partner: PartnerView, secret: z.stri
 /** A partner with its whole secret. */
 export type PartnerWithSecret = z.infer<typeof PartnerWithSecret>;
 
-/** Changes a partner: only the fields given; `logo: null` takes the logo away. */
+/** Changes a partner: only the fields given; `logo: null` takes the logo away, as `null` does for the Wallet card's. */
 export const UpdatePartnerInput = z.object({
   partnerId: Uuid,
   name: PartnerName.optional(),
@@ -120,6 +156,10 @@ export const UpdatePartnerInput = z.object({
   redirectUris: RedirectUris.optional(),
   /** Marks it a sandbox partner, or a live one (AC-7035): only connections made from now on take the mark. */
   isTest: z.boolean().optional(),
+  /** Its own colour for its people's Apple Wallet cards; `null` goes back to Timefix's. */
+  walletColour: PartnerWalletColour.nullable().optional(),
+  /** Its own logo on those cards; `null` goes back to the Timefix wordmark. */
+  walletLogo: PartnerWalletLogoUpload.nullable().optional(),
 });
 /** Changes a partner. */
 export type UpdatePartnerInput = z.infer<typeof UpdatePartnerInput>;

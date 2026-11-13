@@ -1048,6 +1048,20 @@ export const partners = auth.table(
     logoType: text('logo_type'),
     /** Moves with every new logo, so its address (`?v=`) changes and no cache keeps the old one. */
     logoVersion: integer('logo_version').notNull().default(0),
+    /**
+     * Its own Apple Wallet card (13 Nov 2026, migration 0207): the colour its people's passes are drawn in, `#` and
+     * six lowercase hex digits; none keeps Timefix's.
+     */
+    walletColour: text('wallet_colour'),
+    /**
+     * The logo those passes carry in place of the Timefix wordmark: one PNG for each of Wallet's three scales, drawn
+     * by the console's browser, each at most 100 KB. All three or none.
+     */
+    walletLogo: bytea('wallet_logo'),
+    walletLogo2x: bytea('wallet_logo_2x'),
+    walletLogo3x: bytea('wallet_logo_3x'),
+    /** Moves with every new Wallet logo, so the console's preview address changes. */
+    walletLogoVersion: integer('wallet_logo_version').notNull().default(0),
     /** The web origins allowed to embed Timefix in a frame (slice 4's `frame-ancestors`). */
     frameOrigins: text('frame_origins').array().notNull(),
     /** The addresses allowed to receive a connection: a connect's `redirect_uri` must equal one exactly. */
@@ -1072,6 +1086,11 @@ export const partners = auth.table(
     index('partners_created').on(t.createdAt.desc()),
     check('partners_client_id_shape', sql`${t.clientId} ~ '^tfp_[A-Za-z0-9_-]{22}$'`),
     check('partners_name', sql`char_length(${t.name}) between 1 and 80`),
+    check('partners_wallet_colour', sql`${t.walletColour} is null or ${t.walletColour} ~ '^#[0-9a-f]{6}$'`),
+    check(
+      'partners_wallet_logo',
+      sql`(${t.walletLogo} is null and ${t.walletLogo2x} is null and ${t.walletLogo3x} is null) or (${t.walletLogo} is not null and ${t.walletLogo2x} is not null and ${t.walletLogo3x} is not null and octet_length(${t.walletLogo}) between 1 and 102400 and octet_length(${t.walletLogo2x}) between 1 and 102400 and octet_length(${t.walletLogo3x}) between 1 and 102400)`,
+    ),
     check(
       'partners_logo',
       sql`(${t.logo} is null and ${t.logoType} is null) or (octet_length(${t.logo}) between 1 and 204800 and ${t.logoType} in ('image/png', 'image/jpeg', 'image/webp'))`,
