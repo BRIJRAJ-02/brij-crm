@@ -331,6 +331,16 @@ describe('Share (spec 0074, AC-7406)', () => {
     await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
     await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
   });
+
+  it('says at the sheet’s foot that a Private page can’t be opened by visitors', async () => {
+    await renderTeam(layerWith(ready).data);
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Cy Okafor' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share Cy Okafor’s page' });
+    await expect.element(sheet.getByText('Private. Visitors can’t open it until it’s live.')).toBeVisible();
+    await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+    await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+  });
 });
 
 describe('QR codes (AC-7003)', () => {

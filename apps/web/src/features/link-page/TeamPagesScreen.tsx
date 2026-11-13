@@ -410,6 +410,9 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 title={strings.shareTitle(shared.name)}
                 url={publicProfileUrl(shared.handle)}
                 name={shareStrings.name(shared.handle)}
+                // A Private page says so at the foot, so a code isn't printed for a page visitors can't open. Turning
+                // it Live is the teammate's to do, so no switch here.
+                {...(shared.isLive ? {} : { footer: strings.privateShare })}
                 extra={
                   <ButtonLink variant="ghost" icon="external-link" href={publicProfileUrl(shared.handle)} isExternal>
                     {strings.openPage}

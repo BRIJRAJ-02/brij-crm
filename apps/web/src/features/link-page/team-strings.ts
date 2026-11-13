@@ -25,6 +25,11 @@ export const teamStrings = {
   /** Share: the one share sheet for a member's page (spec 0074, AC-7406). */
   share: 'Share',
   shareTitle: (name: string) => `Share ${name}’s page`,
+  /**
+   * The share sheet's foot while the page is Private, as the link page's and a booking page's sheets say theirs. Not
+   * the link page's "Only you can open it": here it is a teammate's page, so "you" would be wrong.
+   */
+  privateShare: 'Private. Visitors can’t open it until it’s live.',
   qrPng: 'Download QR code (PNG)',
   qrSvg: 'Download QR code (SVG)',
   downloadAll: 'Download all QR codes',
