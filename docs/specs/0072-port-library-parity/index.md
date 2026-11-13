@@ -200,7 +200,7 @@ Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look
 3. Tier 1, batch 1b: Tag (+Badge, StatusDot), Avatar (+PersonLine), RecordChip (+LinkChip, Mention, Variable, RecordChipList), QrCode, satisfies **AC-1** to **AC-6**, **AC-12**, **AC-15**, **AC-16**
 4. Tier 1, batch 1c: Checkbox (+Radio, Switch), Slider, DragHandle, satisfies **AC-1** to **AC-6**
 5. Tier 1 gates: cost table, `pnpm size`, budgets lowered, guardian, `pnpm check`, satisfies **AC-7** to **AC-10**
-6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16**
+6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; AC-8 not met on the hosted form's and booking page's CSS, see rationale.md, Tier 2 after)_
 7. Tier 3, batches 3a to 3d, then its gates, satisfies **AC-1** to **AC-16**
 8. Per tier, the landing car reshoots baselines through CI, satisfies **AC-17**
 

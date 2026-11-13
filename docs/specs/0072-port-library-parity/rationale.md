@@ -185,3 +185,37 @@ The after tables are filled in per tier below.
 | Notice sheet chunk | 463 B | 469 B | 500 B (was 800) |
 
 All of `apps/web/dist/assets`, gzipped: JavaScript 2,169,429 to 2,170,195 B, CSS 149,413 to 150,063 B. **AC-9 is not met in full**: the hosted form's JavaScript (+40 B), its CSS (+10 B), the signature chunk (+50 B) and the notice sheet (+2 B) grew, and so did the totals. Part of the JavaScript is noise: a changed chunk's content hash changes the import strings of every chunk that loads it, and about a hundred route chunks moved by 10 to 14 B each with no code change. The real growth is the checkbox's tick wrapper (about 20 B) and Button's `soft` look. The CSS totals grew by the new motion above, less the retired tokens (130 B off every page's first load).
+
+### Tier 2 after
+
+Built in three batches (2a fields and pickers, 2b overlays and navigation, 2c feedback and layout), each reviewed by `design-system-guardian` and fixed. `node packages/ui/scripts/part-cost.ts --tier 2 --against 997da74b1` (bytes, gzipped, reporting only since decision 15):
+
+| Batch | CSS before → after | JS before → after | Change |
+|---|---|---|---|
+| 2a (18 folders) | 11,327 → 12,496 | 27,217 → 27,299 | 3.2% |
+| 2b (10 folders) | 7,333 → 7,946 | 9,344 → 9,342 | 3.7% |
+| 2c (17 folders) | 10,084 → 10,532 | 19,083 → 19,156 | 1.8% |
+| **Tier 2 (45 folders)** | **28,744 → 31,045** | **55,644 → 55,797** | **2.9%** |
+
+**Duplicates folded away.** The folded parts that already rendered their replacer stayed so (CurrencyPicker, DateNav and FileIcon render Select, DatePicker and Icon; InfoTip renders Popover; SocialLinksEditor renders SocialLinks' parts; none keeps CSS of its own). BulkActionBar and SaveBar now render one `FloatingBarGroup` instead of their own copies of its rules: -68 B and -48 B, against +167 B in FloatingBar for the group and the prototype's toast motion. A shared stats part for Stats and RecordStats under Card was built and measured: the three folders came to +56 B, and a page using either would have loaded both layouts (about +0.6 to +0.9 kB), so each keeps its own module (decision 14). Stepper is a quantity control the prototype names in Steps' `replaces` only, and keeps its look. **The cuts the first draft expected from tier 2's duplicates did not appear**: most of the folded molecules were already thin, and the heavy duplicates are tier 3's (Table, SampleTable and DataGrid; the week calendars).
+
+`pnpm size` on the tier 2 tip (6f4cf5a2e) against tier 1's tip (the phase's base in parentheses):
+
+| Line | Tier 1 (base) | Tier 2 | Change | Budget now |
+|---|---|---|---|---|
+| First load JavaScript | 296.61 kB (296.64) | 296.64 kB | +30 B | 297.2 kB |
+| First load CSS | 7.79 kB (7.86) | 7.80 kB | +10 B | 8.3 kB |
+| Hosted form JavaScript | 205.96 kB (205.91) | 206.00 kB | +40 B | 206.5 kB |
+| Hosted form CSS | 18.64 kB (18.57) | 19.24 kB | **+600 B** | 19.8 kB (was 19.2) |
+| Form step layouts, lazy | 5.75 kB | 5.74 kB | -10 B | 6.3 kB |
+| Form signature and ranking, lazy | 6.31 kB (6.25) | 6.32 kB | +10 B | 6.9 kB |
+| Booking page JavaScript | 188.90 kB (188.89) | 188.89 kB | -10 B | 189.4 kB |
+| Booking page CSS | 19.37 kB | 19.43 kB | **+60 B** | 20 kB (was 19.9) |
+| Media block chunk | 1.14 kB | 1.13 kB | -10 B | 1.7 kB |
+| Picture and gallery chunk | 1.68 kB (1.67) | 1.68 kB | 0 | 2.2 kB |
+| Next times chunk | 1.37 kB | 1.37 kB | 0 | 1.9 kB |
+| Notice sheet chunk | 469 B (463) | 466 B | -3 B | 1 kB |
+
+**AC-8 is not met by two lines.** The hosted form's CSS grew 600 B (670 B over the phase's base) and the booking page's 60 B. The hosted form carries Field, Select, FieldLabel, FieldError, ChoiceChips, PhoneField and Popover in its first load: the prototype's filled field (a fill that deepens, the accent edge and ring when typed in, the large and search looks, a read only ring), Select's menu rows, pressed and chevron states and phone code chip, and the type mapping the card needs to keep its labels at body size. Part costs: Select +296 B, Field +165 B, Button's field box and ring fade, FormParts' mapping. A trim that scoped Select's open look away from its inline, prefix and cell variants saved nothing once gzipped and broke the invalid edge, so it was undone. The first load JavaScript (+30 B) and the hosted form's JavaScript (+40 B) are at the edge of content-hash noise (`Field`'s two new options and `FloatingBarGroup`). The budgets follow AC-10 (measurement plus 0.5 kB); whether the hosted form pays 0.6 kB for the filled field, or the form's controls get a lighter public variant, is the owner's call.
+
+Legacy tokens: tier 2's 45 folders no longer use any "Phase 1" token, but every one of them still has users in tier 3 or phase 2 parts (`shadow-focus` 27 files, `shadow-focus-inset` 22, `size-chip` 20 and so on), so none leaves `legacy.json` in this tier.
