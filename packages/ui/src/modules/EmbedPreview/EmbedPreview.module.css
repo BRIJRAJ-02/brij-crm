@@ -1,15 +1,17 @@
-/* EmbedPreview: a made up site in a browser frame (a bar with three dots and an address), its page of skeleton
-   lines, and the form as the embed draws it there. Card's hairline, corners and raised surface for the frame; the
-   page on the sunken surface a site's background stands for. A picture: nothing in it takes a press. */
+/* EmbedPreview, in the look of the Timefix prototype's embed preview (spec 0072): a made up site in a quiet browser
+   frame (a border hairline, radius-lg, surface, shadow-xs), its bar a size-control strip on surface-subtle over a
+   border-subtle hairline, three border-strong dots and a surface address pill; the site's page of skeleton lines,
+   and the form as the embed draws it there: a box on surface-subtle among the lines, the site's own plain button,
+   or our size-control corner pill in its colour. A picture: nothing in it moves or takes a press. */
 @layer components {
   .root {
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
+    background: var(--surface);
     box-shadow: var(--shadow-xs);
     pointer-events: none;
     user-select: none;
@@ -19,44 +21,46 @@
     display: flex;
     gap: var(--space-4);
     align-items: center;
-    padding: var(--space-8) var(--space-12);
+    block-size: var(--size-control);
+    padding-inline: var(--space-12);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
   }
 
   .dot {
     inline-size: var(--space-8);
     block-size: var(--space-8);
     border-radius: var(--radius-full);
-    background: var(--surface-hover);
+    background: var(--border-strong);
   }
 
   .address {
     flex: 1;
-    max-inline-size: var(--size-column);
-    block-size: var(--space-12);
+    max-inline-size: var(--size-menu);
+    block-size: calc(var(--size-control-sm) - var(--space-6));
     margin-inline-start: var(--space-8);
     border-radius: var(--radius-full);
-    background: var(--surface-hover);
+    background: var(--surface);
   }
 
   .page {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
     min-block-size: var(--size-column);
-    padding: var(--space-16);
-    background: var(--surface-subtle);
+    padding: var(--space-16) var(--space-20) var(--space-20);
   }
 
-  /* In the page: the form's own ground and hairline, or nothing at all when it is asked to be clear. */
+  /* In the page: the form's box on the subtle ground, or nothing at all when it is asked to be clear. */
   .form {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-    padding: var(--space-12);
+    margin-block: var(--space-8);
+    padding: var(--space-16);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
-    background: var(--surface);
+    background: var(--surface-subtle);
   }
 
   .form[data-ground='none'] {
@@ -71,56 +75,54 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* What `content` draws there (a booking page's picture) brings its own inset: the box is its ground and hairline. */
+  /* What `content` draws there (a booking page's picture) brings its own inset, on the page's sheet. */
   .form[data-content] {
     padding: 0;
+    background: var(--surface);
   }
 
   .send {
     align-self: flex-start;
     inline-size: var(--size-column-narrow);
     block-size: var(--size-control-sm);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-full);
     background: var(--brand-accent, var(--accent));
   }
 
-  /* The site's own button: drawn plain, in the text colour, since its look is the site's. */
+  /* The site's own button: drawn plain, since its look is the site's. */
   .siteButton {
     align-self: flex-start;
+    margin-block: var(--space-8);
     padding: var(--space-6) var(--space-12);
-    border: var(--border-width-hairline) solid var(--text);
-    border-radius: var(--radius-md);
+    border: var(--border-width-hairline) solid var(--border-strong);
+    border-radius: var(--radius-sm);
     color: var(--text);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  /* Our corner button, in its colour and words, at the page's end corner. */
+  /* Our corner button, in its colour and words (its mark first when it has one, the words cut short with an
+     ellipsis), at the page's end corner. */
   .corner {
     position: absolute;
-    inset-block-end: var(--space-12);
-    inset-inline-end: var(--space-12);
-    max-inline-size: calc(100% - 2 * var(--space-12));
-    padding: var(--space-6) var(--space-16);
-    overflow: hidden;
+    inset-block-end: var(--space-16);
+    inset-inline-end: var(--space-16);
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+    max-inline-size: calc(100% - 2 * var(--space-16));
+    block-size: var(--size-control);
+    padding-inline: var(--space-16);
     border-radius: var(--radius-full);
     background: var(--brand-accent, var(--accent));
     box-shadow: var(--shadow-md);
     color: var(--brand-on-accent, var(--on-accent));
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-    text-overflow: ellipsis;
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
     white-space: nowrap;
   }
 
-  /* With its mark: the mark, then the words, which still cut short with an ellipsis. */
-  .corner[data-marked] {
-    display: inline-flex;
-    gap: var(--space-6);
-    align-items: center;
-  }
-
-  .corner[data-marked] .words {
+  .words {
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;

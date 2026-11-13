@@ -2,10 +2,11 @@
    axis column then seven day columns. An hour is --size-toolbar plus --space-16 tall; a
    block's place comes from its minutes (--start, --length) and its slot
    (placeBlocks.ts): a region (--left, --width, fractions of the column),
-   pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are a soft fill in their link's
-   hue with a bar of it, the member's own calendar events neutral with a thin edge in their calendar's hue, the time they closed hatched (a solid
-   edge for a block, dashed for a hold), cancelled ones struck through, a past day's bookings quieter; today's
-   date is the link colour in a hairline ring (one today mark everywhere), its column untinted.
+   pushed in --indent steps of --nest, then --lane of --lanes, --span wide. The look is the Timefix
+   prototype's (spec 0072): bookings a soft tint in their link's hue, the member's own calendar events hatched with a
+   hairline and a thin edge in their calendar's hue, the time they closed a grey tint (a dashed edge for a hold), busy
+   time hatched, cancelled ones struck through, a past day's bookings quieter; today's weekday and date accent text, the
+   now line accent.
    Hours outside the member's open hours are sunken. Below 480px of its
    container only the selected day's column shows. */
 @layer components {
@@ -33,9 +34,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: var(--border-width-hairline) solid var(--border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    background: var(--surface-raised);
+    background: var(--surface);
     container-type: inline-size;
   }
 
@@ -46,24 +47,21 @@
   }
 
   .head {
-    border-block-end: var(--border-width-hairline) solid var(--border);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  /* A day's head: its weekday over its date, the date in a small circle that is accent on today (as Google
-     Calendar marks today) and the selected surface on the picked day. */
+  /* A day's head (the prototype's): its weekday beside its date, the column's hairline carried up; the date in a small
+     circle, the selected surface on the picked day. */
   .dayButton {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: var(--space-2);
-    margin: var(--space-2);
-    padding: var(--space-2);
-    border: none;
-    border-radius: var(--radius-sm);
+    justify-content: center;
+    gap: var(--space-6);
+    padding: var(--space-8) var(--space-4);
+    border: 0;
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     background: transparent;
     color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
   }
 
   .dayButton[data-past] {
@@ -77,21 +75,14 @@
     block-size: var(--size-control-sm);
     padding-inline: var(--space-2);
     border-radius: var(--radius-full);
-    font: var(--text-body-strong);
+    font: var(--text-title);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-body-strong);
+    letter-spacing: var(--tracking-title);
     transition: background var(--duration-quick) var(--ease-out);
   }
 
   .dayButton[aria-pressed='true'] .dayNumber {
     background: var(--surface-selected);
-  }
-
-  /* Today: the one today mark (DatePicker's and MonthTiles' too), the link colour inside a hairline accent ring. */
-  .dayButton[data-today] .dayNumber {
-    color: var(--link);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -100,9 +91,10 @@
     }
   }
 
+  /* The outline ring, just inside: the week clips at its edge. */
   .dayButton:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: calc(-1 * var(--border-width-thick));
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .weekday {
@@ -111,10 +103,10 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Today: its weekday and date in accent text (the prototype's today head). */
+  .dayButton[data-today],
   .dayButton[data-today] .weekday {
-    color: var(--link);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--accent-text);
   }
 
   /* Outside the member's open hours: a light step off the grid (subtle, not sunken: the redesign of 9 November 2026
@@ -215,10 +207,11 @@
   }
 
   .hour {
-    padding-inline-end: var(--space-6);
+    padding-inline-end: var(--space-8);
     color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-kbd);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-kbd);
     text-align: end;
     translate: 0 calc(-1 * var(--space-8));
   }
@@ -229,9 +222,6 @@
   }
 
   .column {
-    /* What the column draws on, for the ring that parts a nested block from the one under it. */
-    --column-surface: var(--surface-raised);
-
     position: relative;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     /* Hour lines in the lightest border, one cell an hour (no half hour ticks: the owner, 22 October 2026). */
@@ -259,10 +249,19 @@
     justify-content: space-between;
     block-size: calc(var(--length) / 60 * var(--hour));
     padding: var(--space-2) var(--space-4);
-    border: var(--border-width-hairline) solid var(--control-border);
+    border: var(--border-width-hairline) solid var(--accent);
     border-radius: var(--radius-sm);
-    background: var(--surface-selected);
+    background: var(--accent-soft);
+    color: var(--accent-text);
     pointer-events: none;
+    animation: week-span-in var(--duration-quick) var(--ease-smooth-out);
+  }
+
+  /* The span fades in (a fade, so reduced motion keeps it). */
+  @keyframes week-span-in {
+    from {
+      opacity: 0;
+    }
   }
 
   .ghost[data-drawing] {
@@ -280,7 +279,6 @@
 
   .ghostStart,
   .ghostEnd {
-    color: var(--text);
     font: var(--text-label);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-label);
@@ -289,13 +287,12 @@
 
   .ghostEnd {
     align-self: flex-end;
-    color: var(--text-secondary);
   }
 
-  /* The ring is a keyboard's on the grid; a day handed focus back after a pointer's span shows none. */
+  /* The ring is a keyboard's on the grid, just inside the day; a day handed focus back after a pointer's span shows none. */
   .column:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: calc(-1 * var(--border-width-thick));
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .column[data-quiet-focus] {
@@ -303,10 +300,10 @@
   }
 
   .block {
-    /* Without a hue: accent for a booking, grey for an event. */
-    --hue-fill: var(--accent-soft);
-    --hue-bar: var(--accent-text);
-    --hue-text: var(--text);
+    /* Without a hue: the prototype's meeting blue for a booking, grey for an event. */
+    --hue-fill: var(--tag-blue-bg);
+    --hue-bar: var(--dot-gray);
+    --hue-text: var(--tag-blue-text);
 
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
@@ -320,13 +317,14 @@
     overflow: hidden;
     inline-size: calc(var(--span) / var(--lanes) * var(--region-size) - var(--space-4));
     /* Never shorter than one line of its words, so a quarter hour still reads (it may run past its end). */
-    block-size: max(calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline)), var(--size-chip));
+    block-size: max(calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline)), calc(1lh + var(--space-4)));
     padding: var(--space-2) var(--space-6);
     border: none;
-    border-inline-start: var(--border-width-thick) solid var(--accent-text);
     border-radius: var(--radius-sm);
-    background: var(--accent-soft);
-    color: var(--text);
+    /* A ring in the grid's surface parts a block from one it touches or sits over (the prototype's). */
+    box-shadow: 0 0 0 var(--border-width-hairline) var(--surface);
+    background: var(--hue-fill);
+    color: var(--hue-text);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
     text-align: start;
@@ -395,59 +393,42 @@
     --hue-text: var(--tag-purple-text);
   }
 
-  /* A booking: a soft fill in its link's colour, a bar of it at the start, its words in the hue's text. */
-  .block[data-kind='booking'] {
-    border-inline-start-color: var(--hue-bar);
-    background: var(--hue-fill);
-    color: var(--hue-text);
+  /* A booking is the base: a soft tint in its link's colour, its words in the hue's text (the prototype's meeting). */
+
+  /* Time another calendar holds (the prototype's busy and calendar event): hatched, never filled. The member's own
+     calendar events keep a thin edge in their calendar's colour and its mark, in secondary words; busy time has a
+     hairline at its top. */
+  .block:is([data-kind='event'], [data-kind='busy']) {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--border-subtle) 0 var(--border-width-hairline),
+      transparent var(--border-width-hairline) var(--space-6)
+    );
+    color: var(--text-secondary);
   }
 
-  /* The member's own calendar events: quieter than bookings, neutral with a thin edge in their calendar's colour
-     and its mark, so bookings stand out (Notion Calendar and Google Calendar draw others' time this way). */
   .block[data-kind='event'] {
     border: var(--border-width-hairline) solid var(--border);
     border-inline-start: var(--border-width-thick) solid var(--hue-bar);
-    background: var(--surface-raised);
-    color: var(--text-secondary);
   }
 
-  /* An event with no calendar colour: a grey edge. */
-  .block[data-kind='event']:not([data-hue]) {
-    --hue-bar: var(--dot-gray);
-  }
-
-  .block[data-kind='blocked'],
-  .block[data-kind='held'] {
-    border: var(--border-width-hairline) solid var(--control-border);
-    background: repeating-linear-gradient(
-      45deg,
-      var(--border) 0 var(--border-width-hairline),
-      transparent var(--border-width-hairline) var(--space-6)
-    );
-    background-color: var(--surface-subtle);
-    color: var(--text-secondary);
-  }
-
-  .block[data-kind='held'] {
-    border-style: dashed;
-  }
-
-  /* Busy (spec 0024): the member's own calendar time with nobody else invited. Plain, not hatched: nothing
-     here closed it, the calendar holds it. */
   .block[data-kind='busy'] {
-    border: var(--border-width-hairline) solid var(--control-border);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
+    border-block-start: var(--border-width-hairline) solid var(--border);
   }
 
-  /* A block over an earlier one it overlaps: a ring in the column's surface keeps the two apart. */
-  .block[data-nested] {
-    box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
+  /* Time the member closed: the prototype's internal time, a grey tint; a hold draws a dashed edge. */
+  .block:is([data-kind='blocked'], [data-kind='held']) {
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+
+  .block[data-kind='held'] {
+    border: var(--border-width-hairline) dashed var(--control-border);
   }
 
   /* "+N": blocks folded where a lane would be too narrow, in one quiet look. */
   .block[data-kind='more'] {
-    border: var(--border-width-hairline) solid var(--control-border);
+    border: var(--border-width-hairline) solid var(--border);
     background: var(--surface-subtle);
     color: var(--text-secondary);
     align-items: center;
@@ -456,7 +437,6 @@
   }
 
   .block[data-cancelled] {
-    border-inline-start-color: var(--border-strong);
     background: var(--surface-subtle);
     color: var(--text-tertiary);
     text-decoration: line-through;
@@ -468,19 +448,28 @@
     color: var(--text-secondary);
   }
 
-  /* Under a pointer a block lifts, as Google Calendar's do. */
+  /* Under a pointer a block lifts a little (shadow-sm); open, it is outlined in its own text colour. */
   @media (hover: hover) and (pointer: fine) {
     .block:hover:not([data-open], [data-kind='more'], [data-moving]) {
       z-index: var(--z-raised);
-      box-shadow: var(--shadow-md);
+      box-shadow:
+        0 0 0 var(--border-width-hairline) var(--surface),
+        var(--shadow-sm);
     }
   }
 
-  .block[data-open],
+  .block[data-open] {
+    z-index: var(--z-raised);
+    box-shadow:
+      0 0 0 var(--border-width-hairline) var(--surface),
+      var(--shadow-sm);
+    outline: var(--border-width-hairline) solid currentcolor;
+    outline-offset: calc(-1 * var(--border-width-hairline));
+  }
+
   .block:focus-visible {
     z-index: var(--z-raised);
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-text);
+    outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: var(--border-width-hairline);
   }
 
@@ -494,7 +483,7 @@
      minutes of the grid), its time saying where it is. It follows the pointer in grid steps, so nothing eases. */
   .block[data-moving] {
     z-index: var(--z-raised);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
     cursor: grabbing;
     translate: var(--shift-x, 0) calc(var(--shift-minutes, 0) / 60 * var(--hour));
   }
@@ -509,7 +498,7 @@
   /* Let go where it can't land, or put back: it slides home instead of jumping. */
   .block[data-settling] {
     transition:
-      translate var(--duration-fast) var(--ease-in-out),
+      translate var(--duration-fast) var(--ease-smooth-out),
       box-shadow var(--duration-quick) var(--ease-out);
   }
 
@@ -632,8 +621,8 @@
     inset-block-start: calc(var(--start) / 60 * var(--hour));
     inset-inline: 0;
     z-index: var(--z-raised);
-    block-size: var(--border-width-thick);
-    background: var(--danger);
+    block-size: var(--border-width-focus);
+    background: var(--accent);
     pointer-events: none;
   }
 
@@ -645,7 +634,7 @@
     inline-size: var(--space-8);
     block-size: var(--space-8);
     border-radius: var(--radius-full);
-    background: var(--danger);
+    background: var(--accent);
     content: '';
     translate: -50% -50%;
   }
@@ -662,11 +651,11 @@
     min-inline-size: 100%;
     padding-inline: var(--space-2) var(--space-4);
     text-align: end;
-    background: var(--surface-raised);
-    color: var(--danger);
-    font: var(--text-label);
+    background: var(--surface);
+    color: var(--accent-text);
+    font: var(--text-kbd);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-kbd);
     white-space: nowrap;
     translate: 0 -50%;
   }
@@ -733,7 +722,7 @@
     inset-block-start: 0;
     /* Over the pinned axis too, so an hour's label never shows through the heads as the hours scroll under them. */
     z-index: calc(var(--z-sticky) + var(--z-raised));
-    background: var(--surface-raised);
+    background: var(--surface);
   }
 
   /* The corner and the axis stay at the start as the columns scroll, over them. */
@@ -742,7 +731,7 @@
     position: sticky;
     inset-inline-start: 0;
     z-index: var(--z-sticky);
-    background: var(--surface-raised);
+    background: var(--surface);
   }
 
   /* A person's head: whatever TeamDay draws (their picture, name and status), with the day head's own breathing room. */
@@ -785,7 +774,6 @@
     display: inline-block;
     margin: var(--space-4) var(--space-6);
     padding: 0 var(--space-6);
-    border: var(--border-width-hairline) solid var(--tag-yellow-border);
     border-radius: var(--radius-sm);
     background: var(--tag-yellow-bg);
     color: var(--tag-yellow-text);
@@ -833,7 +821,6 @@
     }
 
     .dayButton {
-      margin-inline: 0;
       padding-inline: var(--space-2);
     }
 

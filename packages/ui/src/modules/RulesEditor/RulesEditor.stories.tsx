@@ -369,3 +369,19 @@ export const OwnMessageWithCondition: Story = {
     await expect(canvas.getByText('Only when Stage is Won')).toBeInTheDocument();
   },
 };
+
+/** The keyboard's row: Tab reaches the first rule, the arrows move to the next, each shown with the focus ring. */
+export const RowFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.tab();
+    const [first, second] = canvas.getAllByRole('row');
+    if (first === undefined || second === undefined) throw new globalThis.Error('no rules');
+    await waitFor(() => expect(first).toHaveFocus());
+    await expect(first).toHaveAttribute('data-focus-visible');
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(second).toHaveFocus());
+    await expect(second).toHaveAttribute('data-focus-visible');
+  },
+};

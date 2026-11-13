@@ -19,18 +19,37 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Weekdays open: five tinted columns, the weekend faint, one day picked. */
+/** Weekdays open: a week of seven lettered days, Monday first, the first open one picked, the weekend quiet. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelectorAll('[data-day="picked"]')).toHaveLength(1);
-    await expect(canvasElement.querySelectorAll('[data-day="closed"]').length).toBeGreaterThan(0);
+    const days = [...canvasElement.querySelectorAll('[data-day]')];
+    await expect(days.map((day) => day.textContent)).toEqual(['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+    await expect(days.map((day) => day.getAttribute('data-day'))).toEqual([
+      'picked',
+      'open',
+      'open',
+      'open',
+      'open',
+      'closed',
+      'closed',
+    ]);
   },
 };
 
 /** Every day open. */
 export const EveryDay: Story = {
   args: { openDays: [true, true, true, true, true, true, true], hue: 'green', lengths: '15, 30 or 60 min' },
+};
+
+/** A weekends page: its first open day, Saturday, is the one picked. */
+export const Weekends: Story = {
+  args: { openDays: [false, false, false, false, false, true, true], hue: 'yellow' },
+  play: async ({ canvasElement }) => {
+    const days = [...canvasElement.querySelectorAll('[data-day]')];
+    await expect(days[5]).toHaveAttribute('data-day', 'picked');
+    await expect(days[6]).toHaveAttribute('data-day', 'open');
+  },
 };
 
 /** No hours at all: every day faint, nothing picked. */

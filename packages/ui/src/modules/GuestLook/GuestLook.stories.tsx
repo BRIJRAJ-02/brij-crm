@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor, within } from 'storybook/test';
+import type { ReactNode } from 'react';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
@@ -66,5 +67,47 @@ export const Dialog: Story = {
     await expect(canvasElement.contains(dialog)).toBe(true);
     const save = within(dialog).getByRole('button', { name: 'Save change' });
     await expect(getComputedStyle(save).backgroundColor).toBe('rgb(24, 24, 27)');
+  },
+};
+
+/** A brand's look, as its stylesheet sets it on the page's root: the accent and the words on it. */
+const BRAND_LOOK = [
+  ['--menu-accent', '#0f766e'],
+  ['--menu-on-accent', '#ffffff'],
+] as const;
+
+/** Sets the look on a wrapper, as the look stylesheet sets it on the page's root. */
+function BrandLook({ children }: { readonly children: ReactNode }) {
+  return (
+    <div
+      ref={(element) => {
+        for (const [name, value] of BRAND_LOOK) element?.style.setProperty(name, value);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A look linked: the primary wears the page's accent (decision 16), and keyboard focus still takes the outline ring. */
+export const BrandAccent: Story = {
+  render: () => (
+    <BrandLook>
+      <GuestLook>
+        <Stage direction="column" width="narrow">
+          <Button variant="primary" size="touch">
+            Reserve
+          </Button>
+        </Stage>
+      </GuestLook>
+    </BrandLook>
+  ),
+  play: async ({ canvas }) => {
+    const button = canvas.getByRole('button', { name: 'Reserve' });
+    await expect(getComputedStyle(button).backgroundColor).toBe('rgb(15, 118, 110)');
+    await expect(getComputedStyle(button).color).toBe('rgb(255, 255, 255)');
+    await userEvent.tab();
+    await expect(button).toHaveFocus();
+    await expect(button).toHaveAttribute('data-focus-visible');
   },
 };

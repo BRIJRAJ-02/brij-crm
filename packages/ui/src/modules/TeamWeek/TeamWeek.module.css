@@ -12,43 +12,26 @@
     min-inline-size: 0;
   }
 
-  /* A day's header: the weekday beside its date; today's date in WeekCalendar's ring. */
+  /* A day's header, WeekCalendar's day head (spec 0072): the weekday beside its date; today both in accent text. */
   .heading {
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
+    align-items: baseline;
+    gap: var(--space-6);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .weekday {
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  .heading[data-today] .weekday {
-    color: var(--link);
   }
 
   .date {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-inline-size: var(--size-chip);
-    block-size: var(--size-chip);
-    padding-inline: var(--space-4);
-    border-radius: var(--radius-full);
     color: var(--text);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }
 
-  /* Today: the one today mark, WeekCalendar's (and DatePicker's and MonthTiles'): the link colour inside a hairline
-     accent ring (the bookings critique, A13; it was a filled accent circle here only). */
-  .heading[data-today] .date {
-    color: var(--link);
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: calc(-1 * var(--border-width-hairline));
+  .heading[data-today] > * {
+    color: var(--accent-text);
   }
 
   .person {
@@ -90,7 +73,8 @@
   }
 
   .name[data-opens][data-focus-visible] {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -133,8 +117,8 @@
     padding-block: var(--space-6);
   }
 
-  /* One day's hours: a calm block the cell's width, no edge at rest (it is not a field), each range on its own line,
-     its tone from where the hours come. */
+  /* One day's hours: a calm block the cell's width, WeekCalendar's grey tint (the prototype's internal time), no edge
+     at rest, each range on its own line, its tone from where the hours come. */
   .cell {
     position: relative;
     display: flex;
@@ -155,10 +139,9 @@
     text-align: start;
   }
 
-  /* A change for this date only: the blue tag's surface, and the dot, with room for it so it never sits on a range. */
+  /* A change for this date only: the prototype's meeting blue, and the dot, with room for it so it never sits on a range. */
   .cell[data-tone='override'] {
     padding-inline-end: var(--space-16);
-    border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
     color: var(--tag-blue-text);
   }
@@ -201,55 +184,36 @@
     background: transparent;
   }
 
-  /* Pressable: a hairline at rest, so a block holds its shape on a quiet column too; hover draws a control's edge;
-     nothing shrinks on press (rule 8). */
+  /* Pressable, as a week's event: no edge at rest (a day off keeps its dashed one), a small lift under the pointer,
+     its own text colour round it while its editor is open; nothing shrinks on press (rule 8). */
   .cell[data-editable] {
-    border-color: var(--border-subtle);
     transition:
       background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out);
+      box-shadow var(--duration-quick) var(--ease-out);
   }
 
-  .cell[data-editable][data-tone='off'] {
-    border-color: var(--control-border);
-  }
-
-  /* A change for this date: an edge of its own hue, so the block keeps its shape in dark, where its surface sits
-     close to the page's. */
-  .cell[data-editable][data-tone='override'] {
-    border-color: var(--tag-blue-border);
-  }
-
-  .cell[data-editable][data-tone='away'] {
-    border-color: transparent;
+  /* Its editor open: plain which day the Popover changes. */
+  .cell[data-editable][data-open] {
+    z-index: var(--z-raised);
+    border-style: solid;
+    box-shadow: var(--shadow-sm);
+    outline: var(--border-width-hairline) solid currentcolor;
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   .cell[data-editable][data-focus-visible] {
     z-index: var(--z-raised);
-    outline: none;
-    box-shadow: var(--shadow-focus);
-  }
-
-  /* Its editor open: the cell keeps the accent's edge, so it is plain which day the Popover changes. */
-  .cell[data-editable][data-open] {
-    z-index: var(--z-raised);
-    border-style: solid;
-    border-color: var(--accent);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-hairline);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .cell[data-editable][data-hovered] {
-      border-color: var(--border-strong);
+      box-shadow: var(--shadow-sm);
     }
 
     .cell[data-editable][data-tone='off'][data-hovered] {
-      border-style: solid;
       background: var(--surface-hover);
-    }
-
-    .cell[data-editable][data-tone='away'][data-hovered] {
-      border-color: var(--tag-yellow-text);
     }
   }
 
@@ -347,15 +311,14 @@
   .swatch {
     position: relative;
     flex: none;
-    inline-size: calc(var(--size-icon-xs) * 2);
-    block-size: var(--size-icon-xs);
+    inline-size: calc(var(--space-12) * 2);
+    block-size: var(--space-12);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-xs);
     background: var(--tag-gray-bg);
   }
 
   .swatch[data-tone='override'] {
-    border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
   }
 
@@ -366,7 +329,6 @@
   }
 
   .swatch[data-tone='away'] {
-    border-color: var(--tag-yellow-border);
     background: var(--tag-yellow-bg);
   }
 

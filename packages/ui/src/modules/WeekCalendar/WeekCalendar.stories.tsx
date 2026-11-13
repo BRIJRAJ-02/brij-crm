@@ -328,11 +328,53 @@ export const OpenCard: Story = {
       canvas.getByRole('button', { name: 'Alan Turing, 10:00 – 11:00 AM, Site visit, cancelled' }),
     ).toBeInTheDocument();
     // Its name says who and when, and what it is about (the block's detail).
-    await userEvent.click(canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' }));
+    const grace = canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' });
+    await userEvent.click(grace);
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
+    // The block stays marked open (outlined in its own text colour) while its card shows.
+    await expect(grace).toHaveAttribute('aria-expanded', 'true');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
+    await expect(grace).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/** Today's head (the prototype's: weekday and date in accent text) is named today; the others are not. */
+export const TodayHead: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Thursday, 8 October, today' })).toHaveAttribute('data-today');
+    await expect(canvas.getByRole('button', { name: 'Friday, 9 October' })).not.toHaveAttribute('data-today');
+  },
+};
+
+/** Under a pointer a block lifts (CSS only): nothing opens and no state changes until it is pressed. */
+export const BlockHover: Story = {
+  render: TodayHead.render,
+  play: async ({ canvas, args }) => {
+    const grace = canvas.getByRole('button', { name: 'Grace Hopper, 3:30 – 4:00 PM, Quick chat' });
+    await userEvent.hover(grace);
+    await expect(grace).toHaveAttribute('aria-expanded', 'false');
+    await expect(args.onOpen).not.toHaveBeenCalled();
+  },
+};
+
+/** The keyboard reaches a day's blocks by start with Down; the focused block wears the outline ring. */
+export const BlockFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: TodayHead.render,
+  play: async ({ canvas }) => {
+    canvas.getByRole('group', { name: 'Thursday, 8 October, 2 items' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('button', { name: /^Team standup, / })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('button', { name: /^Grace Hopper, / })).toHaveFocus();
   },
 };
 

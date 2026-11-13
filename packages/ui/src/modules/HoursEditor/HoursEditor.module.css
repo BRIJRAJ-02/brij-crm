@@ -1,11 +1,11 @@
-/* HoursEditor: one grid for the week. Every row has its day in a
-   size-column-narrow column, then its windows: fixed width time Selects with
-   "to" between at a fixed width, and + or − after them, so each control sits
-   at the same place down the week. Copy times to follows the first window.
-   The days part by their rhythm (a row's height), not by rules, so no line
-   competes with the fields; Set all days sits under them as a quiet action. A
-   day off reads "Unavailable" in the secondary colour; a row's error sits
-   under its windows, at their start. */
+/* HoursEditor, in the look of the Timefix prototype's weekly hours (spec 0072): one grid for the week. Every row
+   has its day in a column three fifths of size-menu wide, space-16 from its windows: fixed width size-control time
+   Selects with "to" (text-tertiary) between at a fixed width, and + or − after them, space-8 apart, so each control
+   sits at the same place down the week; a second window stacks space-12 under the first. Copy times to follows
+   the first window. The days are space-12 / space-8 rows parted by full width border-subtle hairlines; Set all days
+   sits under them as a quiet action. A day off reads "Unavailable" in text-tertiary; a row's error (text-body-sm,
+   danger) sits under its windows, at their start. Nothing in it moves of its own (the prototype's open, close and
+   shake are owed, see the README). */
 @layer components {
   .root {
     display: flex;
@@ -20,8 +20,13 @@
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
     align-items: start;
-    row-gap: var(--space-4);
-    padding-block: var(--space-4);
+    row-gap: var(--space-8);
+    padding: var(--space-12) var(--space-8);
+  }
+
+  /* Plain full width hairlines between the days, no cards. */
+  .row + .row {
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   /* Set all days: a quiet action under the week, at its start. */
@@ -35,100 +40,95 @@
     display: flex;
     align-items: center;
     inline-size: var(--size-column-narrow);
-    min-block-size: var(--size-control-sm);
+    min-block-size: var(--line);
   }
 
+  /* A line is a control's height, a window space-12 under the one before; read only, text's. */
   .rows {
+    --day-column: calc(var(--size-menu) * 0.6);
+    --line: var(--size-control);
+    --range-gap: var(--space-12);
+
     display: grid;
-    grid-template-columns: var(--size-column-narrow) auto auto;
+    grid-template-columns: var(--day-column) auto auto;
     justify-content: start;
-    column-gap: var(--space-8);
+    column-gap: var(--space-16);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  /* A whole day: "All day" in the windows' place, with Set hours beside it. */
-  .allDay {
+  .day,
+  .copy,
+  .allDay,
+  .dayName,
+  .rangeText,
+  .offLabel {
     display: flex;
     align-items: center;
+    min-block-size: var(--line);
+  }
+
+  /* A whole day: "All day" in the windows' place, with Set hours beside it. */
+  .allDay,
+  .dayName,
+  .rangeText,
+  .offLabel {
     gap: var(--space-8);
-    min-block-size: var(--size-control-sm);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  .day {
-    display: flex;
-    align-items: center;
-    min-block-size: var(--size-control-sm);
+  .offLabel {
+    color: var(--text-tertiary);
   }
 
   .ranges {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--range-gap);
     min-inline-size: 0;
   }
 
   .range {
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-8);
   }
 
   /* One width for "to", so the second time starts at one place in every row. */
   .to {
     flex: none;
     inline-size: var(--space-16);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     text-align: center;
   }
 
-  .copy {
-    display: flex;
-    align-items: center;
-    min-block-size: var(--size-control-sm);
-  }
-
+  /* Copy times to and Set all days: a menu's width with roomier padding. */
   .copyList {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
+    box-sizing: border-box;
+    min-inline-size: var(--size-menu);
     padding: var(--space-12);
   }
 
   .copyTitle {
-    margin: 0;
+    margin: 0 0 var(--space-4);
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  .dayName,
-  .rangeText {
-    display: flex;
-    align-items: center;
-    min-block-size: var(--size-control-sm);
-    color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-  }
-
   .rows[data-read-only] {
-    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
-  }
+    --line: var(--size-control-sm);
+    --range-gap: var(--space-4);
 
-  .offLabel {
-    display: flex;
-    align-items: center;
-    min-block-size: var(--size-control-sm);
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
+    grid-template-columns: var(--day-column) minmax(0, 1fr);
   }
 
   /* At the windows' start, as wide as they are: a long message wraps rather than widening the row. */
@@ -137,8 +137,8 @@
     min-inline-size: 100%;
     margin: 0;
     color: var(--danger);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   /* One date (isSingleDay): Working on its own line, then each window on a line of its own. Not a size container, so
@@ -169,6 +169,7 @@
     .rows {
       grid-template-columns: var(--size-column-narrow) minmax(0, 1fr) auto;
       justify-content: stretch;
+      column-gap: var(--space-8);
     }
 
     .range {

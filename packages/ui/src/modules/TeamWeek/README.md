@@ -30,7 +30,7 @@ The references (Mobbin, read again for the owner's "better UI" pass, 30 October 
 ```
 
 - Every cell has a whole `label` ("Monday 2 November, Sam Lee: 9:00 am to 5:00 pm, this date only"), which is what a screen reader hears; the drawn lines are hidden from it.
-- A day with `weekday` and `date` heads its column with the two apart, the date in a small circle that carries WeekCalendar's today mark on `isToday` (the link colour in a hairline accent ring, the one today mark), its header in the link colour over an accent line; a screen reader hears the `label`, with ", today" on today. `isQuiet` tints the whole column a step off the page (the weekend), from its header through the footer of totals, which keeps the band under the pointer too.
+- A day with `weekday` and `date` heads its column as WeekCalendar's day head does, weekday beside date, both `accent-text` on `isToday`; a screen reader hears the `label`, with ", today" on today. `isQuiet` tints the whole column a step off the page (the weekend), from its header through the footer of totals, which keeps the band under the pointer too.
 - `isEditable` with `renderEditor` makes a person's cells buttons; otherwise they are text. The screen decides (a past week, See only).
 - `meta` is the quiet line under the name and `badge` follows it after a middle dot, only when given: Bookings › Roster passes the zone, then the week's hours ("GMT+5:30 · 41 h", the mock's roster, 10 November 2026); the Shifts grid passes the hours alone. The line keeps to one line.
 - `picture` and `hue` (spec 0066 B1, the Shifts grid): a staff member's photo in place of the initials, and their own colour on the tile when there is no photo. Why a variant: the Shifts grid is this grid with people who have a chosen look; a second grid would repeat every cell, tone and key.
@@ -38,17 +38,17 @@ The references (Mobbin, read again for the owner's "better UI" pass, 30 October 
 - `extra` sits under the name (a Link to the person's schedules); `actions` at the cell's end (the row's menu), so it stays beside the name.
 - Days away in a row join into one band across the cells' gaps; the band says "Away" (and its reason) once, on its first day, while each day's label still says it in full.
 - The footer row follows the people, set apart by Table's `total` tone, and is left out with no people. Each total draws the same lines every day, a day nobody works too ("Nobody", "0 h"). A total's `extra` is one more quiet line under its detail (the workspace link's coverage, "3 bookable").
-- `legend` draws one quiet line under the grid, in the tertiary text colour: each key a small copy of its cell (twice `size-icon-xs` wide, one tall, the cell's fill and edge at `radius-xs`) with its word beside it ("Usual", "This date only" in the blue edge with the cell's dot in its top corner, "Off" in a dashed edge, "Away"), never a square that reads as a checkbox or a radio (review, 1 November 2026), then an optional `hint`, plain text on the same line (the Roster's "Teammates show here once they share their hours with you.", once a box of its own). Every mark has an edge of its own (the subtle border, the control outline, or the tag's border), since a mark of a tag surface alone all but vanished in dark (31 October 2026). Marks rather than keys written inside their look since the polish pass of 31 October 2026: four boxed keys and a boxed note read as busier than the grid they explain. It shows only with people. Pass only the keys the grid draws: a grid with nothing to change draws its days as words, so the Roster keys only the dot and Away there.
+- `legend` draws one quiet line under the grid, in the tertiary text colour: each key a small copy of its cell (twice `space-12` wide, one tall, the cell's fill and a `border-subtle` hairline at `radius-xs`) with its word beside it ("Usual", "This date only" in the blue tint with the cell's dot in its top corner, "Off" in a dashed edge, "Away"), never a square that reads as a checkbox or a radio (review, 1 November 2026), then an optional `hint`, plain text on the same line (the Roster's "Teammates show here once they share their hours with you.", once a box of its own). Every mark has an edge of its own (the subtle border, or the control outline for Off), since a mark of a tag surface alone all but vanished in dark (31 October 2026). Marks rather than keys written inside their look since the polish pass of 31 October 2026: four boxed keys and a boxed note read as busier than the grid they explain. It shows only with people. Pass only the keys the grid draws: a grid with nothing to change draws its days as words, so the Roster keys only the dot and Away there.
 - The editor opens in a Popover under the cell, at its content's width (an HoursEditor `isSingleDay` sizes itself, so both times show whole), shifted or flipped by React Aria to stay in the window, the last day's included. `editorTitle` heads it ("Mon 2 · Sam Lee"); `editorLabel` names the dialog. The cell keeps the accent's edge and ring while its editor is open (`data-open`).
 - `isLoading` shows Table's skeleton rows; `emptyState` shows with no people.
 
 ## States
 
-Editable: usual (the grey tag's surface with a `border-subtle` hairline), this date only (the blue tag's surface and the dot), off (a dashed edge in `control-border`, 3:1 and more against the page in both themes, secondary text), open (the accent's edge and the focus ring while its editor shows), away (the yellow tag's surface and text, joined across days through Table's `--table-cell-inline` padding). Read only (a past week, a See only row): the same words with no block, so a filled block always means "select to change" (Away keeps its band), and the screen says "View only" after that person's hours. today, the weekend, hover (pointer only: a control's edge appears), focus (the focus ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
+Editable: usual (the grey tag's surface, no edge), this date only (the blue tag's surface and the dot), off (a dashed edge in `control-border`, 3:1 and more against the page in both themes, secondary text), open (a hairline outline in its own text colour and `shadow-sm` while its editor shows), away (the yellow tag's surface and text, joined across days through Table's `--table-cell-inline` padding). Read only (a past week, a See only row): the same words with no block, so a filled block always means "select to change" (Away keeps its band), and the screen says "View only" after that person's hours. today, the weekend, hover (pointer only: `shadow-sm`), focus (the outline ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
 
 Rows are taller than Table's 34px (a 24px picture over two lines, the blocks `size-input` high with `space-6` above and below), on purpose: the owner found 34px rows cramped here.
 
-Today's date circle repeats WeekCalendar's ring (one today mark across the grids, the bookings critique A13; it was a filled accent circle) at `size-chip` rather than its `size-control`, since it sits in a 36px table header beside the weekday rather than over it; the two stay separate until a third use earns a shared DayNumber.
+Today's head repeats WeekCalendar's (weekday and date in `accent-text`, the one today mark across the grids) at `text-label` size, since it sits in a 36px table header.
 
 ## Keyboard
 
@@ -57,3 +57,20 @@ Tab enters the grid. The arrow keys move between cells (an editable cell's butto
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into WeekCalendar in the prototype (its `meta.json` lists TeamWeek under WeekCalendar's `replaces`). It cannot render WeekCalendar without changing its props: it is a roster, a Table of people by days whose cells are each day's usual hours, not a time axis. So it keeps its own module (decision 14) and **takes its look from WeekCalendar** (spec 0072). The rules it repeats from WeekCalendar's prototype, which leave with this export when its last caller moves:
+
+- the day head: weekday (`text-label`, `text-secondary`) beside its date, `space-6` apart, both `accent-text` today;
+- an event's block: a tag tint at `radius-sm` with no edge (usual is the prototype's internal grey, this date only its meeting blue), `shadow-sm` under the pointer over `duration-quick` on `ease-out`, open outlined a hairline in its own text colour with `shadow-sm`, keyboard focus the outline ring offset a hairline.
+
+Its own: the dashed Off slot, the yellow Away band joined across days, the "this date only" dot, the person cell, the totals and the legend. `tag-blue-border`, `tag-yellow-border`, `shadow-focus`, `size-chip` and `size-icon-xs` are no longer used.
+
+**Use it for** the Roster's week of usual hours per person, and a person's own week. **Don't use it for** bookings on a time axis (WeekCalendar, TeamDay).
+
+**The consumer provides** `label`, `days`, `people` (each with `cells`, `isEditable`, `picture`, `meta`, `badge`, `extra`, `actions`, `onOpen`), `personLabel`, `editorLabel`, `editorTitle`, `renderEditor`, `footer`, `legend`, `isLoading` and `emptyState`.
+
+**States** (stories): Default, OpensByKeyboard (focus, open), CellHover, ReadOnly, OpensPerson, StaffColours, LinkCoverage, Loading, Empty, Phone, OnlyYou, EditorAtEdge.
+
+**Differences from the prototype**: the prototype has no roster grid; the cells keep the library's tones (usual, this date only, off, away), its joined Away band and its dot, and the editor in a Popover under the cell.

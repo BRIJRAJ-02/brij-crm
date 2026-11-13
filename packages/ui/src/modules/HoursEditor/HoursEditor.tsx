@@ -363,7 +363,6 @@ export function HoursEditor({
     <Select
       label={name}
       isLabelHidden
-      size="sm"
       variant="time"
       items={items}
       value={value}

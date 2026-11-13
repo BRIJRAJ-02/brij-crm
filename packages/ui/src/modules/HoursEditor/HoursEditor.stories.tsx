@@ -367,3 +367,85 @@ export const PastMidnight: Story = {
     await expect(canvas.getAllByText(/^2:00\s?AM$/i).length).toBeGreaterThanOrEqual(1);
   },
 };
+
+/** Whether a day's windows overlap or run backwards, as a screen checks them before saving. */
+function problemOf(ranges: readonly HoursRange[]): string | undefined {
+  const sorted = [...ranges].sort((a, b) => a[0].localeCompare(b[0]));
+  const isBad = sorted.some(([start, end], at) => end <= start || (at > 0 && start < (sorted[at - 1]?.[1] ?? '')));
+  return isBad ? 'Hours on one day can’t overlap.' : undefined;
+}
+
+/** A week held as a screen holds it, each change checked: the row's message says what is wrong. */
+function CheckedWeek(props: Parameters<typeof HoursEditor>[0]) {
+  const [rows, setRows] = useState(weekRows);
+  return (
+    <HoursEditor
+      {...props}
+      rows={rows}
+      onChange={(id, ranges) => {
+        props.onChange(id, ranges);
+        setRows((current) =>
+          current.map((row) => {
+            if (row.id !== id) return row;
+            const error = problemOf(ranges);
+            return error === undefined ? { id, label: row.label, ranges } : { id, label: row.label, ranges, error };
+          }),
+        );
+      }}
+    />
+  );
+}
+
+/** Adding hours: + puts the hour after the last window under it, and a second window carries −. */
+export const AddHours: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <CheckedWeek {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add more hours on Tuesday' }));
+    await expect(args.onChange).toHaveBeenCalledWith('tue', [
+      ['09:00', '17:00'],
+      ['18:00', '19:00'],
+    ]);
+    await expect(canvas.getByRole('button', { name: 'Remove 6:00 PM to 7:00 PM on Tuesday' })).toBeInTheDocument();
+  },
+};
+
+/** A new problem: a window moved over another opens the row's message, announced as an alert. */
+export const NewProblem: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <CheckedWeek {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /Monday from, hours 2/ }));
+    await userEvent.click(await within(document.body).findByRole('option', { name: /^11:00 AM/ }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('Hours on one day can’t overlap.');
+  },
+};
+
+/** By keyboard: Tab reaches the first day's switch, Space turns the day off, and its times give way to Unavailable. */
+export const Keyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <CheckedWeek {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.tab();
+    const monday = canvas.getByRole('switch', { name: 'Monday' });
+    await expect(monday).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(args.onChange).toHaveBeenCalledWith('mon', []);
+    await expect(monday).not.toBeChecked();
+    await expect(canvas.getAllByText('Unavailable')).toHaveLength(3);
+    await userEvent.tab();
+    await expect(canvas.getByRole('switch', { name: 'Tuesday' })).toHaveFocus();
+  },
+};

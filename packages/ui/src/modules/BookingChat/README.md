@@ -59,3 +59,20 @@ Not in the artifact.
 - The visitor's lines carry no face, and the host's label shows once, over the conversation's first line (critic C16). `visitorName` is gone.
 - Quick replies stay round secondary buttons (they act, they are not a choice that stays picked), and the offered times are SlotList's own buttons, with no accent pill look of their own (critics C5, A9).
 - The confirm card takes `more`, a line for the guests and the note folded into it (critic B-10).
+
+## Timefix prototype (spec 0072)
+
+On the public booking page, so only what visibly differed from the prototype's BookingChat moved, at no cost to the page: the host's bubbles on `surface-subtle` and the visitor's in the page's accent with `on-accent`, both `radius-lg` (from `radius-xl`) with the corner nearest the face `radius-xs`, `space-8` / `space-12` inside; the thread's keyboard focus is the outline ring (`border-width-focus` in `focus-ring`, `space-2` outside it; the prototype draws it just inside, but the thread clips nothing of its own ring and the old one stood outside); the prompt box, typed in, takes a focused field's look (an `accent-text` edge and a `border-width-focus` halo of `accent-border`, which BookingFrame points at the page's brand), in place of the legacy `shadow-focus`. Times are SlotList's and suggestions Button's, so they follow those parts.
+
+**Use it for** the booking page's Chat view. **Don't use it for** the app's AI panel or comments between teammates.
+
+**The consumer provides** `lines` (oldest first; an assistant line may carry `days`, `suggestions`, `prompt`, `answer`, `card` and `confirm`), `host`, `onSend`, `onPickTime`, and optionally `isLoading`, `isWaiting`, `isDone` with `doneNote`, `error` (with `onRetry`, `onRestart`, `isPause`) and `maxLength`. The page owns the conversation.
+
+**States**: as above, and the keyboard's order (`KeyboardOrder`: the thread, the times, the suggestions, the box).
+
+**Differences from the prototype**
+- Kept, the owner's calls on this page (4 and 5 November 2026): the prompt box (a raised box two rows tall with a round Send at its foot) rather than the prototype's filled pill field; the face at the foot of each run, so the small corner is the bubble's foot, on every bubble of a run; the host's typing dots rather than the shimmering thinking line; the read back's confirm card rather than the prototype's booked card with its success check; lines that drop in with their own height (stageshow) rather than rising `distance-small`; replies resolving word by word at the page's own pace; `--scale-press` 0.97 on the page.
+- The visitor's bubble is the page's accent (BookingFrame's brand), where the prototype draws ink: on a guest page the prototype's own `guestLookProps` makes ink the brand, which is what the accent is here.
+- The bubble's words are the page's body (`text-body`, BookingFrame's), not the prototype's 15px: the booking page's type belongs to its frame (phase 2's BookingFrame).
+- No card head (the host's face, name and title): the booking page's rail and card draw those. Day names and times are SlotList's (phase 2).
+- Cost: the booking page's first load is unchanged (BookingChatGhost, the part in it, is untouched; this module loads in the chat's own chunk when the visitor first picks Chat), and this module's CSS grew 8 B gzipped (the prompt box's focus halo spelled out in place of the legacy `shadow-focus` token; the thread's redundant `margin: 0` went).

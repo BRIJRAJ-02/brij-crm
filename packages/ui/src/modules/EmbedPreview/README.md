@@ -35,3 +35,20 @@ None: it is a picture.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Takes its look from the prototype's EmbedPreview frame: a quiet browser on `surface` with a `border` hairline, `radius-lg` corners and `shadow-xs`; its bar a `size-control` strip on `surface-subtle` over a `border-subtle` hairline, three `space-8` dots in `border-strong` and an address pill on `surface` (`size-control-sm` less `space-6` tall, at most `size-menu` wide). The site is skeleton lines `space-8` apart inside `space-16` / `space-20` of room. In the page, the form's box sits `space-8` clear of the lines on `surface-subtle` with a `border-subtle` hairline, `radius-md` and `space-16` inside (a `content` picture fills it on `surface`, with no inset of its own); its button is a pill. Popup draws the site's own plain button (`border-strong`, `radius-sm`, `text-label`). The corner button is a `size-control` pill `space-16` from the corner, `text-body-sm-strong` with its mark `space-6` before the words, `shadow-md`. It never moves.
+
+**Use it for** the Share tab of a form or a booking page, beside its embed choices. **Don't use it for** sharing a plain link, or a preview of the real page.
+
+**The consumer provides** `mode`, `headline`, `words`, `label`, and optionally `content` (a booking page's `BookingPagePicture`), `colour`, `mark`, `isTransparent`, `isTitleHidden`.
+
+**States**: in the page (with its headline, clear, or a booking page's picture), popup, corner button (the accent or a colour, with or without its mark), a mode changing (`ModeChange`).
+
+**Differences from the prototype**
+- It is the picture only. The prototype's EmbedPreview also holds the ways as a SegmentedControl, the caption and the snippet with Copy code: the Share tab (EmbedCard in the app) draws those from the library's own parts.
+- Popup draws the site's button alone: the prototype's page over a scrim (scaling in from `scale-large`) needs the box drawn a second time in that mode, owed to the Share tab's screen phase. There is no Slide-in mode (`mode` has three ways), and no `site` address text: the bar's address is a bare pill.
+- No motion, owed to the Share tab's screen phase: the prototype slides a new mode's site in `distance-base` (page side by side, the page keyed by its mode) and raises the corner pill `distance-medium` a `duration-quick` after it. Built and measured at about 154 B gzipped on the module (the look itself moved 28 B), so it waits for that phase's load budget.
+- The page keeps `size-column` as its least height, not the prototype's six `size-control-lg`, so the Share tab's column does not grow under its choices.
+- Kept beyond the prototype: `headline` with `isTitleHidden` and `isTransparent` for a form drawn as its fields, `colour` checked as a hex and its words in white or ink (the prototype's `accent`), `mark`; `content` is the prototype's `picture` and `page`.

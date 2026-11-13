@@ -55,8 +55,20 @@ The call to action is a button: Tab reaches it, Enter or Space opens the dialog.
 
 ## Motion
 
-The dots cross the gap in `duration-pulse`, a third of a cycle apart, and the two pictures lean a few degrees towards each other on the same beat (the pictures only: tilting the names under them read as jitter). The lean's four degrees is the one value with no token behind it; there is no rotation token, and Stylelint's token rules don't reach `rotate`. The mark that replaces them (a tick, a slash, a warning) grows in from `scale-enter` in `duration-popover`. When the calendars match, the tick opens out of a wide blur and the two faces lean in to meet it once, then settle (2 November 2026). The visitor's face arrives out of a blur in place of the held circle once Google says who they are, and each step's words resolve in where the last ones stood, the note a beat after. Reduced motion keeps the fades and the dots' turns and drops every movement and the lean. The two faces and the message block keep their size in every step, so the answer landing moves nothing.
+The dots cross the gap in `duration-pulse`, a third of a cycle apart, and the two pictures lean a few degrees towards each other on the same beat (the pictures only: tilting the names under them read as jitter). The lean's four degrees is the one value with no token behind it; there is no rotation token, and Stylelint's token rules don't reach `rotate`. The mark that replaces them (a tick, a slash, a warning) grows in from `scale-enter` in `duration-popover`. When the calendars match, the tick opens out of `scale-shrunk` and the two faces lean in to meet it once, then settle (2 November 2026). The visitor's face scales in from `scale-medium` in place of the held circle once Google says who they are, and each step's words rise in where the last ones stood, the note a beat after. No blur in any of it (spec 0072's house rule, 13 November 2026). Reduced motion keeps the fades and the dots' turns and drops every movement and the lean. The two faces and the message block keep their size in every step, so the answer landing moves nothing.
 
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Listed under WeekCalendar's `replaces` in the prototype, but it shares no look with the week: it is the booking page's call to action and its dialog (Button, Modal, Avatar, SlotList draw it). It cannot render WeekCalendar, and none of WeekCalendar's rules apply, so it keeps its own module (decision 14) and **takes its look from its own parts**, already ported (Button, Modal, Avatar, SlotList). Changed here for the prototype's house rules: no blur in motion (the tick, the arriving face and the words now fade, scale or rise without the two blur values and their Stylelint exceptions), and the matching dots are `space-12` rather than the retired `size-icon-xs`.
+
+**Use it for** the booking page's Match with your calendar. **Don't use it for** connecting a calendar in the app (Settings › Calendars).
+
+**The consumer provides** `step`, `isOpen` and `onOpenChange`, `host`, `visitor`, `connectHref`, `result`, `onBook` and `onShowAll` (the dialog), and `MatchCalendarCta`'s `onPress` and `isLoading`.
+
+**States** (stories): Cta, CtaHolding, Why, Waiting, Matched, OtherTimes, SoonestOnly, OneMatch, Unmatched, Failed, Keyboard.
+
+**Differences from the prototype**: not in the prototype; the prototype's booking flow has no match step.

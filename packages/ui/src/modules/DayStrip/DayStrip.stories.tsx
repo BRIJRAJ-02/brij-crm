@@ -38,6 +38,29 @@ export const WithMonths: Story = {
   },
 };
 
+/** Under a pointer a day washes (CSS only); the chosen day keeps its white pill. */
+export const HoverDay: Story = {
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const friday = canvas.getByRole('button', { name: /Friday, October 9/ });
+    await userEvent.hover(friday);
+    await expect(friday).toHaveAttribute('aria-pressed', 'false');
+    await expect(canvas.getByRole('button', { name: /Thursday, October 8/ })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+/** A day holding a Best time carries its dot, and says so in its name. */
+export const BestDay: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const best = canvas.getByRole('button', { name: /^Tuesday, October 13, .*a best time for you both$/ });
+    await expect(best).toHaveAttribute('data-best');
+    await userEvent.click(best);
+    await expect(best).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
 /** The days before they are known: a day's tile in each place, so the times under them never move. */
 export const Loading: Story = {
   args: { days: [], isLoading: true },

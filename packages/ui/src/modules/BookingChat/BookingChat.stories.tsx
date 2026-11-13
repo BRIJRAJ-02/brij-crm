@@ -319,3 +319,25 @@ export const Extras: Story = {
     await expect(args.onSend).toHaveBeenCalledWith('Add a guest');
   },
 };
+
+/** By keyboard: Tab reaches the thread first (it takes focus so it scrolls), then the times, the suggestions and the box. */
+export const KeyboardOrder: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat {...args} lines={[greeting()]} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    await userEvent.tab();
+    await expect(canvas.getByRole('log', { name: 'Conversation' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: '9:00 AM, Fri 9 Oct, 30 minutes' })).toHaveFocus();
+    const field = canvas.getByRole('textbox', { name: 'Message' });
+    field.focus();
+    await expect(field).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    await expect(canvas.getByRole('button', { name: 'Next week' })).toHaveFocus();
+  },
+};

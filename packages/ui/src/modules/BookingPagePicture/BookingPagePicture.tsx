@@ -1,4 +1,7 @@
 import type { Hue } from '../../hue.ts';
+import '../../lib/custom-properties.ts';
+import { memoIntl } from '../../lib/intl-memo.ts';
+import { useFormatSettings } from '../../provider/context.ts';
 import styles from './BookingPagePicture.module.css';
 
 /** Props for BookingPagePicture. */
@@ -13,26 +16,31 @@ export interface BookingPagePictureProps {
   readonly hue: Hue;
 }
 
-/** Cells before the first of the month in the drawn month, so it reads as a calendar rather than a grid. */
-const LEAD_CELLS = 2;
-/** The drawn month's days. */
-const MONTH_DAYS = 30;
-/** The day drawn as picked, an open one near the month's middle, as a guest would have it on the real page. */
-const PICKED_FROM = 12;
+/** The week the picture draws, Monday first: 1 January 2024 was a Monday. */
+const WEEK = [1, 2, 3, 4, 5, 6, 7].map((day) => Date.UTC(2024, 0, day));
 
 /**
- * A booking page in miniature for LinkCard's picture (5 November 2026): its mark, title and lengths over a month
- * whose open days (from the page's own weekly hours) are tinted in its colour, one picked, as Calendly's and Cal.com's
- * pickers draw them. Shapes and the page's own words only; hidden from screen readers by the card's stage.
+ * A booking page in miniature for LinkCard's picture (5 November 2026; the Timefix prototype's look, spec 0072): its
+ * mark, title and lengths over a week whose open days (from the page's own weekly hours) wear its colour, the first
+ * one picked, each day's letter in the reader's language. Shapes and the page's own words only; hidden from screen
+ * readers by the card's stage.
  */
 export function BookingPagePicture({ title, lengths, openDays, hue }: BookingPagePictureProps) {
-  const cells = Array.from({ length: LEAD_CELLS + MONTH_DAYS }, (_, at) => {
-    if (at < LEAD_CELLS) return 'blank' as const;
-    return openDays[at % 7] === true ? ('open' as const) : ('closed' as const);
-  });
-  const picked = cells.findIndex((cell, at) => at >= PICKED_FROM && cell === 'open');
+  const { locale } = useFormatSettings();
+  const letter = memoIntl(
+    `page-picture-day:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: 'UTC' }),
+  );
+  const picked = openDays.indexOf(true);
   return (
-    <div className={styles.root} data-hue={hue}>
+    <div
+      className={styles.root}
+      style={{
+        '--picture-mark': `var(--dot-${hue})`,
+        '--picture-soft': `var(--tag-${hue}-bg)`,
+        '--picture-ink': `var(--tag-${hue}-text)`,
+      }}
+    >
       <div className={styles.head}>
         <span className={styles.mark} />
         <span className={styles.words}>
@@ -40,10 +48,16 @@ export function BookingPagePicture({ title, lengths, openDays, hue }: BookingPag
           <span className={styles.lengths}>{lengths}</span>
         </span>
       </div>
-      <div className={styles.month}>
-        {cells.map((cell, at) => (
-          // A fixed drawing: its cells never move, so their place is their key.
-          <span key={at} className={styles.day} data-day={at === picked ? 'picked' : cell} />
+      <div className={styles.week}>
+        {WEEK.map((day, at) => (
+          // A fixed week: its days never move, so their place is their key.
+          <span
+            key={at}
+            className={styles.day}
+            data-day={at === picked ? 'picked' : openDays[at] === true ? 'open' : 'closed'}
+          >
+            {letter.format(day)}
+          </span>
         ))}
       </div>
     </div>

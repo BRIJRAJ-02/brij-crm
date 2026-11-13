@@ -35,7 +35,7 @@ The references (Mobbin, 31 October 2026):
 - Under the name, one short line: the `status` ("3 booked", "Free", "Off", "Away"; free in the success colour, off tertiary, away the Team week's Away yellow, strong, booked quiet), then the zone's offset (`badge`, which the screen passes only when it differs from the reader's, five characters at most). The job `title` is in the head's tooltip (the Tooltip atom) and the column's name, never cut mid word (the owner, 31 October 2026: "Practice …", "GMT · S…"); with `isTitleShown` (the screen sets it while the columns are ordered by title, AC-1438) it joins the line, so the order explains itself.
 - `extra` sits at the head's end, never cut: the screen's calendar trouble chip (`extraLabel` says it in words).
 - `canAct: false` (See only, spec 0037): the column draws nothing, has no crosshair and no draw hint, and the head carries an eye.
-- `openHours` gives each person's open hours on the reader's clock: the rest of their column is shaded `surface-sunken`, as the week shades it; an empty list shades the whole column (Off).
+- `openHours` gives each person's open hours on the reader's clock: the rest of their column is shaded `surface-subtle`, as the week shades it; an empty list shades the whole column (Off).
 - `band` draws time off down the column as a quiet wash of the yellow tag's surface, so what sits on it still reads, with its word ("Away · Vacation") once, as a yellow chip pinned under the heads as the hours scroll; under every block, never taking the pointer.
 - `lane` shows only with rows (BookingList's: the time as `date`, the page as `title`, `guestName`, a badge for Host away that only the chip's name reads). It is one row over the grid: "2 need a host" (Button `warning`), which lists them all in BookingList (a Popover under it, a Modal sheet on a phone), so every one is reachable however far the chips scroll; then one chip a booking (a Button, its words its name: "12:00 PM · Product demo · Tom Ruiz · Host away"), scrolling sideways when there are many. A chip opens `detail` (its booking's card, with Reassign) in a Popover under it, the chip held down while it is open; pressing it again, Escape or a press outside closes it (`onClose`) and focus goes back to the chip. A card opened from the list goes back to the list when it closes, so the next booking is one press away. Below `bp-container-md` the chips give way to the one button, and its list and cards are sheets.
 - Overlapping blocks in a column sit side by side (WeekCalendar's team view never cascades one over another), so a Busy never covers a booking's words.
@@ -54,3 +54,15 @@ WeekCalendar's: one column in the tab order; Left and Right move between people 
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Timefix prototype (spec 0072)
+
+Folded into WeekCalendar in the prototype. It already renders WeekCalendar (its `team` view), so the grid, its blocks, heads, now line, bands and keys take WeekCalendar's ported look with no CSS of their own here, and nothing of WeekCalendar's is repeated. Its module keeps only what is TeamDay's: the root and grid flex columns and the Needs a host strip, now on `surface` with WeekCalendar's `border-subtle` hairline under it, and its list's width (`size-dialog` less `space-64` and `space-16`, the 400px `size-dialog-sm` gave, which is retired).
+
+**Use it for** Bookings › Calendar's Team view. **Don't use it for** one person's week (WeekCalendar) or the Roster's usual hours (TeamWeek).
+
+**The consumer provides** `people`, `selectedPerson` and `onSelectPerson`, `blocks`, `openHours`, `lane`, and the rest of WeekCalendar's props.
+
+**States** (stories): Default, LaneOpen, SeeOnly, Keyboard, Phone, PhoneList, TitleOrder, Empty, Loading; WeekCalendar's own stories cover its blocks' hover, focus and open looks.
+
+**Differences from the prototype**: the prototype draws a team's day as its WeekCalendar of one person at a time; the library keeps a column per person (WeekCalendar's `team` view), person heads, time off bands and the Needs a host strip.

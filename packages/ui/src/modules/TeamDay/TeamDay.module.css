@@ -1,5 +1,5 @@
 /* TeamDay: Needs a host as one slim strip over the grid (only when it holds something), then WeekCalendar's team view
-   with the whole width and height under it. Below 480px of its container the strip is its one button. */
+   with the whole width and height under it (its look is WeekCalendar's, spec 0072; the strip sits on its surface). Below 480px of its container the strip is its one button. */
 @layer components {
   .root {
     display: flex;
@@ -27,7 +27,7 @@
     min-inline-size: 0;
     padding: var(--space-4) var(--space-12);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-raised);
+    background: var(--surface);
   }
 
   /* Room round each chip for its focus ring, which the sideways scroll would otherwise clip. */
@@ -51,7 +51,7 @@
 
   /* The list in its popover: a small dialog's width, so a row's time, title and people sit on their lines. */
   .list {
-    inline-size: var(--size-dialog-sm);
+    inline-size: calc(var(--size-dialog) - var(--space-64) - var(--space-16));
     max-inline-size: 100%;
   }
 

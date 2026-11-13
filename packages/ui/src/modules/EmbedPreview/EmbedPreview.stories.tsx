@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { useState } from 'react';
+import { expect, userEvent } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { EmbedPreview } from './EmbedPreview.tsx';
@@ -72,5 +74,34 @@ export const BookingInline: Story = {
     await expect(canvas.getByRole('img', { name: 'How the booking page sits on your site' })).toBeInTheDocument();
     // The picture is the page's: its title is drawn, its fields are not.
     await expect(canvas.getByText('Intro call')).toBeInTheDocument();
+  },
+};
+
+/** A new mode draws the site afresh: In the page, then Popup, then the corner button, as the Share tab's choices change it. */
+export const ModeChange: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => {
+    function Changing() {
+      const [mode, setMode] = useState<'inline' | 'popup' | 'floating'>('inline');
+      return (
+        <Stage width="dialog" direction="column">
+          <Button onPress={() => setMode((now) => (now === 'inline' ? 'popup' : 'floating'))}>Next way</Button>
+          <EmbedPreview {...args} mode={mode} />
+        </Stage>
+      );
+    }
+    return <Changing />;
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Tell us about your team')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Next way' }));
+    await expect(canvas.queryByText('Tell us about your team')).toBeNull();
+    await expect(canvas.getByText('Talk to us')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Next way' }));
+    await expect(canvas.getByRole('img', { name: 'How the form sits on your site' })).toHaveAttribute(
+      'data-mode',
+      'floating',
+    );
+    await expect(canvas.getByText('Talk to us')).toBeInTheDocument();
   },
 };

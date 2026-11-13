@@ -34,15 +34,15 @@
     flex-direction: column;
     gap: var(--space-4);
     min-block-size: 0;
-    margin: 0;
     padding: 0 var(--space-4) var(--space-4) 0;
     border-radius: var(--radius-md);
     overflow-y: auto;
   }
 
+  /* The outline ring (the prototype's), space-2 outside the thread, as the old accent ring stood. */
   .thread:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--space-2);
   }
 
   .line {
@@ -104,7 +104,7 @@
     max-inline-size: 80%;
     margin: 0;
     padding: var(--space-8) var(--space-12);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
     border-end-start-radius: var(--radius-xs);
     background: var(--surface-subtle);
     color: var(--text);
@@ -115,7 +115,7 @@
   }
 
   .line[data-role='visitor'] .bubble {
-    border-end-start-radius: var(--radius-xl);
+    border-end-start-radius: var(--radius-lg);
     border-end-end-radius: var(--radius-xs);
     background: var(--accent);
     color: var(--on-accent);
@@ -289,10 +289,13 @@
       box-shadow var(--duration-quick) var(--ease-out);
   }
 
-  /* The ring is the message's: Send keeps its own. */
+  /* The ring is the message's (a focused field's, the prototype's: the accent edge and an accent-border halo, the
+     page's brand on a booking page): Send keeps its own. */
   .composer:has(.field:focus-within) {
     border-color: var(--accent-text);
-    box-shadow: var(--shadow-md), var(--shadow-focus);
+    box-shadow:
+      var(--shadow-md),
+      0 0 0 var(--border-width-focus) var(--accent-border);
   }
 
   /* Forced colours drop the shadow and the accent: the system's highlight marks the focused message. */

@@ -145,10 +145,23 @@ export const OpensByKeyboard: Story = {
     await settleAnimations();
     const editor = within(document.body).getByRole('dialog', { name: 'Hours for Tuesday 3 November' });
     await expect(editor).toBeVisible();
+    // The cell stays marked open (outlined in its own text colour) while its editor shows.
+    await expect(next).toHaveAttribute('data-open');
     await userEvent.keyboard('{Escape}');
     // The Popover's exit runs before focus goes back (paused animations wait at their first frame).
     await settleAnimations();
     await waitFor(() => expect(next).toHaveFocus());
+  },
+};
+
+/** Under a pointer an editable day lifts a little (CSS only); nothing opens until it is pressed. */
+export const CellHover: Story = {
+  render: Default.render,
+  play: async ({ canvas }) => {
+    const monday = canvas.getByRole('button', { name: `Monday 2 November, Ada Lovelace: ${NINE}` });
+    await userEvent.hover(monday);
+    await expect(monday).toHaveAttribute('data-hovered');
+    await expect(monday).not.toHaveAttribute('data-open');
   },
 };
 

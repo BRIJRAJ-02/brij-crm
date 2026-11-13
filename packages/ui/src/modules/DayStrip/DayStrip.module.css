@@ -1,10 +1,12 @@
-/* The List view's days: a row of tiles that scrolls sideways, each its
-   weekday over its date, the chosen one solid ink like the month's. */
+/* The List view's days (the Timefix prototype's strip, spec 0072): a grey bar of days that scrolls sideways, each its
+   weekday over its date, the chosen one a white pill. */
 @layer components {
   .root {
     display: flex;
-    gap: var(--space-8);
-    padding-block: var(--space-2);
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
@@ -39,17 +41,15 @@
   .day {
     position: relative;
     display: flex;
-    flex: none;
+    flex: 1 0 calc(var(--size-row) * 1.5);
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
-    inline-size: calc(var(--size-row) * 1.5);
-    padding-block: var(--space-8);
+    padding: var(--space-6) var(--space-4) var(--space-4);
     border: none;
     border-radius: var(--radius-md);
-    background: var(--surface-selected);
-    color: var(--text);
+    background: none;
+    color: var(--text-secondary);
     cursor: pointer;
     scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
@@ -88,13 +88,14 @@
     }
   }
 
-  /* The chosen day's fill settles in at the movement pace; the day let go of fades at the hover pace. */
+  /* The chosen day: a white pill, its date in ink, edged in control-border (3:1 and more on the bar in both themes;
+     the white pill alone is about 1.1:1). */
   .day[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--on-accent);
-    transition:
-      background-color var(--duration-fast) var(--ease-smooth-out),
-      color var(--duration-fast) var(--ease-smooth-out);
+    background: var(--surface);
+    box-shadow:
+      var(--shadow-xs),
+      0 0 0 var(--border-width-hairline) var(--control-border);
+    color: var(--text);
   }
 
   .day[data-best]::after {
@@ -108,24 +109,20 @@
     content: '';
   }
 
-  .day[data-best][aria-pressed='true']::after {
-    background: var(--on-accent);
-  }
-
+  /* The outline ring, inside the bar's padding (the strip scrolls, so it clips). */
   .day:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
+    outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: var(--border-width-hairline);
   }
 
   .weekday {
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
   }
 
   .date {
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
+    font: var(--text-body-lg-strong);
+    letter-spacing: var(--tracking-body-lg-strong);
     font-variant-numeric: tabular-nums;
   }
 
@@ -136,7 +133,8 @@
 
   @media (hover: hover) and (pointer: fine) {
     .day:not([aria-pressed='true']):hover {
-      background: var(--accent-border);
+      background: var(--surface-hover);
+      color: var(--text);
     }
   }
 

@@ -47,3 +47,18 @@ Tab moves into the list and through a row's controls; the arrow keys move betwee
 ## Differences from the artifact
 
 Not in the artifact yet (milestone 1 is held from the artifact publish until it is approved).
+
+## Timefix prototype (spec 0072)
+
+Folded into HoursEditor: the prototype lists RulesEditor in HoursEditor's `replaces`. It takes its look from HoursEditor (spec 0072), written into its own module (decision 14): it edits an attribute's validation rules, not a week, so it cannot draw HoursEditor's rows, and keeps its props. The rules it repeats from HoursEditor's: rows `space-12` / `space-8` of room parted by a full width `border-subtle` hairline (`.row + .row`), with no cards and no gap between them; a refusal in `text-body-sm` and `danger`; a popover title's `text-label` in `text-secondary` (the rule's kind over its message, the message `text-body`). The keyboard's row takes the outline ring (`border-width-focus` in `focus-ring`) just inside its edge; an open row is a band of `surface-subtle` between the hairlines; a lifted row rounds to `radius-md` on `surface-raised` with `shadow-md`. Two bounds sit side by side at least `size-column-narrow` each. The overlap leaves with this export when its last caller moves.
+
+**Use it for** an attribute's Validation section (AttributeSettings). **Don't use it for** hours (HoursEditor) or a select's options (OptionsEditor).
+
+**The consumer provides** `label`, `rules`, `kinds`, `attribute`, `newId`, `onChange`, and optionally `conditionAttributes`, `editorProps`, `hint`, `errors`, `limit`, `isReadOnly`.
+
+**States**: as above (empty, closed, open, refused, full, read only, dragging), and the keyboard's row (`RowFocus`).
+
+**Differences from the prototype**
+- The prototype has no rules editor of this kind (its RulesEditor in `replaces` is HoursEditor's availability rules): nothing here is drawn from a prototype rules list, only HoursEditor's rows.
+- No error shake or message fade: a refusal comes back from the server on Save, all at once, not as the person edits.
+- The list's frame still repeats OptionsEditor's (the label and count, the dashed Add button); see Known follow up.

@@ -1,65 +1,37 @@
-/* BookingPagePicture: a booking page in miniature on LinkCard's sheet. A space-12 inset; a head of the page's mark
-   (a space-16 circle in its dot colour) beside its title (text-label-strong, one line, cut) over its lengths
-   (text-label, text-tertiary); then a month of seven columns across the sheet, each day a space-16 circle:
-   open days tinted with the page's colour, closed ones border-subtle, one open day solid in the colour (the
-   pick). Tokens only; it never moves. */
+/* BookingPagePicture, in the look of the Timefix prototype's booking page picture (spec 0072): the page's sheet
+   (LinkCard's) holds a space-12 inset, space-16 at its foot. A head of the page's mark (an icon-lg circle in its
+   dot colour, where the prototype draws the host's face) beside its title (text-body-sm-strong) over its lengths
+   (text-caption, text-secondary), each one line, cut; then a week of seven days space-4 apart, each a radius-sm
+   square holding its letter (text-kbd): a closed day in text-tertiary, an open day on the hue's tag ground in its
+   tag text, the first open day picked, those two swapped (the prototype's dot fill under white failed 4.5:1 on the
+   light hues). The hue reaches it as three names the TSX sets from `hue`. Tokens only; it never moves. */
 @layer components {
   .root {
-    --picture-hue: var(--dot-gray);
+    --picture-mark: var(--dot-gray);
+    --picture-soft: var(--tag-gray-bg);
+    --picture-ink: var(--tag-gray-text);
 
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
     box-sizing: border-box;
-    padding: var(--space-12);
+    padding: var(--space-12) var(--space-12) var(--space-16);
     color: var(--text);
-  }
-
-  .root[data-hue='red'] {
-    --picture-hue: var(--dot-red);
-  }
-
-  .root[data-hue='orange'] {
-    --picture-hue: var(--dot-orange);
-  }
-
-  .root[data-hue='yellow'] {
-    --picture-hue: var(--dot-yellow);
-  }
-
-  .root[data-hue='lime'] {
-    --picture-hue: var(--dot-lime);
-  }
-
-  .root[data-hue='green'] {
-    --picture-hue: var(--dot-green);
-  }
-
-  .root[data-hue='sky'] {
-    --picture-hue: var(--dot-sky);
-  }
-
-  .root[data-hue='blue'] {
-    --picture-hue: var(--dot-blue);
-  }
-
-  .root[data-hue='purple'] {
-    --picture-hue: var(--dot-purple);
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--space-6);
     min-inline-size: 0;
   }
 
   .mark {
     flex: none;
-    inline-size: var(--space-16);
-    block-size: var(--space-16);
+    inline-size: var(--size-icon-lg);
+    block-size: var(--size-icon-lg);
     border-radius: var(--radius-full);
-    background: var(--picture-hue);
+    background: var(--picture-mark);
   }
 
   .words {
@@ -76,46 +48,47 @@
   }
 
   .title {
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm-strong);
+    letter-spacing: var(--tracking-body-sm-strong);
   }
 
   .lengths {
-    color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
   }
 
-  .month {
+  .week {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: var(--space-6) var(--space-4);
+    gap: var(--space-4);
   }
 
   .day {
-    justify-self: center;
-    inline-size: var(--space-16);
-    block-size: var(--space-16);
-    border-radius: var(--radius-full);
-    background: var(--border-subtle);
-  }
-
-  .day[data-day='blank'] {
-    background: none;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    font: var(--text-kbd);
+    letter-spacing: var(--tracking-kbd);
   }
 
   .day[data-day='open'] {
-    background: color-mix(in oklab, var(--picture-hue) 30%, var(--surface-raised));
+    background: var(--picture-soft);
+    color: var(--picture-ink);
   }
 
   .day[data-day='picked'] {
-    background: var(--picture-hue);
+    background: var(--picture-ink);
+    color: var(--picture-soft);
   }
 
   @media (forced-colors: active) {
     .mark,
     .day[data-day='picked'] {
       background: CanvasText;
+      color: Canvas;
     }
 
     .day[data-day='open'] {
