@@ -612,9 +612,9 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           name: screenshot-baselines
           path: packages/ui/__screenshots__/
           retention-days: 7
+          if-no-files-found: ignore
       - name: Fail a reshoot run, which compared nothing
         if: steps.mode.outputs.reshoot == 'true'
         run: |
           echo "::error::[reshoot] rendered the baselines without comparing them. Download screenshot-baselines, review the changes, commit them, and push without [reshoot]."
           exit 1
-          if-no-files-found: ignore
