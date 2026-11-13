@@ -1,5 +1,5 @@
 /* PresenceGroup (spec 0073, AC-7308): overlapping avatars, each ringed in the surface colour with a status dot at
-   its foot, then "+n" in AvatarStack's look. The hovered or focused avatar lifts distance-small and its neighbours
+   its foot, then "+n" in AvatarStack's look (spec 0072's: the faces overlap by 22%, "+n" is a grey face). The hovered or focused avatar lifts distance-small and its neighbours
    half that, at the hover pace (transitions.dev's avatar group hover, without its grow). Its own stylesheet, so the
    booking page, which draws AvatarStack, never carries it. */
 @layer components {
@@ -18,12 +18,12 @@
     position: relative;
     display: inline-grid;
     border-radius: var(--radius-full);
-    outline: var(--border-width-thick) solid var(--surface-raised);
+    outline: var(--border-width-thick) solid var(--surface);
     transition: translate var(--duration-quick) var(--ease-in-out);
   }
 
   .item:not(:first-child) {
-    margin-inline-start: calc(-1 * var(--space-4));
+    margin-inline-start: calc(var(--presence-avatar) * -0.22);
   }
 
   .item:focus-visible {
@@ -51,7 +51,7 @@
     inset-inline-end: calc(-1 * var(--border-width-hairline));
     inline-size: var(--space-8);
     block-size: var(--space-8);
-    border: var(--border-width-thick) solid var(--surface-raised);
+    border: var(--border-width-thick) solid var(--surface);
     border-radius: var(--radius-full);
     background: var(--dot-green);
   }
@@ -60,9 +60,18 @@
     background: var(--dot-yellow);
   }
 
-  /* "+n" as AvatarStack draws it: the label in the secondary colour, a step clear of the last face. */
+  /* "+n" as AvatarStack draws it (spec 0072): a grey face of its own, overlapping the last one as the faces do. */
   .more {
-    margin-inline-start: var(--space-4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--presence-avatar);
+    block-size: var(--presence-avatar);
+    margin-inline-start: calc(var(--presence-avatar) * -0.22);
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-full);
+    outline: var(--border-width-thick) solid var(--surface);
+    background: var(--surface-subtle);
     color: var(--text-secondary);
     font: var(--text-label);
     font-variant-numeric: tabular-nums;

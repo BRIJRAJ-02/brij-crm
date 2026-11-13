@@ -71,7 +71,7 @@
   }
 
   /* `ai` (spec 0073): a fact AI found, on the surface with a hairline, the violet sparkle before the words. */
-  .root[data-tone='ai'] {
+  .root[data-tone='ai']:not([data-archived]) {
     border: var(--border-width-hairline) solid var(--border);
     background: var(--surface);
     color: var(--text);

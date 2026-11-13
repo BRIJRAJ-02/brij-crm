@@ -2,11 +2,12 @@
    0072), an aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
 @layer components {
   /* `--label-colour` lets a surface give its labels another colour (a branded hosted form); the default is the text
-     colour, as the prototype's labels are. */
+     colour, as the prototype's labels are. `--label-font` and `--label-tracking` do the same for the type (the hosted
+     form's questions read at its body size and weight). */
   .label {
     color: var(--label-colour, var(--text));
-    font: var(--text-body-sm-strong);
-    letter-spacing: var(--tracking-body-sm-strong);
+    font: var(--label-font, var(--text-body-sm-strong));
+    letter-spacing: var(--label-tracking, var(--tracking-body-sm-strong));
   }
 
   /* A section's heading over labelled values: a step above the terms under it in size. */

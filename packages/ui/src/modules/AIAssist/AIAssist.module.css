@@ -53,7 +53,7 @@
     margin: 0;
     padding: var(--space-8) var(--space-12);
     border: var(--border-width-hairline) solid transparent;
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
     border-end-end-radius: var(--radius-xs);
     background: var(--surface-subtle);
     overflow-wrap: anywhere;

@@ -42,7 +42,7 @@ Who else is looking at the same thing now (spec 0073, AC-7308, the prototype's P
 - `people`: `id`, `name`, optional `src` and `hue`, `status` (`active` or `idle`) and `activity` ("Editing Pricing") for the tooltip. Hand it only people the access door lets the viewer see, in the order to draw them (active first, then the most recent); it draws what it is given.
 - It draws at most `max` (4) avatars and one "+n", and its accessible name says how many are here and at most `max` names, then "and n others", so 1,000 viewers cost what four do (AC-7324).
 - Each avatar is a tab stop named with its status in words ("Maya Ross, away"), with a Tooltip saying what they are doing ("Maya Ross · Editing Pricing · Away"; "Here now" or "Away" when the screen gives no activity), so status never rests on the dot's colour alone. The hovered or focused one lifts `distance-small` at the hover pace (`duration-quick`), its neighbours half that; reduced motion keeps them still. Nothing grows: the prototype's 1.05 has no token, and the app keeps sizes still. Focus is the outline ring (spec 0072), in place of the surface ring that separates the faces; in forced colours it turns `Highlight`.
-- "+n" is AvatarStack's: the label in the secondary colour.
+- The faces, their surface ring, their 22% overlap and "+n" are AvatarStack's (spec 0072): "+n" is a grey face of its own (`surface-subtle`), its label in the secondary colour.
 - Why a wrapper beside AvatarStack and not props on it: AvatarStack is in the booking page's first load, whose CSS budget has no room, and the dots, tooltips and lift are app only. So it is its own file with its own stylesheet (`PresenceGroup.module.css`), composing Avatar and Tooltip. Stories: `Atoms/PresenceGroup`.
 
 ## States

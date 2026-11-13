@@ -33,7 +33,7 @@ Not in the artifact (it is part of each control there).
 
 ## Colour on a public surface
 
-The label reads `--label-colour` before the text colour (the default since spec 0072; it was the secondary grey). The hosted form sets it to the text colour in its card, where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026); a branded surface may set another. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each.
+The label reads `--label-colour` before the text colour (the default since spec 0072; it was the secondary grey). The hosted form sets it to the text colour in its card, where grey labels at the public 16px read weaker than the placeholders under them (the design critique, 5 November 2026); a branded surface may set another. Why a custom property and not a variant: every control draws its own FieldLabel, so a form wide colour reaches them all through one name rather than a prop on each. `--label-font` and `--label-tracking` do the same for the type: the hosted form's card sets them to the regular body, so its questions read at 16px and regular (the merge of port phases 1 and 2), while the card's own remap of the `text-body-sm` steps keeps a button's label at its weight.
 
 ## Timefix prototype (spec 0072)
 

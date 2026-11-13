@@ -360,7 +360,6 @@ export function AIAssist({
                 {suggestions.map((suggestion) => (
                   <Button
                     key={suggestion}
-                    isRound
                     isDisabled={isDisabled}
                     onPress={() => {
                       askFrom(suggestion);
@@ -450,13 +449,12 @@ export function AIAssist({
           {...(disabledReason === undefined ? { hint: strings.hint } : { disabledReason })}
           suffix={
             isBusy ? (
-              <Button ref={stopButton} icon="square" label={strings.stop} isRound onPress={stop} />
+              <Button ref={stopButton} icon="square" label={strings.stop} onPress={stop} />
             ) : (
               <Button
                 variant="primary"
                 icon="arrow-up"
                 label={strings.ask}
-                isRound
                 isDisabled={isDisabled || draft.trim() === ''}
                 onPress={() => {
                   ask(draft);
