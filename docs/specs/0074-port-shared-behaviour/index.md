@@ -3,6 +3,7 @@
 **Date**: 2026-11-12
 **Status**: In Progress
 **Batch 1**: built on `feat/port-3`, 12 Nov 2026 (as built, measurements and open items below)
+**Batches 2 to 5**: built on `feat/port-3`, 13 Nov 2026 (as built below); batch 6 waits for phase 1's merge
 **Builds on**: [0073 Port phase 2, library additions](../0073-port-library-additions/index.md) (ShareSheet, `shareableUrl`, `downloadQr`, the three gates), [0071 Port phase 0, tokens](../0071-port-tokens/index.md) (the app scale, no zoom, motion tokens), [0068 Professional pages and Publish](../0068-professional-pages-publish/index.md) (PublishBar and the publish data), spec 0072 (phase 1, on `feat/port-1`: restyles the 72 shared parts)
 
 ## Summary
@@ -41,7 +42,7 @@ Guest looks on popups (batch 4)
 - **AC-7426**: A guest page's popups carry `--size-topbar: var(--size-bar)` (spec 0071's legacy `size-bar`, 46px, which the guest pages' own bars use; MenuList's root already sets it), so a guest sheet's or dialog's header is the height of the page's bars, never the app's `size-topbar`. A story measures a sheet's header against the page's bar on the menu, link and booking pages.
 
 - **AC-7427** (owed at the phase 1 merge): ReadyPanel's `share` tile and ShareSheet take a `qrSize` option, and the link page's Share uses the large size, since its code is scanned from a screen across a table (the owner's Share design, 25 October 2026). ReadyPanel is phase 1's file, so the option lands when phase 1 merges, not before.
-- **AC-7428**: Download saves the PNG in one press (the sheet's Download PNG); the SVG sits in a menu beside it. A download in flight holds the sheet open: Esc, a click outside and Close wait, and Done pressed meanwhile closes the sheet once the file is saved. After a menu's first publish, Done hands focus to the live split button that replaced Publish, never to the page.
+- **AC-7428**: Download saves the PNG in one press (the sheet's Download PNG); the SVG sits in a menu beside it. A download in flight holds the sheet open: Esc, a click outside and Close wait, and Done pressed meanwhile closes the sheet once the file is saved. After a menu's first publish, focus never falls to the page: it lands on the publish bar's status line, where Publish was (batch 3 moved Publish into the bar).
 
 Record panel (batch 5)
 - **AC-7411**: The record panel floats over the right of the content area at its full height, below the top bar, inset by the content's own padding, never pushing the table or board. Its width is `size-panel`; it enters over `duration-slow` and leaves over `duration-medium` on `ease-smooth-out`, and reduced motion keeps only the fade.
@@ -195,6 +196,53 @@ The share code itself (source, gzip -9, files wholly about sharing plus the shar
 - **Focus after a menu's first publish** (AC-7428): fixed. When the publish dialog closes and focus has fallen to the page, Menus hands it to Publish or, once live, to the split button's main half (found beside its named menu half: a `ref` on SplitButton's halves grew the hosted form and booking page by 40 B, since they share Button's chunk, so it was taken back).
 - **A failed chunk load** reaches the app's `vite:preloadError` guard, as Bookings' lazy parts do (unchanged).
 - Screenshots for `Styled`, `Column` and the rest of ShareSheet's stories need `pnpm test:visual --update` in the pinned image (unchanged).
+
+### Batches 2 to 5 as built (13 November 2026)
+
+**Batch 2, Share where there was none (AC-7406).** `features/booking/BookingShareSheet.tsx` opens the one ShareSheet for a booking page from the editor's header (beside the one press Copy link) and from each card's ⋯ on Bookings › Pages and Captures › Links (a reader with no ⋯ gets Share on the card). Its own ways each land on their card on the page's Share tab (`#share-times`, `#one-time-links`, `#embed`, scrolled into view): Share specific times (named as its card is; the AC's "Offer specific times"), One-time link, Put it on your site, and Edit link page for the reader's own public page (the AC's "Add to link page": a public page is on the link page already, so the way is to edit where it sits there). A page that isn't live, or an editor's address not yet saved, says so at the sheet's foot. The ⋯ Embed item went (the sheet's Put it on your site is the one way to the snippet). Team links › Share for the workspace link; Share in each team page row's ⋯ (Copy link, Open page and the PNG and SVG downloads stay); Share beside View page on the business page (committed with batch 3). Every sheet loads apart (`features/share`).
+
+**Batch 3, PublishBar on every editor (AC-7407, AC-7408).** PublishBar gained additive options: `changeCount`, `draftText` ("Not published yet"), `liveText`, `pausedText`, `discardWords`, `publishKbd`, `versionsFailed`, an optional `onDiscard` that may return a promise (the confirm stays busy and says a refusal inside it), focus kept on the bar's status line when Publish or Discard leaves, and Changes keyed by place.
+- Forms: the bar replaces the header's status and Publish, and ⋯ Discard changes; Changes lists each question added, changed or removed and each other part changed (`formChanges` in `forms/draft.ts`, memoised, from the two documents the editor holds); a later publish says Published in the bar; the first still ends on "<form> is live". The bar's words live in `forms/bar-strings.ts`, apart from the first load's `strings.ts` (they had grown the first load by 190 B). `DiscardChangesDialog` and `statusOf` went.
+- Menus: the bar replaces EditorStatus and the Publish split; a first publish (or one with something in the way) goes through the review, later ones at once, a refusal said in the bar; a hidden menu says so; Discard draft keeps "Sold out stays as it is."; the header keeps View and Share; a reader keeps the status in the header.
+- Business page: the bar replaces the status, Discard and Publish; what Publish would refuse is said in the bar with its way to fix (the separate callout went); an address refusal stays on its field; Discard draft only for saved changes; the bar says when the page went live; a first publish ends on "Your business page is live".
+- Booking pages, in the one step form: the bar replaces Save changes; Publish saves and puts it live; Changes names each section with unsaved settings and what an earlier editor left; Discard draft (asks, then Undo as before) and Versions move from ⋯ into the bar; a refused save is said once, in the bar, with the way to its section; Hidden in the header's words; ⌘↵ shown on Publish; Published in the bar, and a hidden page's toast still offers Make live. The loading state holds the bar's strip.
+- The flows that drove the old headers drive the bar (not run in this lane).
+
+**Batch 4, guest looks on popups (AC-7409, AC-7410, AC-7426).** `PopupHost` (beside GuestLook, not exported): the portal provider around a guest page's content and an empty `display: contents` host at the end of its themed root, its class from the page's own stylesheet (a stylesheet of its own cost the form and booking pages 120 B each). The hosted form, the link page and the booking page gain it; GuestLook and MenuList moved onto it. Each page's host class shares the rule where it maps its brand onto the library's names, so a popup's accent and focus ring are the brand's. The link page's grid container moved off its root onto a frame inside its PopupHost (a size container holds `position: fixed` boxes, so its dialogs had opened against the page, not the window). The host sets `--size-topbar: var(--size-bar, calc(var(--size-row) + var(--space-2)))`: 46px until spec 0071's `size-bar` reaches this branch, then `size-bar` (drop the fallback at that merge).
+
+**Batch 5, the record panel (AC-7411 to AC-7413, AC-7425).** The panel draws the record at once from the store (`openPeekCore`: `records.one`, objects and access from their caches) and opens each section once the record shows (`openPeekParts`), each on its own Skeleton until its read lands, a failure said in that section with Try again. AppShell writes where its content area starts (`--shell-panel-top`, one ResizeObserver on the content area: the bars' heights vary, so CSS alone couldn't say it), and the floating Panel starts there, `size-panel` wide, entering over `duration-slow`, leaving over `duration-medium`, taking no clicks on its way out. The head says "Companies · 3 of 120" (the list's own count, "10,000+" past the cap); J and K step as ↓ and ↑ (never from a field, a listbox or a grid; from a tab they do; Caps Lock too); a step is said to screen readers; the keys sit at the foot.
+
+Measurements (gzip; `pnpm size` lines, then each touched route's static closure past the first load; the base is 261cdbe1f):
+
+| Line | Base | After batch 2 | After batch 3 | After batch 4 | After batch 5 |
+|---|---|---|---|---|---|
+| First load JavaScript | 296.63 kB | 296.65 | 296.62 | 296.62 | 296.64 |
+| Hosted form JavaScript, CSS | 205.9, 18.57 kB | same | same | 206.1, 18.7 | 206.1, 18.61 |
+| Booking page JavaScript, CSS | 188.89, 19.37 kB | same | same | 189.08, 19.49 | 189.08, 19.4 |
+| Every other line | as batch 1 | same | same | notice sheet 464 B (+1) | same |
+
+| Route (JS, CSS bytes) | Base | Batch 2 | Batch 3 | Batch 4 | Batch 5 |
+|---|---|---|---|---|---|
+| Booking page editor | 449,847, 58,876 | +2,013, +3 | +1,971, +632 | +193, +120 | +66, −39 |
+| Captures › Links | 213,968, 30,483 | +1,513, 0 | +24, 0 | −4, 0 | +55, +34 |
+| Bookings › Pages | 215,819, 30,483 | +1,636, 0 | +21, 0 | −3, 0 | +56, +34 |
+| Link page | 467,265, 62,600 | +495, 0 | +545, 0 | +201, +120 | +78, −6 |
+| Form editor | 486,098, 59,671 | +432, +3 | +2,355, +632 | +198, +120 | +48, −48 |
+| Menus | 327,115, 50,119 | +503, 0 | +1,813, +632 | +143, +120 | +67, −58 |
+| Business page | 215,781, 32,828 | −12, 0 | −968, −1,398 | −1, 0 | +49, +34 |
+| A table view (records) | 537,104, 54,463 | −15, 0 | +24, 0 | −23, 0 | +529, +57 |
+
+The batch 5 column is its first commit (6ed3ef427); the review fixes after it are in the final `pnpm size`. Where a line grew past 20 B it is said here rather than hidden: the hosted form's and booking page's JavaScript grew by about 200 B and their CSS by 30 to 40 B in batch 4, which is PopupHost and React Aria's portal provider itself (the spec's "JavaScript only" budget for those pages; no CSS file of its own after the review). Batch 3's +632 B of CSS on the editors is PublishBar's stylesheet, which they load for the first time. The share code is measured again at the phase's end (AC-7418, amended).
+
+### Open after batches 2 to 5
+
+- AC-7427 (the link page's large QR code) waits for phase 1's merge, as decided.
+- AC-7426's story measuring a sheet's header against the page's bar on the menu, link and booking pages waits for spec 0071's `size-bar` on this branch: until then the menu's own bar reads the app's `size-topbar` (56px) while its sheets read 46px. The hosted form's browser test measures 46px in the host now.
+- The link page's own face and shape (`--page-body-face`, `--page-radius`) don't reach its popups: the page uses them through its own names, not the library's.
+- The board's "n of N" counts the card's column but names the object ("Deals · 3 of 12"); naming the stage needs the column's label where the board builds its steps.
+- A section's lazy store (`activity`, `tasks`, `notes`, `comments`, `files` in `@crm/data`) keeps a failed chunk load's promise, so the panel's Try again recovers only the related sections; the app's `vite:preloadError` guard reloads on a failed chunk.
+- The panel's sections draw a generic Skeleton until their source exists, then their own module's loading state; one shape throughout would need each section's module drawn with `status="loading"` before its source.
+- Not run in this lane: the flows (`e2e/*.flow.ts`, updated for the bar), Firefox and WebKit, and the screenshots (`pnpm test:visual --update` is owed for ShareSheet, ReadyPanel's Download, PublishBar, RecordPanel's width, foot line and place, and Panel).
 
 ## Build plan
 
