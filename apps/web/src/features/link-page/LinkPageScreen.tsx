@@ -63,6 +63,7 @@ import { PagePhotos } from './PagePhotos.tsx';
 import { SharingFields } from './SharingFields.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { homeStrings } from './home-strings.ts';
 import { useLinkPagePlace } from './place.tsx';
 import {
   ADDABLE,
@@ -370,9 +371,13 @@ export function HeaderActions({
   const [isMarking, setMarking] = useState(false);
   const [isStyling, setStyling] = useState(false);
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
-  // The Wallet pass is read once Share has opened, not on every visit to the page.
+  // The Wallet pass is read once Share has opened, not on every visit to the page. Inside a partner's frame it is
+  // read with the page and offered in the bar itself (the owner, 13 November 2026): there the card in someone's
+  // wallet is the partner's own, and a button two presses deep in Share was never found.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const [hasShared, setShared] = useState(false);
-  const wallet = useWalletLink(data, slug, live.isLive && hasShared && !isTeam);
+  const wallet = useWalletLink(data, slug, live.isLive && (hasShared || isEmbedded) && !isTeam);
+  const hasWalletInBar = isEmbedded && wallet !== undefined;
   return (
     <>
       <LiveSwitch live={live} />
@@ -402,6 +407,11 @@ export function HeaderActions({
           >
             {strings.share}
           </Button>
+          {hasWalletInBar && (
+            <ButtonLink href={wallet} isExternal icon="wallet" isLabelCollapsible label={homeStrings.addToWallet}>
+              {homeStrings.addToWallet}
+            </ButtonLink>
+          )}
         </>
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
@@ -433,7 +443,8 @@ export function HeaderActions({
           setSharing(false);
           setStyling(true);
         }}
-        {...(wallet === undefined ? {} : { wallet })}
+        // Offered once: in the bar inside a partner's frame, in Share everywhere else.
+        {...(wallet === undefined || hasWalletInBar ? {} : { wallet })}
         isOpen={isSharing}
         onClose={() => setSharing(false)}
       />

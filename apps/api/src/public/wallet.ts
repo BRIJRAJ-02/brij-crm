@@ -24,7 +24,7 @@ import type { Hono } from 'hono';
 import type { Auth } from '../auth/auth.ts';
 import { errorFields, log } from '../log.ts';
 import { PKPASS_TYPE } from '../wallet/apple.ts';
-import { APPLE_PASS_PATH, type ApplePassMaker } from '../wallet/wallet.ts';
+import { APPLE_PASS_PATH, PUBLIC_APPLE_PASS_PATH, type ApplePassMaker } from '../wallet/wallet.ts';
 import { createMemoryLimiter, type LimitRule } from './limits.ts';
 
 /** A `{ code, message }` answer at the status the error map gives the code, as every route here answers. */
@@ -79,7 +79,7 @@ async function brandOf(deps: WalletPassDeps, workspaceId: string): Promise<PassB
   }
 }
 
-export const PUBLIC_PASS_PATH = '/api/public/handles/:handle/pass.pkpass';
+export const PUBLIC_PASS_PATH = PUBLIC_APPLE_PASS_PATH;
 
 /** What this route reads off the request, which is what the app already sets on every one. */
 interface WalletVariables {

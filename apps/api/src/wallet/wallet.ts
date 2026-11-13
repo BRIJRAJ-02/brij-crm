@@ -62,6 +62,17 @@ export interface WalletSettings {
 export const APPLE_PASS_PATH = '/api/me/wallet/pass.pkpass';
 
 /**
+ * Where anyone's browser asks for a page's `.pkpass` with no session: `public/wallet.ts` mounts it. Said here so a
+ * handler that may not import the public door can still point at it.
+ */
+export const PUBLIC_APPLE_PASS_PATH = '/api/public/handles/:handle/pass.pkpass';
+
+/** The public pass address of one handle. */
+export function publicApplePassPath(handle: string): string {
+  return PUBLIC_APPLE_PASS_PATH.replace(':handle', encodeURIComponent(handle));
+}
+
+/**
  * The maker for each wallet, or undefined where this environment has no credentials for it. Built once by
  * `createApp` and handed to handlers through the request context, so nothing downstream reads the environment.
  *

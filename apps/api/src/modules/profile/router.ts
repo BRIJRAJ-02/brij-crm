@@ -38,6 +38,7 @@ import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext, type SessionContext } from '../../orpc.ts';
 import { sourceOf } from '../../source.ts';
+import { publicApplePassPath } from '../../wallet/wallet.ts';
 
 /**
  * What only the session knows: the account picture as our own origin serves it (`/api/me/picture?v=`), when it is
@@ -187,6 +188,13 @@ export const profileRouter = member.profile.router({
     if (wallet === undefined) return { off: true as const };
     const me = await getMyProfile(context.scope);
     if (me.handle === undefined) throw apiError('NOT_FOUND', 'Pick a handle before you save your page.');
+    // Inside a partner's frame (spec 0070; the owner, 13 Nov 2026) the pass is asked for through the page's public
+    // address. The frame's session lives in a cookie partitioned to the partner's site, which a new tab never
+    // sends, so the caller's own route would answer "Sign in". The pass is the same one; a visitor's copy of it
+    // is what the page already offers.
+    if (context.embed !== undefined && input.wallet === 'apple_wallet') {
+      return { url: publicApplePassPath(me.handle) };
+    }
     return {
       url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
     };
