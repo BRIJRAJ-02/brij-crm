@@ -2,7 +2,8 @@
    which every page loads, so a guest page draws as it did; the app takes the prototype's under <html
    data-scale="app">: the list popover's inner edge (space-6, its rows' highlight a step further in) and the avatar
    scale (20 inline, 28 in rows, 36 in lists, 44 heading a record; 72 and 96 at full size for a booking page's host
-   and a link page's own face). Only app.css loads this file. */
+   and a link page's own face). Only src/app-look.ts loads this file, with
+   the parts' app looks, so the app's first load doesn't carry it either. */
 @layer base {
   :root[data-scale='app'] {
     --popover-inset: var(--space-6);
