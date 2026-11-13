@@ -4,7 +4,7 @@
 // Leaves out: Overview, the stat strip and the record's menu (delete, copy link), all on its full page one press away.
 import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, RecordView } from '@crm/data';
 import { useCommentCount, useNoteTotal, useRecord, useRecordFileCount, useTaskTotal } from '@crm/data/react';
-import { Callout, EmptyState, RecordPanel, type RecordPanelTab } from '@crm/ui';
+import { Callout, EmptyState, RecordPanel, Skeleton, type RecordPanelTab } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentsTab } from '../comments/CommentsTab.tsx';
@@ -22,7 +22,7 @@ import { TasksTab } from '../tasks/TasksTab.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
-import { openPeek, type PeekSources } from './peek.ts';
+import { openPeekCore, openPeekParts, type PeekCore, type PeekParts } from './peek.ts';
 import { RecordDetails } from './RecordDetails.tsx';
 import { RelatedSections } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
@@ -56,9 +56,9 @@ export interface RecordPeekProps {
 const STEP_SETTLE_MS = 150;
 
 /**
- * The record panel: its sources opened through the data layer, then the record in whichever state it is. The panel
- * draws once the first record's sources are in (the table already holds its body, so that is a moment), and a step
- * keeps the last record's until the next one's arrive, so the panel never slides in twice nor flashes empty.
+ * The record panel: the record drawn at once from the store the table or board keeps fresh (no read for it), then each
+ * section as its own read lands (spec 0074, AC-7413, AC-7425). A step keeps the last record until the next one's is in,
+ * a moment later, so the panel never slides in twice nor flashes empty.
  */
 function RecordPeekPanel(props: RecordPeekProps) {
   const { slug, object, attributes, recordId } = props;
@@ -93,8 +93,10 @@ function RecordPeekPanel(props: RecordPeekProps) {
     },
     [step, recordId],
   );
-  // The last sources that arrived, whichever record they are for, and a record whose sources failed to open.
-  const [held, setHeld] = useState<PeekSources | undefined>(undefined);
+  // The last record that arrived, whichever it is, and a record that failed to open (spec 0074, AC-7413: the record
+  // draws at once from the store; each section fills as its own read lands, `parts`).
+  const [held, setHeld] = useState<PeekCore | undefined>(undefined);
+  const [parts, setParts] = useState<PeekParts | undefined>(undefined);
   const [failedFor, setFailedFor] = useState<string | undefined>(undefined);
   // Whether a record shows yet: the first opens at once; a step waits a moment, so holding ↓ opens only the record
   // it stops on rather than every one it passes.
@@ -102,17 +104,27 @@ function RecordPeekPanel(props: RecordPeekProps) {
   useEffect(() => {
     let isCurrent = true;
     const open = () => {
-      openPeek(data, slug, object, attributes, recordId).then(
-        (sources) => {
+      // Try again asks every section afresh; the ones already in stay drawn meanwhile.
+      setParts((before) => {
+        if (before?.recordId !== recordId || before.failed === undefined) return before;
+        const { failed: _failed, ...kept } = before;
+        return kept;
+      });
+      openPeekCore(data, slug, attributes, recordId).then(
+        (core) => {
           if (!isCurrent) return;
           isShowing.current = true;
-          setHeld(sources);
+          setHeld(core);
           setFailedFor(undefined);
         },
         () => {
           if (isCurrent) setFailedFor(recordId);
         },
       );
+      openPeekParts(data, slug, object, attributes, recordId, (part) => {
+        if (!isCurrent) return;
+        setParts((before) => (before?.recordId === recordId ? { ...before, ...part } : { recordId, ...part }));
+      });
     };
     const timer = isShowing.current ? setTimeout(open, STEP_SETTLE_MS) : undefined;
     if (timer === undefined) open();
@@ -125,7 +137,6 @@ function RecordPeekPanel(props: RecordPeekProps) {
     return (
       <RecordPanel
         isOpen
-        width="lg"
         status="error"
         onRetry={() => {
           setAttempt((count) => count + 1);
@@ -144,6 +155,10 @@ function RecordPeekPanel(props: RecordPeekProps) {
     <LoadedPeek
       {...props}
       sources={held}
+      {...(parts?.recordId === held.recordId ? { parts } : {})}
+      onRetryPart={() => {
+        setAttempt((count) => count + 1);
+      }}
       loadStep={loadStep}
       // The next record is on its way: the one before stays, with a quiet line over it.
       isStepping={step?.from === recordId || held.recordId !== recordId}
@@ -172,6 +187,8 @@ export const RecordPeek = memo(
     before.steps?.next === after.steps?.next &&
     before.steps?.isPreviousPending === after.steps?.isPreviousPending &&
     before.steps?.isNextPending === after.steps?.isNextPending &&
+    before.steps?.at === after.steps?.at &&
+    before.steps?.of === after.steps?.of &&
     (before.steps === undefined) === (after.steps === undefined),
 );
 
@@ -213,6 +230,20 @@ function stepProps(
 const pageHref = ({ slug, object, recordId, tab }: Pick<RecordPeekProps, 'slug' | 'object' | 'recordId' | 'tab'>) =>
   recordHref(slug, object.apiSlug, recordId, tab === 'details' ? 'overview' : tab);
 
+/**
+ * A section whose read hasn't landed: its Skeleton in its own place, so the panel draws the record at once and never
+ * waits on the slowest read (spec 0074, AC-7413); or, where the read failed, the failure with Try again.
+ */
+function PeekSectionWaiting({ isFailed, onRetry }: { readonly isFailed: boolean; readonly onRetry: () => void }) {
+  return isFailed ? (
+    <EmptyState tone="error" title={strings.sectionFailed} onRetry={onRetry} />
+  ) : (
+    <div aria-busy="true">
+      <Skeleton lines={3} />
+    </div>
+  );
+}
+
 /** No tabs, while the record loads or isn't there: one array, so the panel's memo holds. */
 const NO_TABS: readonly RecordPanelTab[] = [];
 
@@ -224,21 +255,26 @@ function shownOf(state: RecordState): RecordView | undefined {
 
 function LoadedPeek(
   props: RecordPeekProps & {
-    readonly sources: PeekSources;
+    readonly sources: PeekCore;
+    /** Each section's source as it lands; a section still opening draws its own Skeleton. */
+    readonly parts?: PeekParts;
+    readonly onRetryPart: () => void;
     readonly loadStep: (direction: 'previous' | 'next') => void;
     readonly isStepping: boolean;
   },
 ) {
-  const { slug, object, members, tab, onTabChange, onClose, sources } = props;
+  const { slug, object, members, tab, onTabChange, onClose, sources, parts } = props;
   // The record these sources are for: the one asked for once its sources arrive, the last one until then.
   const { recordId } = sources;
   const { data } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const state = useRecord(sources.record);
-  const openTotal = useTaskTotal(sources.open);
-  const notesTotal = useNoteTotal(sources.notes);
-  const commentCount = useCommentCount(sources.comments);
-  const fileCount = useRecordFileCount(sources.files);
+  const openTotal = useTaskTotal(parts?.open);
+  const notesTotal = useNoteTotal(parts?.notes);
+  const commentCount = useCommentCount(parts?.comments);
+  const fileCount = useRecordFileCount(parts?.files);
+  // A section still opening: its Skeleton, or where its read failed, the failure with Try again.
+  const waiting = <PeekSectionWaiting isFailed={parts?.failed === true} onRetry={props.onRetryPart} />;
   const link = useMemo(() => recordLinks(slug, sources.objects), [slug, sources.objects]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
@@ -270,8 +306,9 @@ function LoadedPeek(
   };
   const common = {
     isOpen: true,
-    width: 'lg' as const,
     onClose,
+    // Where it is in the list beside it: "People · 3 of 120" (AC-7412).
+    ...(props.steps === undefined ? {} : { place: strings.place(object.pluralName, props.steps.at, props.steps.of) }),
     onOpenPage: openPage,
     isStepping: props.isStepping,
     ...stepProps(props, props.loadStep),
@@ -313,75 +350,95 @@ function LoadedPeek(
                 }
               : {})}
           />
-          {!isLost && (
-            <RelatedSections
-              slug={slug}
-              recordId={recordId}
-              related={sources.related}
-              canChange={canEdit}
-              link={link}
-            />
-          )}
+          {!isLost &&
+            (parts?.related === undefined ? (
+              waiting
+            ) : (
+              <RelatedSections
+                slug={slug}
+                recordId={recordId}
+                related={parts.related}
+                canChange={canEdit}
+                link={link}
+              />
+            ))}
         </>
       ),
     },
     {
       id: 'activity',
       label: strings.activity,
-      content: (
-        <ActivityTab
-          feed={sources.feed}
-          feedFor={feedFor}
-          link={link}
-          {...(canEdit ? { onLogActivity: () => setLog('new') } : {})}
-        />
-      ),
+      content:
+        parts?.feed === undefined ? (
+          waiting
+        ) : (
+          <ActivityTab
+            feed={parts.feed}
+            feedFor={feedFor}
+            link={link}
+            {...(canEdit ? { onLogActivity: () => setLog('new') } : {})}
+          />
+        ),
     },
     {
       id: 'notes',
       label: noteStrings.notes,
       ...tabCount(notesTotal),
-      content: (
-        <NotesTab list={sources.notes} members={members} canAdd={canEdit} onOpenNote={setNote} onOpenLog={setLog} />
-      ),
+      content:
+        parts?.notes === undefined ? (
+          waiting
+        ) : (
+          <NotesTab list={parts.notes} members={members} canAdd={canEdit} onOpenNote={setNote} onOpenLog={setLog} />
+        ),
     },
     {
       id: 'tasks',
       label: taskStrings.tasks,
       ...tabCount(openTotal),
-      content: (
-        <TasksTab
-          slug={slug}
-          record={display}
-          open={sources.open}
-          members={members}
-          meId={sources.meId}
-          canAdd={canEdit}
-          recordHref={chipHref}
-          onOpenTask={setTask}
-        />
-      ),
+      content:
+        parts?.open === undefined ? (
+          waiting
+        ) : (
+          <TasksTab
+            slug={slug}
+            record={display}
+            open={parts.open}
+            members={members}
+            meId={sources.meId}
+            canAdd={canEdit}
+            recordHref={chipHref}
+            onOpenTask={setTask}
+          />
+        ),
     },
     {
       id: 'comments',
       label: commentStrings.comments,
       ...tabCount(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }),
-      content: (
-        <CommentsTab
-          slug={slug}
-          recordId={recordId}
-          comments={sources.comments}
-          members={members}
-          meId={sources.meId}
-          isReadOnly={isLost}
-        />
-      ),
+      content:
+        parts?.comments === undefined ? (
+          waiting
+        ) : (
+          <CommentsTab
+            slug={slug}
+            recordId={recordId}
+            comments={parts.comments}
+            members={members}
+            meId={sources.meId}
+            isReadOnly={isLost}
+          />
+        ),
     },
     {
       id: 'files',
       label: fileStrings.files,
       ...tabCount(fileCount === undefined ? undefined : { count: fileCount, atLeast: false }),
-      content: <FilesTab slug={slug} recordId={recordId} files={sources.files} members={members} isReadOnly={isLost} />,
+      content:
+        parts?.files === undefined ? (
+          waiting
+        ) : (
+          <FilesTab slug={slug} recordId={recordId} files={parts.files} members={members} isReadOnly={isLost} />
+        ),
     },
   ];
   return (

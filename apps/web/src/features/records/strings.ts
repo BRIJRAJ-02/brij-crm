@@ -8,6 +8,10 @@ export const strings = {
   linkedElsewhere: 'Linked elsewhere',
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available',
+  /** The record panel's place in the list beside it (spec 0074, AC-7412): "People · 3 of 120". */
+  place: (objects: string, at: number, of: number) => `${objects} · ${at.toLocaleString()} of ${of.toLocaleString()}`,
+  /** A panel section whose read failed. */
+  sectionFailed: 'This didn’t load',
   /** Under it: what to do next. */
   recordUnavailableText: 'It may be deleted, or you don’t have access.',
   backTo: (pluralName: string) => `Back to ${pluralName}`,

@@ -1,6 +1,6 @@
 /* Panel: a full height sheet at the end of the page, on surface-raised with a
-   hairline edge and shadow-lg; the floating variant sits space-8 in from the
-   edges with a hairline border all round and radius-xl. It slides in with ease-smooth-out over
+   hairline edge and shadow-lg; the floating variant sits below the top bar and
+   space-8 in from the other edges with a hairline border all round and radius-xl. It slides in with ease-smooth-out over
    duration-fast and out in duration-quick; reduced motion keeps a fade. */
 @layer components {
   .root {
@@ -20,8 +20,10 @@
     inline-size: min(100vw, var(--size-panel-wide));
   }
 
+  /* The record panel (spec 0074, AC-7411): over the content area at its full height, below the top bar, inset by the
+     content's own padding, so the top bar and the view's own controls stay in reach and the list never moves. */
   .root[data-variant='floating'] {
-    inset-block: var(--space-8);
+    inset-block: calc(var(--size-topbar) + var(--space-8)) var(--space-8);
     inset-inline-end: var(--space-8);
     inline-size: min(100vw - 2 * var(--space-8), var(--size-panel));
     overflow: hidden;
@@ -134,6 +136,15 @@
 
   .root[data-exiting] {
     animation: slide-out var(--duration-quick) var(--ease-smooth-out) forwards;
+  }
+
+  /* The record panel enters over duration-slow and leaves over duration-medium (AC-7411). */
+  .root[data-variant='floating'][data-entering] {
+    animation-duration: var(--duration-slow);
+  }
+
+  .root[data-variant='floating'][data-exiting] {
+    animation-duration: var(--duration-medium);
   }
 
   .root[data-opened-by='keyboard'][data-entering] {

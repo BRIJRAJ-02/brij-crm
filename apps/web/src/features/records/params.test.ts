@@ -26,26 +26,30 @@ describe('isPeekTab', () => {
 
 describe('stepsAround', () => {
   it('names the rows either side', () => {
-    expect(stepsAround(1, 4, idAt)).toEqual({ previous: 'a', next: 'c' });
+    expect(stepsAround(1, 4, idAt)).toEqual({ at: 2, of: 4, previous: 'a', next: 'c' });
   });
 
   it('leaves out the step past either end', () => {
-    expect(stepsAround(0, 4, idAt)).toEqual({ next: 'b' });
-    expect(stepsAround(3, 4, idAt)).toEqual({ previous: 'c' });
+    expect(stepsAround(0, 4, idAt)).toEqual({ at: 1, of: 4, next: 'b' });
+    expect(stepsAround(3, 4, idAt)).toEqual({ at: 4, of: 4, previous: 'c' });
   });
 
   it('keeps the step on for a neighbour the list has but hasn’t loaded, so Next is off only at the real end', () => {
     expect(stepsAround(1, 4, (index) => (index === 2 ? undefined : idAt(index)))).toEqual({
+      at: 2,
+      of: 4,
       previous: 'a',
       isNextPending: true,
     });
     expect(stepsAround(2, 4, (index) => (index === 1 ? undefined : idAt(index)))).toEqual({
+      at: 3,
+      of: 4,
       next: 'd',
       isPreviousPending: true,
     });
     // At the real end there is nothing to load.
-    expect(stepsAround(3, 4, () => undefined)).toEqual({ isPreviousPending: true });
-    expect(stepsAround(0, 4, () => undefined)).toEqual({ isNextPending: true });
+    expect(stepsAround(3, 4, () => undefined)).toEqual({ at: 4, of: 4, isPreviousPending: true });
+    expect(stepsAround(0, 4, () => undefined)).toEqual({ at: 1, of: 4, isNextPending: true });
   });
 
   it('has no steps for a record the list doesn’t hold', () => {

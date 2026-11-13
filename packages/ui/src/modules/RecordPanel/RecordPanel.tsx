@@ -5,6 +5,7 @@ import type { RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -57,13 +58,18 @@ export interface RecordPanelProps {
    * nothing. Marks the body busy for screen readers.
    */
   readonly isStepping?: boolean;
+  /**
+   * Where the record is in the list beside it, said under its name: "People · 3 of 120" (spec 0074, AC-7412). Left
+   * out where the panel wasn't opened from a list.
+   */
+  readonly place?: string;
 }
 
 /**
  * A record beside the table, in the floating panel: the record's avatar and
- * name as its title, Previous and Next to step through the view without
- * closing it, Open full page, then its stat strip and its tabs, each filling the panel's height
- * so a feed or task list scrolls inside it. Focus moves in when it opens, and
+ * name as its title, where it is in the list under it, Previous and Next to step through the view without
+ * closing it (↑ ↓, J K), Open full page, then its stat strip and its tabs, each filling the panel's height
+ * so a feed or task list scrolls inside it, and the keys at its foot. Focus moves in when it opens, and
  * Esc closes it.
  */
 export function RecordPanel({
@@ -84,6 +90,7 @@ export function RecordPanel({
   notice,
   empty,
   isStepping = false,
+  place,
 }: RecordPanelProps) {
   const showStepping = useDelayedLoading(isStepping);
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
@@ -124,11 +131,12 @@ export function RecordPanel({
         (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
       }
       variant="floating"
+      {...(place === undefined ? {} : { subtitle: place })}
       isFlush
       width={width}
       isOpen={isOpen}
       onClose={onClose}
-      // ↑ and ↓ step as Previous and Next do, where nothing in the panel owns the arrows.
+      // ↑ and ↓ (and K and J) step as Previous and Next do, where nothing in the panel owns the keys.
       {...(hasSteps
         ? {
             onStep: (step: 'previous' | 'next') => {
@@ -209,6 +217,16 @@ export function RecordPanel({
               ))}
             </Tabs>
           </div>
+          {/* The keys, quietly, at the foot (AC-7412): J and K where there is a list to step through, Esc always. */}
+          <p className={styles.hint}>
+            {hasSteps && (
+              <>
+                <Kbd>{strings.keyNext}</Kbd> <Kbd>{strings.keyPrevious}</Kbd> {strings.hintStep}
+                {strings.hintBetween}
+              </>
+            )}
+            <Kbd>{strings.keyClose}</Kbd> {strings.hintClose}
+          </p>
         </div>
       )}
     </Panel>

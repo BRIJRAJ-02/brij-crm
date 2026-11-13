@@ -92,6 +92,13 @@ import type { UnreadSource } from './inbox/unread.ts';
  * AC-55): only those and the primary are read, and a column shown later is
  * fetched for the loaded rows alone.
  */
+
+/**
+ * Subscribes to nothing: the count hooks' stand in while their source is still opening (the record panel draws before
+ * its sections' reads land, spec 0074, AC-7413), so a hook is never called conditionally.
+ */
+const noSubscription = (): (() => void) => () => undefined;
+
 export function useView(view: RecordsView, attributeIds: readonly string[] = []): ViewState {
   const reader = useRef<ViewReader | undefined>(undefined);
   // One string, so a new array with the same columns changes nothing.
@@ -331,9 +338,9 @@ export function useTaskList(list: TaskList): TaskListState {
  * not with every task. Holds the list while the screen is mounted, so the
  * count stays live.
  */
-export function useTaskTotal(list: TaskList): TaskListState['total'] {
-  useEffect(() => list.retain(), [list]);
-  return useSyncExternalStore(list.subscribe, () => list.getSnapshot().total);
+export function useTaskTotal(list: TaskList | undefined): TaskListState['total'] | undefined {
+  useEffect(() => list?.retain(), [list]);
+  return useSyncExternalStore(list?.subscribe ?? noSubscription, () => list?.getSnapshot().total);
 }
 
 /** One task (the task dialog), re-rendering when it changes. Held while the screen is mounted. */
@@ -616,9 +623,9 @@ export function useNoteList(list: NoteList): NoteListState {
 }
 
 /** Only a note list's total (the Notes tab's count). Holds the list while the screen is mounted, so it stays live. */
-export function useNoteTotal(list: NoteList): NoteListState['total'] {
-  useEffect(() => list.retain(), [list]);
-  return useSyncExternalStore(list.subscribe, () => list.getSnapshot().total);
+export function useNoteTotal(list: NoteList | undefined): NoteListState['total'] | undefined {
+  useEffect(() => list?.retain(), [list]);
+  return useSyncExternalStore(list?.subscribe ?? noSubscription, () => list?.getSnapshot().total);
 }
 
 /** An open note (the note window), re-rendering as it saves. Held while the window is mounted. */
@@ -684,11 +691,11 @@ export function useRecordFiles(files: RecordFilesSource): FilesState {
 /**
  * Only a record's file count (the Files tab's label), re-rendering only when it moves. Holds the files while mounted.
  */
-export function useRecordFileCount(files: RecordFilesSource): number | undefined {
-  useEffect(() => files.retain(), [files]);
-  return useSyncExternalStore(files.subscribe, () => {
-    const state = files.getSnapshot();
-    return state.status === 'ready' ? state.files.length : undefined;
+export function useRecordFileCount(files: RecordFilesSource | undefined): number | undefined {
+  useEffect(() => files?.retain(), [files]);
+  return useSyncExternalStore(files?.subscribe ?? noSubscription, () => {
+    const state = files?.getSnapshot();
+    return state?.status === 'ready' ? state.files.length : undefined;
   });
 }
 
@@ -705,11 +712,11 @@ export function useComments(comments: RecordComments): CommentsState {
  * Only a record's open thread count (the Comments tab's label), re-rendering
  * only when it moves. Holds the threads while mounted, so the count is live.
  */
-export function useCommentCount(comments: RecordComments): number | undefined {
-  useEffect(() => comments.retain(), [comments]);
-  return useSyncExternalStore(comments.subscribe, () => {
-    const state = comments.getSnapshot();
-    return state.status === 'ready' ? state.openCount : undefined;
+export function useCommentCount(comments: RecordComments | undefined): number | undefined {
+  useEffect(() => comments?.retain(), [comments]);
+  return useSyncExternalStore(comments?.subscribe ?? noSubscription, () => {
+    const state = comments?.getSnapshot();
+    return state?.status === 'ready' ? state.openCount : undefined;
   });
 }
 

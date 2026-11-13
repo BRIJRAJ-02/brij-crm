@@ -43,4 +43,15 @@
     padding: var(--space-16);
     overflow: auto;
   }
+
+  /* The keys, at the foot: one quiet line under the tabs, on the panel's own ground (spec 0074, AC-7412). */
+  .hint {
+    flex: none;
+    margin: 0;
+    padding: var(--space-8) var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
 }

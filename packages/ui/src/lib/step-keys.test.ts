@@ -26,6 +26,18 @@ describe('stepOf', () => {
     expect(stepOf(press('ArrowDown'), button)).toBe('next');
   });
 
+  it('steps with K and J as with the arrows, but never in a field, a listbox or a grid (spec 0074, AC-7412)', () => {
+    expect(stepOf(press('k'), button)).toBe('previous');
+    expect(stepOf(press('j'), button)).toBe('next');
+    expect(stepOf(press('j'), [element('INPUT'), element('DIV', 'dialog')])).toBeUndefined();
+    expect(stepOf(press('k'), [element('DIV', 'option'), element('DIV', 'listbox')])).toBeUndefined();
+    expect(stepOf(press('j'), [element('DIV', 'gridcell'), element('DIV', 'grid')])).toBeUndefined();
+    expect(stepOf(press('j'), [element('P', null, true)])).toBeUndefined();
+    // Capital J (Shift) and ⌘J are someone else's.
+    expect(stepOf(press('J', { shiftKey: true }), button)).toBeUndefined();
+    expect(stepOf(press('j', { metaKey: true }), button)).toBeUndefined();
+  });
+
   it('ignores other keys and any modifier', () => {
     expect(stepOf(press('ArrowLeft'), button)).toBeUndefined();
     expect(stepOf(press('ArrowDown', { shiftKey: true }), button)).toBeUndefined();

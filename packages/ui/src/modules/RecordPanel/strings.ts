@@ -11,4 +11,11 @@ export const strings = {
   failed: 'This record didn’t load',
   noAccess: 'You can’t see this record',
   noAccessBody: 'Ask a workspace admin for access.',
+  /** The keys at the panel's foot (spec 0074, AC-7412): "J K next and previous · Esc close". */
+  keyNext: 'J',
+  keyPrevious: 'K',
+  keyClose: 'Esc',
+  hintStep: 'next and previous',
+  hintBetween: ' · ',
+  hintClose: 'close',
 } as const;

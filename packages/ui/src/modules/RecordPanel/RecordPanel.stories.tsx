@@ -83,6 +83,7 @@ function SamplePanel({
             }
           : {})}
         {...(onOpenPage === undefined ? {} : { onOpenPage })}
+        place={`Companies · ${String(index + 1)} of ${String(last + 1)}`}
         actions={<Button variant="ghost" icon="ellipsis" label="Record actions" />}
         {...(gone === 'lost'
           ? {
@@ -210,6 +211,28 @@ export const ArrowKeysStep: Story = {
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
     canvas.getByRole('tab', { name: 'Details' }).focus();
     await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * J and K step as ↓ and ↑ do, never from a field; the head says where the record is in the list, and the keys sit
+ * quietly at the foot (spec 0074, AC-7412).
+ */
+export const JAndKStep: Story = {
+  args: { onOpenPage: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Northwind Traders' });
+    await expect(within(panel).getByText('Companies · 1 of 3')).toBeInTheDocument();
+    await expect(within(panel).getByText(/next and previous/)).toBeInTheDocument();
+    await expect(within(panel).getByText(/close/)).toBeInTheDocument();
+    canvas.getByRole('button', { name: 'Open full page' }).focus();
+    await userEvent.keyboard('j');
+    const next = canvas.getByRole('dialog', { name: 'Globex' });
+    await expect(within(next).getByText('Companies · 2 of 3')).toBeInTheDocument();
+    canvas.getByRole('button', { name: 'Open full page' }).focus();
+    await userEvent.keyboard('k');
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
   },
 };

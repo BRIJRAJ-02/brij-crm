@@ -58,15 +58,23 @@ export function pathOf(target: EventTarget | null, until: Element): readonly Ste
   return path;
 }
 
+/** The keys that step, and which way: the arrows, and K and J as a mail inbox has them (spec 0074, AC-7412). */
+const STEP_KEYS: Readonly<Record<string, 'previous' | 'next'>> = {
+  ArrowUp: 'previous',
+  ArrowDown: 'next',
+  k: 'previous',
+  j: 'next',
+};
+
 /**
- * `previous` for ↑ and `next` for ↓ when nothing else owns the key: no
- * modifier, not already handled, and neither the target nor anything around
- * it types or moves with arrows. `path` is the target and its ancestors,
- * nearest first.
+ * `previous` for ↑ or K and `next` for ↓ or J when nothing else owns the key:
+ * no modifier, not already handled, and neither the target nor anything
+ * around it types or moves with arrows (a field, a listbox, a grid). `path`
+ * is the target and its ancestors, nearest first.
  */
 export function stepOf(event: StepKey, path: readonly StepTarget[]): 'previous' | 'next' | undefined {
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined;
-  const step = event.key === 'ArrowUp' ? 'previous' : event.key === 'ArrowDown' ? 'next' : undefined;
+  const step = Object.hasOwn(STEP_KEYS, event.key) ? STEP_KEYS[event.key] : undefined;
   if (step === undefined) return undefined;
   // A tab's panel holding focus itself scrolls with the arrows; a button inside it leaves them to the step.
   const isOwned =

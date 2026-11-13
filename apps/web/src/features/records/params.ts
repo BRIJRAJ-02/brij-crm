@@ -71,6 +71,9 @@ export interface PeekControl {
  * is on, and pressing it loads that block and moves on (`loadRowId`), so Next is off only at the real end.
  */
 export interface PeekSteps {
+  /** Where the record is in the list, counted from 1, and how many the list has: "3 of 120" (spec 0074, AC-7412). */
+  readonly at: number;
+  readonly of: number;
   readonly previous?: string;
   readonly next?: string;
   readonly isPreviousPending?: true;
@@ -90,6 +93,8 @@ export function stepsAround(
   const previous = index > 0 ? idAt(index - 1) : undefined;
   const next = index < count - 1 ? idAt(index + 1) : undefined;
   return {
+    at: index + 1,
+    of: count,
     ...(previous === undefined ? {} : { previous }),
     ...(next === undefined ? {} : { next }),
     // A row the list has but hasn't loaded: the step stays on, and loads it.
