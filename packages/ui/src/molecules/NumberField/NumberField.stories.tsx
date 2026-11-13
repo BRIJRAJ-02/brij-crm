@@ -24,6 +24,8 @@ export const Count: Story = {
   ),
   play: async ({ canvas, args, userEvent }) => {
     const field = canvas.getByRole('textbox', { name: 'Seats' });
+    // Figures of one width, so the count doesn't shift as it steps (Field's isTabular, spec 0072).
+    await expect(getComputedStyle(field).fontVariantNumeric).toBe('tabular-nums');
     await userEvent.click(field);
     await userEvent.keyboard('{ArrowUp}');
     await expect(field).toHaveValue('5');

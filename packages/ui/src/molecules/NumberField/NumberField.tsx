@@ -222,6 +222,7 @@ export function NumberField(props: NumberFieldProps) {
         onKeyDown={onKeyDown}
         inputMode={mode === 'currency' || step % 1 !== 0 || maximumFractionDigits !== undefined ? 'decimal' : 'numeric'}
         autoComplete="off"
+        isTabular
         size={size}
         isRequired={isRequired}
         isDisabled={isDisabled}

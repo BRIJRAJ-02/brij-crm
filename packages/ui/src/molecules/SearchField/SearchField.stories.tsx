@@ -163,6 +163,8 @@ export const Shortcut: Story = {
   play: async ({ canvas, userEvent }) => {
     const field = canvas.getByRole('searchbox', { name: 'Search' });
     await expect(canvas.getByText('/')).toBeInTheDocument();
+    // Stated to screen readers too, not only drawn (Field's aria-keyshortcuts, spec 0072).
+    await expect(field).toHaveAttribute('aria-keyshortcuts', '/');
     await userEvent.keyboard('/');
     await expect(field).toHaveFocus();
     await expect(canvas.queryByText('/')).toBeNull();
@@ -179,6 +181,7 @@ export const CommandShortcut: Story = {
   ),
   play: async ({ canvas, canvasElement, userEvent }) => {
     const field = canvas.getByRole('searchbox', { name: 'Search everything' });
+    await expect(field.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+K$/);
     await userEvent.keyboard('{Control>}k{/Control}');
     await expect(field).toHaveFocus();
     let reachedHolder = false;

@@ -28,7 +28,8 @@
 
   .item:focus-visible {
     z-index: var(--z-raised);
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-hairline);
     translate: 0 calc(-1 * var(--distance-small));
   }
 

@@ -46,4 +46,4 @@ Empty, a value, focused (Field's accent edge), invalid (`error`), disabled, read
 
 The prototype pops each changed digit in on commit; that needs markup inside Field's box, which phase 1 is restyling, so it waits for phase 3 (spec 0073). Steppers default to off (above).
 
-**Owed to phase 1 (Field):** AC-7305's tabular digits. Field's input sets no `font-variant-numeric`, and this wrapper has no CSS of its own, so a `data-numeric` input state on Field (`tabular-nums`) lands with phase 1's Field restyle; until then the digits are the face's own, which in Geist are close to even.
+**Tabular digits** (AC-7305): the wrapper passes Field's `isTabular` (spec 0072's Field), so the input's figures are one width (`tabular-nums`) and a stepped count doesn't shift. Wired in the merge of phases 1 and 2 (feat/port-12).

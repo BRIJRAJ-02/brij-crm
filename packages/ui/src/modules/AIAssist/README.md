@@ -33,7 +33,7 @@ const AIAssist = lazy(() => import('@crm/ui/ai').then((ai) => ({ default: ai.AIA
 - `thinking` is the status line's steps ("Reading the timeline", "Checking 3 notes and 2 emails"); three general ones by default. Screen readers hear "Working on an answer" once instead of every step.
 - `onSaveNote` gets the whole answer; left out, Save as note isn't drawn. New question (after an answer, a stop or a failure) empties the panel and puts focus in the prompt.
 - `disabledReason` turns the prompt, Ask and the suggestions off and shows why under the prompt (AI off for the workspace, a viewer who can't read the record), as Field shows any disabled reason.
-- It fills its slot's height: the conversation (a region named "Conversation", focusable so it scrolls from the keyboard in every browser) scrolls above the prompt, and keeps the newest words in view while they arrive unless the person has scrolled up to read.
+- It fills its slot's height: the conversation (a region named "Conversation", focusable so it scrolls from the keyboard in every browser, with the outline ring drawn just inside its edge, since the slot around it may clip) scrolls above the prompt, and keeps the newest words in view while they arrive unless the person has scrolled up to read.
 - Screen readers: one status region, there from the start, says "Working on an answer", then "Answer ready" or "Stopped."; a failure is the Callout's own alert. The answer is `aria-busy` while it arrives, and the question is prefixed "You asked:".
 
 ## Scale (spec 0073, gate 3)

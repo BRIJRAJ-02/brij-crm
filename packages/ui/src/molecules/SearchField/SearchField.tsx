@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
+import { keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
+import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Field } from '../Field/Field.tsx';
 import { strings } from './strings.ts';
 
@@ -88,6 +90,7 @@ export function SearchField({
   const text = value ?? own;
   const [isFocused, setFocused] = useState(false);
   const input = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const platform = useKeyboardPlatform();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The last query `onSearch` was given, so a pause after Enter, or a clear of an empty field, sends nothing twice.
   const sent = useRef(text);
@@ -175,6 +178,8 @@ export function SearchField({
       onChange={change}
       isDisabled={isDisabled}
       {...(disabledReason === undefined ? {} : { disabledReason })}
+      // The keycap is for sight; the shortcut is stated to screen readers (Meta+K on a Mac, Control+K elsewhere).
+      {...(shortcut === undefined || isDisabled ? {} : { 'aria-keyshortcuts': keyShortcuts([shortcut], platform) })}
       // The caller's choice, handed to Field, which focuses as React Aria expects (a list's search as it opens).
       // eslint-disable-next-line jsx-a11y-x/no-autofocus
       autoFocus={autoFocus}
