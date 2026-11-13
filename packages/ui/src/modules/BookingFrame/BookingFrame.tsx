@@ -12,6 +12,7 @@ import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
 import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import { templateAttributes, type PageTemplate } from '../../lib/page-template.ts';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import { PopupHost } from '../GuestLook/PopupHost.tsx';
 import styles from './BookingFrame.module.css';
 import { strings } from './strings.ts';
 
@@ -286,221 +287,225 @@ export function BookingFrame({
       {...(isEmbedded ? { 'data-embedded': true } : {})}
       {...(isAnchored ? { 'data-anchored': true } : {})}
     >
-      <div className={styles.layout}>
-        <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
-          {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
-          {brandLogo !== undefined && brand?.logo !== undefined && (
-            <BrandMark
-              src={brandLogo}
-              alt={brand.logo.alt}
-              href={brand.href}
-              isEmbedded={isEmbedded}
-              onError={() => {
-                setFailedLogo(brandLogo);
-              }}
-            />
-          )}
-          {isLoading ? (
-            /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
-            <div className={styles.identity}>
-              <Skeleton shape="circle" size="xl" />
-              <div className={styles.names}>
-                <p className={styles.host}>
-                  <Skeleton shape="text" width="medium" />
+      {/* The page's popups (the visitor bar's menu, add to calendar, the change dialogs) open inside its themed root,
+          in its template and theme (spec 0074, AC-7409). */}
+      <PopupHost>
+        <div className={styles.layout}>
+          <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
+            {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
+            {brandLogo !== undefined && brand?.logo !== undefined && (
+              <BrandMark
+                src={brandLogo}
+                alt={brand.logo.alt}
+                href={brand.href}
+                isEmbedded={isEmbedded}
+                onError={() => {
+                  setFailedLogo(brandLogo);
+                }}
+              />
+            )}
+            {isLoading ? (
+              /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
+              <div className={styles.identity}>
+                <Skeleton shape="circle" size="xl" />
+                <div className={styles.names}>
+                  <p className={styles.host}>
+                    <Skeleton shape="text" width="medium" />
+                  </p>
+                  <p className={styles.title}>
+                    <Skeleton shape="text" width="short" />
+                  </p>
+                </div>
+                <p className={styles.description}>
+                  <Skeleton shape="text" lines={2} />
                 </p>
-                <p className={styles.title}>
-                  <Skeleton shape="text" width="short" />
-                </p>
-              </div>
-              <p className={styles.description}>
-                <Skeleton shape="text" lines={2} />
-              </p>
-              <ul className={styles.facts}>
-                {/* The meeting's line, as most pages draw it (one length, "30 min · Video call"): a line of text in
+                <ul className={styles.facts}>
+                  {/* The meeting's line, as most pages draw it (one length, "30 min · Video call"): a line of text in
                     the row, so the rows under it and the card under the rail on a phone stand where they will. A
                     page with several lengths draws its switch here, a few pixels taller. */}
-                <li className={styles.fact}>
-                  <span className={styles.factIcon}>
-                    <Skeleton shape="tile" />
-                  </span>
-                  <span className={styles.factBody} data-loading="">
-                    <Skeleton shape="text" width="medium" />
-                  </span>
-                </li>
-                <li className={styles.fact}>
-                  <span className={styles.factIcon}>
-                    <Skeleton shape="tile" />
-                  </span>
-                  <span className={styles.factBody} data-loading="">
-                    <Skeleton shape="text" width="long" />
-                  </span>
-                </li>
-                {/* The page's rules under them (how soon, how far ahead), which every page with times shows. */}
-                <li className={styles.fact} data-quiet>
-                  <span className={styles.factIcon}>
-                    <Skeleton shape="tile" />
-                  </span>
-                  <span className={styles.factBody} data-loading="">
-                    <Skeleton shape="text" width="long" />
-                  </span>
-                </li>
-              </ul>
-            </div>
-          ) : (
-            <div
-              className={isTile ? `${styles.identity ?? ''} ${placeLook.identity ?? ''}` : styles.identity}
-              data-arrived={openedLoading || undefined}
-              data-identity={isTile ? 'tile' : undefined}
-            >
-              {isTile ? (
-                // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
-                // its name, on one row.
-                <div className={placeLook.tileRow}>
-                  {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
-                  {brandLogo === undefined && (
-                    <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
-                  )}
-                  <p className={`${styles.host ?? ''} ${placeLook.host ?? ''}`}>{host.name}</p>
-                </div>
-              ) : host.team === undefined ? (
-                <Avatar
-                  name={host.name}
-                  size="xl"
-                  isDecorative
-                  {...(host.image === undefined ? {} : { src: host.image })}
-                />
-              ) : host.team.people.length === 0 ? null : (
-                <AvatarStack
-                  people={host.team.people}
-                  total={host.team.total}
-                  label={host.team.label}
-                  max={TEAM_FACES}
-                  size="lg"
-                />
-              )}
-              <div
-                className={styles.names}
-                data-team={host.team === undefined ? undefined : ''}
-                data-alone={
-                  isTile || (host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase())
-                    ? ''
-                    : undefined
-                }
-              >
-                {/* A team page names nobody before booking: its faces and the page's own title. */}
-                {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
-                {!isTile &&
-                  host.team === undefined &&
-                  host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
-                    <p className={styles.host}>{host.name}</p>
-                  )}
-                {!isTile && host.team === undefined && host.role !== undefined && host.role !== '' && (
-                  <p className={styles.hostRole}>{host.role}</p>
-                )}
-                <h1 className={styles.title}>{title}</h1>
-              </div>
-              {description !== undefined && description !== '' && <p className={styles.description}>{description}</p>}
-              {facts.length > 0 && (
-                <ul className={styles.facts}>
-                  {facts.map((fact) => (
-                    <li
-                      key={factKey(fact)}
-                      className={styles.fact}
-                      data-quiet={fact.isQuiet === true || undefined}
-                      {...(firstFacts.has(factKey(fact)) ? {} : { 'data-reveal': true })}
-                    >
-                      <span className={styles.factIcon}>
-                        <Icon name={fact.icon} size="sm" tone="muted" />
-                      </span>
-                      <span className={styles.factBody}>
-                        {fact.children}
-                        {fact.aside !== undefined && <span className={styles.factAside}>{fact.aside}</span>}
-                      </span>
-                    </li>
-                  ))}
+                  <li className={styles.fact}>
+                    <span className={styles.factIcon}>
+                      <Skeleton shape="tile" />
+                    </span>
+                    <span className={styles.factBody} data-loading="">
+                      <Skeleton shape="text" width="medium" />
+                    </span>
+                  </li>
+                  <li className={styles.fact}>
+                    <span className={styles.factIcon}>
+                      <Skeleton shape="tile" />
+                    </span>
+                    <span className={styles.factBody} data-loading="">
+                      <Skeleton shape="text" width="long" />
+                    </span>
+                  </li>
+                  {/* The page's rules under them (how soon, how far ahead), which every page with times shows. */}
+                  <li className={styles.fact} data-quiet>
+                    <span className={styles.factIcon}>
+                      <Skeleton shape="tile" />
+                    </span>
+                    <span className={styles.factBody} data-loading="">
+                      <Skeleton shape="text" width="long" />
+                    </span>
+                  </li>
                 </ul>
-              )}
-              {/* Last in the block (booking socials): it arrives with the facts, and on a wide page nothing under it
-                  moves, since the foot is pinned to the rail's end. */}
-              {host.team === undefined && host.socials !== undefined && (
-                <SocialLinks links={host.socials} label={strings.socials(host.name)} />
-              )}
-              {railLink !== undefined && railHref !== undefined && (
-                <a className={placeLook?.railLink} href={railHref}>
-                  {railLink.label}
-                  <Icon name="arrow-right" size="xs" />
-                </a>
-              )}
-            </div>
-          )}
-        </aside>
-        <div className={styles.main}>
-          {banner}
-          {bar !== undefined && <div className={styles.bar}>{bar}</div>}
-          <section
-            className={styles.card}
-            // Covered whole (the details step), the step's own form names what the card holds.
-            {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
-            data-instant={shown.isInstant || undefined}
-            data-place={isCardCovered ? 'card' : undefined}
-            data-hold={holdsCard || undefined}
-            aria-busy={isLoading || undefined}
-          >
-            {(heading !== undefined || toolbar !== undefined) && (
-              <div className={styles.head} inert={isCardCovered}>
-                {heading !== undefined && (
-                  // Keyed by its words, so a new heading is drawn anew and resolves in with the step.
-                  <h2
-                    key={heading}
-                    className={styles.heading}
-                    {...(heading === firstHeading ? {} : { 'data-reveal': true })}
-                  >
-                    {heading}
-                  </h2>
+              </div>
+            ) : (
+              <div
+                className={isTile ? `${styles.identity ?? ''} ${placeLook.identity ?? ''}` : styles.identity}
+                data-arrived={openedLoading || undefined}
+                data-identity={isTile ? 'tile' : undefined}
+              >
+                {isTile ? (
+                  // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
+                  // its name, on one row.
+                  <div className={placeLook.tileRow}>
+                    {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
+                    {brandLogo === undefined && (
+                      <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
+                    )}
+                    <p className={`${styles.host ?? ''} ${placeLook.host ?? ''}`}>{host.name}</p>
+                  </div>
+                ) : host.team === undefined ? (
+                  <Avatar
+                    name={host.name}
+                    size="xl"
+                    isDecorative
+                    {...(host.image === undefined ? {} : { src: host.image })}
+                  />
+                ) : host.team.people.length === 0 ? null : (
+                  <AvatarStack
+                    people={host.team.people}
+                    total={host.team.total}
+                    label={host.team.label}
+                    max={TEAM_FACES}
+                    size="lg"
+                  />
                 )}
-                {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
+                <div
+                  className={styles.names}
+                  data-team={host.team === undefined ? undefined : ''}
+                  data-alone={
+                    isTile || (host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase())
+                      ? ''
+                      : undefined
+                  }
+                >
+                  {/* A team page names nobody before booking: its faces and the page's own title. */}
+                  {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
+                  {!isTile &&
+                    host.team === undefined &&
+                    host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
+                      <p className={styles.host}>{host.name}</p>
+                    )}
+                  {!isTile && host.team === undefined && host.role !== undefined && host.role !== '' && (
+                    <p className={styles.hostRole}>{host.role}</p>
+                  )}
+                  <h1 className={styles.title}>{title}</h1>
+                </div>
+                {description !== undefined && description !== '' && <p className={styles.description}>{description}</p>}
+                {facts.length > 0 && (
+                  <ul className={styles.facts}>
+                    {facts.map((fact) => (
+                      <li
+                        key={factKey(fact)}
+                        className={styles.fact}
+                        data-quiet={fact.isQuiet === true || undefined}
+                        {...(firstFacts.has(factKey(fact)) ? {} : { 'data-reveal': true })}
+                      >
+                        <span className={styles.factIcon}>
+                          <Icon name={fact.icon} size="sm" tone="muted" />
+                        </span>
+                        <span className={styles.factBody}>
+                          {fact.children}
+                          {fact.aside !== undefined && <span className={styles.factAside}>{fact.aside}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* Last in the block (booking socials): it arrives with the facts, and on a wide page nothing under it
+                  moves, since the foot is pinned to the rail's end. */}
+                {host.team === undefined && host.socials !== undefined && (
+                  <SocialLinks links={host.socials} label={strings.socials(host.name)} />
+                )}
+                {railLink !== undefined && railHref !== undefined && (
+                  <a className={placeLook?.railLink} href={railHref}>
+                    {railLink.label}
+                    <Icon name="arrow-right" size="xs" />
+                  </a>
+                )}
               </div>
             )}
-            <div
-              className={styles.stage}
-              data-moved={shown.isMoved || undefined}
+          </aside>
+          <div className={styles.main}>
+            {banner}
+            {bar !== undefined && <div className={styles.bar}>{bar}</div>}
+            <section
+              className={styles.card}
+              // Covered whole (the details step), the step's own form names what the card holds.
+              {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
               data-instant={shown.isInstant || undefined}
-              data-place={isCovered ? coverPlace : undefined}
+              data-place={isCardCovered ? 'card' : undefined}
               data-hold={holdsCard || undefined}
-              // The view over the month: on a phone Book by chat sets the card's height itself (BookingChat).
-              data-view={isCovered ? view : undefined}
-              data-enter={enter}
+              aria-busy={isLoading || undefined}
             >
-              {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
-              <div className={styles.under} inert={isCovered}>
-                <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
-                  {/* A pane draws what it is given, loading or not: the page hands its own month and times, already
-                      in their shape, so the card is the right height from the first paint. */}
-                  <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
-                  {aside !== undefined && (
-                    <div
-                      className={isTile ? `${styles.aside ?? ''} ${placeLook.aside ?? ''}` : styles.aside}
-                      data-growing={isAsideGrowing || undefined}
+              {(heading !== undefined || toolbar !== undefined) && (
+                <div className={styles.head} inert={isCardCovered}>
+                  {heading !== undefined && (
+                    // Keyed by its words, so a new heading is drawn anew and resolves in with the step.
+                    <h2
+                      key={heading}
+                      className={styles.heading}
+                      {...(heading === firstHeading ? {} : { 'data-reveal': true })}
                     >
-                      {aside}
-                    </div>
+                      {heading}
+                    </h2>
                   )}
-                </div>
-                {footer !== undefined && footBand(footer)}
-              </div>
-              {isCovered && (
-                <div key={view} className={styles.cover}>
-                  <div className={styles.coverBody}>{cover}</div>
-                  {coverFooter !== undefined && footBand(coverFooter)}
+                  {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
                 </div>
               )}
-            </div>
-          </section>
-        </div>
-        {/* After the card in the reading order (critic C7): drawn at the rail's foot on a wide page, under the card on
+              <div
+                className={styles.stage}
+                data-moved={shown.isMoved || undefined}
+                data-instant={shown.isInstant || undefined}
+                data-place={isCovered ? coverPlace : undefined}
+                data-hold={holdsCard || undefined}
+                // The view over the month: on a phone Book by chat sets the card's height itself (BookingChat).
+                data-view={isCovered ? view : undefined}
+                data-enter={enter}
+              >
+                {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
+                <div className={styles.under} inert={isCovered}>
+                  <div className={styles.panes} data-panes={aside === undefined ? 'one' : 'two'}>
+                    {/* A pane draws what it is given, loading or not: the page hands its own month and times, already
+                      in their shape, so the card is the right height from the first paint. */}
+                    <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
+                    {aside !== undefined && (
+                      <div
+                        className={isTile ? `${styles.aside ?? ''} ${placeLook.aside ?? ''}` : styles.aside}
+                        data-growing={isAsideGrowing || undefined}
+                      >
+                        {aside}
+                      </div>
+                    )}
+                  </div>
+                  {footer !== undefined && footBand(footer)}
+                </div>
+                {isCovered && (
+                  <div key={view} className={styles.cover}>
+                    <div className={styles.coverBody}>{cover}</div>
+                    {coverFooter !== undefined && footBand(coverFooter)}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+          {/* After the card in the reading order (critic C7): drawn at the rail's foot on a wide page, under the card on
             a phone. */}
-        <BookingFoot placement="rail" logo={logo} {...claim} />
-      </div>
+          <BookingFoot placement="rail" logo={logo} {...claim} />
+        </div>
+      </PopupHost>
     </main>
   );
 }

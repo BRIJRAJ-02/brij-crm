@@ -9,7 +9,6 @@
 import { EU_ALLERGENS, formatPrice, nextOpening, openAt, servingAt } from '@crm/contracts/menu';
 import type { PublicMenu, SnapshotItem, SnapshotSection, SnapshotSubsection } from '@crm/contracts';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { UNSAFE_PortalProvider } from 'react-aria';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -34,6 +33,7 @@ import { useNow } from '../../provider/context.ts';
 import { checkedLookVariables } from './look-variables.ts';
 import '@crm/tokens/packs.css';
 import styles from './MenuList.module.css';
+import { PopupHost } from '../GuestLook/PopupHost.tsx';
 import { TOUCH_TARGET } from '../../atoms/Button/touch-target.ts';
 import { strings } from './strings.ts';
 
@@ -279,8 +279,6 @@ export function MenuList({
   };
   const plainCount = (itemId: string) => chosen.find((each) => each.key === pickKey(plainPick(itemId)))?.quantity ?? 0;
 
-  // The page's overlays (the dish's sheet, Your picks) open inside this root, so they wear the menu's look too.
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const initial = Array.from(business.name.trim())[0]?.toLocaleUpperCase(locale) ?? '';
   const entering = (node: ReactNode, place: number, display: 'block' | 'inline' = 'block') =>
     hasEntrance ? (
@@ -370,8 +368,9 @@ export function MenuList({
       <span role="status">
         <VisuallyHidden>{said}</VisuallyHidden>
       </span>
-      <div className={styles.look} ref={setHost}>
-        <UNSAFE_PortalProvider getContainer={() => host}>
+      <div className={styles.look}>
+        {/* The page's overlays (the dish's sheet, Your picks) open inside this root, so they wear the menu's look too. */}
+        <PopupHost>
           {/* The glass bar: the brand, and nothing else (checklabs'). */}
           <div className={styles.bar} data-sticky="">
             <div className={styles.barTop}>
@@ -586,7 +585,7 @@ export function MenuList({
               <PicksSheet menu={menu} picks={chosen} onPicksChange={onPicksChange} photoHref={photoHref} />
             </Modal>
           )}
-        </UNSAFE_PortalProvider>
+        </PopupHost>
       </div>
     </div>
   );

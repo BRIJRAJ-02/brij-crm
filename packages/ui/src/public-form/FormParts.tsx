@@ -19,6 +19,7 @@ import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import type { EmbedLook } from './HostedForm.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
+import { PopupHost } from '../modules/GuestLook/PopupHost.tsx';
 import styles from './FormParts.module.css';
 import { SentAnswers } from './SentAnswers.tsx';
 import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
@@ -84,22 +85,26 @@ export function FormGround({
         {...(isLoading ? { 'aria-busy': true } : {})}
         {...(mode === 'preview' ? { inert: true } : {})}
       >
-        <div className={styles.card}>
-          {/* The workspace's own logo over the form (spec 0060, AC-4). */}
-          {logo !== undefined && brand?.logo !== undefined && (
-            <img
-              className={styles.brandLogo}
-              src={logo}
-              alt={brand.logo.alt}
-              decoding="async"
-              onError={() => {
-                setFailedLogo(logo);
-              }}
-            />
-          )}
-          {children}
-        </div>
-        {foot}
+        {/* The form's popups (a Select, the phone's country picker, a date) open inside its themed root, so they wear
+            the form's theme, corners and template (spec 0074, AC-7409). */}
+        <PopupHost>
+          <div className={styles.card}>
+            {/* The workspace's own logo over the form (spec 0060, AC-4). */}
+            {logo !== undefined && brand?.logo !== undefined && (
+              <img
+                className={styles.brandLogo}
+                src={logo}
+                alt={brand.logo.alt}
+                decoding="async"
+                onError={() => {
+                  setFailedLogo(logo);
+                }}
+              />
+            )}
+            {children}
+          </div>
+          {foot}
+        </PopupHost>
       </div>
     </div>
   );

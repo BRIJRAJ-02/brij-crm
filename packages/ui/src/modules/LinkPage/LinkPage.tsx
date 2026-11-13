@@ -35,6 +35,7 @@ import { initialsOf } from '../../lib/stable-hue.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import type { PageTemplate } from '../../lib/page-template.ts';
+import { PopupHost } from '../GuestLook/PopupHost.tsx';
 import styles from './LinkPage.module.css';
 // Types only: erased, so none of these chunks joins the first load.
 import type { LinkPageGalleryProps } from './LinkPageGallery.tsx';
@@ -2451,191 +2452,195 @@ export function LinkPage({
         ref={variablesRef}
         {...(isPreview ? { inert: true } : {})}
       >
-        <div className={styles.column} ref={columnRef}>
-          {banner !== undefined && !bannerClosed && <Banner block={banner} onPress={onPress} onClose={closeBanner} />}
-          {/* Who the page is: one column with the rest, except in Split, where it is the sticky panel on the left
+        {/* The page's popups (the gated link notice, a Tooltip, the gallery, Share) open inside its themed root, in
+            its theme, font and shape (spec 0074, AC-7409). */}
+        <PopupHost>
+          <div className={styles.column} ref={columnRef}>
+            {banner !== undefined && !bannerClosed && <Banner block={banner} onPress={onPress} onClose={closeBanner} />}
+            {/* Who the page is: one column with the rest, except in Split, where it is the sticky panel on the left
               of a wide page (spec 0068, AC-6801). */}
-          <div className={styles.identity}>
-            {brand !== undefined && <Lockup brand={brand} />}
-            <header
-              className={styles.hero}
-              data-cover={(person !== undefined && hasCover) || undefined}
-              aria-busy={person === undefined || undefined}
-            >
-              {person !== undefined && leadsWithCard ? (
-                // The profile card says who the page is (spec 0068, AC-6808): the header keeps the page's one h1
-                // for screen readers and the outline, and the card draws the face, name and line once.
-                <h1 className={styles.name}>
-                  <VisuallyHidden>{person.name}</VisuallyHidden>
-                </h1>
-              ) : person === undefined ? (
-                <>
-                  <Skeleton shape="circle" size="xl" />
-                  <p className={styles.name}>
-                    <Skeleton shape="text" width="medium" align="center" />
-                  </p>
-                  <p className={styles.bio}>
-                    <Skeleton shape="text" width="long" align="center" />
-                  </p>
-                  {/* The pill's own place, so the header doesn't grow when the address arrives. */}
-                  {address !== undefined && (
-                    <span className={styles.pillLoading}>
-                      <Skeleton shape="fill" />
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
-                  {hasCover && <span className={styles.cover} aria-hidden="true" />}
-                  {drawn?.avatar !== 'none' && (
-                    <span className={styles.face}>
-                      <Avatar
-                        name={person.name}
-                        id={person.id}
-                        size="hero"
-                        shape={drawn?.avatar === 'rounded' ? 'square' : 'circle'}
-                        isDecorative
-                        {...(person.image === undefined ? {} : { src: person.image })}
-                      />
-                    </span>
-                  )}
-                  {/* The words beside the face in the left header, and in the column under it otherwise. */}
-                  <div className={styles.who}>
-                    {/* The person's words rise in once as the page first draws (spec 0068, AC-6803). */}
-                    <h1 className={styles.name}>{entering(person.name, 1)}</h1>
-                    {person.role !== undefined && person.role !== '' && (
-                      <p className={styles.jobTitle}>{entering(person.role, 2)}</p>
-                    )}
-                    {person.bio !== undefined && person.bio !== '' && (
-                      <p className={styles.bio}>{entering(person.bio, 3)}</p>
-                    )}
+            <div className={styles.identity}>
+              {brand !== undefined && <Lockup brand={brand} />}
+              <header
+                className={styles.hero}
+                data-cover={(person !== undefined && hasCover) || undefined}
+                aria-busy={person === undefined || undefined}
+              >
+                {person !== undefined && leadsWithCard ? (
+                  // The profile card says who the page is (spec 0068, AC-6808): the header keeps the page's one h1
+                  // for screen readers and the outline, and the card draws the face, name and line once.
+                  <h1 className={styles.name}>
+                    <VisuallyHidden>{person.name}</VisuallyHidden>
+                  </h1>
+                ) : person === undefined ? (
+                  <>
+                    <Skeleton shape="circle" size="xl" />
+                    <p className={styles.name}>
+                      <Skeleton shape="text" width="medium" align="center" />
+                    </p>
+                    <p className={styles.bio}>
+                      <Skeleton shape="text" width="long" align="center" />
+                    </p>
+                    {/* The pill's own place, so the header doesn't grow when the address arrives. */}
                     {address !== undefined && (
-                      <span className={styles.address}>
-                        <CopyButton
-                          value={address.value}
-                          label={address.label}
-                          name={strings.copyAddress(address.label)}
-                          announcement={strings.addressCopied}
-                          isRound
+                      <span className={styles.pillLoading}>
+                        <Skeleton shape="fill" />
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
+                    {hasCover && <span className={styles.cover} aria-hidden="true" />}
+                    {drawn?.avatar !== 'none' && (
+                      <span className={styles.face}>
+                        <Avatar
+                          name={person.name}
+                          id={person.id}
+                          size="hero"
+                          shape={drawn?.avatar === 'rounded' ? 'square' : 'circle'}
+                          isDecorative
+                          {...(person.image === undefined ? {} : { src: person.image })}
                         />
                       </span>
                     )}
-                  </div>
-                </>
-              )}
-            </header>
-            {person !== undefined && openNow !== undefined && openNow !== '' && (
-              <p className={styles.openNow}>
-                <span className={styles.openDot} aria-hidden="true" />
-                {openNow}
-              </p>
-            )}
-            {person !== undefined && bookHref !== undefined && heroBook !== undefined && (
-              <ButtonLink
-                variant="primary"
-                size="touch"
-                icon="calendar"
-                href={bookHref}
-                isFullWidth="center"
-                {...(onPress === undefined ? {} : { onPress: () => onPress('book') })}
-              >
-                {heroBook.label}
-              </ButtonLink>
-            )}
-            {/* Where else to find them, under the bio (the v5 mock), then Share and Save contact as an equal pair.
-              Share stands while the page loads: it shares the address the visitor is already on. */}
-            {!hasSocialsBlock && socials !== undefined && <div className={styles.heroSocials}>{socials}</div>}
-            <Actions
-              contact={contact}
-              share={leadsWithCard ? undefined : share}
-              onPress={onPress}
-              {...(walletHref === undefined ? {} : { walletHref })}
-            />
-          </div>
-          <div className={styles.content}>
-            {toolbar}
-            {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
-            {summary !== undefined && (
-              <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
-                {summary}
-              </p>
-            )}
-            {blocks === undefined ? (
-              <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
-                {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
-                  <li key={index} className={styles.item}>
-                    <span className={styles.block} data-loading="">
-                      <LinkPageTile />
-                      <span className={styles.text}>
-                        <span className={styles.title}>
-                          <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                    {/* The words beside the face in the left header, and in the column under it otherwise. */}
+                    <div className={styles.who}>
+                      {/* The person's words rise in once as the page first draws (spec 0068, AC-6803). */}
+                      <h1 className={styles.name}>{entering(person.name, 1)}</h1>
+                      {person.role !== undefined && person.role !== '' && (
+                        <p className={styles.jobTitle}>{entering(person.role, 2)}</p>
+                      )}
+                      {person.bio !== undefined && person.bio !== '' && (
+                        <p className={styles.bio}>{entering(person.bio, 3)}</p>
+                      )}
+                      {address !== undefined && (
+                        <span className={styles.address}>
+                          <CopyButton
+                            value={address.value}
+                            label={address.label}
+                            name={strings.copyAddress(address.label)}
+                            announcement={strings.addressCopied}
+                            isRound
+                          />
                         </span>
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : groups.length === 0 && ghosts === 0 ? (
-              empty
-            ) : (
-              <div className={styles.blocks}>
-                {groups.map((group, index) => (
-                  <Group
-                    key={group.heading?.id ?? `top-${String(index)}`}
-                    rows={group.rows}
-                    onPress={onPress}
-                    onToggleFolder={toggleFolder}
-                    {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
-                    {...(group.heading === undefined ? {} : { heading: group.heading })}
-                  />
-                ))}
-                {ghosts > 0 && (
-                  // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
-                  <ul className={styles.list} aria-hidden="true">
-                    {Array.from({ length: ghosts }, (_, index) => (
-                      <li key={index} className={styles.item}>
-                        <span className={styles.block} data-ghost="">
-                          <LinkPageTile />
-                          <span className={styles.text}>
-                            <span className={styles.title}>
-                              <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
-                            </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </header>
+              {person !== undefined && openNow !== undefined && openNow !== '' && (
+                <p className={styles.openNow}>
+                  <span className={styles.openDot} aria-hidden="true" />
+                  {openNow}
+                </p>
+              )}
+              {person !== undefined && bookHref !== undefined && heroBook !== undefined && (
+                <ButtonLink
+                  variant="primary"
+                  size="touch"
+                  icon="calendar"
+                  href={bookHref}
+                  isFullWidth="center"
+                  {...(onPress === undefined ? {} : { onPress: () => onPress('book') })}
+                >
+                  {heroBook.label}
+                </ButtonLink>
+              )}
+              {/* Where else to find them, under the bio (the v5 mock), then Share and Save contact as an equal pair.
+              Share stands while the page loads: it shares the address the visitor is already on. */}
+              {!hasSocialsBlock && socials !== undefined && <div className={styles.heroSocials}>{socials}</div>}
+              <Actions
+                contact={contact}
+                share={leadsWithCard ? undefined : share}
+                onPress={onPress}
+                {...(walletHref === undefined ? {} : { walletHref })}
+              />
+            </div>
+            <div className={styles.content}>
+              {toolbar}
+              {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
+              {summary !== undefined && (
+                <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
+                  {summary}
+                </p>
+              )}
+              {blocks === undefined ? (
+                <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
+                  {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
+                    <li key={index} className={styles.item}>
+                      <span className={styles.block} data-loading="">
+                        <LinkPageTile />
+                        <span className={styles.text}>
+                          <span className={styles.title}>
+                            <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
                           </span>
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {after}
-            {footLine !== undefined && footLine !== '' && <p className={styles.footLine}>{footLine}</p>}
-            {foot}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : groups.length === 0 && ghosts === 0 ? (
+                empty
+              ) : (
+                <div className={styles.blocks}>
+                  {groups.map((group, index) => (
+                    <Group
+                      key={group.heading?.id ?? `top-${String(index)}`}
+                      rows={group.rows}
+                      onPress={onPress}
+                      onToggleFolder={toggleFolder}
+                      {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
+                      {...(group.heading === undefined ? {} : { heading: group.heading })}
+                    />
+                  ))}
+                  {ghosts > 0 && (
+                    // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
+                    <ul className={styles.list} aria-hidden="true">
+                      {Array.from({ length: ghosts }, (_, index) => (
+                        <li key={index} className={styles.item}>
+                          <span className={styles.block} data-ghost="">
+                            <LinkPageTile />
+                            <span className={styles.text}>
+                              <span className={styles.title}>
+                                <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                              </span>
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {after}
+              {footLine !== undefined && footLine !== '' && <p className={styles.footLine}>{footLine}</p>}
+              {foot}
+            </div>
           </div>
-        </div>
-        {hasNotice && (
-          <Suspense fallback={null}>
-            <LazyNotice
-              asking={
-                asking === undefined || askingTarget === undefined
-                  ? undefined
-                  : {
-                      id: asking.id,
-                      title: asking.title,
-                      notice: asking.notice ?? 'sensitive',
-                      href: askingTarget.href,
-                      isWeb: askingTarget.scheme === 'web',
-                    }
-              }
-              onClose={() => {
-                setAsking(undefined);
-              }}
-              onContinue={continueNotice}
-              onUnavailable={stopAsking}
-            />
-          </Suspense>
-        )}
+          {hasNotice && (
+            <Suspense fallback={null}>
+              <LazyNotice
+                asking={
+                  asking === undefined || askingTarget === undefined
+                    ? undefined
+                    : {
+                        id: asking.id,
+                        title: asking.title,
+                        notice: asking.notice ?? 'sensitive',
+                        href: askingTarget.href,
+                        isWeb: askingTarget.scheme === 'web',
+                      }
+                }
+                onClose={() => {
+                  setAsking(undefined);
+                }}
+                onContinue={continueNotice}
+                onUnavailable={stopAsking}
+              />
+            </Suspense>
+          )}
+        </PopupHost>
       </Root>
     </PageActionsContext>
   );
