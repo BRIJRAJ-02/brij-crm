@@ -250,9 +250,7 @@ describe('sharing a booking page from its card (spec 0074, AC-7406)', () => {
   });
 
   it('offers a reader Share on the card, with none of the ways that change the page', async () => {
-    await renderLinks([
-      { ...pageOf('p1', 'Bea’s chat'), canChange: false, ownerName: 'Bea', handle: 'bea' },
-    ]);
+    await renderLinks([{ ...pageOf('p1', 'Bea’s chat'), canChange: false, ownerName: 'Bea', handle: 'bea' }]);
     expect(page.getByRole('button', { name: 'More for Bea’s chat' }).query()).toBeNull();
     await userEvent.click(page.getByRole('button', { name: 'Share' }));
     const sheet = page.getByRole('dialog', { name: 'Share Bea’s chat' });
