@@ -21,9 +21,11 @@ export const strings = {
   shareSheet: {
     title: (title: string) => `Share ${title}`,
     invite: 'Pick a time that suits you:',
-    offerTimes: 'Offer specific times',
+    /** The card's own name, so the way and where it lands read the same. */
+    shareTimes: 'Share specific times',
     oneTimeLink: 'One-time link',
-    addToLinkPage: 'Add to link page',
+    notLive: 'Hidden. Guests can’t book it until it’s live.',
+    saveAddressFirst: 'Save the new address to share it.',
   },
   more: (title: string) => `More for ${title}`,
   openNewTab: 'Open in a new tab',
@@ -117,7 +119,6 @@ export const strings = {
     madeLive: (title: string) => `${title} is live`,
     madeHidden: (title: string) => `${title} is hidden`,
     viewLive: 'View live page',
-    embed: 'Embed',
     newPage: 'New page',
   },
   emptyTitle: 'No booking pages yet',

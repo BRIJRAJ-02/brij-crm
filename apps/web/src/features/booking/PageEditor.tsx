@@ -123,7 +123,7 @@ import { insightsHref } from '../insights/search.ts';
 import { activityStrings } from './activity-strings.ts';
 import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
 import { ShareTimesCard } from './ShareTimesCard.tsx';
-import { BookingShareSheet, usePreloadBookingShare } from './BookingShareSheet.tsx';
+import { BookingShareSheet, SHARE_CARDS, useShareCardInView, usePreloadBookingShare } from './BookingShareSheet.tsx';
 import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
@@ -898,6 +898,8 @@ export function PageEditor({
     (each) => (each !== 'hosts' || isTeam) && ((each !== 'bookings' && each !== 'insights') || !isLocked),
   );
   const shown: PageTab = tabs.includes(tab) ? tab : 'details';
+  // The share sheet's ways land on their card: Share specific times, One-time links, the snippet.
+  useShareCardInView(shown === 'share');
   // The sections whose fields hold an error now: what's marked red in the list, and a refusal's field from the server.
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing =
@@ -1188,7 +1190,8 @@ export function PageEditor({
             <BookingShareSheet
               slug={slug}
               page={isShareOpen ? page : undefined}
-              isOwnPage={isOwnPage}
+              // The sheet shares the saved address, so a new one waiting to be saved is said, as the tab's Copy says.
+              {...(isAddressUnsaved ? { note: strings.shareSheet.saveAddressFirst } : {})}
               onClose={() => setShareOpen(false)}
             />
             <Modal
@@ -2038,38 +2041,44 @@ export function PageEditor({
                   </Card>
                   <Card title={strings.shareLinkSection}>
                     {/* The same column the share dialog draws (spec 0074, AC-7402), here in its card. */}
-                    <ShareColumn url={savedLink} name={page.title} />
+                    <ShareColumn url={savedLink} name={page.title} invite={strings.shareSheet.invite} />
                   </Card>
                   {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
                   {!isLocked && (
-                    <ShareTimesCard
-                      data={data}
-                      publicKey={page.publicKey}
-                      title={page.title}
-                      duration={page.durations[0] ?? 30}
-                      link={savedLink}
-                      isLive={page.status === 'live'}
-                      isPaused={page.status === 'paused'}
-                    />
+                    <div id={SHARE_CARDS.times}>
+                      <ShareTimesCard
+                        data={data}
+                        publicKey={page.publicKey}
+                        title={page.title}
+                        duration={page.durations[0] ?? 30}
+                        link={savedLink}
+                        isLive={page.status === 'live'}
+                        isPaused={page.status === 'paused'}
+                      />
+                    </div>
                   )}
                   {/* The snippet for someone else's site (spec 0062, L3). */}
-                  <EmbedCard
-                    script={data.forms.embedUrl()}
-                    publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
-                    title={page.title}
-                    isLive={page.status === 'live'}
-                    quickPicks={BRAND_QUICK_PICKS}
-                    picture={pagePicture(page)}
-                  />
+                  <div id={SHARE_CARDS.embed}>
+                    <EmbedCard
+                      script={data.forms.embedUrl()}
+                      publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
+                      title={page.title}
+                      isLive={page.status === 'live'}
+                      quickPicks={BRAND_QUICK_PICKS}
+                      picture={pagePicture(page)}
+                    />
+                  </div>
                   {/* One-time links (AC-6204). */}
-                  <OneOffLinksCard
-                    data={data}
-                    slug={slug}
-                    page={page}
-                    pageUrl={bLink}
-                    isReadOnly={isLocked}
-                    onSaved={setPage}
-                  />
+                  <div id={SHARE_CARDS.oneTime}>
+                    <OneOffLinksCard
+                      data={data}
+                      slug={slug}
+                      page={page}
+                      pageUrl={bLink}
+                      isReadOnly={isLocked}
+                      onSaved={setPage}
+                    />
+                  </div>
                   {!isWorkspace && (
                     <SocialsCardSlot
                       data={data}

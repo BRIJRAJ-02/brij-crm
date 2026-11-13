@@ -192,7 +192,7 @@ The share code itself (source, gzip -9, files wholly about sharing plus the shar
 - **The QR code's size** (AC-7427): the link page keeps its large code, because it is scanned from a screen. ReadyPanel is phase 1's file, so no size option is added now; it is owed at the phase 1 merge: "ReadyPanel/ShareSheet `qrSize` option; the link page uses the large size".
 - **The 30% share code target** (AC-7418, amended): under the owner's rule (measure per phase, on real pages) batch 1 is accepted, since no first load grew and Menus dropped 4.4 kB. The share code is measured again at the phase's end.
 - **Closing mid download** (AC-7428): fixed. ShareColumn tells the sheet while a file is being made; the sheet is busy (Esc, a click outside and Close wait) and a Done pressed meanwhile closes it as soon as the file is saved.
-- **Focus after a menu's first publish** (AC-7428): fixed. SplitButton takes a `ref` to its main half; when the publish dialog closes and focus has fallen to the page, Menus hands it to the live split's main button (or Publish, before a publish).
+- **Focus after a menu's first publish** (AC-7428): fixed. When the publish dialog closes and focus has fallen to the page, Menus hands it to Publish or, once live, to the split button's main half (found beside its named menu half: a `ref` on SplitButton's halves grew the hosted form and booking page by 40 B, since they share Button's chunk, so it was taken back).
 - **A failed chunk load** reaches the app's `vite:preloadError` guard, as Bookings' lazy parts do (unchanged).
 - Screenshots for `Styled`, `Column` and the rest of ShareSheet's stories need `pnpm test:visual --update` in the pinned image (unchanged).
 

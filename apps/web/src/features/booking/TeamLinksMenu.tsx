@@ -140,7 +140,6 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
       <BookingShareSheet
         slug={slug}
         page={isSharing && canCopy ? workspace : undefined}
-        isOwnPage={false}
         onClose={() => setSharing(false)}
       />
     </>

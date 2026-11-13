@@ -144,19 +144,24 @@ export function ShareSheet({
   // is made (spec 0074, the coordinator's call of 13 Nov): Esc, a click outside and Close wait while it runs, and a
   // Done pressed meanwhile closes the sheet as soon as the file is saved.
   const [isSaving, setSaving] = useState(false);
+  // A Done pressed while the file is made: kept in a ref for the download's end, and in state so Done shows it waits.
   const closeAsked = useRef(false);
+  const [isClosing, setClosing] = useState(false);
   const savingChanged = (saving: boolean) => {
     setSaving(saving);
     if (saving || !closeAsked.current) return;
     closeAsked.current = false;
+    setClosing(false);
     onOpenChange(false);
   };
   const changeOpen = (open: boolean) => {
     if (!open && isSaving) {
       closeAsked.current = true;
+      setClosing(true);
       return;
     }
     closeAsked.current = false;
+    setClosing(false);
     onOpenChange(open);
   };
   return (
@@ -172,7 +177,7 @@ export function ShareSheet({
         // Copy link is the sheet's one primary; Done only closes it. Focus starts on Done, so Enter and Esc both
         // close the sheet, and the sheet is said with its name (the forms' live dialog, which this replaces).
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
-        <Button slot="close" autoFocus>
+        <Button slot="close" autoFocus isPending={isClosing}>
           {strings.done}
         </Button>
       }
@@ -181,7 +186,7 @@ export function ShareSheet({
         url={url}
         name={name}
         onEmbed={() => {
-          onOpenChange(false);
+          changeOpen(false);
         }}
         onSavingChange={savingChanged}
         {...(invite === undefined ? {} : { invite })}

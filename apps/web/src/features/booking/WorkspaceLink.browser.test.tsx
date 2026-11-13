@@ -389,9 +389,10 @@ describe('Team links › Share (spec 0074, AC-7406)', () => {
     await userEvent.click(page.getByRole('menuitem', { name: strings.share }));
     const sheet = page.getByRole('dialog', { name: 'Share Talk to us' });
     await expect.element(sheet.getByRole('img', { name: 'QR code for Talk to us' })).toBeInTheDocument();
-    // A member who can't change the workspace link gets no ways that change it.
-    expect(sheet.getByRole('link', { name: 'Offer specific times' }).query()).toBeNull();
-    expect(sheet.getByRole('link', { name: 'Put it on your site' }).query()).toBeNull();
+    // A member who can't change the workspace link gets no ways that change it; the snippet is still theirs to copy.
+    expect(sheet.getByRole('link', { name: 'Share specific times' }).query()).toBeNull();
+    expect(sheet.getByRole('link', { name: 'Edit link page' }).query()).toBeNull();
+    await expect.element(sheet.getByRole('link', { name: 'Put it on your site' })).toBeVisible();
     await checkEverywhere('share-workspace-link', () => document.querySelector('[role="dialog"]'));
   });
 });

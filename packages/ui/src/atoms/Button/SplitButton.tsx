@@ -2,7 +2,7 @@
 // MenuTrigger, and the popover and dialog code behind it) stays out of the
 // first load, which only draws plain Buttons (the toasts).
 import { MenuTrigger, type PressEvent } from 'react-aria-components';
-import type { ReactNode, Ref } from 'react';
+import type { ReactNode } from 'react';
 import { Icon } from '../Icon/Icon.tsx';
 import { SplitFrame, SplitHalf } from './Button.tsx';
 import { strings } from './strings.ts';
@@ -20,8 +20,6 @@ export interface SplitButtonProps {
   readonly menu: ReactNode;
   readonly isDisabled?: boolean;
   readonly isPending?: boolean;
-  /** The main action's button, for a screen that hands focus back to it (after a dialog it opened has gone). */
-  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /** A primary action with a menu of its variants beside it: Save, and Save as new view. */
@@ -34,7 +32,6 @@ export function SplitButton({
   menu,
   isDisabled = false,
   isPending = false,
-  ref,
 }: SplitButtonProps) {
   return (
     <SplitFrame>
@@ -45,7 +42,6 @@ export function SplitButton({
         onPress={onPress}
         isDisabled={isDisabled}
         isPending={isPending}
-        {...(ref === undefined ? {} : { ref })}
       >
         {children}
       </SplitHalf>

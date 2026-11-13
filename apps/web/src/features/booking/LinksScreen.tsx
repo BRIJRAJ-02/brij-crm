@@ -195,6 +195,16 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           isLocked={!page.canChange}
         />
       ),
+      // A reader who can't change the page has no ⋯ (owner, 30 Oct 2026), so Share stands on the card by itself.
+      ...(!page.canChange
+        ? {
+            actions: (
+              <Tooltip content={strings.share}>
+                <Button variant="ghost" icon="share" label={strings.share} onPress={() => setSharing(page)} />
+              </Tooltip>
+            ),
+          }
+        : {}),
       ...(page.canChange
         ? {
             actions: (
@@ -209,7 +219,6 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                     if (key === 'share') setSharing(page);
                     if (key === 'duplicate') duplicate(page);
                     if (key === 'hours') open(page.id, 'hours');
-                    if (key === 'embed') open(page.id, 'share');
                     if (key === 'delete') removal.remove(page);
                   }}
                 >
@@ -229,9 +238,6 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                   )}
                   <MenuItem id="hours" icon="clock">
                     {strings.hours}
-                  </MenuItem>
-                  <MenuItem id="embed" icon="code">
-                    {strings.pageCard.embed}
                   </MenuItem>
                   {/* An editor changes a page but never deletes it (AC-1331). */}
                   {page.isEditor !== true && <MenuSeparator />}
@@ -273,12 +279,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       }}
       dialogs={
         <>
-          <BookingShareSheet
-            slug={slug}
-            page={sharing}
-            isOwnPage={sharing !== undefined && sharing.ownerName === undefined && sharing.scope !== 'workspace'}
-            onClose={() => setSharing(undefined)}
-          />
+          <BookingShareSheet slug={slug} page={sharing} onClose={() => setSharing(undefined)} />
           {
             // Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the question
             // says so in as many words, since getting these two the wrong way round loses people's pages.

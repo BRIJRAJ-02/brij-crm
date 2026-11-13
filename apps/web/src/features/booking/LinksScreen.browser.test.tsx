@@ -219,20 +219,47 @@ describe('sharing a booking page from its card (spec 0074, AC-7406)', () => {
     // Copy link stays on the card, one press (owner, 5 November 2026).
     await expect.element(page.getByRole('button', { name: /Copy link/ }).first()).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'More for Quick chat' }));
+    // Embed went: the sheet's Put it on your site is the one way to the snippet.
+    expect(page.getByRole('menuitem', { name: 'Embed' }).query()).toBeNull();
     await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
     const sheet = page.getByRole('dialog', { name: 'Share Quick chat' });
     await expect.element(sheet.getByRole('img', { name: 'QR code for Quick chat' })).toBeInTheDocument();
     await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    // Each way lands on its own card on the Share tab, named as the card is.
     await expect
-      .element(sheet.getByRole('link', { name: 'Offer specific times' }))
-      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share');
-    await expect.element(sheet.getByRole('link', { name: 'One-time link' })).toBeVisible();
+      .element(sheet.getByRole('link', { name: 'Share specific times' }))
+      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share#share-times');
+    await expect
+      .element(sheet.getByRole('link', { name: 'One-time link' }))
+      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share#one-time-links');
     await expect
       .element(sheet.getByRole('link', { name: 'Put it on your site' }))
-      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share');
-    // No handle, so the page isn't on a link page: nothing offers to add it.
-    expect(sheet.getByRole('link', { name: 'Add to link page' }).query()).toBeNull();
+      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share#embed');
+    // A live page: nothing at the foot.
+    expect(sheet.getByText(/Guests can’t book it/).query()).toBeNull();
     await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
     await expect.poll(() => openDialog('dialog')).toBeNull();
+  });
+
+  it('says a hidden page can’t be booked yet, at the sheet’s foot', async () => {
+    await renderLinks([{ ...pageOf('p1', 'Quick chat'), status: 'paused' }]);
+    await userEvent.click(page.getByRole('button', { name: 'More for Quick chat' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share Quick chat' });
+    await expect.element(sheet.getByText('Hidden. Guests can’t book it until it’s live.')).toBeVisible();
+  });
+
+  it('offers a reader Share on the card, with none of the ways that change the page', async () => {
+    await renderLinks([
+      { ...pageOf('p1', 'Bea’s chat'), canChange: false, ownerName: 'Bea', handle: 'bea' },
+    ]);
+    expect(page.getByRole('button', { name: 'More for Bea’s chat' }).query()).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share Bea’s chat' });
+    await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    expect(sheet.getByRole('link', { name: 'Share specific times' }).query()).toBeNull();
+    expect(sheet.getByRole('link', { name: 'One-time link' }).query()).toBeNull();
+    // A colleague's page under their handle: never the reader's link page to edit.
+    expect(sheet.getByRole('link', { name: 'Edit link page' }).query()).toBeNull();
   });
 });

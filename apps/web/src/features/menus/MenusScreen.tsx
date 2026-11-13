@@ -123,7 +123,7 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   const [isPublishing, setPublishing] = useState(false);
   // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
   usePreloadShareSheet();
-  // Publish, then the live split button that takes its place: where focus goes back when the publish dialog closes.
+  // Publish, where focus goes back when the publish dialog closes (the live split button once Publish has gone).
   const publishRef = useRef<HTMLButtonElement>(null);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
@@ -396,7 +396,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
     ) : null
   ) : (
     <SplitButton
-      ref={publishRef}
       variant={hasDrafts ? 'primary' : 'secondary'}
       isPending={isPublishing}
       onPress={() => {
@@ -773,7 +772,11 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                   // nothing and lands on the page: hand it to the split's main button instead (spec 0074).
                   focusLater(() => {
                     const active = document.activeElement;
-                    return active === null || active === document.body ? publishRef.current : undefined;
+                    if (active !== null && active !== document.body) return undefined;
+                    // Publish before a first publish; after it, the live split button's main half, found by its
+                    // menu half's name (SplitButton takes no ref: its halves sit in the first load's Button chunk).
+                    const menuHalf = document.querySelector(`button[aria-label="${strings.shareMenu}"]`);
+                    return publishRef.current ?? menuHalf?.parentElement?.querySelector('button');
                   });
                 }}
                 onFix={(fix) => {
