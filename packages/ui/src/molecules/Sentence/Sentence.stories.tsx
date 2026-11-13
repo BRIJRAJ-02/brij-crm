@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -51,6 +52,29 @@ export const Default: Story = {
     await expect(remove).toHaveFocus();
     await userEvent.tab({ shift: true });
     await expect(canvas.getByRole('textbox', { name: 'Days' })).toHaveFocus();
+  },
+};
+
+/** An inline Select inside the line opens its list from its words, and the choice reads in the line. */
+export const MenuOpen: Story = {
+  render: () => (
+    <Stage width="fill">
+      <Sentence lead="When">
+        <Select label="Object" variant="inline" items={objects} defaultValue="deal" />
+        <Select label="Event" variant="inline" items={events} defaultValue="stage" />
+      </Sentence>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const event = canvas.getByRole('button', { name: /Event/ });
+    await userEvent.click(event);
+    const list = await within(document.body).findByRole('listbox');
+    await settleAnimations();
+    await expect(list).toBeVisible();
+    await expect(event).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(within(list).getByRole('option', { name: 'is created' }));
+    await expect(event).toHaveTextContent('is created');
+    await expect(event).toHaveAttribute('aria-expanded', 'false');
   },
 };
 

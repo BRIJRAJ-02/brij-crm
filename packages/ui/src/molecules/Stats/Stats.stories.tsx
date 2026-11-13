@@ -123,3 +123,21 @@ export const Cards: Story = {
     </Stage>
   ),
 };
+
+/** Cards on a phone: the cards wrap to the width, and every figure still reads whole at the display size. */
+export const CardsNarrow: Story = {
+  args: Cards.args,
+  render: (args) => (
+    <Stage width="phone">
+      <Stats {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const group = canvas.getByRole('group', { name: 'Last 30 days' });
+    for (const figure of ['128', '64', '41', '64%', '1m 12s']) {
+      const value = canvas.getByText(figure);
+      await expect(value.scrollWidth).toBeLessThanOrEqual(value.clientWidth);
+    }
+    await expect(group.scrollWidth).toBeLessThanOrEqual(group.clientWidth);
+  },
+};
