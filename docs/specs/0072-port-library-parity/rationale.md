@@ -422,7 +422,7 @@ What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, meas
 
 Tiers 3b to 3d added to the signed in pages' lines (the shell look on every screen, +189 to +231 B of CSS; the week; the settings parts), cut the booking page's and the business page's, and took the public profile page and the captures pages under their `f81623f0c` figures, by the LinkListToolbar split. The menu, reserve and business lines are listed for the first time: they carry tiers 1 to 3a's shared parts (Button, Select, Field, Tag and the like), not tier 3's.
 
-**After the merge of phases 0, 1 and 2** (feat/port-12, 7f6364a69; measured the same way, against `f81623f0c`; "phase 1" is the line above, "phase 2" its own change measured from `f81623f0c` to feat/port-2's tip, "main" what phase 0 brought from main after `f81623f0c`, the wallet card):
+**After the merge of phases 0, 1 and 2** (feat/port-12, af91d9b75; measured the same way, against `f81623f0c`; "phase 1" is the line above, "phase 2" its own change measured from `f81623f0c` to feat/port-2's tip, "main" what phase 0 brought from main after `f81623f0c`, the wallet card):
 
 | Page | JavaScript | CSS | Over the base | Of which |
 |---|---|---|---|---|
@@ -432,15 +432,15 @@ Tiers 3b to 3d added to the signed in pages' lines (the shell look on every scre
 | Reserve page | 293,645 -> 294,396 B (+751) | 41,875 -> 42,999 B (+1,124) | **+1,875 B** | phase 1 +1,140, phase 2 +612, main +14 |
 | Business page | 253,748 -> 254,292 B (+544) | 29,207 -> 29,560 B (+353) | **+897 B** | phase 1 +180, phase 2 +618, main +17 |
 | Public profile | 270,196 -> 247,278 B (-22,918) | 35,796 -> 33,325 B (-2,471) | **-25,389 B**, under the base | phase 1 -25,903, phase 2 +406 |
-| Sign in | 415,059 -> 415,347 B (+288) | 26,735 -> 27,741 B (+1,006) | **+1,294 B** | phase 1 +999, main +147, phase 2 +23 |
-| Workspace shell (w.$slug) | 472,242 -> 472,956 B (+714) | 34,809 -> 36,302 B (+1,493) | **+2,207 B** | phase 1 +1,515, phase 2 +402, main +152, the entry's chunk map +76 |
-| Workspace index | 449,144 -> 449,815 B (+671) | 28,116 -> 29,305 B (+1,189) | **+1,860 B** | phase 1 +1,189, phase 2 +402, main +152 |
-| An object's records | 457,049 -> 457,727 B (+678) | 29,811 -> 31,041 B (+1,230) | **+1,908 B** | phase 1 +1,246, phase 2 +408, main +154 |
-| Bookings list (the week) | 680,334 -> 681,183 B (+849) | 51,956 -> 54,439 B (+2,483) | **+3,332 B** | phase 1 +2,526, phase 2 +460, main +158 |
-| Settings, an object's tab | 728,001 -> 728,936 B (+935) | 52,932 -> 55,734 B (+2,802) | **+3,737 B** | phase 1 +2,894, phase 2 +452, main +191 |
-| Link page editor | 764,592 -> 766,035 B (+1,443) | 70,798 -> 73,977 B (+3,179) | **+4,622 B** | phase 1 +3,330, phase 2 +883, main +192 |
-| Captures, links | 511,530 -> 498,091 B (-13,439) | 38,565 -> 37,717 B (-848) | **-14,287 B**, under the base | phase 1 -14,966, phase 2 +377, main +148 |
-| Captures, a form | 783,126 -> 781,501 B (-1,625) | 67,524 -> 68,022 B (+498) | **-1,127 B**, under the base | phase 1 -2,052, phase 2 +454, main +194 |
+| Sign in | 415,059 -> 415,336 B (+277) | 26,735 -> 27,741 B (+1,006) | **+1,283 B** | phase 1 +999, main +147, phase 2 +23 |
+| Workspace shell (w.$slug) | 472,242 -> 472,950 B (+708) | 34,809 -> 36,302 B (+1,493) | **+2,201 B** | phase 1 +1,515, phase 2 +402, main +152, content hashes (the entry's chunk map) the rest |
+| Workspace index | 449,144 -> 449,803 B (+659) | 28,116 -> 29,305 B (+1,189) | **+1,848 B** | phase 1 +1,189, phase 2 +402, main +152 |
+| An object's records | 457,049 -> 457,715 B (+666) | 29,811 -> 31,041 B (+1,230) | **+1,896 B** | phase 1 +1,246, phase 2 +408, main +154 |
+| Bookings list (the week) | 680,334 -> 681,172 B (+838) | 51,956 -> 54,439 B (+2,483) | **+3,321 B** | phase 1 +2,526, phase 2 +460, main +158 |
+| Settings, an object's tab | 728,001 -> 728,928 B (+927) | 52,932 -> 55,734 B (+2,802) | **+3,729 B** | phase 1 +2,894, phase 2 +452, main +191 |
+| Link page editor | 764,592 -> 766,022 B (+1,430) | 70,798 -> 73,977 B (+3,179) | **+4,609 B** | phase 1 +3,330, phase 2 +883, main +192 |
+| Captures, links | 511,530 -> 498,081 B (-13,449) | 38,565 -> 37,717 B (-848) | **-14,297 B**, under the base | phase 1 -14,966, phase 2 +377, main +148 |
+| Captures, a form | 783,126 -> 781,483 B (-1,643) | 67,524 -> 68,022 B (+498) | **-1,145 B**, under the base | phase 1 -2,052, phase 2 +454, main +194 |
 
 The merge adds nothing of its own beyond the two merge notes' CSS (FormParts +41 B on the hosted form, BookingFrame +20 B on the booking page) and content-hash noise; phase 2's figures are its own (spec 0073 records Modal's +375 B and Reveal's +232 B chunks, which every page that loads them now carries). The screen phases' rule below applies to these lines.
 
@@ -459,4 +459,4 @@ Things phase 1 can't do because they live in phase 2's files, for the merge to p
 - `apps/web/src/features/booking/page-picture.tsx`'s comment still says the picture draws "a month"; it draws a week since tier 3c (a screen phase's one line fix). BookingPagePicture reads the provider's language, so it must render inside UiProvider (every caller does).
 - `public-booking/booking.ts` now imports `LinkListToolbar` from `modules/LinkList/LinkListToolbar.tsx`; a merge that touches that file keeps the import, or the public profile page loads LinkList again (+3.4 kB CSS, +23 kB JavaScript).
 
-Applied in feat/port-12 (ec7f36019, 62c80306d, 7f6364a69): the card's `text-body-sm` steps map to the body size keeping their weights, and its `--focus-ring` to the brand; its `--shadow-focus` and `--form-focus` remaps stay, since Rating still reads `shadow-focus`; BookingReceipt remaps `--primary` to `--accent`; BookingFrame's `--focus-ring` and logo link as written above; NumberField and SearchField now pass `isTabular` and `aria-keyshortcuts` (they did not before the merge, so the hosted form's 64 B is Field's, phase 1's); page-picture's comment says a week; `booking.ts` keeps the import. Still owed: MenuList's own pill (phase 8) and GuestLook's legacy remaps.
+Applied in feat/port-12 (ec7f36019, 62c80306d, 7f6364a69, af91d9b75): the card's `text-body-sm` steps map to the public body size (16px) keeping their weights, and its `--focus-ring` to the brand; its `--shadow-focus` and `--form-focus` remaps stay, since Rating still reads `shadow-focus`; BookingReceipt remaps `--primary` to `--accent`; BookingFrame's `--focus-ring` and logo link as written above; NumberField and SearchField now pass `isTabular` and `aria-keyshortcuts` (they did not before the merge, so the hosted form's 64 B is Field's, phase 1's); page-picture's comment says a week; `booking.ts` keeps the import. Still owed: MenuList's own pill (phase 8) and GuestLook's legacy remaps.
