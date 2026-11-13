@@ -9,8 +9,8 @@
    line is a thick accent rule.
 
    The Timefix prototype's question cards (spec 0072): surface, a border-subtle hairline, radius-lg; the question
-   being edited (open) takes the accent edge and an accent-border ring (blue marks the selected question), in place
-   of a fill; the second line is text-body-sm; the keyboard's card takes the outline ring space-2 out, and a head
+   being edited (open) takes the accent edge, thick at its start (blue marks the selected question), in place of a
+   fill; the second line is text-body-sm; the keyboard's card takes the outline ring space-2 out, and a head
    or step name the ring just inside it (the card clips). */
 @layer components {
   .root {
@@ -150,10 +150,11 @@
     outline-offset: var(--space-2);
   }
 
-  /* The question being edited: the accent edge (3:1 and more on surface in both themes) with an accent-border ring. */
+  /* The question being edited: the accent edge (3:1 and more on surface in both themes), thick at its start. No halo
+     round it: a ring outside the card read as keyboard focus. */
   .row[data-open] {
     border-color: var(--accent);
-    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+    border-inline-start-width: var(--border-width-thick);
   }
 
   /* A page break (kind step, spec 0063; T20, 5 November 2026): an inline header on the ground, no card, so the list
@@ -308,10 +309,9 @@
     position: relative;
   }
 
-  /* A question a publish refused: the danger edge (with no accent ring, open or not), and "Needs a fix" by its title. */
+  /* A question a publish refused: the danger edge (open, its thick start too), and "Needs a fix" by its title. */
   .row[data-problem] {
     border-color: var(--danger);
-    box-shadow: none;
   }
 
   /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
@@ -638,7 +638,7 @@
       outline: var(--border-width-thick) solid Highlight;
     }
 
-    /* Open, where the accent ring is gone: the edge takes the selection colour. */
+    /* Open: the edge, thick start and all, takes the selection colour. */
     .row[data-open] {
       border-color: Highlight;
     }

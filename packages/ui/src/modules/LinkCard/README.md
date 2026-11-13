@@ -107,10 +107,10 @@ References (Mobbin, 20 October 2026):
 - private (badge);
 - pending (quieter, not a link, controls wait);
 - read only (switch disabled with why, no menu);
-- a long title (one line, then cut, as the prototype's cards do).
+- a long title (two lines, then cut; one line on the `page` variant, as the prototype's cards do).
 - pictured (a stage across the top, a status dot, a lead link, a quiet Copy link), and its loading shape.
 
-**Hover:** fine pointer only; the edge turns `border` and the card takes `shadow-xs`.
+**Hover:** fine pointer only; the edge turns `border-strong` and the card takes `shadow-xs`.
 
 **Focus:** focus on the title rings the whole card with the outline ring, which forced colours keep as it is.
 
@@ -126,7 +126,7 @@ Not in the artifact yet.
 
 ## Timefix prototype (spec 0072)
 
-Takes its look from the prototype's LinkList family, as its management cards draw it: the booking pages' BookingPageCard and the forms' FormCard (the prototype's LinkList folds LinkCard; its own LinkCard is a link page's featured card, which LinkPage draws). A `surface` card with a `border-subtle` hairline, `radius-lg` and no shadow at rest; under a fine pointer over its link (which covers the card) the edge turns `border` and the card takes `shadow-xs`, over `duration-quick` on `ease-out`; the keyboard's focus on the title rings the whole card with the outline ring (`border-width-focus` solid `focus-ring`, `space-2` out). The body is padded `space-12` `space-16` `space-8`, the title `text-body-strong` on one line, the facts `text-body-sm` in `text-secondary`, `space-2` under it; the foot is padded `space-8` `space-12` `space-12` `space-16`. A picture's stage is `surface-subtle`, `calc(3 * size-control-lg + space-4)` tall, over a `border-subtle` hairline; its sheet is `surface` with `shadow-xs` and `radius-md` top corners; an off card's picture fades to `opacity-disabled` and greys over `duration-fast` on `ease-smooth-out`. The `page` variant's foot sits on the card's surface as the prototype's card foot does, its facts `text-body-sm` in `text-secondary`. Nothing moves on press.
+Takes its look from the prototype's LinkList family, as its management cards draw it: the booking pages' BookingPageCard and the forms' FormCard (the prototype's LinkList folds LinkCard; its own LinkCard is a link page's featured card, which LinkPage draws). A `surface` card with a `border-subtle` hairline, `radius-lg` and no shadow at rest; under a fine pointer over its link (which covers the card) the edge turns `border-strong` and the card takes `shadow-xs`, over `duration-quick` on `ease-out`; the keyboard's focus on the title rings the whole card with the outline ring (`border-width-focus` solid `focus-ring`, `space-2` out). The body is padded `space-12` `space-16` `space-8`, the title `text-body-strong`, two lines at most (one on the `page` variant), the facts `text-body-sm` in `text-secondary`, `space-2` under it; the foot is padded `space-8` `space-12` `space-12` `space-16`. A picture's stage is `surface-subtle`, `calc(3 * size-control-lg + space-4)` tall, over a `border-subtle` hairline; its sheet is `surface` with `shadow-xs` and `radius-md` top corners; an off card's picture fades to `opacity-disabled` and greys over `duration-fast` on `ease-smooth-out`. The `page` variant's foot sits on the card's surface as the prototype's card foot does, its facts `text-body-sm` in `text-secondary`. Nothing moves on press.
 
 **Use it for** a booking page or a form on its list (Captures › Links and Forms, Bookings › Pages), alone or in LinkGrid. **Don't use it for** a link page's featured link (LinkPage) or a short list in a card (LinkList).
 
@@ -136,7 +136,8 @@ Takes its look from the prototype's LinkList family, as its management cards dra
 
 **Differences from the prototype**
 - The prototype's FormCard draws its picture inset in the card on `canvas` and its status as a Tag beside a rolling count; the library keeps one card for pages and forms, its stage across the top, the status as a StatusDot on the facts line and its counts as the caller words them (`factsEnd`). A rolling count (NumberRoll) is owed to the forms screen phase.
+- Under the pointer the edge turns `border-strong`, not the prototype's `border`: `border` against `border-subtle` was too slight a change to read as the card answering the pointer. The default card's title takes two lines before it is cut (the prototype's one line stays on the `page` variant): a booking page's or a form's name is often longer than half a card, and one line cut most of them.
 - No press ease to .99 (the house rule: nothing scales on press). No Copied text morph or icon swap on Copy link: that is CopyButton's.
 - Kept beyond the prototype: `toggle` with its hint, `badge`, `address`, `lead`, `factsEnd`, `isCopyQuiet`, pending and read only, the `page` variant and `LinkCardSkeleton`.
 - Rules it repeats from LinkList's module (decision 14, no reach across folders): the `surface` ground, the `border-subtle` hairline and `radius-lg`, and the outline ring; they leave with whichever export goes first.
-- Until spec 0072 the stage was tinted with the link's colour, the sheet lifted `space-4` on hover, the card had `shadow-xs` at rest and the title wrapped to two lines; the prototype draws none of these, so they went (about 120 B of CSS gzipped).
+- Until spec 0072 the stage was tinted with the link's colour, the sheet lifted `space-4` on hover, and the card had `shadow-xs` at rest; the prototype draws none of these, so they went (about 120 B of CSS gzipped).

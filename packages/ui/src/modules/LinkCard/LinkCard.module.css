@@ -22,9 +22,9 @@
    card's link, a middle dot before it; Copy link can be a quiet ghost icon.
 
    The Timefix prototype's look (spec 0072, its BookingPageCard and FormCard): a surface card, its hairline
-   border-subtle, radius-lg and no shadow at rest; a fine pointer over its link turns the edge border and adds
+   border-subtle, radius-lg and no shadow at rest; a fine pointer over its link turns the edge border-strong and adds
    shadow-xs; the keyboard's focus on the title rings the whole card (the outline ring, space-2 out). The title is
-   text-body-strong on one line, the facts text-body-sm in text-secondary. The stage is surface-subtle, the sheet
+   text-body-strong, two lines at most (one on the page variant), the facts text-body-sm in text-secondary. The stage is surface-subtle, the sheet
    surface with shadow-xs, still under the pointer; off, the picture fades to opacity-disabled in grey. The page
    variant's foot sits on the card's own surface, as the prototype's card foot does. */
 @layer components {
@@ -89,7 +89,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .root:has(.title[data-hovered]) {
-      border-color: var(--border);
+      border-color: var(--border-strong);
       box-shadow: var(--shadow-xs);
     }
   }
@@ -137,6 +137,12 @@
     overflow-wrap: anywhere;
     outline: none;
     -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* A page's card keeps its title to one line (the prototype's BookingPageCard); the plain card's takes two. */
+  .root[data-variant='page'] .title {
     -webkit-line-clamp: 1;
     line-clamp: 1;
   }

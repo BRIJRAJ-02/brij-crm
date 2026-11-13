@@ -1,5 +1,5 @@
 /* The List view's days (the Timefix prototype's strip, spec 0072): a grey bar of days that scrolls sideways, each its
-   weekday over its date, the chosen one a white pill. */
+   weekday over its date, the chosen one the page's accent (spec 0072 decision 2). */
 @layer components {
   .root {
     display: flex;
@@ -55,25 +55,25 @@
     border-radius: var(--radius-md);
     background: none;
     color: var(--text-secondary);
-    cursor: pointer;
     scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      scale var(--duration-quick) var(--ease-smooth-out);
+    /* The fill and the words fade, and a held day eases to --scale-press, at the hover pace. */
+    transition: var(--duration-quick) var(--ease-out);
+    transition-property: background-color, color, scale;
   }
 
-  /* Today or the month under the date (`today`), small, in the tile's own colour, so it holds on the chosen day too. */
+  /* The weekday, and today or the month under the date (`today`), small, in the tile's own colour, so they hold on the
+     chosen day too. */
+  .weekday,
   .month {
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  /* A day's place while the days load: the tile's own size, quiet, and no press. */
+  /* A day's place while the days load: the tile's own size, quiet, and no press (a span, so the base's arrow). */
   .day[data-loading] {
     block-size: calc(var(--size-row) * 1.5);
     background: var(--border);
-    cursor: default;
     animation: day-pulse var(--duration-pulse) var(--ease-in-out) infinite;
   }
 
@@ -93,14 +93,14 @@
     }
   }
 
-  /* The chosen day: a white pill, its date in ink, edged in control-border (3:1 and more on the bar in both themes;
-     the white pill alone is about 1.1:1). */
+  /* The chosen day: the page's accent, a strong selection as MonthTiles' chosen day is (spec 0072 decision 2). The
+     brand guard holds the accent at 3:1 and more on the bar; the app's is 5.3:1 light and 3.3:1 dark. On it the Best
+     dot and the focus ring are on-accent, since the ring's own colour is the accent's or near it. */
   .day[aria-pressed='true'] {
-    background: var(--surface);
-    box-shadow:
-      var(--shadow-xs),
-      0 0 0 var(--border-width-hairline) var(--control-border);
-    color: var(--text);
+    --focus-ring: var(--on-accent);
+
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .day[data-best]::after {
@@ -114,15 +114,14 @@
     content: '';
   }
 
+  .day[aria-pressed='true']::after {
+    background: var(--on-accent);
+  }
+
   /* The outline ring, just inside: the strip scrolls, so it clips. */
   .day:focus-visible {
     outline: var(--border-width-focus) solid var(--focus-ring);
     outline-offset: calc(-1 * var(--border-width-focus));
-  }
-
-  .weekday {
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
   }
 
   .date {
@@ -137,8 +136,9 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    /* surface, not surface-hover: that is about 1:1 on the bar. */
     .day:not([aria-pressed='true']):hover {
-      background: var(--surface-hover);
+      background: var(--surface);
       color: var(--text);
     }
   }

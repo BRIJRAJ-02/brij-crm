@@ -198,7 +198,7 @@ export const Opening: Story = {
 };
 
 /**
- * One question open (the selected card: the accent edge and ring, spec 0072), its editor under it, and its footer row:
+ * One question open (the selected card: the accent edge, thick at its start, spec 0072), its editor under it, and its footer row:
  * Required at the start, Duplicate and Delete at the end.
  */
 export const OneOpen: Story = {

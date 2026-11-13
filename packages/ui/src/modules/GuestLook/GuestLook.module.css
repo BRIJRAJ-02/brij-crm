@@ -53,6 +53,9 @@
     --primary-hover: var(--guest-ink);
     --on-primary: var(--guest-on-ink);
     --link: var(--guest-text);
+    /* The outline ring in the page's brand, as the ported parts' rings were in its accent before (spec 0072): the look's
+       accent is held at 3:1 and more on its ground (menuLookRoles), and the no-look ink is far more. */
+    --focus-ring: var(--guest-ink);
     /* The focus token's own shape in the ink: a field's edge and a button's ring carry the 3:1 mark. A solid ring here
        filled a primary's gap, so a focused Continue only grew. */
     --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))

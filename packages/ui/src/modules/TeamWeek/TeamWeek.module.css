@@ -118,7 +118,7 @@
   }
 
   /* One day's hours: a calm block the cell's width, WeekCalendar's grey tint (the prototype's internal time), no edge
-     at rest, each range on its own line, its tone from where the hours come. */
+     at rest but the tones' own, each range on its own line, its tone from where the hours come. */
   .cell {
     position: relative;
     display: flex;
@@ -139,9 +139,11 @@
     text-align: start;
   }
 
-  /* A change for this date only: the prototype's meeting blue, and the dot, with room for it so it never sits on a range. */
+  /* A change for this date only: the prototype's meeting blue, and the dot, with room for it so it never sits on a range.
+     Its edge is the legend mark's, the hue's dot colour (4.1:1 and more on the tint). */
   .cell[data-tone='override'] {
     padding-inline-end: var(--space-16);
+    border-color: var(--dot-blue);
     background: var(--tag-blue-bg);
     color: var(--tag-blue-text);
   }
@@ -155,8 +157,10 @@
     color: var(--text-secondary);
   }
 
-  /* Time off: the yellow tag's surface; days off in a row join into one band across the cells' gaps. */
+  /* Time off: the yellow tag's surface in the legend mark's yellow edge; days off in a row join into one band across
+     the cells' gaps, with no edge at a join. */
   .cell[data-tone='away'] {
+    border-color: var(--dot-yellow);
     background: var(--tag-yellow-bg);
     color: var(--tag-yellow-text);
   }
@@ -165,6 +169,7 @@
   .cell[data-join='before'],
   .cell[data-join='both'] {
     margin-inline-start: calc(-1 * var(--table-cell-inline, var(--space-8)));
+    border-inline-start-color: transparent;
     border-start-start-radius: 0;
     border-end-start-radius: 0;
   }
@@ -172,6 +177,7 @@
   .cell[data-join='after'],
   .cell[data-join='both'] {
     margin-inline-end: calc(-1 * var(--table-cell-inline, var(--space-8)));
+    border-inline-end-color: transparent;
     border-start-end-radius: 0;
     border-end-end-radius: 0;
   }

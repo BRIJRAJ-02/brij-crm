@@ -89,7 +89,7 @@ function BrandLook({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/** A look linked: the primary wears the page's accent (decision 16), and keyboard focus still takes the outline ring. */
+/** A look linked: the primary wears the page's accent (decision 16), and keyboard focus takes the outline ring in it. */
 export const BrandAccent: Story = {
   render: () => (
     <BrandLook>
@@ -109,5 +109,6 @@ export const BrandAccent: Story = {
     await userEvent.tab();
     await expect(button).toHaveFocus();
     await expect(button).toHaveAttribute('data-focus-visible');
+    await expect(getComputedStyle(button).outlineColor).toBe('rgb(15, 118, 110)');
   },
 };

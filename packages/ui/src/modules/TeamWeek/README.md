@@ -63,9 +63,9 @@ Not in the artifact.
 Folded into WeekCalendar in the prototype (its `meta.json` lists TeamWeek under WeekCalendar's `replaces`). It cannot render WeekCalendar without changing its props: it is a roster, a Table of people by days whose cells are each day's usual hours, not a time axis. So it keeps its own module (decision 14) and **takes its look from WeekCalendar** (spec 0072). The rules it repeats from WeekCalendar's prototype, which leave with this export when its last caller moves:
 
 - the day head: weekday (`text-label`, `text-secondary`) beside its date, `space-6` apart, both `accent-text` today (in forced colours, where the accent is gone, today's date is underlined);
-- an event's block: a tag tint at `radius-sm` with no edge (usual is the prototype's internal grey, this date only its meeting blue), `shadow-sm` under the pointer over `duration-quick` on `ease-out`, open outlined a hairline in its own text colour with `shadow-sm`, keyboard focus the outline ring just inside (Table's sideways scroller clips a ring outside a cell).
+- an event's block: a tag tint at `radius-sm` (usual is the prototype's internal grey with no edge, this date only its meeting blue in a `dot-blue` hairline edge, the legend mark's), `shadow-sm` under the pointer over `duration-quick` on `ease-out`, open outlined a hairline in its own text colour with `shadow-sm`, keyboard focus the outline ring just inside (Table's sideways scroller clips a ring outside a cell).
 
-Its own: the dashed Off slot, the yellow Away band joined across days, the "this date only" dot, the person cell, the totals and the legend. `tag-blue-border`, `tag-yellow-border`, `shadow-focus`, `size-chip` and `size-icon-xs` are no longer used.
+Its own: the dashed Off slot, the yellow Away band joined across days (in a `dot-yellow` hairline edge as its legend mark has, none at a join), the "this date only" dot, the person cell, the totals and the legend. `tag-blue-border`, `tag-yellow-border`, `shadow-focus`, `size-chip` and `size-icon-xs` are no longer used.
 
 **Use it for** the Roster's week of usual hours per person, and a person's own week. **Don't use it for** bookings on a time axis (WeekCalendar, TeamDay).
 

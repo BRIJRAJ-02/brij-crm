@@ -399,13 +399,14 @@
 
   /* Time another calendar holds (the prototype's busy and calendar event): hatched over the grid's surface, so a block
      it overlaps never shows through (busy can sit over closed time, or beside a booking in a lane). The member's own
-     calendar events keep a thin edge in their calendar's colour and its mark, in secondary words; busy time has a
-     hairline at its top. */
+     calendar events keep a thin edge in their calendar's colour and its mark, in secondary words; busy time a
+     border-strong hairline all round, so it never reads as open time. The hatch is in border: secondary words keep
+     5.1:1 and more on its lines in both themes. */
   .block:is([data-kind='event'], [data-kind='busy']) {
     background: var(--surface)
       repeating-linear-gradient(
         135deg,
-        var(--border-subtle) 0 var(--border-width-hairline),
+        var(--border) 0 var(--border-width-hairline),
         transparent var(--border-width-hairline) var(--space-6)
       );
     color: var(--text-secondary);
@@ -417,11 +418,13 @@
   }
 
   .block[data-kind='busy'] {
-    border-block-start: var(--border-width-hairline) solid var(--border);
+    border: var(--border-width-hairline) solid var(--border-strong);
   }
 
-  /* Time the member closed: the prototype's internal time, a grey tint; a hold draws a dashed edge. */
+  /* Time the member closed: the prototype's internal time, a grey tint in a hairline border edge, so it parts from the
+     grid; a hold draws a dashed edge. */
   .block:is([data-kind='blocked'], [data-kind='held']) {
+    border: var(--border-width-hairline) solid var(--border);
     background: var(--tag-gray-bg);
     color: var(--tag-gray-text);
   }
@@ -446,9 +449,9 @@
     text-decoration: line-through;
   }
 
-  /* A past day's bookings step back: a grey fill, their words secondary. */
+  /* A past day's bookings step back: their words secondary, on the booking's own tint (5.3:1 and more on every hue's,
+     both themes), so the colour still says which link it came from. */
   .column[data-past] .block[data-kind='booking']:not([data-open]) {
-    background: var(--surface-subtle);
     color: var(--text-secondary);
   }
 
