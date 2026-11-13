@@ -163,7 +163,6 @@
     max-inline-size: 100%;
   }
 
-  /* The code and its download. Narrow: a row, the tile then Download beside it at the tile's foot. */
   /* The code and its Download beside it on a phone; Download drops under the code where a narrow sheet can't hold
      both (the split Download PNG is wider than the old Download menu, spec 0074). */
   .code {

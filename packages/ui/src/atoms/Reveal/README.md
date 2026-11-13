@@ -16,15 +16,19 @@ The entrance (the default) is for public pages only, around a page's own words a
 
 ## RevealDrop
 
-`RevealDrop` (spec 0073, AC-7311, the prototype's DropIn; `RevealDrop.tsx` beside Reveal) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens, so a focus ring inside it is never cut once it is in; under reduced motion it only fades in, with no height opening and no rise (reduced motion keeps fades). `animate` defaults to `true` as the prototype's DropIn does, so pass `animate={false}` for every row a list draws on load. Why one part: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one part lets them share it as they are ported. Why a sibling and not Reveal's `variant="drop"` (as first built): the variant put its code and keyframes (232 B of JavaScript, 160 B of CSS gzipped) on every public page that draws Reveal's entrance, the guest menu and the link page among them (the port merge, 13 November 2026). Story: `Drop`.
+`RevealDrop` (spec 0073, AC-7311, the prototype's DropIn; `RevealDrop.tsx` beside Reveal) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens (until its animation ends or is cancelled, as when its list is hidden mid entrance), so a focus ring inside it is never cut once it is in; under reduced motion it only fades in, with no height opening and no rise (reduced motion keeps fades). `animate` defaults to `true` as the prototype's DropIn does, so pass `animate={false}` for every row a list draws on load. Why one part: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one part lets them share it as they are ported. Why a sibling and not Reveal's `variant="drop"` (as first built): the variant put its code and keyframes (232 B of JavaScript, 160 B of CSS gzipped) on every public page that draws Reveal's entrance, the guest menu and the link page among them (the port merge, 13 November 2026). Story: `Drop`.
 
 ```tsx
 {rows.map((row) => (
-  <RevealDrop key={row.id} animate={row.isNew}>
-    <TaskRow task={row} />
-  </RevealDrop>
+  <li key={row.id}>
+    <RevealDrop animate={row.isNew}>
+      <TaskRow task={row} />
+    </RevealDrop>
+  </li>
 ))}
 ```
+
+In a list the wrapper goes inside the `<li>`, never between `<ul>` and `<li>`.
 
 ## Differences from the artifact
 

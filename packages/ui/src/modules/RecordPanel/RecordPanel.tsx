@@ -230,12 +230,13 @@ export function RecordPanel({
           {/* The keys, quietly, at the foot (AC-7412): J and K where there is a list to step through, Esc always. */}
           <p className={styles.hint}>
             {hasSteps && (
-              <>
+              <span className={styles.key}>
                 <Kbd>{strings.keyNext}</Kbd> <Kbd>{strings.keyPrevious}</Kbd> {strings.hintStep}
-                {strings.hintBetween}
-              </>
+              </span>
             )}
-            <Kbd>{strings.keyClose}</Kbd> {strings.hintClose}
+            <span className={styles.key}>
+              <Kbd>{strings.keyClose}</Kbd> {strings.hintClose}
+            </span>
           </p>
         </div>
       )}

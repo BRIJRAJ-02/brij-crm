@@ -63,34 +63,33 @@ export function GuardedModal({ isDirty, isOpen, onOpenChange, ...props }: Guarde
   return (
     <>
       <Modal {...props} {...(shownOpen === undefined ? {} : { isOpen: shownOpen })} onOpenChange={answerOpenChange} />
-      {isDirty && (
-        // Its own dialog, not the ModalTrigger's: the trigger's DialogContext would hand it the main dialog's id.
-        <DialogContext value={null}>
-          <Modal
-            title={strings.discardTitle}
-            variant="confirm"
-            tone="danger"
-            isOpen={discard === 'asking' && !isClosed}
-            onOpenChange={(open) => {
-              if (!open) setDiscard('idle');
-            }}
-            actions={
-              <>
-                <Button slot="close">{strings.keepEditing}</Button>
-                <Button
-                  variant="danger-solid"
-                  onPress={() => {
-                    setDiscard('idle');
-                    changeOpen(false);
-                  }}
-                >
-                  {strings.discardChanges}
-                </Button>
-              </>
-            }
-          />
-        </DialogContext>
-      )}
+      {/* Its own dialog, not the ModalTrigger's: the trigger's DialogContext would hand it the main dialog's id. Always
+          mounted, so a confirm whose changes went meanwhile (an autosave landing) leaves over its exit, not at once. */}
+      <DialogContext value={null}>
+        <Modal
+          title={strings.discardTitle}
+          variant="confirm"
+          tone="danger"
+          isOpen={discard === 'asking' && !isClosed && isDirty}
+          onOpenChange={(open) => {
+            if (!open) setDiscard('idle');
+          }}
+          actions={
+            <>
+              <Button slot="close">{strings.keepEditing}</Button>
+              <Button
+                variant="danger-solid"
+                onPress={() => {
+                  setDiscard('idle');
+                  changeOpen(false);
+                }}
+              >
+                {strings.discardChanges}
+              </Button>
+            </>
+          }
+        />
+      </DialogContext>
     </>
   );
 }

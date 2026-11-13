@@ -44,6 +44,12 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* Focus lands here only from code, after Publish or Discard draft leaves (spec 0074), as a page's heading takes it:
+     no ring, the line itself says what happened. */
+  .status:focus {
+    outline: none;
+  }
+
   .root:is([data-said='live'], [data-said='paused']) .status {
     color: var(--text-secondary);
     font: var(--text-body);

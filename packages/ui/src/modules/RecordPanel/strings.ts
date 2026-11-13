@@ -11,12 +11,11 @@ export const strings = {
   failed: 'This record didn’t load',
   noAccess: 'You can’t see this record',
   noAccessBody: 'Ask a workspace admin for access.',
-  /** The keys at the panel's foot (spec 0074, AC-7412): "J K next and previous · Esc close". */
+  /** The keys at the panel's foot (spec 0074, AC-7412): J K "next and previous", ESC "close". */
   keyNext: 'J',
   keyPrevious: 'K',
   keyClose: 'ESC',
   hintStep: 'next and previous',
-  hintBetween: ' · ',
   hintClose: 'close',
   /** Said as a step lands: "Globex, Companies · 2 of 3". */
   stepped: (name: string, place: string) => `${name}, ${place}`,

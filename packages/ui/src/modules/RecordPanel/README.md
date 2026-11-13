@@ -67,5 +67,5 @@ Takes its look from the prototype's RecordPanel body: the record's content padde
 ## Place, keys and box (spec 0074, batch 5)
 
 - `place` says where the record is in the list beside it, under its name ("People · 3 of 120", AC-7412), as the Panel's subtitle; left out where the panel wasn't opened from a list.
-- J and K step as ↓ and ↑ do (`lib/step-keys.ts`), never from a field, a listbox or a grid; the keys sit in one quiet line at the panel's foot ("J K next and previous · Esc close", J and K only where there is a list to step through).
+- J and K step as ↓ and ↑ do (`lib/step-keys.ts`), never from a field, a listbox or a grid; the keys sit in one quiet line at the panel's foot (J K "next and previous", ESC "close", J and K only where there is a list to step through), drawn as the command palette's foot hint is: caption type, each key beside its words, the pairs `space-16` apart.
 - The floating Panel sits over the content area at its full height, below the top bar and `space-8` in from the other edges, never pushing the table or board; `size-panel` wide (the record panel no longer asks for `lg`); it enters over `duration-slow` and leaves over `duration-quick` (the house's exit) on `ease-smooth-out`, and reduced motion keeps only the fade (AC-7411).
