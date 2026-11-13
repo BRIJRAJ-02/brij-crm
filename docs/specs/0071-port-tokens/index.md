@@ -298,5 +298,5 @@ Tracer Bullet: the thinnest end to end thread is "source → generator → one a
 
 - [ ] Publish the design system artifact from `design/timefix-design-system` after step 2, from the account that owns it (this session's account cannot open it), and set `source.json` `version`.
 - [ ] `/sync`: AGENTS.md (fonts line, the token source), `packages/tokens/AGENTS.md` (the porting rule, AC-17), the `crm-design-system` skill (scale rule, new names, `scale-press` gone).
-- [ ] Start `docs/scope/port-ledger.md` from `parity-gaps.md` (handover) before phase 1.
+- [x] Start `docs/scope/port-ledger.md` from `parity-gaps.md` (handover) before phase 1: 107 lines, each with its phase.
 - [ ] Each phase deletes the `legacy.json` entries it retires and retunes the container queries of what it ports.
