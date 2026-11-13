@@ -82,7 +82,10 @@
      the start (up to the last slash) gives way to an ellipsis, the end (the page's own name) always shows. */
   .address {
     display: flex;
-    flex: 1 1 var(--size-column);
+    /* A narrow column to start from, so Copy link and Share keep the address's line in a dialog at the app scale:
+       spec 0072's pill buttons are wider, and from size-column Share wrapped under it. The address grows into the
+       rest. */
+    flex: 1 1 var(--size-column-narrow);
     align-items: center;
     box-sizing: border-box;
     min-inline-size: 0;
