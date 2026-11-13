@@ -675,7 +675,7 @@ function barOf(element: HTMLElement): HTMLElement {
 
 /**
  * The end of the view bar (the owner, 22 October 2026): one secondary View settings button, then a compact Table
- * and Board switch, both size-control tall on the switcher's line. Add attribute lives under View settings and in
+ * and Board switch, both size-control-sm tall on the switcher's line. Add attribute lives under View settings and in
  * the table's "+" column; the view's actions live in the switcher's menu.
  */
 export const ViewBarEndDefault: Story = {

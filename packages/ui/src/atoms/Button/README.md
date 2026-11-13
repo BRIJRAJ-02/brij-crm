@@ -24,7 +24,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - **One primary per surface.** `primary` goes on the action that commits: Save, Add to list, Select record. Pair it with its shortcut (`kbd="⌘↵"`); in a Modal's footer a submit gets it by default.
 - `secondary` (the default) for view controls (View settings, Import / Export) and Cancel (in a Modal's footer it shows `ESC` by itself).
 - `danger` for a control that starts a destructive action, such as Delete in the bulk bar or Archive in settings: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
-- `danger-solid` for the final commit that destroys, such as Delete or Archive in a confirm dialog: a `danger-fill` with an `on-danger` label (5.3:1 light, 5.4:1 dark). One per dialog, in place of the primary.
+- `danger-solid` for the final commit that destroys, such as Delete or Archive in a confirm dialog: a `danger` with an `on-danger` label (5.3:1 light, 5.4:1 dark). One per dialog, in place of the primary.
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
 - `value` for a value that opens something, in a list of values (a member's Scheduling access in their details, 6 November 2026): its text with a chevron, no box, its first letter on the plain values' edge, as Select's inline variant draws. Why not `ghost`: its padding stood the value 8px right of every other one in the list.
 - `link` for a quiet text action at label size with no box, the control's height kept for its hit area: a card footer's Sign out or Back (first run, spec 0036). A variant rather than `ghost`, whose body sized label read as a large text button beside the footer's small "Signed in as" line (owner feedback, 21 October 2026).
@@ -58,7 +58,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
 - **Pressed**: no shrink (the owner, 20 October 2026); a press reads through the hover and active colours. `scale-press` is 1, so nothing in the library scales on press.
-- **Focus**: from the keyboard only, a 1px `accent-line` border (3:1 on every surface) plus the faint `shadow-focus` halo. Primary and danger keep their edge (blue, red), so their 1px `accent-line` ring sits just outside, past a 1px gap. In forced colours, a 2px `Highlight` outline.
+- **Focus**: from the keyboard only, a 1px `accent-text` border (3:1 on every surface) plus the faint `shadow-focus` halo. Primary and danger keep their edge (blue, red), so their 1px `accent-text` ring sits just outside, past a 1px gap. In forced colours, a 2px `Highlight` outline.
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving"), unless the button must hold its width (Captures' New): then keep the label and give the button a `label`, and React Aria adds the spinner's "In progress" to its name ("New form In progress"). Without a `label`, whether "In progress" joins the name depends on the browser, so a kept label alone wouldn't reliably say anything changed.
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
@@ -66,7 +66,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 
 ## Press
 
-Held, a button eases to `--scale-press`. The token is 1, so nothing in the app shrinks (20 October 2026). A public booking page sets it to 0.97 on its own root (1 November 2026), so its buttons answer a press there and only there. Reduced motion keeps every button still. The press eases on `--ease-press` when a page sets one, else `ease-out`: the guest menu sets checklabs' overshoot (`cubic-bezier(0.34, 1.56, 0.64, 1)`, written by the menu's look stylesheet, since CSS here takes curves only from tokens), so its +, steppers and Add settle with a little spring (5 November 2026).
+Held, a button eases to `--scale-press`. The token is 1, so nothing in the app shrinks (20 October 2026). A public booking page sets it to 0.97 on its own root (1 November 2026), so its buttons answer a press there and only there. Reduced motion keeps every button still. The press eases on `--ease-press` when a page sets one, else `ease-smooth-out`: the guest menu sets checklabs' overshoot (`cubic-bezier(0.34, 1.56, 0.64, 1)`, written by the menu's look stylesheet, since CSS here takes curves only from tokens), so its +, steppers and Add settle with a little spring (5 November 2026).
 
 ## Keyboard
 

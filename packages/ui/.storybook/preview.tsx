@@ -24,17 +24,22 @@ type ThemeGlobal = 'light' | 'dark' | 'system';
  */
 const PUBLIC_TITLES = [
   'Public form/',
+  'Modules/BookingChanges',
   'Modules/BookingChat',
   'Modules/BookingDetails',
   'Modules/BookingFrame',
   'Modules/BookingReceipt',
+  'Modules/BusinessPage',
   'Modules/DayStrip',
   'Modules/GuestLook',
   'Modules/ItemSheet',
   'Modules/LinkPage',
+  'Modules/MatchCalendar',
   'Modules/MenuList',
   'Modules/MonthTiles',
+  'Modules/PartyBand',
   'Modules/SlotList',
+  'Modules/VisitorBar',
   'Molecules/SocialLinks',
   'Molecules/Stepper',
 ];

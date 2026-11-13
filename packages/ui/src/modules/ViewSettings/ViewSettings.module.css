@@ -1,4 +1,4 @@
-/* ViewSettings: a label-strong title with the shown count, an optional
+/* ViewSettings: a label title with the shown count, an optional
    search, then size-nav-item rows: the drag handle, the type's icon, the
    name and the switch at the end ("Always shown" on the locked row). A dragged row fades; the drop target takes
    the inset ring. */

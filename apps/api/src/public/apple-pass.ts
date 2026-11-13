@@ -3,7 +3,17 @@
 // public routes may reach; this file is the one place the API turns a person into pass bytes.
 import type { Hue, ProfileContactCard } from '@crm/contracts';
 import { walletPageUrl } from '@crm/contracts/brand';
-import { brandImages, passImages, writePass } from '@crm/core/public';
+import {
+  brandBackground,
+  brandImages,
+  brandLogoImages,
+  brandLook,
+  brandTextIsWhite,
+  passImages,
+  writePass,
+  type PassBrand,
+  type PassImages,
+} from '@crm/core/public';
 import type { ApplePassMaker, WalletSettings } from '../wallet/wallet.ts';
 
 /**
@@ -15,6 +25,23 @@ import type { ApplePassMaker, WalletSettings } from '../wallet/wallet.ts';
  * 27 October 2026: the gradient in their hue, white type, the wordmark small, the role beside the page), and this
  * only hands it the person, their colour and Apple's keys.
  */
+/**
+ * What a partner's own card changes (13 November 2026): the ground and the type's colours when it has a colour, the
+ * logo when it has one. Whatever it leaves out stays Timefix's, in the wordmark that reads on the card's text.
+ */
+function brandedParts(
+  brand: PassBrand,
+  hue: Hue,
+): { readonly images: PassImages; readonly look?: ReturnType<typeof brandLook> } {
+  const { colour, logo } = brand;
+  const timefix =
+    colour === undefined ? passImages(hue) : { ...brandImages(brandTextIsWhite(colour)), ...brandBackground(colour) };
+  return {
+    images: { ...timefix, ...(logo === undefined ? {} : brandLogoImages(logo)) },
+    ...(colour === undefined ? {} : { look: brandLook(colour) }),
+  };
+}
+
 export function createApplePass(settings: WalletSettings): ApplePassMaker | undefined {
   const config = settings.apple;
   if (config === undefined) return undefined;
@@ -39,6 +66,9 @@ export function createApplePass(settings: WalletSettings): ApplePassMaker | unde
     // The card is the brand's orange whatever colour their page is (the owner, 27 October 2026: keep that orange
     // gradient as is). The page's hue dresses the page, not the thing people hand to each other.
     const hue: Hue = 'orange';
+    // A partner's own card, when their workspace is connected to one that has it; the pass is then issued in the
+    // partner's name. Apple's certificate stays ours either way: it signs the pass, it does not name it.
+    const branded = person.brand === undefined ? undefined : brandedParts(person.brand, hue);
     return writePass(
       {
         card,
@@ -48,8 +78,9 @@ export function createApplePass(settings: WalletSettings): ApplePassMaker | unde
         codeUrl: `${walletPageUrl(page, 'apple_wallet')}${person.shared === true ? '&utm_content=shared' : ''}`,
         theme: { hue },
         serialNumber: person.handle,
-        identity,
-        images: { ...brandImages(true), ...passImages(hue) },
+        identity: person.brand === undefined ? identity : { ...identity, organizationName: person.brand.name },
+        images: branded?.images ?? { ...brandImages(true), ...passImages(hue) },
+        ...(branded?.look === undefined ? {} : { look: branded.look }),
       },
       keys,
       new Date(),

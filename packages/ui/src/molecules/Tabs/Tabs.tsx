@@ -85,7 +85,7 @@ export interface TabsProps {
   readonly end?: ReactNode;
   /**
    * `strip` (the default): 40px tabs on a hairline, inside a page (a record's tabs). `bar`: the tabs as a page's
-   * second bar, the row People's ViewBar takes under the TopBar: size-bar tall on the surface, the same padding
+   * second bar, the row People's ViewBar takes under the TopBar: size-topbar tall on the surface, the same padding
    * and hairline, kept in place while the page under it scrolls (Captures, Bookings). `feature`: a product's areas on
    * its own home page (the marketing site's first fold), equal columns with an icon tile, a label and a
    * `description` each, the chosen one bright under a line that slides along their top. `pills`: a guest page's

@@ -6,6 +6,7 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { ThemeSwitch } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { fakeThemeController } from '../../workbench/theme.ts';
@@ -694,6 +695,10 @@ export const KeptFold: Story = {
     await expect(canvas.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
     await userEvent.click(label);
     await expect(label).toHaveAttribute('aria-expanded', 'false');
+    // The shot shows the folded section at rest: the pointer leaves the label and the fold and hover finish, so it
+    // never catches either part way (it differed by 143 pixels between two renders of the same code).
+    await userEvent.unhover(label);
+    await settleAnimations();
   },
 };
 

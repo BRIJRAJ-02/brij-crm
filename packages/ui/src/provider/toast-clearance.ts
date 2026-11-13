@@ -1,7 +1,7 @@
-// Keeps toasts off the buttons people press next. A Modal's or a Panel's footer (Save, Cancel) claims its place;
-// ToastRegion reads the claims and, when its toasts would sit over one, rises above it. A file of its own, apart from
-// context.ts, so a page that draws no footer loads none of it, and the hosted form (UiProviderBase, no region) gets
-// no store at all: its footers claim nothing.
+// Keeps toasts off the buttons people press next. A Modal's or a Panel's footer (Save, Cancel), and a FloatingBar
+// while it is up (a bulk Delete), claims its place; ToastRegion reads the claims and, when its toasts would sit over
+// one, rises above it. A file of its own, apart from context.ts, so a page that draws no footer loads none of it, and
+// the hosted form (UiProviderBase, no region) gets no store at all: its footers claim nothing.
 import { createContext, useCallback, useContext } from 'react';
 
 /** A box in the window's pixels, as laid out: transforms (a drawer sliding in, a sheet rising) are left out. */
@@ -51,8 +51,8 @@ export function createToastClearance(): ToastClearance {
 export const ToastClearanceContext = createContext<ToastClearance | undefined>(undefined);
 
 /**
- * A ref for an overlay's footer: while it is mounted, toasts keep off it. Modal's and Panel's footers use it; a
- * screen never does.
+ * A ref for an overlay's footer: while it is mounted, toasts keep off it. Modal's and Panel's footers and FloatingBar
+ * use it; a screen never does.
  */
 export function useToastClearance(): (footer: HTMLElement | null) => (() => void) | undefined {
   const clearance = useContext(ToastClearanceContext);

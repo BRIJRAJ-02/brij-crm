@@ -25,10 +25,11 @@ New (20 October 2026). The owner asked for the save bar to be the same family as
 - Content too long for one line wraps onto a second (a save that failed, with its reason, on a phone).
 - On a narrow view (under 480px) it spans the width, inside the gutter.
 - `frameProps` puts handlers on the whole bar (BulkActionBar's Esc).
+- Toasts keep off it by themselves: while the bar is up it tells the toast region where it is, and a toast that would land on it (a bulk Delete's, at the bottom right) rises to stand `space-8` above it, as it does for a Modal's or a Panel's footer. A bar on its way out claims nothing. Why: a toast sat over the bulk bar's Delete and took its next click (the trash flow, 13 November 2026). Story `WithToast`.
 
 ## States
 
-Shown, leaving, at once (opened from the keyboard); inline and in a footer (stories), floating (BulkActionBar's and DataGrid's stories); wide and narrow (SaveBar's narrow story).
+Shown, leaving, at once (opened from the keyboard); inline and in a footer (stories), floating (BulkActionBar's and DataGrid's stories); wide and narrow (SaveBar's narrow story); with a toast raised from it (`WithToast`).
 
 ## Keyboard
 

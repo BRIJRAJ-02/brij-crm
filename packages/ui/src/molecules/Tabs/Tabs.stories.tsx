@@ -184,7 +184,7 @@ export const Overflowing: Story = {
 };
 
 /**
- * As a page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface,
+ * As a page's second bar (Captures, Bookings): the row People's ViewBar takes, size-topbar tall on the surface,
  * the tab's tools at its end, the underline on its hairline.
  */
 export const Bar: Story = {

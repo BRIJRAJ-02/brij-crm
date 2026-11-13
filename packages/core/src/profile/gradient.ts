@@ -75,3 +75,14 @@ export function brightestOf(colour: Channels): Channels {
   }
   return brightest;
 }
+
+/**
+ * A ground drawn row by row, as a PNG: the card of a brand's own colour (13 November 2026), where the poured
+ * gradient above would turn that colour through its neighbours. `rowColour` is asked for each row's colour by how
+ * far down the card it is, 0 at the top to 1 at the foot.
+ */
+export function rowsPng(rowColour: (along: number) => Channels, scale: number): Uint8Array {
+  const width = WIDTH * scale;
+  const height = HEIGHT * scale;
+  return writePng(width, height, (_x, y) => rowColour(y / (height - 1)));
+}

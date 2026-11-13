@@ -4,7 +4,7 @@ The head of a public page's editor (spec 0068, AC-6811, AC-6812): how many chang
 
 ## Why a new part
 
-SaveBar is the floating bar for unsaved edits on one screen: it leaves once they are saved. A published page has a second state that outlives the screen: a saved draft guests don't see, its changes, and its versions. Putting that into SaveBar would make one bar mean two things (unsaved here, unpublished for guests), so it is its own strip, built from the library's Icon, Button, Menu and Modal. It is dashboard chrome, so it keeps today's design system exactly: a status change is a plain icon and words that crossfade (`duration-popover`), never the public pages' NumberPop or SuccessCheck.
+SaveBar is the floating bar for unsaved edits on one screen: it leaves once they are saved. A published page has a second state that outlives the screen: a saved draft guests don't see, its changes, and its versions. Putting that into SaveBar would make one bar mean two things (unsaved here, unpublished for guests), so it is its own strip, built from the library's Icon, Button, Menu and Modal. It is dashboard chrome, so it keeps today's design system exactly: a status change is a plain icon and words that crossfade (`duration-fast`), never the public pages' NumberPop or SuccessCheck.
 
 ## States
 

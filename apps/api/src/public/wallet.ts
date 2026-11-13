@@ -17,13 +17,14 @@
 // every pass is signed and nobody is signed in to key on: the client address, and the handle.
 import { createHash } from 'node:crypto';
 import { errorStatus, HANDLE_PATTERN, type ProfileContactCard } from '@crm/contracts';
-import { enterContactCard, findHandleOwner, readContactCard } from '@crm/core/public';
-import type { Database } from '@crm/db';
+import { enterContactCard, findHandleOwner, readContactCard, readPassBrand, type PassBrand } from '@crm/core/public';
+import type { Database, IdentityStore } from '@crm/db';
 import type { Geo } from '../edge.ts';
 import type { Hono } from 'hono';
 import type { Auth } from '../auth/auth.ts';
+import { errorFields, log } from '../log.ts';
 import { PKPASS_TYPE } from '../wallet/apple.ts';
-import { APPLE_PASS_PATH, type ApplePassMaker } from '../wallet/wallet.ts';
+import { APPLE_PASS_PATH, PUBLIC_APPLE_PASS_PATH, type ApplePassMaker } from '../wallet/wallet.ts';
 import { createMemoryLimiter, type LimitRule } from './limits.ts';
 
 /** A `{ code, message }` answer at the status the error map gives the code, as every route here answers. */
@@ -63,7 +64,22 @@ async function cardOf(db: Database, handle: string, viewer?: string): Promise<Pr
   }
 }
 
-export const PUBLIC_PASS_PATH = '/api/public/handles/:handle/pass.pkpass';
+/**
+ * The partner's card this person's pass wears (13 November 2026), or undefined for Timefix's. A read that fails is
+ * no reason to refuse a pass: it comes out as Timefix's own, so this never throws.
+ */
+async function brandOf(deps: WalletPassDeps, workspaceId: string): Promise<PassBrand | undefined> {
+  if (deps.partners === undefined) return undefined;
+  try {
+    return await readPassBrand({ db: deps.db, partners: deps.partners }, { workspaceId });
+  } catch (error) {
+    // Said, so a registry that can't be read doesn't pass for "no partner has a card".
+    log.warn('wallet.pass.brand.unread', errorFields(error));
+    return undefined;
+  }
+}
+
+export const PUBLIC_PASS_PATH = PUBLIC_APPLE_PASS_PATH;
 
 /** What this route reads off the request, which is what the app already sets on every one. */
 interface WalletVariables {
@@ -79,6 +95,8 @@ export interface WalletPassDeps {
   readonly auth: Auth;
   /** Undefined where this environment has no Apple certificate: then the address simply isn't there. */
   readonly pass: ApplePassMaker | undefined;
+  /** The partner registry's Wallet cards; without it every pass is Timefix's own. */
+  readonly partners?: Pick<IdentityStore, 'partnerWalletCard'>;
 }
 
 /** The client address as a short hash, as every other public limit keys on it: no raw address is kept. */
@@ -125,7 +143,9 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     }
     if (owner.userId !== session.user.id) return nothing();
     const card = await cardOf(deps.db, owner.handle, owner.userId);
+    const brand = await brandOf(deps, owner.workspaceId);
     const bytes = make({
+      ...(brand === undefined ? {} : { brand }),
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),
@@ -157,7 +177,9 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     // The page's own budget, on the handle the door answered: an old address of theirs shares this one.
     if (!limiter(`wallet-pass-handle:${owner.handle}`, PUBLIC_PASS_LIMITS.perHandle).allowed) return tooMany();
     const card = await cardOf(deps.db, owner.handle);
+    const brand = await brandOf(deps, owner.workspaceId);
     const bytes = make({
+      ...(brand === undefined ? {} : { brand }),
       handle: owner.handle,
       name: owner.name.trim() === '' ? owner.handle : owner.name,
       ...(owner.bio === '' ? {} : { bio: owner.bio }),

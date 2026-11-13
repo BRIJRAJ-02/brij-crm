@@ -24,7 +24,7 @@ New. The artifact draws each menu's surface itself and animates it in only. One 
 
 ## States
 
-Opening grows it from its trigger in `duration-popover`; closing fades it in `duration-exit`. Opened from the keyboard it appears and leaves at once. Reduced motion keeps the fade and drops the growth.
+Opening grows it from its trigger in `duration-fast`; closing fades it in `duration-quick`. Opened from the keyboard it appears and leaves at once. Reduced motion keeps the fade and drops the growth.
 
 ## Keyboard
 

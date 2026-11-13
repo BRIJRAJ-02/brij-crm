@@ -273,6 +273,12 @@
     "value": "640px",
     "usage": "The widest a table column resizes to.",
     "retire": "Phase 4 (shell and navigation), or the phase that ports its screen."
+   },
+   {
+    "name": "size-bar",
+    "value": "46px",
+    "usage": "The guest pages' own bars: the guest menu's sticky header and category pills, the business page's bar and gallery, the link page gallery and the hosted form's steps. Spec 0071 renamed size-bar to size-topbar, the app's top bar (56px in the prototype), which would have grown every guest bar by 10px.",
+    "retire": "Phases 6 to 8, as each guest page is ported to the prototype's own sizes."
    }
   ]
  },

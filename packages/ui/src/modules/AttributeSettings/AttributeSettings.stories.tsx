@@ -946,7 +946,9 @@ export const ChangeType: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Change type'));
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
-    await expect(within(dialog).getByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
+    // The success line is a status Callout: its words go in a frame after it mounts, so it announces them. Wait for
+    // them; read at once, it is empty whenever no frame has passed since the step drew (CI's WebKit, now and then).
+    await expect(await within(dialog).findByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
     await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeEnabled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Edit attribute'));

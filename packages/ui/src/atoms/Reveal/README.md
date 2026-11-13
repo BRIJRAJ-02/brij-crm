@@ -16,4 +16,4 @@ On public pages only, around a page's own words as they first draw (LinkPage's n
 
 ## Differences from the artifact
 
-Not in the artifact yet; it goes with the next `pnpm ui:artifact`. The stagger (a quarter of `duration-press`), the pace (`duration-modal`) and the blur (`space-2`) come from tokens; transitions.dev's 500ms reveal is not on the token scale, so it takes the longest UI motion token.
+Not in the artifact yet; it goes with the next `pnpm ui:artifact`. The stagger (a quarter of `duration-quick`), the pace (`duration-fast`) and the blur (`space-2`) come from tokens; transitions.dev's 500ms reveal is not on the token scale, so it takes the longest UI motion token.

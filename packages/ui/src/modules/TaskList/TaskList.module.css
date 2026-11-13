@@ -101,7 +101,7 @@
     min-block-size: 0;
   }
 
-  /* A composer row: the quick add and its buttons at one height (a size-input
+  /* A composer row: the quick add and its buttons at one height (a size-control
      field beside size lg buttons), the field never wider than a column's
      most, so its button stays beside it on a wide page. */
   .toolbar {

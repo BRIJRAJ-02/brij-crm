@@ -1,4 +1,4 @@
-/* The view bars: TopBar and ViewBar are size-bar tall, Toolbar size-toolbar,
+/* The view bars: TopBar and ViewBar are size-topbar tall, Toolbar size-toolbar,
    each on surface with a hairline under it, controls start to end with
    space-8 between them and space-16 at the page's edge. SortChip has no
    styles here: it is a FilterChip. */

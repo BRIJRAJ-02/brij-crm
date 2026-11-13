@@ -18,7 +18,8 @@ export { detectKeyboardPlatform, type UiProviderProps } from './UiProviderBase.t
  * here, never from the browser.
  */
 export function UiProvider(props: UiProviderProps) {
-  // The footers the toasts keep clear of (a drawer's Save and Cancel), claimed by Modal and Panel.
+  // The footers the toasts keep clear of (a drawer's Save and Cancel, a bulk bar's Delete), claimed by Modal, Panel
+  // and FloatingBar.
   const [clearance] = useState(createToastClearance);
   return (
     <IconScope icons={icons}>

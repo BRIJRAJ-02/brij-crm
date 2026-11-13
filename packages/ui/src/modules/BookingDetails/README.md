@@ -56,7 +56,7 @@ Guests are rows (9 November 2026, the owner: "more guests should be added, inste
 - The fields span the card's full width, lining up with the Back and Confirm row (the owner, 5 November 2026, over critic A11's form width). On a wide page the card keeps the month's height, with the row at its foot; stacked or in a site's embed the card hugs the fields (BookingFrame).
 - On that held card the last long text box showing (the note, or a long text question when one follows it) takes the spare height, from 1024px up, so the form runs down to the row with no blank band (the owner, 5 November 2026). It is the Field's `isFilling`. The card's height is unchanged; Add guests or an error takes height from the box rather than moving the row; a form taller than the month has nothing spare, so the box keeps its usual size and the card grows as before. Phones and embeds hug, so they look the same.
 - One foot band with Book's (critic C6): Back is a secondary button at Confirm's `lg` size, and Confirm takes the rest of the band, over a hairline.
-- Field outlines are unchanged: critic A12 (the quiet field border faint on a dark card) is the owner's call on the `field-border` token (owner exception, 20 Oct), raised rather than overridden here.
+- Field outlines are unchanged: critic A12 (the quiet field border faint on a dark card) is the owner's call on the `border-subtle` token (owner exception, 20 Oct), raised rather than overridden here.
 
 ## The booking page's arrangement (v5 mock, 10 November 2026)
 

@@ -1,5 +1,5 @@
 /* TextSwap (spec 0068, AC-6806): transitions.dev's text states swap. The old words rise space-4 out and fade in
-   duration-exit; the new ones wait that long, then rise space-4 in from below in duration-popover, on the ease in out
+   duration-quick; the new ones wait that long, then rise space-4 in from below in duration-fast, on the ease in out
    curve. Tokens only: no blur until the artifact has a blur token. Both sit in one grid cell, so the wider sets the
    width while they cross. Reduced motion crossfades. */
 @layer components {

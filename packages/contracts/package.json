@@ -57,6 +57,7 @@
     "./hospitality-hours": "./src/hospitality-hours.ts",
     "./business-page": "./src/business-page-model.ts",
     "./brand-colour": "./src/brand-colour.ts",
+    "./wallet-card": "./src/wallet-card.ts",
     "./computed": "./src/computed-rules.ts",
     "./formula": "./src/formula/index.ts",
     "./zip": "./src/zip.ts"

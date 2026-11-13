@@ -27,6 +27,24 @@ export interface WalletPerson {
   readonly card?: ProfileContactCard;
   /** The hue of their link page, so the pass is the colour their page is; the theme's own default without one. */
   readonly hue?: Hue;
+  /**
+   * The brand the pass wears in place of Timefix's (13 November 2026): a partner's own colour and logo, when their
+   * page's workspace is connected to one that has them. Only the Apple pass reads it.
+   */
+  readonly brand?: WalletBrand;
+}
+
+/**
+ * A partner's own card, as a maker takes it: the shape of `@crm/core/public`'s `PassBrand`, said again here because
+ * only the public routes may import that door, and this file is every route's.
+ */
+export interface WalletBrand {
+  /** The partner's name: who the pass says issued it. */
+  readonly name: string;
+  /** `#rrggbb`; none keeps the Timefix ground. */
+  readonly colour?: string;
+  /** One PNG for each of Wallet's three scales; none keeps the Timefix wordmark. */
+  readonly logo?: { readonly x1: Uint8Array; readonly x2: Uint8Array; readonly x3: Uint8Array };
 }
 
 /** Makes one save link for one person. Never throws for a missing credential: there is no maker without one. */
@@ -42,6 +60,17 @@ export interface WalletSettings {
 
 /** Where a browser asks for the caller's own `.pkpass`. A plain link, so it works with no script. */
 export const APPLE_PASS_PATH = '/api/me/wallet/pass.pkpass';
+
+/**
+ * Where anyone's browser asks for a page's `.pkpass` with no session: `public/wallet.ts` mounts it. Said here so a
+ * handler that may not import the public door can still point at it.
+ */
+export const PUBLIC_APPLE_PASS_PATH = '/api/public/handles/:handle/pass.pkpass';
+
+/** The public pass address of one handle. */
+export function publicApplePassPath(handle: string): string {
+  return PUBLIC_APPLE_PASS_PATH.replace(':handle', encodeURIComponent(handle));
+}
 
 /**
  * The maker for each wallet, or undefined where this environment has no credentials for it. Built once by

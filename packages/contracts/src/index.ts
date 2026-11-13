@@ -140,6 +140,7 @@ export * from './team-pages.ts';
 export * from './partners.ts';
 export * from './workspace-brand.ts';
 export * from './brand-colour.ts';
+export * from './wallet-card.ts';
 export * from './hospitality.ts';
 export * from './menu.ts';
 export * from './visits-model.ts';

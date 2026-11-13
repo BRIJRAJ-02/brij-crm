@@ -1,6 +1,6 @@
 /* ReadyPanel (spec 0058): the "done, here is your link" moment. One column on one left and right edge, blocks
    space-16 apart: the head (a success mark and the heading), the link label, the link row (the address in a read
-   only box, then Copy and Share, all size-input tall), the QR and the preview (at most size-column tall) side by side at one height, then more,
+   only box, then Copy and Share, all size-control tall), the QR and the preview (at most size-column tall) side by side at one height, then more,
    then the buttons at the end. It eases in on opacity and a small rise; the mark pops in on opacity and scale. */
 @layer components {
   .root {

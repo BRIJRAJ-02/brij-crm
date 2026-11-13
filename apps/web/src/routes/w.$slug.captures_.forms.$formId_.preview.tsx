@@ -9,6 +9,7 @@ import {
   PreviewPage,
   SectionBar,
   SegmentedControl,
+  usePublicScale,
 } from '@crm/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -48,6 +49,8 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview'
 type Device = 'desktop' | 'phone';
 
 function PreviewRoute() {
+  // The visitor's page at the visitor's size (spec 0071, AC-6): the whole tab draws at full size while it is open.
+  usePublicScale(true);
   const { form, brand } = Route.useLoaderData();
   const { slug, formId } = Route.useParams();
   const [device, setDevice] = useState<Device>('desktop');

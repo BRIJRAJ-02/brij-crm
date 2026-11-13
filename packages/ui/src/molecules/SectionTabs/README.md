@@ -22,7 +22,7 @@ caller says which that is (a scroll spy). Neither existing part could become tha
 />
 ```
 
-- The fill's first place is drawn at once; after that it slides in `duration-move` on the ease in out curve, its
+- The fill's first place is drawn at once; after that it slides in `duration-fast` on the ease in out curve, its
   width following the pill's. A face that loads late or a resized window moves it at once.
 - `onSelect` hears a press first: the caller may scroll smoothly itself, or leave the anchor to jump.
 - Colours are the surface's: the fill is `text`, the chosen words `surface-raised`, the others `text-secondary`, so
