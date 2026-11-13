@@ -239,6 +239,37 @@ export const Classic: Story = {
   },
 };
 
+/**
+ * A grid page's dialogs open against the window, not the page (spec 0074, AC-7409): the blocks measure against a
+ * size container inside the page's popup host, never the root the popups open in, since a container holds
+ * `position: fixed` boxes. A fixed box in the popup host sits at the window's top however far the page is scrolled.
+ */
+export const PopupsInTheWindow: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { theme: { ...PLAIN, template: 'classic' } },
+  play: async ({ canvasElement }) => {
+    await expectFilled(canvasElement);
+    const host = canvasElement.querySelector('[data-popup-host]');
+    await expect(host).not.toBeNull();
+    // No ancestor of the host is a size container.
+    for (let at = host?.parentElement ?? null; at !== null; at = at.parentElement) {
+      await expect(getComputedStyle(at).containerType).toBe('normal');
+    }
+    // The bento still measures the page's width from its frame (three columns on a wide page, as Classic).
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    const probe = document.createElement('div');
+    probe.style.position = 'fixed';
+    probe.style.insetBlockStart = '0';
+    host?.append(probe);
+    try {
+      await expect(Math.round(probe.getBoundingClientRect().top)).toBe(0);
+    } finally {
+      probe.remove();
+      window.scrollTo(0, 0);
+    }
+  },
+};
+
 /** Studio: the warm paper and its round, image led cards. */
 export const Studio: Story = {
   args: { theme: { ...PLAIN, template: 'studio' } },

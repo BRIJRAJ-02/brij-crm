@@ -289,7 +289,7 @@ export function BookingFrame({
     >
       {/* The page's popups (the visitor bar's menu, add to calendar, the change dialogs) open inside its themed root,
           in its template and theme (spec 0074, AC-7409). */}
-      <PopupHost>
+      <PopupHost className={styles.popups}>
         <div className={styles.layout}>
           <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
             {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}

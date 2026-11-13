@@ -353,7 +353,8 @@
      ring, the address pill), so the brand reaches them too. One level in from the root, where the names above
      were worked out, since a name can't be built from its own value on one element. */
   .column,
-  .thumb {
+  .thumb,
+  .popups {
     --accent: var(--page-accent);
     --accent-hover: var(--page-accent-hover);
     --on-accent: var(--page-on-accent);
@@ -1369,7 +1370,17 @@
 
   /* A grid page (AC-6103): the person stays in the card's column, and the blocks take a wider dialog's width across
      it, centred on it, never wider than the page's own room. */
-  .root[data-grid] {
+  /* The page's content, inside its PopupHost: no box of its own, except on a grid page, where it is the size container
+     the blocks measure against. Not the root: a container holds `position: fixed` boxes, and the page's dialogs open
+     in the root (spec 0074), so on the root a dialog would be placed against the whole page, not the window. */
+  .frame {
+    display: contents;
+  }
+
+  .root[data-grid] .frame {
+    display: flex;
+    justify-content: center;
+    inline-size: 100%;
     container-type: inline-size;
   }
 
@@ -1805,5 +1816,15 @@
     .block {
       border-color: CanvasText;
     }
+  }
+
+  /* PopupHost's host (spec 0074, AC-7409): no box of its own, so the page's layout never sees it; the popups inside
+     inherit the page's look through it. A guest sheet's or dialog's header is the height of the page's own bars
+     (AC-7426): spec 0071's legacy `size-bar` (46px), never the app's `size-topbar`. Until that token reaches this
+     branch the same 46px is built from tokens; the fallback goes once spec 0071's merge brings `size-bar`. */
+  .popups {
+    --size-topbar: var(--size-bar, calc(var(--size-row) + var(--space-2)));
+
+    display: contents;
   }
 }

@@ -87,7 +87,7 @@ export function FormGround({
       >
         {/* The form's popups (a Select, the phone's country picker, a date) open inside its themed root, so they wear
             the form's theme, corners and template (spec 0074, AC-7409). */}
-        <PopupHost>
+        <PopupHost className={styles.popups}>
           <div className={styles.card}>
             {/* The workspace's own logo over the form (spec 0060, AC-4). */}
             {logo !== undefined && brand?.logo !== undefined && (

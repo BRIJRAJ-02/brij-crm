@@ -58,6 +58,13 @@ it('opens a dropdown inside the form’s themed root, dark and square, never on 
   for (const name of ['--radius-md', '--radius-lg', '--surface', '--text']) {
     expect(listStyle.getPropertyValue(name).trim(), name).toBe(rootStyle.getPropertyValue(name).trim());
   }
+  // The accent and focus ring the form works out one level in (its card) reach the popup too.
+  const card = root?.querySelector('.ws-form-parts-card');
+  expect(card).not.toBeNull();
+  const cardStyle = getComputedStyle(card as Element);
+  for (const name of ['--accent', '--on-accent', '--shadow-focus']) {
+    expect(listStyle.getPropertyValue(name).trim(), name).toBe(cardStyle.getPropertyValue(name).trim());
+  }
   // AC-7426: inside the host, the guest pages' bar height, 46px, never the app's 56px top bar.
   const popupHost = listbox.closest('[data-popup-host]');
   const probe = document.createElement('div');

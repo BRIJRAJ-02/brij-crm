@@ -67,4 +67,14 @@
 
     display: contents;
   }
+
+  /* PopupHost's host (spec 0074, AC-7409): no box of its own, so the page's layout never sees it; the popups inside
+     inherit the page's look through it. A guest sheet's or dialog's header is the height of the page's own bars
+     (AC-7426): spec 0071's legacy `size-bar` (46px), never the app's `size-topbar`. Until that token reaches this
+     branch the same 46px is built from tokens; the fallback goes once spec 0071's merge brings `size-bar`. */
+  .popups {
+    --size-topbar: var(--size-bar, calc(var(--size-row) + var(--space-2)));
+
+    display: contents;
+  }
 }

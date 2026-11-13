@@ -370,7 +370,7 @@ export function MenuList({
       </span>
       <div className={styles.look}>
         {/* The page's overlays (the dish's sheet, Your picks) open inside this root, so they wear the menu's look too. */}
-        <PopupHost>
+        <PopupHost className={styles.popups}>
           {/* The glass bar: the brand, and nothing else (checklabs'). */}
           <div className={styles.bar} data-sticky="">
             <div className={styles.barTop}>

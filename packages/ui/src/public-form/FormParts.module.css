@@ -112,9 +112,11 @@
   /* A visitor reads each question once, often on a phone: inside the card a question's name, and the line under its
      field, read at the body size rather than the app's dense label size. A choice group's question (the strong
      label) comes down to the same regular weight, so every question reads alike. The foot keeps the small size. */
-  .card {
-    /* The form's controls read the accent through the library's own names, so the brand reaches each of them: the
-       button, a chosen option, links and focus rings. One level in, where the names above were worked out. */
+  /* The form's controls read the accent through the library's own names, so the brand reaches each of them: the
+     button, a chosen option, links and focus rings, in the form and in its popups (spec 0074). One level in, where the
+     names above were worked out. */
+  .card,
+  .popups {
     --accent: var(--form-accent);
     --accent-hover: var(--form-accent-hover);
     --on-accent: var(--form-on-accent);
@@ -126,6 +128,9 @@
     --focus-ring: var(--form-accent-line);
     /* Read by the parts not yet ported to the outline ring (Rating, the rating question). */
     --shadow-focus: var(--form-focus);
+  }
+
+  .card {
     --text-label: var(--text-body);
     --tracking-label: var(--tracking-body);
     /* Field's label, hint and error (and a small button's label) read the text-body-sm steps since spec 0072's tier 2:
@@ -425,5 +430,15 @@
     .thanks {
       animation-name: fade;
     }
+  }
+
+  /* PopupHost's host (spec 0074, AC-7409): no box of its own, so the page's layout never sees it; the popups inside
+     inherit the page's look through it. A guest sheet's or dialog's header is the height of the page's own bars
+     (AC-7426): spec 0071's legacy `size-bar` (46px), never the app's `size-topbar`. Until that token reaches this
+     branch the same 46px is built from tokens; the fallback goes once spec 0071's merge brings `size-bar`. */
+  .popups {
+    --size-topbar: var(--size-bar, calc(var(--size-row) + var(--space-2)));
+
+    display: contents;
   }
 }

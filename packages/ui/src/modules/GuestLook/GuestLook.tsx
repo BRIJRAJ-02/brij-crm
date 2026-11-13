@@ -20,7 +20,7 @@ export function GuestLook({ children }: GuestLookProps) {
   return (
     <div className={styles.root}>
       <div className={styles.names}>
-        <PopupHost>{children}</PopupHost>
+        <PopupHost className={styles.popups}>{children}</PopupHost>
       </div>
     </div>
   );

@@ -83,9 +83,11 @@
     min-block-size: 0;
   }
 
-  .layout {
-    /* Everything on the page reads the accent through the library's own names (the chosen day, Book, links, focus
-       rings), so the brand reaches each of them. One level in, where the names above were worked out. */
+  /* Everything on the page reads the accent through the library's own names (the chosen day, Book, links, focus
+     rings), in the page and in its popups (spec 0074), so the brand reaches each of them. One level in, where the
+     names above were worked out. */
+  .layout,
+  .popups {
     --accent: var(--frame-accent);
     --accent-hover: var(--frame-accent-hover);
     --on-accent: var(--frame-on-accent);
@@ -96,7 +98,9 @@
     /* The outline ring (spec 0072's ported parts: DayStrip, BookingChat, Button) in the brand as well. */
     --focus-ring: var(--frame-accent-line);
     --shadow-focus: var(--frame-focus);
+  }
 
+  .layout {
     display: flex;
     flex-direction: column;
     gap: var(--space-24);
@@ -962,5 +966,15 @@
     .claim:hover {
       color: var(--text);
     }
+  }
+
+  /* PopupHost's host (spec 0074, AC-7409): no box of its own, so the page's layout never sees it; the popups inside
+     inherit the page's look through it. A guest sheet's or dialog's header is the height of the page's own bars
+     (AC-7426): spec 0071's legacy `size-bar` (46px), never the app's `size-topbar`. Until that token reaches this
+     branch the same 46px is built from tokens; the fallback goes once spec 0071's merge brings `size-bar`. */
+  .popups {
+    --size-topbar: var(--size-bar, calc(var(--size-row) + var(--space-2)));
+
+    display: contents;
   }
 }
