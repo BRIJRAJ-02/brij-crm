@@ -77,7 +77,7 @@ describe('the Share tab (AC-11, T44)', () => {
     await expect.element(page.getByRole('group', { name: 'Link' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
     await expect.element(page.getByRole('img', { name: 'QR code for Talk to us' })).toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Download PNG' })).toBeVisible();
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);
     // On a wide card the code sits beside the link, at the card's right edge, not under it.
     const field = page.getByRole('group', { name: 'Link' }).element().getBoundingClientRect();

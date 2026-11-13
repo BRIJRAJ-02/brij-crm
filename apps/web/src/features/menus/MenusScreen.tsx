@@ -22,6 +22,7 @@ import {
   EditorStatus,
   EmptyState,
   Field,
+  focusLater,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -40,7 +41,7 @@ import {
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { memo, useDeferredValue, useState, type ReactNode } from 'react';
+import { memo, useDeferredValue, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { useIsNarrow } from './narrow.ts';
@@ -122,6 +123,8 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   const [isPublishing, setPublishing] = useState(false);
   // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
   usePreloadShareSheet();
+  // Publish, then the live split button that takes its place: where focus goes back when the publish dialog closes.
+  const publishRef = useRef<HTMLButtonElement>(null);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
   // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
@@ -387,12 +390,13 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   const hasDrafts = draft.canEdit && isLive && draft.changes > 0;
   const publishButton = !isLive ? (
     draft.canEdit ? (
-      <Button variant="primary" onPress={() => setOpen({ kind: 'publish' })}>
+      <Button ref={publishRef} variant="primary" onPress={() => setOpen({ kind: 'publish' })}>
         {isNarrow ? strings.publish : strings.publishGoLive}
       </Button>
     ) : null
   ) : (
     <SplitButton
+      ref={publishRef}
       variant={hasDrafts ? 'primary' : 'secondary'}
       isPending={isPublishing}
       onPress={() => {
@@ -763,7 +767,15 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                 hasHours={hasHours}
                 {...(place === undefined ? {} : { place })}
                 blocker={blocker}
-                onClose={() => setOpen(undefined)}
+                onClose={() => {
+                  setOpen(undefined);
+                  // A first publish swaps Publish for the live split button, so the dialog's own focus return finds
+                  // nothing and lands on the page: hand it to the split's main button instead (spec 0074).
+                  focusLater(() => {
+                    const active = document.activeElement;
+                    return active === null || active === document.body ? publishRef.current : undefined;
+                  });
+                }}
                 onFix={(fix) => {
                   setOpen(undefined);
                   if (fix.kind === 'hours') router.history.push(hoursHref);

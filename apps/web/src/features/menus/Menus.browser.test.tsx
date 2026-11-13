@@ -280,6 +280,48 @@ describe('the Menus editor', () => {
     await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
   });
 
+  it('puts focus on the live split button after a first publish, never on the page (spec 0074)', async () => {
+    // The draft turns live when Publish lands, as the real store's does, so Publish gives way to the split button.
+    const listeners = new Set<() => void>();
+    let state: HospitalityHeldState<MenuDraft> = { status: 'ready', value: DRAFT, isSaving: false };
+    const held: HospitalityHeld<MenuDraft> = {
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      retry: () => undefined,
+    };
+    const { store } = storeOf(DRAFT);
+    const turning = {
+      ...store,
+      draft: () => held,
+      publish: () => {
+        state = {
+          status: 'ready',
+          value: { ...DRAFT, publishedAt: '2026-11-13T10:00:00.000Z', changes: 0 },
+          isSaving: false,
+        };
+        for (const listener of listeners) listener();
+        return Promise.resolve(undefined);
+      },
+    } as MenuStore;
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={turning} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
+    const review = page.getByRole('dialog', { name: 'Review and publish' });
+    await userEvent.click(review.getByRole('button', { name: 'Publish & go live' }));
+    const sheet = page.getByRole('dialog', { name: 'Your menu is live' });
+    await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => document.querySelector('[role="dialog"]')).toBeNull();
+    await expect.element(page.getByRole('button', { name: 'View', exact: true })).toHaveFocus();
+  });
+
   it('publishes drafts from the split button at once, its chevron sharing, and keeps Discard and Delete in ⋯', async () => {
     await page.viewport(1280, 900);
     const live: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z' };

@@ -1,3 +1,4 @@
+import { clearAnnouncer } from '@react-aria/live-announcer';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, screen, spyOn, waitFor, within } from 'storybook/test';
@@ -74,7 +75,9 @@ export const Default: Story = {
       'href',
       `https://wa.me/?text=${encodeURIComponent(ADDRESS)}`,
     );
-    await expect(sheet.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
+    // Download is one press for the PNG, with the SVG in the menu beside it.
+    await expect(sheet.getByRole('button', { name: 'Download PNG' })).toBeInTheDocument();
+    await expect(sheet.getByRole('button', { name: 'Other formats' })).toBeInTheDocument();
     // Done is the only other button in the footer, and the dialog opens on it: Enter and Esc both close it.
     const done = sheet.getByRole('button', { name: 'Done' });
     await waitFor(() => expect(done).toHaveFocus());
@@ -181,13 +184,45 @@ export const DownloadFails: Story = {
       throw new Error('Blocked.');
     });
     try {
-      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
-      await settleAnimations();
-      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: 'Download PNG' }));
       await expect(await screen.findByText('The QR code didn’t save. Try again.')).toBeInTheDocument();
       await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     } finally {
       refuse.mockRestore();
+    }
+  },
+};
+
+/**
+ * A download in flight holds the sheet open (spec 0074): Done pressed while the file is being made closes the sheet
+ * only once it is saved, so the code is never read after it has gone.
+ */
+export const DownloadHoldsOpen: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, userEvent }) => {
+    const sheet = within(await openSheet());
+    // Hold the PNG's drawing step until the story lets it go.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const decode = spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(() => held);
+    const save = spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      await userEvent.click(sheet.getByRole('button', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+      await expect(args.onOpenChange).not.toHaveBeenCalledWith(false);
+      await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      release();
+      await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+      await expect(save).toHaveBeenCalled();
+      await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+      // The pending Download React Aria announced is gone with the sheet, so the announcement's label points at
+      // nothing for its 7 s; clear it for axe.
+      clearAnnouncer('assertive');
+    } finally {
+      decode.mockRestore();
+      save.mockRestore();
     }
   },
 };
@@ -242,7 +277,7 @@ export const Column: Story = {
     await expect(document.querySelector('[role="dialog"]')).toBeNull();
     await expect(canvas.getByRole('img', { name: 'QR code for Discovery call' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
-    await expect(canvas.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Download PNG' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Put it on your site' })).toHaveAttribute(
       'href',
       '/w/acme/bookings/discovery-call/embed',

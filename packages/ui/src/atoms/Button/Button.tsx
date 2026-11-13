@@ -522,6 +522,7 @@ export interface SplitHalfProps {
   readonly isPending: boolean;
   /** The start half's label, or the end half's chevron. */
   readonly children: ReactNode;
+  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -533,10 +534,21 @@ export function SplitFrame({ children }: { readonly children: ReactNode }) {
 }
 
 /** One half of a SplitButton, in Button's look: the main action (`start`) or the menu trigger (`end`). */
-export function SplitHalf({ half, variant, kbd, label, onPress, isDisabled, isPending, children }: SplitHalfProps) {
+export function SplitHalf({
+  half,
+  variant,
+  kbd,
+  label,
+  onPress,
+  isDisabled,
+  isPending,
+  children,
+  ref,
+}: SplitHalfProps) {
   const platform = useKeyboardPlatform();
   return (
     <AriaButton
+      {...(ref === undefined ? {} : { ref })}
       className={styles.root}
       isDisabled={isDisabled}
       isPending={isPending}

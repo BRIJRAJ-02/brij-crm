@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, screen, spyOn, userEvent } from 'storybook/test';
+import { expect, fn, screen, spyOn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { probeAlignment } from '../../lib/alignment-probe.ts';
@@ -202,16 +202,19 @@ export const Share: Story = {
     // The code and its download are one thing: Download sits right under the code (wide) or beside it (narrow), never
     // in the row of ways.
     const code = canvas.getByRole('img', { name: 'QR code for the link' }).getBoundingClientRect();
-    const save = canvas.getByRole('button', { name: /^Download QR code/ });
+    const save = canvas.getByRole('button', { name: 'Download PNG' });
     const saved = save.getBoundingClientRect();
     const isUnder = saved.top >= code.bottom && saved.top - code.bottom < 24;
     const isBeside = saved.left >= code.right && saved.left - code.right < 24;
     await expect(isUnder || isBeside).toBe(true);
     await expect(canvas.getByRole('group', { name: 'Send the link' })).not.toContainElement(save);
-    // The QR code saves as PNG from its menu, handed the code's own SVG.
+    // The QR code saves as a PNG in one press, handed the code's own SVG; the SVG is in the menu beside it.
     await userEvent.click(save);
-    await settleAnimations();
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
     await expect(args.onDownloadQr).toHaveBeenCalledWith('png', expect.any(SVGSVGElement));
+    await waitFor(() => expect(save).not.toHaveAttribute('data-pending'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Other formats' }));
+    await settleAnimations();
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Download SVG' }));
+    await expect(args.onDownloadQr).toHaveBeenCalledWith('svg', expect.any(SVGSVGElement));
   },
 };

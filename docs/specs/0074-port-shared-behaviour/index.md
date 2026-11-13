@@ -40,6 +40,9 @@ Guest looks on popups (batch 4)
 - **AC-7410**: A popup in the app (not on a guest page) is unchanged: it portals to `document.body` and wears the app's theme.
 - **AC-7426**: A guest page's popups carry `--size-topbar: var(--size-bar)` (spec 0071's legacy `size-bar`, 46px, which the guest pages' own bars use; MenuList's root already sets it), so a guest sheet's or dialog's header is the height of the page's bars, never the app's `size-topbar`. A story measures a sheet's header against the page's bar on the menu, link and booking pages.
 
+- **AC-7427** (owed at the phase 1 merge): ReadyPanel's `share` tile and ShareSheet take a `qrSize` option, and the link page's Share uses the large size, since its code is scanned from a screen across a table (the owner's Share design, 25 October 2026). ReadyPanel is phase 1's file, so the option lands when phase 1 merges, not before.
+- **AC-7428**: Download saves the PNG in one press (the sheet's Download PNG); the SVG sits in a menu beside it. A download in flight holds the sheet open: Esc, a click outside and Close wait, and Done pressed meanwhile closes the sheet once the file is saved. After a menu's first publish, Done hands focus to the live split button that replaced Publish, never to the page.
+
 Record panel (batch 5)
 - **AC-7411**: The record panel floats over the right of the content area at its full height, below the top bar, inset by the content's own padding, never pushing the table or board. Its width is `size-panel`; it enters over `duration-slow` and leaves over `duration-medium` on `ease-smooth-out`, and reduced motion keeps only the fade.
 - **AC-7412**: The panel's head says the object and "n of N" with Previous and Next; J and K step like ↑ and ↓ unless focus is in a field, a listbox or a grid; Esc closes and focus goes back to the row that opened it. The quiet line "J K next and previous · Esc close" sits at its foot.
@@ -52,7 +55,7 @@ Drag (batch 6, after phase 1 lands)
 
 Gate 1: load time
 - **AC-7417**: No `pnpm size` line grows by more than 20 bytes (content hash noise) in any batch. Budgets sit at the measurement plus at most 0.5 kB.
-- **AC-7418**: Where a shared part replaces hand made screen code (share dialogs, publish bars, popup wiring, drag looks), that code, gzipped, is at least 30% smaller after the batch, measured before and after in its commit, and the old code is deleted, not left beside the new.
+- **AC-7418**: Where a shared part replaces hand made screen code (share dialogs, publish bars, popup wiring, drag looks), that code, gzipped, is at least 30% smaller at the end of the phase, measured on the real pages (the owner's rule: measure per phase, on real pages); each batch still reports its before and after, and the old code is deleted, not left beside the new. The share code is measured again at phase end (amended 13 Nov 2026: batch 1's 25.7% is accepted, since no first load grew and Menus fell 4.4 kB).
 - **AC-7419**: Each batch reports every touched route's lazy JavaScript and CSS (its static closure past the first load, gzipped) before and after. ShareSheet stays out of `index.html`, `book.html` and `form.html` (`apps/web/build.test.ts`, which batch 1 makes load bearing).
 
 Gate 2: security
@@ -183,14 +186,15 @@ The form and booking editors grow because ShareColumn draws a refused address wi
 
 The share code itself (source, gzip -9, files wholly about sharing plus the share blocks inside mixed files): 6,343 B before (`ShareBlock.tsx`, the forms `PublishDialog.tsx`, `ShareLinkPageModal.tsx`, `share-strings.ts`, `qr-png.ts`, the menus live stage, the link page's call site), 4,712 B after (the forms `PublishDialog.tsx`, `share-strings.ts`, `features/share/`, the menus sheet and its wiring, the link page's call site): **25.7% less, short of the 30% target** (AC-7418). Raw, 14,258 to 10,407 B (27% less). The difference is the lazy loader (978 B) and the review's fixes (the side by side dialogs, the stranded close, the footer); without the loader the share code would be about 40% less, but the link page and menus routes would carry 2.4 and 3.5 kB more. The load gate's route numbers were weighed as the stronger of the two.
 
-### Open after batch 1
+### Batch 1's open items, decided (coordinator, 13 November 2026, accepted)
 
-- **The QR code's size** on the link page's Share went from filling the dialog (the owner's Share design, 25 October 2026, "large enough to scan across a table") to ShareSheet's `sm` (the prototype's look, which wins on looks per the handover). The design system and UX reviews both flagged it. If the owner wants the big code back, it is a `qrSize` on ReadyPanel's `share` tile, which is phase 1's file: after phase 1 merges.
-- **Download** is now ShareSheet's ghost Download with PNG and SVG (two presses) instead of the link page's one press primary PNG; Copy link is the sheet's primary.
-- **Focus after a menu's first publish**: Done returns focus to the page body, since the Publish button is replaced by the split button as the menu goes live. It was the same before; a ref to the split's main button would fix it.
-- **Closing mid download**: the old link page modal held itself open while saving; the sheet can close while a centre picture is read, which could save the code without its fills. Narrow; ReadyPanel's busy state would need to reach the Modal.
-- **A failed chunk load** reaches the app's `vite:preloadError` guard, as Bookings' lazy parts do.
-- Screenshots for `Styled`, `Column` and the rest of ShareSheet's stories need `pnpm test:visual --update` in the pinned image.
+- **Download is one press again** (AC-7428): ReadyPanel's `share` column draws Download as a SplitButton, Download PNG on its main half and Download SVG in its menu, so the link page's one press PNG is back and the SVG is still there. The owner's rule is "simple, familiar, foolproof", and two presses for a download was a regression.
+- **The QR code's size** (AC-7427): the link page keeps its large code, because it is scanned from a screen. ReadyPanel is phase 1's file, so no size option is added now; it is owed at the phase 1 merge: "ReadyPanel/ShareSheet `qrSize` option; the link page uses the large size".
+- **The 30% share code target** (AC-7418, amended): under the owner's rule (measure per phase, on real pages) batch 1 is accepted, since no first load grew and Menus dropped 4.4 kB. The share code is measured again at the phase's end.
+- **Closing mid download** (AC-7428): fixed. ShareColumn tells the sheet while a file is being made; the sheet is busy (Esc, a click outside and Close wait) and a Done pressed meanwhile closes it as soon as the file is saved.
+- **Focus after a menu's first publish** (AC-7428): fixed. SplitButton takes a `ref` to its main half; when the publish dialog closes and focus has fallen to the page, Menus hands it to the live split's main button (or Publish, before a publish).
+- **A failed chunk load** reaches the app's `vite:preloadError` guard, as Bookings' lazy parts do (unchanged).
+- Screenshots for `Styled`, `Column` and the rest of ShareSheet's stories need `pnpm test:visual --update` in the pinned image (unchanged).
 
 ## Build plan
 

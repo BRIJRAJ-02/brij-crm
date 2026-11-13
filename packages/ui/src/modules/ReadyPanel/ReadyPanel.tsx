@@ -2,11 +2,12 @@ import { useId, useRef, useState, type ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
+import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { QrCode, type QrCodeProps } from '../../atoms/QrCode/QrCode.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
-import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
+import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import styles from './ReadyPanel.module.css';
 import { strings } from './strings.ts';
 
@@ -244,30 +245,30 @@ export function ReadyPanel({
               <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" ground="clear" {...qrStyle} />
             </div>
             {onDownloadQr !== undefined && (
-              <MenuTrigger>
-                <Button
-                  icon="download"
-                  iconRight="chevron-down"
-                  variant="ghost"
-                  isPending={saving !== undefined}
-                  label={strings.downloadName}
-                >
-                  {strings.download}
-                </Button>
-                <Menu
-                  label={strings.downloadQr}
-                  onAction={(key) => {
-                    download(key === 'svg' ? 'svg' : 'png');
-                  }}
-                >
-                  <MenuItem id="png" icon="download">
-                    {strings.downloadPng}
-                  </MenuItem>
-                  <MenuItem id="svg" icon="download">
-                    {strings.downloadSvg}
-                  </MenuItem>
-                </Menu>
-              </MenuTrigger>
+              // One press saves the PNG, the file most people want (spec 0074, the coordinator's call of 13 Nov:
+              // a download is never two presses); the SVG waits in the menu beside it.
+              <SplitButton
+                variant="secondary"
+                isPending={saving !== undefined}
+                onPress={() => {
+                  download('png');
+                }}
+                menuLabel={strings.downloadOther}
+                menu={
+                  <Menu
+                    label={strings.downloadQr}
+                    onAction={() => {
+                      download('svg');
+                    }}
+                  >
+                    <MenuItem id="svg" icon="download">
+                      {strings.downloadSvg}
+                    </MenuItem>
+                  </Menu>
+                }
+              >
+                {strings.downloadPng}
+              </SplitButton>
             )}
           </div>
         </div>
