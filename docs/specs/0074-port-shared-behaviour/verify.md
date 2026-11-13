@@ -30,6 +30,7 @@ Later batches
 - [ ] `pnpm --filter @crm/web exec vitest run build.test.ts` → ShareSheet not in `index.html`, `book.html` or `form.html` → AC-7419
 - [ ] `pnpm --filter @crm/ui exec vitest run --project unit src/modules/ShareSheet` → `javascript:`, `data:`, `vbscript:` refused → AC-7420
 - [ ] `grep -rn "dangerouslySetInnerHTML\|innerHTML\s*=\|insertAdjacentHTML" apps/web/src packages/ui/src` → only the lines 0073 allowed → AC-7423
+- [ ] `pnpm --filter @crm/ui exec vitest run --project browser src/molecules/Panel/Panel.browser.test.tsx` → the record panel leaves over `duration-quick` (150ms), not AC-7411's `duration-medium`: the review of batch 5 held exits to the house's short exit token → AC-7411
 - [ ] Batch 5: a browser test counting the data layer's reads on opening a panel for a held record → no read for the record → AC-7425
 - [ ] Batch 6: a story with 10,000 sortable rows, lift and move 50 steps → rows drawn stay bounded, no long task → AC-7424
 - [ ] `pnpm check` → green

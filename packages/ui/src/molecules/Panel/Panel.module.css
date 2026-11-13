@@ -1,8 +1,8 @@
 /* Panel: a full height sheet at the end of the page, on surface-raised with a
    hairline edge and shadow-lg; the floating variant sits space-8 in from the
    edges of the content area that holds it, with a hairline border all round and radius-xl. It slides in on
-   ease-smooth-out over duration-fast (the floating one over duration-slow) and out over duration-quick (the floating
-   one over duration-medium); reduced motion keeps a fade. */
+   ease-smooth-out over duration-fast (the floating one over duration-slow) and out over duration-quick, both variants;
+   reduced motion keeps a fade. */
 @layer components {
   .root {
     position: fixed;
@@ -143,13 +143,10 @@
     animation: slide-out var(--duration-quick) var(--ease-smooth-out) forwards;
   }
 
-  /* The record panel enters over duration-slow and leaves over duration-medium (AC-7411). */
+  /* The record panel enters over duration-slow (AC-7411) and leaves as every panel and dialog does, over the house's
+     exit, duration-quick: a closed record does not linger. */
   .root[data-variant='floating'][data-entering] {
     animation-duration: var(--duration-slow);
-  }
-
-  .root[data-variant='floating'][data-exiting] {
-    animation-duration: var(--duration-medium);
   }
 
   .root[data-opened-by='keyboard'][data-entering] {

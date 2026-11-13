@@ -38,7 +38,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 
 Open overlaid; open pushing the page (`pushesPage`, the AppShell story `PushedByPanel`); closing with Back on a phone (`CloseAsBack`).
 
-Opening slides it in over `duration-fast` on `ease-smooth-out`; closing slides and fades it out in `duration-quick`, and it is removed when that ends. Opened from the keyboard it appears at once. Reduced motion keeps a fade.
+Opening slides it in over `duration-fast` on `ease-smooth-out` (the floating record panel over `duration-slow`); closing slides and fades it out over `duration-quick`, the house's exit, for both variants, and it is removed when that ends. Opened from the keyboard it appears at once. Reduced motion keeps a fade.
 
 ## Keyboard
 
