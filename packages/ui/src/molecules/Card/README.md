@@ -49,7 +49,7 @@ Not in the artifact.
 
 ## Timefix prototype (spec 0072)
 
-Takes its look from the prototype's Card: the surface with a `border-subtle` hairline, `radius-lg` and `shadow-xs`; the header `space-16` in with the title in `text-heading` over a grey `text-body-sm` description, `space-12` between them and the actions; the body `space-12` under the header and `space-16` at its sides and foot. A pressable card washes `surface-hover` with a `border-strong` edge under the pointer and wears the outline ring outside its edge on focus.
+Takes its look from the prototype's Card: the surface with a `border-subtle` hairline, `radius-lg` and `shadow-xs`; the header `space-16` in with the title in `text-heading` over a grey `text-body-sm` description, `space-12` between them and the actions; the body `space-12` under the header and `space-16` at its sides and foot. A pressable card's edge is `control-border` (not the prototype's `border-subtle`: the edge is its only boundary, and the house asks 3:1); it washes `surface-hover` under the pointer and wears the outline ring outside its edge on focus.
 
 Stats and RecordStats, which the prototype folds into Card's StatCard, keep their own modules in its look (decision 14). Sharing one implementation was built and measured: a `CardStats` part both rendered cut their duplicate CSS by 264 B gzipped but cost 320 B more script, and every page that draws only one of them (Home's Stats, a record's RecordStats) loaded both layouts, about 0.6 to 0.9 kB more; so it was not kept.
 

@@ -42,8 +42,10 @@
 
   /* A pressable card (onPress): the title's button stretches over the whole card, so any press on it opens; the
      card draws the ring and the hover, and its own buttons sit above the stretch. */
+  /* Its edge is control-border, not border-subtle: the edge is a pressable card's only boundary (3:1). */
   .root[data-pressable] {
     position: relative;
+    border-color: var(--control-border);
     transition:
       border-color var(--duration-quick) var(--ease-out),
       background-color var(--duration-quick) var(--ease-out);
@@ -76,10 +78,9 @@
     outline-offset: var(--border-width-focus);
   }
 
-  /* Under the pointer, the prototype's tile hover: the edge steps up and the fill washes. */
+  /* Under the pointer, the prototype's tile hover: the fill washes (the edge is already control-border). */
   @media (hover: hover) and (pointer: fine) {
     .root[data-pressable]:hover {
-      border-color: var(--border-strong);
       background: var(--surface-hover);
     }
   }
@@ -175,6 +176,8 @@
 
   /* What runs to the Card's edges itself (a Table with edge="card"). */
   .body[data-flush] {
+    --body-top: 0;
+
     padding: 0;
   }
 
@@ -241,7 +244,9 @@
   }
 
   .root[data-placement='page'][data-size='sm'] .body {
-    padding-block: var(--space-20) var(--space-24);
+    --body-top: var(--space-20);
+
+    padding-block-end: var(--space-24);
     padding-inline: var(--space-24);
   }
 

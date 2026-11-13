@@ -50,7 +50,7 @@
   /* With a pointer, the end control waits for the line's hover or focus (the prototype's remove); a finger has no
      hover, so it always shows there. */
   @media (hover: hover) and (pointer: fine) {
-    .root:not(:hover, :focus-within) .end {
+    .root:not(:hover, :focus-within, :has([aria-expanded='true'])) .end {
       opacity: 0;
     }
   }

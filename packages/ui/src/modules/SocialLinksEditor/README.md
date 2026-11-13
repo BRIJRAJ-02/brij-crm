@@ -40,7 +40,7 @@ else setRows(checked.rows); // every row that won't save now says why
 
 ## Timefix prototype (spec 0072)
 
-Takes its look from the prototype's SocialLinks editor (spec 0072) through the parts it is made of: each network's row is a SettingsRow holding a Field (the prototype's filled input since tier 2), its menu a Menu and Add social link a Button, so it keeps no CSS of its own.
+Takes its look from SocialLinks (spec 0072), the prototype's SocialLinks editor (spec 0072) through the parts it is made of: each network's row is a SettingsRow holding a Field (the prototype's filled input since tier 2), its menu a Menu and Add social link a Button, so it keeps no CSS of its own.
 
 **Differences from the prototype**: one field per network rather than one paste box that detects the network; reorder is the row menu's Move up and Move down rather than a grip; Remove is undone by Discard (nothing saves until Save) rather than an Undo line.
 

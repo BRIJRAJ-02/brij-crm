@@ -162,7 +162,7 @@
     }
 
     .label {
-      min-block-size: var(--space-24);
+      min-block-size: var(--size-control-sm);
     }
   }
 }
