@@ -1,4 +1,5 @@
 import { useEffect, useRef, type HTMLAttributes, type ReactNode } from 'react';
+import { useToastClearance } from '../../provider/toast-clearance.ts';
 import styles from './FloatingBar.module.css';
 
 /** Props for FloatingBar. */
@@ -44,6 +45,14 @@ export function FloatingBar({
   frameProps,
 }: FloatingBarProps) {
   const surface = useRef<HTMLDivElement>(null);
+  // Toasts rise above the bar while it is up (a bulk Delete sat under a toast at the bottom right, trash flow,
+  // 13 Nov 2026); a bar on its way out claims nothing.
+  const keepToastsOff = useToastClearance();
+  useEffect(() => {
+    const element = surface.current;
+    if (element === null || isLeaving) return undefined;
+    return keepToastsOff(element);
+  }, [keepToastsOff, isLeaving]);
   const left = useRef(onLeft);
   useEffect(() => {
     left.current = onLeft;
