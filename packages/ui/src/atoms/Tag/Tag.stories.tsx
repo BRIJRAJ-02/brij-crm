@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor } from 'storybook/test';
 import { HUES } from '../../hue.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { AiTag } from './AiTag.tsx';
 import { Tag, TagList, type TagItem } from './Tag.tsx';
 
 const meta = {
@@ -46,18 +47,23 @@ export const Archived: Story = {
   },
 };
 
-/** The `ai` tone: a fact AI found, on the surface with the violet sparkle, said as "filled by AI" (spec 0073). */
+/** AiTag: a fact AI found, on the surface with the violet sparkle, said as "filled by AI" (spec 0073). */
 export const Ai: Story = {
   render: () => (
     <Stage>
-      <Tag tone="ai">AI enriched</Tag>
-      <Tag tone="ai">Series B</Tag>
+      <Tag hue="green">Won</Tag>
+      <AiTag>AI enriched</AiTag>
+      <AiTag>Series B</AiTag>
     </Stage>
   ),
   play: async ({ canvas }) => {
     const tag = canvas.getByText('Series B').parentElement;
-    await expect(tag).toHaveAttribute('data-tone', 'ai');
     await expect(tag).toHaveTextContent('Series B (filled by AI)');
+    // The surface with a hairline ring, inset, so the chip keeps a hue tag's size.
+    await expect(getComputedStyle(tag as Element).boxShadow).toMatch(/inset/);
+    await expect(getComputedStyle(tag as Element).blockSize).toBe(
+      getComputedStyle(canvas.getByText('Won').parentElement as Element).blockSize,
+    );
     // The sparkle is the only violet: the words keep the text colour, the chip the surface.
     const sparkle = tag?.querySelector('svg');
     await expect(sparkle).not.toBeNull();

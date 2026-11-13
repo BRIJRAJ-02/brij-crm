@@ -323,6 +323,10 @@ describe('@crm/ui', () => {
 
 /** Spec 0073 (port phase 2) batches 1 and 2's exports, in one block so parallel port lanes merge cleanly. */
 const PORT_PHASE_2 = [
+  // Built as their own parts in the merge (feat/port-12), so no screen carries them until it draws one.
+  'AiTag',
+  'GuardedModal',
+  'RevealDrop',
   'NumberField',
   'PresenceGroup',
   'SEARCH_DEBOUNCE_MS',

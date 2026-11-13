@@ -5,6 +5,7 @@ import { Button } from '../Button/Button.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Reveal } from './Reveal.tsx';
+import { RevealDrop } from './RevealDrop.tsx';
 
 const meta = {
   title: 'Atoms/Reveal',
@@ -37,7 +38,7 @@ export const Inline: Story = {
   args: { display: 'inline', order: 2, children: 'Booked' },
 };
 
-/** `drop`: a row arriving in a list opens from no height and rises, with no blur; rows there on load stay still. */
+/** RevealDrop: a row arriving in a list opens from no height and rises, with no blur; rows there on load stay still. */
 export const Drop: Story = {
   render: function Drop() {
     const [rows, setRows] = useState<readonly string[]>(['Call Northwind', 'Send the proposal']);
@@ -46,9 +47,9 @@ export const Drop: Story = {
         <Button onPress={() => setRows((was) => [`Follow up ${String(was.length + 1)}`, ...was])}>Add a task</Button>
         <div>
           {rows.map((row, index) => (
-            <Reveal key={row} variant="drop" animate={index < rows.length - 2}>
+            <RevealDrop key={row} animate={index < rows.length - 2}>
               {row}
-            </Reveal>
+            </RevealDrop>
           ))}
         </div>
       </Stage>

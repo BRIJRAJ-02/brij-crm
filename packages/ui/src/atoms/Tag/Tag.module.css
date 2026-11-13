@@ -2,10 +2,9 @@
    any icon in the option's hue on the hue's soft ground, the same everywhere a select value shows. An archived option is
    gray with a dashed edge. The "+N" chip opens the rest. */
 @layer components {
+  /* Gray unless a hue says otherwise. The colours and the ring (none) come through custom properties a wrapper may set,
+     so AiTag draws the same chip on the surface with a hairline, in a stylesheet of its own. */
   .root {
-    --tag-bg: var(--tag-gray-bg);
-    --tag-text: var(--tag-gray-text);
-
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -14,8 +13,9 @@
     block-size: calc(var(--space-20) + var(--space-2));
     padding: 0 var(--space-6);
     border-radius: var(--radius-sm);
-    background: var(--tag-bg);
-    color: var(--tag-text);
+    background: var(--tag-bg, var(--tag-gray-bg));
+    box-shadow: var(--tag-ring, none);
+    color: var(--tag-text, var(--tag-gray-text));
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
     white-space: nowrap;
@@ -68,13 +68,6 @@
 
   .root[data-archived] {
     border: var(--border-width-hairline) dashed var(--border-strong);
-  }
-
-  /* `ai` (spec 0073): a fact AI found, on the surface with a hairline, the violet sparkle before the words. */
-  .root[data-tone='ai']:not([data-archived]) {
-    border: var(--border-width-hairline) solid var(--border);
-    background: var(--surface);
-    color: var(--text);
   }
 
   .list {

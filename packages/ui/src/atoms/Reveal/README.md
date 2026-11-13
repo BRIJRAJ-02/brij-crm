@@ -12,17 +12,17 @@ There is one: it plays as it mounts. Under reduced motion it is simply there. `d
 
 ## Use
 
-The entrance (the default) is for public pages only, around a page's own words as they first draw (LinkPage's name, job title and bio). Never in the app (the app's one entrance is `drop`, below), and never around something that changes after the first paint (use NumberPop or a label swap for that).
+The entrance (the default) is for public pages only, around a page's own words as they first draw (LinkPage's name, job title and bio). Never in the app (the app's one entrance is RevealDrop, below), and never around something that changes after the first paint (use NumberPop or a label swap for that).
 
-## Drop
+## RevealDrop
 
-`variant="drop"` (spec 0073, AC-7311, the prototype's DropIn) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens, so a focus ring inside it is never cut once it is in; under reduced motion it only fades in, with no height opening and no rise (reduced motion keeps fades). `animate` defaults to `true` as the prototype's DropIn does, so pass `animate={false}` for every row a list draws on load. Why a variant: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one variant lets them share it as they are ported. Story: `Drop`.
+`RevealDrop` (spec 0073, AC-7311, the prototype's DropIn; `RevealDrop.tsx` beside Reveal) is a row arriving in a list (a comment, a task, a booking that just came in): its height opens from nothing while it rises `distance-medium` over `duration-fast` on `ease-smooth-out`, with no blur, so it is the one entrance allowed in the app. `animate={false}` for rows that were there on load. The row is clipped only while it opens, so a focus ring inside it is never cut once it is in; under reduced motion it only fades in, with no height opening and no rise (reduced motion keeps fades). `animate` defaults to `true` as the prototype's DropIn does, so pass `animate={false}` for every row a list draws on load. Why one part: BookingList, SettingsLayout, MatchCalendar and ReadyPanel each keep their own row entrance today; one part lets them share it as they are ported. Why a sibling and not Reveal's `variant="drop"` (as first built): the variant put its code and keyframes (232 B of JavaScript, 160 B of CSS gzipped) on every public page that draws Reveal's entrance, the guest menu and the link page among them (the port merge, 13 November 2026). Story: `Drop`.
 
 ```tsx
 {rows.map((row) => (
-  <Reveal key={row.id} variant="drop" animate={row.isNew}>
+  <RevealDrop key={row.id} animate={row.isNew}>
     <TaskRow task={row} />
-  </Reveal>
+  </RevealDrop>
 ))}
 ```
 

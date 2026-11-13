@@ -67,6 +67,7 @@ export { Skeleton, type SkeletonProps, type SkeletonShape, type SkeletonWidth } 
 export { Slider, type SliderProps } from './atoms/Slider/Slider.tsx';
 /** A public page's entrance, played once on first draw (spec 0068, AC-6806). */
 export { Reveal, type RevealProps } from './atoms/Reveal/Reveal.tsx';
+export { RevealDrop, type RevealDropProps } from './atoms/Reveal/RevealDrop.tsx';
 /** A worded number whose changed digits pop in (spec 0068, AC-6806). */
 export { NumberPop, type NumberPopProps } from './atoms/NumberPop/NumberPop.tsx';
 /** The moment something is done: a check that draws itself (spec 0068, AC-6806). */
@@ -79,6 +80,7 @@ export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx'
 export { linkHue } from './lib/stable-hue.ts';
 export { Switch, type SwitchProps } from './atoms/Switch/Switch.tsx';
 export { Tag, TagList, type TagItem, type TagListProps, type TagProps } from './atoms/Tag/Tag.tsx';
+export { AiTag, type AiTagProps } from './atoms/Tag/AiTag.tsx';
 export { LockReason, type LockReasonProps } from './atoms/Tooltip/LockReason.tsx';
 export { Tooltip, type TooltipPlacement, type TooltipProps } from './atoms/Tooltip/Tooltip.tsx';
 export { ShortcutTooltip, type ShortcutTooltipProps } from './atoms/Tooltip/ShortcutTooltip.tsx';
@@ -216,6 +218,7 @@ export {
   type ModalTriggerProps,
   type ModalVariant,
 } from './molecules/Modal/Modal.tsx';
+export { GuardedModal, type GuardedModalProps } from './molecules/Modal/GuardedModal.tsx';
 export { Panel, type PanelProps, type PanelVariant, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { PhoneField, type PhoneFieldProps, type PhoneFieldValue } from './molecules/PhoneField/PhoneField.tsx';
 export { InfoTip, type InfoTipProps } from './molecules/InfoTip/InfoTip.tsx';

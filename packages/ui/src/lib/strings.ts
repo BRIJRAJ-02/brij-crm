@@ -11,8 +11,4 @@ export const strings = {
   undoStale: 'Something changed since. Not undone.',
   /** Why a control is off, said as the disabled control's tooltip, never as a box beside it. */
   ownersAndAdminsOnly: 'Only owners and admins can change this.',
-  /** The ask before unsaved changes are thrown away (SaveBar's Discard, a dirty Modal's close): one question, everywhere. */
-  discardTitle: 'Discard your unsaved changes?',
-  keepEditing: 'Keep editing',
-  discardChanges: 'Discard changes',
 } as const;

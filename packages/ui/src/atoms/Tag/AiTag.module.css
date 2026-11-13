@@ -1,0 +1,12 @@
+/* AiTag (spec 0073, the prototype's AITag): Tag's chip on the surface with a hairline ring (the prototype's outline
+   tag, an inset ring so the chip keeps its size) and the words in the text colour; the violet is the sparkle's alone.
+   Set through Tag's custom properties on a box that draws nothing itself, so Tag's own stylesheet carries none of it. */
+@layer components {
+  .root {
+    --tag-bg: var(--surface);
+    --tag-text: var(--text);
+    --tag-ring: inset 0 0 0 var(--border-width-hairline) var(--border);
+
+    display: contents;
+  }
+}

@@ -12,6 +12,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Form } from '../Form/Form.tsx';
 import { MonthRangeCalendar } from '../DatePicker/DatePicker.tsx';
+import { GuardedModal } from './GuardedModal.tsx';
 import { Modal, ModalTrigger } from './Modal.tsx';
 
 const meta = {
@@ -982,7 +983,7 @@ export const DirtyDrawer: Story = {
     return (
       <Stage>
         <Button onPress={() => setOpen(true)}>Edit service</Button>
-        <Modal
+        <GuardedModal
           title="Edit service"
           variant="drawer"
           isOpen={isOpen}
@@ -999,7 +1000,7 @@ export const DirtyDrawer: Story = {
           }
         >
           <Field label="Name" value={name} onChange={setName} />
-        </Modal>
+        </GuardedModal>
       </Stage>
     );
   },
@@ -1030,9 +1031,9 @@ export const DirtyInTrigger: Story = {
     <Stage>
       <ModalTrigger>
         <Button>Edit note</Button>
-        <Modal title="Edit note" variant="form" isDirty actions={<Button slot="close">Cancel</Button>}>
+        <GuardedModal title="Edit note" variant="form" isDirty actions={<Button slot="close">Cancel</Button>}>
           <Field label="Note" defaultValue="Call back Friday, changed" />
-        </Modal>
+        </GuardedModal>
       </ModalTrigger>
     </Stage>
   ),
@@ -1064,7 +1065,7 @@ export const DirtySaveInTrigger: Story = {
       <Stage>
         <ModalTrigger>
           <Button>Edit note</Button>
-          <Modal
+          <GuardedModal
             title="Edit note"
             variant="form"
             isDirty={note !== saved}
@@ -1082,7 +1083,7 @@ export const DirtySaveInTrigger: Story = {
             }
           >
             <Field label="Note" value={note} onChange={setNote} />
-          </Modal>
+          </GuardedModal>
         </ModalTrigger>
       </Stage>
     );
@@ -1127,7 +1128,7 @@ function DrawerMovedFromOutside() {
   }, []);
   return (
     <Stage>
-      <Modal
+      <GuardedModal
         title="Edit service"
         variant="drawer"
         isOpen={isOpen}
@@ -1136,7 +1137,7 @@ function DrawerMovedFromOutside() {
         actions={<Button slot="close">Cancel</Button>}
       >
         <Field label="Name" defaultValue="Haircut and beard" />
-      </Modal>
+      </GuardedModal>
     </Stage>
   );
 }
@@ -1182,7 +1183,7 @@ export const CleanDrawer: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage>
-      <Modal
+      <GuardedModal
         title="Edit service"
         variant="drawer"
         isOpen
@@ -1191,7 +1192,7 @@ export const CleanDrawer: Story = {
         actions={<Button slot="close">Done</Button>}
       >
         <Field label="Name" defaultValue="Haircut" />
-      </Modal>
+      </GuardedModal>
     </Stage>
   ),
   play: async ({ args, userEvent }) => {

@@ -1,0 +1,58 @@
+/* RevealDrop (spec 0073, AC-7311, the prototype's DropIn): the row's height opens from nothing while it rises
+   distance-medium, on the smooth out curve. No blur, so the app may use it. Its own stylesheet, so the public pages
+   that draw Reveal's entrance never carry it. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: drop-open var(--duration-fast) var(--ease-smooth-out) both;
+  }
+
+  .inner {
+    min-block-size: 0;
+    animation: drop-rise var(--duration-fast) var(--ease-smooth-out) both;
+  }
+
+  .root[data-opening] > .inner {
+    overflow: hidden;
+  }
+
+  .root[data-still],
+  .root[data-still] > .inner {
+    animation: none;
+  }
+
+  @keyframes drop-open {
+    from {
+      grid-template-rows: 0fr;
+    }
+  }
+
+  @keyframes drop-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--distance-medium);
+    }
+  }
+
+  @keyframes drop-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* Reduced motion keeps the fade and drops the movement: no height opening, no rise. */
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      animation: none;
+    }
+
+    .inner {
+      animation-name: drop-fade;
+    }
+
+    .root[data-opening] > .inner {
+      overflow: visible;
+    }
+  }
+}

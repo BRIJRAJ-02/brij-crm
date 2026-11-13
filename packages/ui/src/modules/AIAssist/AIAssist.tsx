@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from '
 import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
+import { RevealDrop } from '../../atoms/Reveal/RevealDrop.tsx';
 import { TextSwap } from '../../atoms/TextSwap/TextSwap.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -408,7 +408,7 @@ export function AIAssist({
               )
             )}
             {!isBusy && (
-              <Reveal variant="drop">
+              <RevealDrop>
                 <ButtonGroup label={strings.answerActions} layout="row">
                   {isAnswered && answer !== '' && (
                     <CopyButton value={answer} label={strings.copy} announcement={strings.copied} variant="ghost" />
@@ -428,7 +428,7 @@ export function AIAssist({
                     {strings.newQuestion}
                   </Button>
                 </ButtonGroup>
-              </Reveal>
+              </RevealDrop>
             )}
           </div>
         )}

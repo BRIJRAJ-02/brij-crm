@@ -11,7 +11,7 @@ Ported from the artifact's Tag card. It is the select attribute's one display, s
 ```tsx
 <Tag hue="green">Won</Tag>
 <Tag isArchived>Legacy</Tag>
-<Tag tone="ai">AI enriched</Tag>
+<AiTag>AI enriched</AiTag>
 <TagList tags={options} maxVisible={3} />
 ```
 
@@ -19,11 +19,11 @@ Ported from the artifact's Tag card. It is the select attribute's one display, s
 - `isArchived`: an archived option still on an old value shows gray with a dashed edge, and "(archived)" for screen readers.
 - `TagList` shows `maxVisible` tags, then a "+N" chip that opens all of them in a popover. Cards pass 3; grid cells measure their width (milestone 3). Stories always pass a number, so screenshots don't depend on width.
 
-- `tone="ai"` (spec 0073, the prototype's AITag): a fact AI found, waiting to be trusted or edited ("AI enriched", "Series B"). The surface with a `border` hairline of its own (the hue chips have none since spec 0072; it is the "+N" chip's edge) and the text colour, the violet `sparkles` before the words (the `ai` colour shows only there, as the design system keeps it for AI alone), and "(filled by AI)" after the words for screen readers. It replaces `hue`. A tone, not a new component: the chip's size, padding, type and truncation are the same, only its colours and the mark change. Screens reach it as they reach every tag, through the field set (phase 5's AI filled values) or a library module.
+- `AiTag` (spec 0073, the prototype's AITag; `AiTag.tsx` beside Tag): a fact AI found, waiting to be trusted or edited ("AI enriched", "Series B"). Tag's chip on the surface with an inset `border` hairline and the text colour, the violet `sparkles` before the words (the `ai` colour shows only there, as the design system keeps it for AI alone), and "(filled by AI)" after the words for screen readers. It sets Tag's `--tag-bg`, `--tag-text` and `--tag-ring` on a box that draws nothing (`display: contents`), so the chip's size, padding, type and truncation are Tag's. Why a sibling and not Tag's `tone="ai"` (as first built): the tone put 67 B of JavaScript, 20 B of CSS and its words (18 B, in a chunk every guest booking page loads) on every screen that draws a tag (the port merge, 13 November 2026). Screens reach it through the field set (phase 5's AI filled values) or a library module.
 
 ## States
 
-Archived, and the `ai` tone. The "+N" chip has hover, focus and pressed.
+Archived, and AiTag. The "+N" chip has hover, focus and pressed.
 
 ## Keyboard
 

@@ -1,7 +1,7 @@
 /* AIAssist: the conversation and the prompt, with no frame of its own (the screen hosts it in a Panel or a Card,
    whose title, subtitle and close it uses). The conversation scrolls between the top and the prompt. Motion is the
    app's: the answer's newest words fade in, the status line's steps swap through TextSwap under a sweeping light,
-   and the row under an answer arrives through Reveal's drop; no blur and no press scale, and under reduced motion
+   and the row under an answer arrives through RevealDrop; no blur and no press scale, and under reduced motion
    only the fades stay. */
 @layer components {
   .root {
