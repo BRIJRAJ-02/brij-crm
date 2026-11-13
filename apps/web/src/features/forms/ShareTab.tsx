@@ -16,7 +16,6 @@ import {
   Field,
   InfoTip,
   Modal,
-  ShareColumn,
   SettingsStack,
   Switch,
   Table,
@@ -24,11 +23,15 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { lazyShareColumn } from '../share/LazyShareColumn.tsx';
 import { EMBED_TILES } from './embed-tiles.ts';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
+
+// The column's code loads apart from the editor's first paint (the live dialog's preload brings it in when idle).
+const ShareColumn = lazyShareColumn(() => import('../share/share-sheet.ts'));
 
 /** Props for the Share tab. */
 export interface ShareTabProps {

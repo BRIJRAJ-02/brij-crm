@@ -7,12 +7,19 @@ import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 
 type Sheet = ComponentType<ShareSheetProps>;
 
-/** ShareSheet as `load` brings it in, and the hook that loads it once the screen is idle. */
-export function lazyShareSheet(load: () => Promise<{ readonly ShareSheet: Sheet }>) {
-  const Lazy = lazy(() => load().then((module) => ({ default: module.ShareSheet })));
-  function ShareSheet(props: ShareSheetProps) {
-    const [hasOpened, setHasOpened] = useState(props.isOpen);
-    if (props.isOpen && !hasOpened) setHasOpened(true);
+/**
+ * A dialog's component as `load` brings it in: nothing drawn and no code until `isOpen` first says so, then mounted
+ * for good, so its exit plays; and the hook that loads it once the screen is idle, so a first open rarely waits.
+ */
+export function lazyOnOpen<P extends object>(
+  load: () => Promise<ComponentType<P>>,
+  isOpen: (props: P) => boolean,
+): { readonly Component: ComponentType<P>; readonly usePreload: () => void } {
+  const Lazy = lazy(() => load().then((component) => ({ default: component })));
+  function OnOpen(props: P) {
+    const open = isOpen(props);
+    const [hasOpened, setHasOpened] = useState(open);
+    if (open && !hasOpened) setHasOpened(true);
     return hasOpened ? (
       <Suspense fallback={null}>
         <Lazy {...props} />
@@ -30,5 +37,14 @@ export function lazyShareSheet(load: () => Promise<{ readonly ShareSheet: Sheet 
       return () => window.cancelIdleCallback(id);
     }, []);
   }
-  return { ShareSheet, usePreload };
+  return { Component: OnOpen, usePreload };
+}
+
+/** ShareSheet as `load` brings it in, and the hook that loads it once the screen is idle. */
+export function lazyShareSheet(load: () => Promise<{ readonly ShareSheet: Sheet }>) {
+  const { Component, usePreload } = lazyOnOpen(
+    () => load().then((module) => module.ShareSheet),
+    (props: ShareSheetProps) => props.isOpen,
+  );
+  return { ShareSheet: Component, usePreload };
 }

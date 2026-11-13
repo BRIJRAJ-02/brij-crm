@@ -5,13 +5,17 @@
 // Main task: copy the link (the sheet's one primary), or pass it on from the row of equal buttons.
 // Leaves out: the embed code (one row to the Share tab, where it is set up with a preview), changing the name and
 // where answers go (Settings; the footer says where they go, with Change), and later publishes (a toast is enough).
-// Drawn by the library's ShareSheet, the one share dialog (spec 0074, AC-7401).
+// Drawn by the library's ShareSheet, the one share dialog (spec 0074, AC-7401), loaded apart from the editor's first
+// paint (`features/share`): it opens after a first publish, by when the editor's idle moment has brought it in.
 import type { FormView } from '@crm/data';
-import { Link, ShareSheet } from '@crm/ui';
+import { Link } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { lazyShareSheet } from '../share/LazyShareSheet.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
+
+const { ShareSheet, usePreload } = lazyShareSheet(() => import('../share/share-sheet.ts'));
 
 /** Props for the Ready dialog. */
 export interface ReadyDialogProps {
@@ -33,6 +37,7 @@ export interface LiveFiling {
 /** "<Form> is live": the QR code, the link with Copy link, the share row, a row to the embeds, and Done. */
 export function ReadyDialog({ slug, form, onClose, filing }: ReadyDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
+  usePreload();
   // The last form stays while the sheet plays its exit.
   const [last, setLast] = useState(form);
   if (form !== undefined && form !== last) setLast(form);

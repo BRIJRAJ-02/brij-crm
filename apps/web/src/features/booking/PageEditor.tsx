@@ -56,7 +56,6 @@ import {
   Select,
   SettingsRow,
   SettingsStack,
-  ShareColumn,
   Skeleton,
   Switch,
   Tooltip,
@@ -126,11 +125,16 @@ import { activityStrings } from './activity-strings.ts';
 import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
 import { ShareTimesCard } from './ShareTimesCard.tsx';
 import { BookingShareSheet, SHARE_CARDS, useShareCardInView, usePreloadBookingShare } from './BookingShareSheet.tsx';
+import { lazyShareColumn } from '../share/LazyShareColumn.tsx';
 import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { PageStatusMenu } from './PageStatusMenu.tsx';
 import { liveRefusal, setPageLive } from './page-status.ts';
+
+// The Share tab's column loads apart from the editor's first paint; the header's share sheet preloads the same chunk
+// when the editor is idle (`usePreloadBookingShare`).
+const ShareColumn = lazyShareColumn(() => import('../share/share-sheet.ts'));
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
