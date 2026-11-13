@@ -1,5 +1,4 @@
 import type { Hue } from '../../hue.ts';
-import '../../lib/custom-properties.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './BookingPagePicture.module.css';
@@ -33,14 +32,7 @@ export function BookingPagePicture({ title, lengths, openDays, hue }: BookingPag
   );
   const picked = openDays.indexOf(true);
   return (
-    <div
-      className={styles.root}
-      style={{
-        '--picture-mark': `var(--dot-${hue})`,
-        '--picture-soft': `var(--tag-${hue}-bg)`,
-        '--picture-ink': `var(--tag-${hue}-text)`,
-      }}
-    >
+    <div className={styles.root} data-hue={hue}>
       <div className={styles.head}>
         <span className={styles.mark} />
         <span className={styles.words}>

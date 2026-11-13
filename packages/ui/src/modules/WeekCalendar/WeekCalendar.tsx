@@ -351,7 +351,7 @@ function placementBeside(block: HTMLElement): PopoverPlacement {
 /** A block with its slot: overlapping blocks side by side, or a later start indented over an earlier one. */
 type Placed = PlacedSlot<WeekCalendarBlock>;
 
-/** The fewest minutes a block is drawn as: one line (`size-chip`, 20px) of an hour (`size-toolbar` plus `space-16`, 64px), rounded up. */
+/** The fewest minutes a block is drawn as: one line and `space-4` (20px) of an hour (`size-toolbar` plus `space-16`, 64px), rounded up. */
 const DRAWN_MINUTES = 19;
 
 /** Closed time's slot: the whole column, under bookings and events. */
@@ -1321,7 +1321,7 @@ function heldTime(item: Held, days: readonly WeekCalendarDay[], minuteLabel: (mi
 /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
 function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string, nestAfter: number) {
   const ofDay = blocks.filter((block) => block.dayKey === dayKey);
-  // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
+  // Laid out as tall as they are drawn: a short block is never under one line and `space-4`, so two back to back
   // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
   const drawn = (block: WeekCalendarBlock) => ({
     ...block,

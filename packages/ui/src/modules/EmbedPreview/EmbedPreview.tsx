@@ -100,7 +100,7 @@ export function EmbedPreview({
         {mode === 'popup' && <span className={styles.siteButton}>{words}</span>}
         <Skeleton lines={2} />
         {mode === 'floating' && (
-          <span className={styles.corner} data-marked={mark === undefined ? undefined : ''}>
+          <span className={styles.corner}>
             {mark !== undefined && <Icon name={mark} size="sm" />}
             <span className={styles.words}>{words}</span>
           </span>

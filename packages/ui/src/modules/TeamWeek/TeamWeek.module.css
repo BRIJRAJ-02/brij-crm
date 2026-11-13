@@ -74,7 +74,7 @@
 
   .name[data-opens][data-focus-visible] {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--space-2);
+    outline-offset: var(--border-width-focus);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -201,10 +201,11 @@
     outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
+  /* Just inside: Table's sideways scroller clips a ring drawn outside a cell at its edge. */
   .cell[data-editable][data-focus-visible] {
     z-index: var(--z-raised);
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-hairline);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -318,7 +319,9 @@
     background: var(--tag-gray-bg);
   }
 
+  /* A tinted mark's edge is its hue's dot colour: the subtle border is about 1.2:1 against the tint. */
   .swatch[data-tone='override'] {
+    border-color: var(--dot-blue);
     background: var(--tag-blue-bg);
   }
 
@@ -329,6 +332,7 @@
   }
 
   .swatch[data-tone='away'] {
+    border-color: var(--dot-yellow);
     background: var(--tag-yellow-bg);
   }
 
@@ -357,6 +361,11 @@
     .cell,
     .swatch {
       border-color: CanvasText;
+    }
+
+    /* Today's accent text is gone: its date is underlined instead. */
+    .heading[data-today] .date {
+      text-decoration: underline;
     }
   }
 }

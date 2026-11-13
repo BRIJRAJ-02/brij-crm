@@ -13,6 +13,11 @@
     scrollbar-width: none;
   }
 
+  /* No days and not loading: no bar at all. */
+  .root:empty {
+    display: none;
+  }
+
   /* The days run on past an edge: a fade there says so, where a hard cut read as the last day (critic A4); both ends
      once it has scrolled (the redesign of 9 November 2026). Only the mask's alpha counts, so the surface token stands
      in for opaque. */
@@ -109,10 +114,10 @@
     content: '';
   }
 
-  /* The outline ring, inside the bar's padding (the strip scrolls, so it clips). */
+  /* The outline ring, just inside: the strip scrolls, so it clips. */
   .day:focus-visible {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-hairline);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   .weekday {
@@ -143,8 +148,10 @@
       border: var(--border-width-hairline) solid ButtonText;
     }
 
+    /* Chosen is a fill, so the outline is focus's alone. */
     .day[aria-pressed='true'] {
-      outline: var(--border-width-thick) solid Highlight;
+      background: Highlight;
+      color: HighlightText;
     }
   }
 }

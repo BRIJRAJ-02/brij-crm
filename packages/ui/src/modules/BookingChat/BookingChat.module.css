@@ -11,11 +11,6 @@
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
 
-    /* One word's beat as a reply writes itself: 40ms, about 25 words a second (stageshow's ai-chat), quick enough to
-       feel live and slow enough to read along (the owner, 2 November 2026: the chat was too fast to use). */
-    /* stylelint-disable-next-line unit-disallowed-list -- a reading pace, no motion token stands for it */
-    --stream-step: 40ms;
-
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -39,10 +34,10 @@
     overflow-y: auto;
   }
 
-  /* The outline ring (the prototype's), space-2 outside the thread, as the old accent ring stood. */
+  /* The outline ring (the prototype's), just outside the thread, as the old accent ring stood. */
   .thread:focus-visible {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--space-2);
+    outline-offset: var(--border-width-focus);
   }
 
   .line {
@@ -144,11 +139,13 @@
     animation-delay: calc(var(--duration-pulse) / 3);
   }
 
-  /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), about 25
-     words a second; past 40 words the rest arrive together, so a long reply never keeps the visitor waiting. */
+  /* A reply writes itself: each word resolves a beat (duration-stagger, 40ms, about 25 words a second: stageshow's
+     ai-chat, quick enough to feel live and slow enough to read along, the owner, 2 November 2026) after the one before
+     (Written in BookingChat.tsx); past 40 words the rest arrive together, so a long reply never keeps the visitor
+     waiting. */
   .word {
     animation: word-in var(--duration-fast) var(--ease-smooth-out) backwards;
-    animation-delay: calc(var(--word, 0) * var(--stream-step));
+    animation-delay: calc(var(--word, 0) * var(--duration-stagger));
   }
 
   /* What the reply offers (its times, its suggestions) arrives once its words have: the answer first, then the
@@ -169,7 +166,7 @@
   .suggestions {
     interpolate-size: allow-keywords;
     animation: line-drop var(--duration-fast) var(--ease-smooth-out) backwards;
-    animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-fast));
+    animation-delay: calc(var(--words, 0) * var(--duration-stagger) + var(--duration-fast));
   }
 
   /* Each day's times start a group of their own. */

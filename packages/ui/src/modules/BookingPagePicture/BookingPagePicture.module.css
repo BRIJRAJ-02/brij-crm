@@ -4,7 +4,7 @@
    (text-caption, text-secondary), each one line, cut; then a week of seven days space-4 apart, each a radius-sm
    square holding its letter (text-kbd): a closed day in text-tertiary, an open day on the hue's tag ground in its
    tag text, the first open day picked, those two swapped (the prototype's dot fill under white failed 4.5:1 on the
-   light hues). The hue reaches it as three names the TSX sets from `hue`. Tokens only; it never moves. */
+   light hues). `data-hue` sets the three names, grey by default. Tokens only; it never moves. */
 @layer components {
   .root {
     --picture-mark: var(--dot-gray);
@@ -17,6 +17,54 @@
     box-sizing: border-box;
     padding: var(--space-12) var(--space-12) var(--space-16);
     color: var(--text);
+  }
+
+  .root[data-hue='red'] {
+    --picture-mark: var(--dot-red);
+    --picture-soft: var(--tag-red-bg);
+    --picture-ink: var(--tag-red-text);
+  }
+
+  .root[data-hue='orange'] {
+    --picture-mark: var(--dot-orange);
+    --picture-soft: var(--tag-orange-bg);
+    --picture-ink: var(--tag-orange-text);
+  }
+
+  .root[data-hue='yellow'] {
+    --picture-mark: var(--dot-yellow);
+    --picture-soft: var(--tag-yellow-bg);
+    --picture-ink: var(--tag-yellow-text);
+  }
+
+  .root[data-hue='lime'] {
+    --picture-mark: var(--dot-lime);
+    --picture-soft: var(--tag-lime-bg);
+    --picture-ink: var(--tag-lime-text);
+  }
+
+  .root[data-hue='green'] {
+    --picture-mark: var(--dot-green);
+    --picture-soft: var(--tag-green-bg);
+    --picture-ink: var(--tag-green-text);
+  }
+
+  .root[data-hue='sky'] {
+    --picture-mark: var(--dot-sky);
+    --picture-soft: var(--tag-sky-bg);
+    --picture-ink: var(--tag-sky-text);
+  }
+
+  .root[data-hue='blue'] {
+    --picture-mark: var(--dot-blue);
+    --picture-soft: var(--tag-blue-bg);
+    --picture-ink: var(--tag-blue-text);
+  }
+
+  .root[data-hue='purple'] {
+    --picture-mark: var(--dot-purple);
+    --picture-soft: var(--tag-purple-bg);
+    --picture-ink: var(--tag-purple-text);
   }
 
   .head {

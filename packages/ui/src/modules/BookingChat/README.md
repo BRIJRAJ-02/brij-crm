@@ -44,7 +44,7 @@ Loading, the greeting with times, no times, a few turns with the read back, wait
 
 ## Motion
 
-A time picked from a reply stays on that reply as the record (SlotList's `answered`): marked with a check, the others quiet, none pressable again; the reply's offers no longer vanish while the next answer is written. A reply writes itself: its words resolve out of a soft blur one after another (about 25 words a second, stageshow's ai-chat pace, so it reads along as it arrives; past 40 words the rest arrive together), and its times and suggestions arrive after its words. The whole text is in the log from the start, so it is read once. While a reply is out, the waiting line shows its words beside the spinner with a light passing across them. Reduced motion shows whole replies and a plain waiting line.
+A time picked from a reply stays on that reply as the record (SlotList's `answered`): marked with a check, the others quiet, none pressable again; the reply's offers no longer vanish while the next answer is written. A reply writes itself: its words fade in one after another (a `duration-stagger` beat, about 25 words a second, stageshow's ai-chat pace, so it reads along as it arrives; past 40 words the rest arrive together), and its times and suggestions arrive after its words. The whole text is in the log from the start, so it is read once. While a reply is out, the waiting line shows its words beside the spinner with a light passing across them. Reduced motion shows whole replies and a plain waiting line.
 
 ## Keyboard and screen readers
 
@@ -62,7 +62,7 @@ Not in the artifact.
 
 ## Timefix prototype (spec 0072)
 
-On the public booking page, so only what visibly differed from the prototype's BookingChat moved, at no cost to the page: the host's bubbles on `surface-subtle` and the visitor's in the page's accent with `on-accent`, both `radius-lg` (from `radius-xl`) with the corner nearest the face `radius-xs`, `space-8` / `space-12` inside; the thread's keyboard focus is the outline ring (`border-width-focus` in `focus-ring`, `space-2` outside it; the prototype draws it just inside, but the thread clips nothing of its own ring and the old one stood outside); the prompt box, typed in, takes a focused field's look (an `accent-text` edge and a `border-width-focus` halo of `accent-border`, which BookingFrame points at the page's brand), in place of the legacy `shadow-focus`. Times are SlotList's and suggestions Button's, so they follow those parts.
+On the public booking page, so only what visibly differed from the prototype's BookingChat moved, at no cost to the page: the host's bubbles on `surface-subtle` and the visitor's in the page's accent with `on-accent`, both `radius-lg` (from `radius-xl`) with the corner nearest the face `radius-xs`, `space-8` / `space-12` inside; the thread's keyboard focus is the outline ring (`border-width-focus` in `focus-ring`, `border-width-focus` outside it; the prototype draws it just inside, but the thread clips nothing of its own ring and the old one stood outside); the prompt box, typed in, takes a focused field's look (an `accent-text` edge and a `border-width-focus` halo of `accent-border`, which BookingFrame points at the page's brand), in place of the legacy `shadow-focus`. Times are SlotList's and suggestions Button's, so they follow those parts.
 
 **Use it for** the booking page's Chat view. **Don't use it for** the app's AI panel or comments between teammates.
 

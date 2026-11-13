@@ -54,7 +54,7 @@
      circle, the selected surface on the picked day. */
   .dayButton {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: center;
     gap: var(--space-6);
     padding: var(--space-8) var(--space-4);
@@ -81,8 +81,10 @@
     transition: background var(--duration-quick) var(--ease-out);
   }
 
+  /* Picked: the selected surface, and the chosen ring DayStrip draws, so it reads at 3:1 where the fill alone can't. */
   .dayButton[aria-pressed='true'] .dayNumber {
     background: var(--surface-selected);
+    box-shadow: 0 0 0 var(--border-width-hairline) var(--control-border);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -318,7 +320,7 @@
     inline-size: calc(var(--span) / var(--lanes) * var(--region-size) - var(--space-4));
     /* Never shorter than one line of its words, so a quarter hour still reads (it may run past its end). */
     block-size: max(calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline)), calc(1lh + var(--space-4)));
-    padding: var(--space-2) var(--space-6);
+    padding: var(--space-4) var(--space-6);
     border: none;
     border-radius: var(--radius-sm);
     /* A ring in the grid's surface parts a block from one it touches or sits over (the prototype's). */
@@ -395,15 +397,17 @@
 
   /* A booking is the base: a soft tint in its link's colour, its words in the hue's text (the prototype's meeting). */
 
-  /* Time another calendar holds (the prototype's busy and calendar event): hatched, never filled. The member's own
+  /* Time another calendar holds (the prototype's busy and calendar event): hatched over the grid's surface, so a block
+     it overlaps never shows through (busy can sit over closed time, or beside a booking in a lane). The member's own
      calendar events keep a thin edge in their calendar's colour and its mark, in secondary words; busy time has a
      hairline at its top. */
   .block:is([data-kind='event'], [data-kind='busy']) {
-    background: repeating-linear-gradient(
-      135deg,
-      var(--border-subtle) 0 var(--border-width-hairline),
-      transparent var(--border-width-hairline) var(--space-6)
-    );
+    background: var(--surface)
+      repeating-linear-gradient(
+        135deg,
+        var(--border-subtle) 0 var(--border-width-hairline),
+        transparent var(--border-width-hairline) var(--space-6)
+      );
     color: var(--text-secondary);
   }
 
@@ -442,7 +446,7 @@
     text-decoration: line-through;
   }
 
-  /* A past day's bookings step back: a grey fill, their words secondary, the hue's bar kept. */
+  /* A past day's bookings step back: a grey fill, their words secondary. */
   .column[data-past] .block[data-kind='booking']:not([data-open]) {
     background: var(--surface-subtle);
     color: var(--text-secondary);
@@ -467,10 +471,11 @@
     outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
+  /* Just inside: the scroller clips a ring drawn outside a block at a column's edge. */
   .block:focus-visible {
     z-index: var(--z-raised);
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--border-width-hairline);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
 
   /* A booking that can move (the screen's `move`): the cursor says it can be taken, and its foot is an edge that
@@ -846,5 +851,25 @@
 
   .root[data-fill][data-fits] .body {
     --hour: max(var(--hour-base), calc(100cqb / var(--hours)));
+  }
+
+  /* Forced colours drop fills and shadows: blocks keep an edge, the picked day a ring, today an underline, now a line. */
+  @media (forced-colors: active) {
+    .block {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+
+    .dayButton[aria-pressed='true'] .dayNumber {
+      outline: var(--border-width-hairline) solid Highlight;
+    }
+
+    .dayButton[data-today] .dayNumber {
+      text-decoration: underline;
+    }
+
+    .now,
+    .now::before {
+      background: CanvasText;
+    }
   }
 }
