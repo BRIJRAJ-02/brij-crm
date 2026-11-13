@@ -22,7 +22,6 @@ import {
   EditorStatus,
   EmptyState,
   Field,
-  focusLater,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -132,8 +131,6 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
   usePreloadShareSheet();
-  // Share in the header, where focus goes when the publish dialog closes and the bar's Publish has gone with it.
-  const shareRef = useRef<HTMLButtonElement>(null);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
   // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
@@ -410,13 +407,7 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
         >
           {strings.view}
         </ButtonLink>
-        <Button
-          ref={shareRef}
-          icon="share"
-          label={strings.share}
-          isLabelCollapsible
-          onPress={() => setOpen({ kind: 'share' })}
-        >
+        <Button icon="share" label={strings.share} isLabelCollapsible onPress={() => setOpen({ kind: 'share' })}>
           {strings.share}
         </Button>
       </>
@@ -794,15 +785,9 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                 hasHours={hasHours}
                 {...(place === undefined ? {} : { place })}
                 blocker={blocker}
-                onClose={() => {
-                  setOpen(undefined);
-                  // A first publish takes Publish out of the bar, so the dialog's own focus return finds nothing and
-                  // lands on the page: hand it to the header's Share instead (spec 0074, AC-7428).
-                  focusLater(() => {
-                    const active = document.activeElement;
-                    return active === null || active === document.body ? shareRef.current : undefined;
-                  });
-                }}
+                // A first publish takes Publish out of the bar: the bar moves focus to its own status line as the
+                // publish lands, so the dialog's focus return goes there, never the page (spec 0074, AC-7428).
+                onClose={() => setOpen(undefined)}
                 onFix={(fix) => {
                   setOpen(undefined);
                   if (fix.kind === 'hours') router.history.push(hoursHref);
