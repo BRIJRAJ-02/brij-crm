@@ -76,7 +76,7 @@ function clear() {
 afterEach(clear);
 
 /** The fake layer: the list as given (or a refusal), and a claim that answers the claimed row. */
-function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: string }>) {
+function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: string; hasWallet?: boolean }>) {
   const claim = vi.fn((_slug: string, member: string, handle: string) => {
     const found = PAGES.find((each) => each.memberId === member);
     return found === undefined
@@ -107,6 +107,10 @@ function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: 
     Promise.resolve({ isFree: handle !== TAKEN }),
   );
   const suggestHandle = vi.fn(() => Promise.resolve({ handle: 'nick-2' }));
+  const walletPass = vi.fn((_slug: string, member: string) => {
+    const found = PAGES.find((each) => each.memberId === member);
+    return Promise.resolve({ name: `${found?.handle ?? 'nobody'}.pkpass`, bytes: new Uint8Array([80, 75, 5, 6]) });
+  });
   const data = {
     teamPages: {
       list,
@@ -117,11 +121,12 @@ function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: 
       cancelInvite,
       checkHandle,
       suggestHandle,
+      walletPass,
       editedBy: () => Promise.resolve({}),
     },
     inbox: { unread: () => stillLoading },
   } as unknown as Partial<DataLayer>;
-  return { data, claim, addPerson, removePerson, invitePerson, cancelInvite, checkHandle };
+  return { data, claim, addPerson, removePerson, invitePerson, cancelInvite, checkHandle, walletPass };
 }
 
 async function renderTeam(data: Partial<DataLayer>, permissions: readonly string[] = MANAGE) {
@@ -158,6 +163,43 @@ describe('Team pages (AC-7001)', () => {
     await renderTeam(layerWith(refused).data, []);
     await expect.element(page.getByText(/Only people who manage the team/)).toBeVisible();
     expect(document.querySelector('[role="grid"], table')).toBeNull();
+  });
+});
+
+describe('Apple Wallet passes from Team pages (13 Nov 2026)', () => {
+  it('offers no pass where none can be made', async () => {
+    await renderTeam(layerWith(ready).data);
+    await expect.element(page.getByRole('button', { name: 'Download all QR codes' })).toBeEnabled();
+    expect(document.body.textContent).not.toContain('Wallet');
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: 'Download Wallet pass' }).query()).toBeNull();
+  });
+
+  it('downloads one Live page’s pass from its row, every Live page’s from the bar, and never a Private page’s', async () => {
+    const { data, walletPass } = layerWith(() =>
+      Promise.resolve({ pages: PAGES, month: '2026-11-01', hasWallet: true }),
+    );
+    await renderTeam(data);
+    // A Private page has no pass: its row offers the codes and nothing of Wallet.
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Cy Okafor' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: 'Download Wallet pass' }).query()).toBeNull();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Download Wallet pass' }));
+    await vi.waitFor(() => expect(walletPass).toHaveBeenCalledWith('acme', PAGES[1]?.memberId));
+
+    // Everyone's: the two Live pages, one after another, then one zip and a line that counts them.
+    walletPass.mockClear();
+    await userEvent.click(page.getByRole('button', { name: 'Download all Wallet passes' }));
+    await expect.element(page.getByText('2 Wallet passes downloaded.')).toBeVisible();
+    expect(walletPass.mock.calls.map(([, member]) => member)).toEqual([PAGES[0]?.memberId, PAGES[1]?.memberId]);
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations()).toEqual([]);
+    }
   });
 });
 

@@ -36,6 +36,7 @@ import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { AddPageDialog } from './AddPageDialog.tsx';
 import { CancelPageInvite, PageInviteDialog } from './PageInviteDialog.tsx';
 import { useLinkPagePlace } from './place.tsx';
+import { writeZip, type ZipEntry } from '@crm/contracts/zip';
 import { saveFile } from './qr-png.ts';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
 import { teamStrings as strings } from './team-strings.ts';
@@ -54,6 +55,11 @@ type TeamState =
   | { readonly status: 'failed'; readonly message: string };
 
 /** A download under way: one page's code in one format, or every page's as one zip. */
+/** The media type of a `.pkpass`, so a phone that opens the saved file offers Wallet. */
+const WALLET_PASS_TYPE = 'application/vnd.apple.pkpass';
+/** `walleting` while every pass is fetched for the zip; any other value is one person's member id. */
+const ALL_PASSES = 'all';
+
 type Drawing =
   | { readonly kind: 'one'; readonly handle: string; readonly format: 'png' | 'svg' }
   | { readonly kind: 'all'; readonly handles: readonly string[] };
@@ -74,8 +80,11 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   const place = useLinkPagePlace(slug);
   const workspaceName = place.workspaceName ?? '';
   const [state, setState] = useState<TeamState>({ status: 'loading' });
+  const [hasWallet, setHasWallet] = useState(false);
   const [claiming, setClaiming] = useState<TeamLinkPage | undefined>(undefined);
   const [drawing, setDrawing] = useState<Drawing | undefined>(undefined);
+  // The Apple Wallet pass being fetched (13 Nov 2026): one person's, or everyone's for the zip. One at a time.
+  const [walleting, setWalleting] = useState<string | undefined>(undefined);
   // Add a page, open (a new key for each opening, so it starts empty), and the page only person being removed.
   const [adding, setAdding] = useState<number | undefined>(undefined);
   const [removing, setRemoving] = useState<TeamLinkPage | undefined>(undefined);
@@ -104,7 +113,9 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
     let isCurrent = true;
     data.teamPages.list(slug).then(
       (list) => {
-        if (isCurrent) setState({ status: 'ready', pages: list.pages });
+        if (!isCurrent) return;
+        setState({ status: 'ready', pages: list.pages });
+        setHasWallet(list.hasWallet === true);
       },
       (error: unknown) => {
         if (!isCurrent) return;
@@ -134,6 +145,52 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
     void navigate({ href: place.href({ member: page.memberId }) });
   };
 
+  // A pass exists only for a page visitors can open: it is the one the Live page itself offers.
+  const walletPages = hasWallet ? pages.filter((page) => page.handle !== undefined && page.isLive) : [];
+
+  /** One person's pass, saved as `<handle>.pkpass`. */
+  const saveWalletPass = (page: TeamLinkPage) => {
+    if (walleting !== undefined) return;
+    setWalleting(page.memberId);
+    data.teamPages.walletPass(slug, page.memberId).then(
+      (pass) => {
+        setWalleting(undefined);
+        saveFile(new Blob([pass.bytes], { type: WALLET_PASS_TYPE }), pass.name);
+      },
+      () => {
+        setWalleting(undefined);
+        toasts.toast({ tone: 'danger', message: strings.walletFailed });
+      },
+    );
+  };
+
+  /** Every Live page's pass in one zip, fetched one after another: each is signed as it is asked for. */
+  const saveWalletPasses = async () => {
+    if (walleting !== undefined || walletPages.length === 0) return;
+    setWalleting(ALL_PASSES);
+    const entries: ZipEntry[] = [];
+    let missed = 0;
+    for (const page of walletPages) {
+      try {
+        const pass = await data.teamPages.walletPass(slug, page.memberId);
+        entries.push({ name: pass.name, bytes: pass.bytes });
+      } catch {
+        missed += 1;
+      }
+    }
+    setWalleting(undefined);
+    if (entries.length === 0) {
+      toasts.toast({ tone: 'danger', message: strings.walletAllFailed });
+      return;
+    }
+    saveFile(new Blob([writeZip(entries)], { type: 'application/zip' }), strings.walletZipName(workspaceName || slug));
+    toasts.toast(
+      missed === 0
+        ? { tone: 'success', message: strings.walletZipped(entries.length) }
+        : { tone: 'danger', message: strings.walletSomeFailed(entries.length, missed) },
+    );
+  };
+
   const copy = (handle: string) => {
     navigator.clipboard.writeText(publicProfileUrl(handle)).then(
       () => toasts.toast({ tone: 'success', message: strings.copied }),
@@ -153,6 +210,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           if (key === 'uninvite' || key === 'unlogin') setUninviting(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
+          if (key === 'wallet') saveWalletPass(page);
           // One download at a time: a second press while one is drawn waits for it rather than being lost.
           if ((key === 'png' || key === 'svg') && drawing === undefined) {
             setDrawing({ kind: 'one', handle: page.handle, format: key });
@@ -181,6 +239,11 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
             <MenuItem id="svg" icon="qr-code" isDisabled={drawing !== undefined}>
               {strings.qrSvg}
             </MenuItem>
+            {hasWallet && page.isLive && (
+              <MenuItem id="wallet" icon="wallet" isDisabled={walleting !== undefined}>
+                {strings.walletPass}
+              </MenuItem>
+            )}
           </>
         )}
         {page.isPageOnly === true && (
@@ -344,6 +407,24 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 onPress={() => setDrawing({ kind: 'all', handles })}
               >
                 {strings.downloadAll}
+              </Button>
+            )}
+            {state.status !== 'forbidden' && hasWallet && (
+              // Everyone's Apple Wallet pass in one zip (the owner, 13 Nov 2026), beside the codes: both are what a
+              // manager hands out. Only where passes can be made, and only Live pages have one.
+              <Button
+                icon="wallet"
+                isLabelCollapsible
+                label={strings.walletAll}
+                isDisabled={
+                  state.status !== 'ready' ||
+                  walletPages.length === 0 ||
+                  (walleting !== undefined && walleting !== ALL_PASSES)
+                }
+                isPending={walleting === ALL_PASSES}
+                onPress={() => void saveWalletPasses()}
+              >
+                {strings.walletAll}
               </Button>
             )}
             {state.status !== 'forbidden' && (

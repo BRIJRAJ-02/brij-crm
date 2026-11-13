@@ -77,6 +77,8 @@ export const TeamLinkPages = z.object({
   pages: z.array(TeamLinkPage),
   /** The first day of the month counted, `YYYY-MM-DD` (UTC). */
   month: z.iso.date(),
+  /** Apple Wallet passes can be made here (13 Nov 2026): Team pages offers each Live page's pass, and all at once. */
+  hasWallet: z.boolean().optional(),
 });
 /** Every active member's link page. */
 export type TeamLinkPages = z.infer<typeof TeamLinkPages>;
@@ -278,6 +280,16 @@ export type LinkPageEditedBy = z.infer<typeof LinkPageEditedBy>;
  * person's social links; `inviteLogin` and
  * `cancelLoginInvite` take it with `members.invite`, from Timefix only (never an app's frame).
  */
+/** One person's Apple Wallet pass, asked for by a team page manager (13 Nov 2026). */
+export const TeamWalletPassInput = WorkspaceScoped.extend({ member: Uuid });
+/** One person's Apple Wallet pass, asked for by a team page manager. */
+export type TeamWalletPassInput = z.infer<typeof TeamWalletPassInput>;
+
+/** A `.pkpass` as it travels to the browser that zips it: the file's name and its bytes as base64. */
+export const TeamWalletPass = z.object({ name: z.string(), data: z.string() });
+/** A `.pkpass` as it travels to the browser. */
+export type TeamWalletPass = z.infer<typeof TeamWalletPass>;
+
 export const teamPagesContract = {
   list: oc.input(WorkspaceScoped).output(TeamLinkPages),
   claim: oc.input(ClaimTeamHandleInput).output(TeamLinkPage),
@@ -293,4 +305,9 @@ export const teamPagesContract = {
   checkHandle: oc.input(TeamHandleCheckInput).output(TeamHandleCheck),
   suggestHandle: oc.input(TeamHandleSuggestInput).output(TeamHandleSuggestion),
   editedBy: oc.input(WorkspaceScoped).output(LinkPageEditedBy),
+  /**
+   * A member's Apple Wallet pass (13 Nov 2026), for `link_pages.manage_team`: the same pass their Live page offers,
+   * so a manager can hand everyone theirs. NOT_FOUND for a page that isn't Live, and where no pass can be made.
+   */
+  walletPass: oc.input(TeamWalletPassInput).output(TeamWalletPass),
 };

@@ -227,6 +227,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   walletLink: (wallet: WalletKind) => WalletLinkMaker | undefined;
   /**
+   * Makes the Apple pass of the Live page a handle names (13 Nov 2026), for Team pages' downloads; undefined where
+   * this environment has no certificate. It answers undefined for a page that isn't Live.
+   */
+  pagePass:
+    ((handle: string) => Promise<{ readonly handle: string; readonly bytes: Uint8Array } | undefined>) | undefined;
+  /**
    * The names of the workspaces a person is in that require two factor (spec
    * 0033, AC-885): Account › Sign in and devices says so, and keeps their last second
    * factor on. A system read per workspace, in packages/core.
