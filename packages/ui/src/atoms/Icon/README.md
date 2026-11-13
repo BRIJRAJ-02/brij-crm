@@ -62,6 +62,8 @@ It takes no focus. Put a labelled icon inside a Button when it must be pressed.
 
 Takes its look from the prototype's Icon: Lucide at one stroke (`--icon-stroke`) and four sizes, 16 (`md`, the default) in rows, menus and buttons, 14 (`sm`) inside 28px controls and chips, 12 (`xs`) in footers and meta lines, 20 (`lg`) in empty states and tiles. A hue tile has no outline, as the prototype's tags and tiles have none.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Icon too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Icon.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Icon.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
+
 **Use it for**: every interface glyph, through the registry. **Don't** recolour a brand, put a brand mark where a Lucide glyph belongs, or use the `ai` tone for anything but AI.
 
 **Differences from the prototype**

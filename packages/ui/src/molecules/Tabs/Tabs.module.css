@@ -1,6 +1,6 @@
-/* Tabs: the Timefix prototype's tabs (spec 0072). size-control-lg tabs in text-secondary on a hairline, the chosen
-   one in text over a 2px accent line that slides to it (transitions.dev 16: duration-fast on ease-smooth-out). The
-   `feature` variant is a home page's row of a product's areas, `pills` a guest menu's categories (see below). */
+/* Tabs: 40px tabs in text-secondary on a hairline, the chosen one in text with
+   a 2px underline that slides between tabs over duration-move. The `feature` variant is a home page's row of a
+   product's areas (see below). */
 @layer components {
   .root {
     display: flex;
@@ -97,7 +97,7 @@
     max-inline-size: 100%;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-control-lg);
+    min-block-size: calc(var(--space-32) + var(--space-8));
     margin-inline-start: auto;
     padding-inline: var(--space-16);
   }
@@ -113,7 +113,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-6);
-    block-size: var(--size-control-lg);
+    block-size: calc(var(--space-32) + var(--space-8));
     padding-inline: var(--space-8);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
@@ -121,7 +121,7 @@
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
     outline: none;
-    transition: color var(--duration-fast) var(--ease-smooth-out);
+    transition: color var(--duration-quick) var(--ease-out);
   }
 
   /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. Tabs sit a little
@@ -223,27 +223,23 @@
     }
   }
 
-  /* The ring inside the tab, clear of the strip's scroller and its hairline. */
   .tab[data-focus-visible] {
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: calc(-1 * var(--space-4));
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .tab[data-disabled] {
     opacity: var(--opacity-disabled);
   }
 
-  /* The accent line: blue marks the chosen tab (the prototype's one use of blue in navigation). */
   .indicator {
     position: absolute;
     inset-block-end: calc(-1 * var(--border-width-hairline));
     inset-inline: 0;
     block-size: var(--border-width-thick);
-    border-radius: var(--radius-full);
-    background: var(--accent);
+    background: var(--text);
     transition-duration: var(--duration-fast);
     transition-property: translate, width;
-    transition-timing-function: var(--ease-smooth-out);
+    transition-timing-function: var(--ease-in-out);
   }
 
   .list[data-instant] .indicator {
@@ -273,7 +269,7 @@
     padding: var(--space-16) var(--space-4);
     border-block-start: var(--border-width-hairline) solid var(--border);
     border-radius: 0;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     white-space: normal;
   }
 
@@ -310,7 +306,7 @@
   }
 
   .featureDescription {
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
@@ -360,8 +356,7 @@
     border-block-end: none;
   }
 
-  /* A ring's width of room at the ends and above and below, so a pill's focus ring (on its edge) isn't cut by the
-     scroller. A page
+  /* A ring's width of room at the ends, so the first and last pill's focus ring isn't cut by the scroller. A page
      that runs the row to the window's edges sets --pills-inset to its gutter, so the pills start in line with its
      words and scroll out to the edge (the guest menu). */
   .bar[data-variant='pills'] .list {
@@ -380,10 +375,9 @@
     color: var(--text);
     /* The words change colour with the fill's slide, so they never sit light on the ground while it travels. A press
        eases the pill down to --scale-press on --ease-press: 1 in the app, where nothing shrinks; the guest menu sets
-       checklabs' 0.94 and its overshoot. A pill that loses the choice drops its own fill at once, so the sliding
-       indicator is what leaves it. */
+       checklabs' 0.94 and its overshoot. */
     transition:
-      color var(--duration-fast) var(--ease-smooth-out),
+      color var(--duration-fast) var(--ease-in-out),
       scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
   }
 
@@ -391,22 +385,8 @@
     scale: var(--scale-press);
   }
 
-  /* The chosen pill also takes the fill itself once the indicator has slid under it (a step at the end of the slide's
-     duration): mid slide only the indicator shows, at rest the words sit on their own pill's fill. A contrast check
-     reads a label's own ground, never an absolutely placed sibling's, so WebKit's axe read the light words on the
-     page's ground (MenuList's sections). Moved by the keyboard, the fill is there at once, as the indicator is. */
   .bar[data-variant='pills'] .tab[data-selected] {
-    background: var(--text);
     color: var(--surface-raised);
-    transition:
-      color var(--duration-fast) var(--ease-smooth-out),
-      background-color var(--duration-fast) step-end,
-      scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
-  }
-
-  /* Moved by the keyboard, the indicator jumps (below), and every tab's colour and fill change at once with it. */
-  .list[data-instant] .tab {
-    transition: none;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -416,8 +396,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .bar[data-variant='pills'] .tab,
-    .bar[data-variant='pills'] .tab[data-selected] {
+    .bar[data-variant='pills'] .tab {
       transition: none;
     }
 
@@ -428,14 +407,12 @@
 
   @media (forced-colors: active) {
     .bar[data-variant='pills'] .tab[data-selected] {
-      background: Highlight;
       color: HighlightText;
     }
   }
 
-  /* On the pill's edge, not outside it: the scroller clips anything past the list's thin padding. */
   .bar[data-variant='pills'] .tab[data-focus-visible] {
-    outline-offset: 0;
+    box-shadow: var(--shadow-focus);
   }
 
   .bar[data-variant='pills'] .label {
@@ -448,7 +425,6 @@
     inset: calc(-1 * var(--border-width-hairline));
     block-size: auto;
     border-radius: var(--radius-full);
-    background: var(--text);
     box-shadow: var(--shadow-md);
   }
 
@@ -485,9 +461,7 @@
   }
 
   .panel[data-focus-visible] {
-    border-radius: var(--radius-sm);
-    outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: calc(-1 * var(--border-width-focus));
+    box-shadow: var(--shadow-focus-inset);
   }
 
   @media (prefers-reduced-motion: reduce) {

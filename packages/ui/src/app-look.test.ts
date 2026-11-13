@@ -20,23 +20,51 @@ function moduleClasses(appLook: string): Set<string> {
   return new Set(locals.map((local) => scopedClassName(local, module)));
 }
 
+/** A selector list's selectors: split at the commas that sit outside any brackets. */
+function selectorsOf(list: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < list.length; at += 1) {
+    const char = list[at];
+    if (char === '(' || char === '[') depth += 1;
+    else if (char === ')' || char === ']') depth -= 1;
+    else if (char === ',' && depth === 0) {
+      parts.push(list.slice(start, at));
+      start = at + 1;
+    }
+  }
+  return [...parts, list.slice(start)];
+}
+
 describe('the app look', () => {
   it('exists for the parts guests draw that phase 1 restyled', () => {
     expect(APP_LOOKS).toEqual([
+      'atoms/Avatar/Avatar.app.css',
+      'atoms/Badge/Badge.app.css',
       'atoms/Button/Button.app.css',
       'atoms/Checkbox/Checkbox.app.css',
       'atoms/DragHandle/DragHandle.app.css',
       'atoms/FieldError/FieldError.app.css',
       'atoms/FieldLabel/FieldLabel.app.css',
+      'atoms/Icon/Icon.app.css',
+      'atoms/Kbd/Kbd.app.css',
+      'atoms/Link/Link.app.css',
       'atoms/Radio/Radio.app.css',
+      'atoms/Switch/Switch.app.css',
+      'atoms/Tooltip/Tooltip.app.css',
       'molecules/Callout/Callout.app.css',
+      'molecules/Card/Card.app.css',
       'molecules/ChoiceChips/ChoiceChips.app.css',
+      'molecules/Disclosure/Disclosure.app.css',
       'molecules/Field/Field.app.css',
       'molecules/FieldGroup/FieldGroup.app.css',
+      'molecules/Menu/Menu.app.css',
       'molecules/Popover/Popover.app.css',
       'molecules/SegmentedControl/SegmentedControl.app.css',
       'molecules/Select/Select.app.css',
       'molecules/SocialLinks/SocialLinks.app.css',
+      'molecules/Tabs/Tabs.app.css',
     ]);
   });
 
@@ -61,7 +89,7 @@ describe('the app look', () => {
       .filter((selector) => selector.startsWith('.') || selector.includes(',.') || selector.includes(', .'));
     expect(selectors.length).toBeGreaterThan(0);
     for (const group of selectors) {
-      for (const selector of group.split(/,(?![^(]*\))/)) {
+      for (const selector of selectorsOf(group)) {
         expect(selector).toContain(":where([data-scale='app'] *)");
       }
     }

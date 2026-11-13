@@ -55,6 +55,8 @@ The arrow keys move between tabs and choose; Home and End jump; Tab moves into t
 
 Takes its look from the prototype's Tabs: `size-control-lg` tabs, `space-8` in, labels in `text-body-strong`, `text-secondary` at rest and `text` when hovered or chosen, the colour changing over `duration-fast` on `ease-smooth-out`, over the strip's `border-subtle` hairline. The chosen tab's line is 2px of `accent` with round ends (transitions.dev 16, tabs sliding, drawn as an underline: `duration-fast`, `ease-smooth-out`). Focus is the outline ring drawn `space-4` inside the tab, clear of the scroller; a focused panel gets the ring just inside its edge.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Tabs too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Tabs.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Tabs.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
+
 **Use it for** sections of one page: a record's Overview, Activity, Notes; a booking page's settings; Upcoming and Past. **Don't use it for** switching how the same data is drawn (SegmentedControl) or moving between pages of the app (the sidebar).
 
 **States**: rest, hover, chosen, focus visible, disabled, with an alert dot; the label keeps its weight when chosen, so nothing shifts.

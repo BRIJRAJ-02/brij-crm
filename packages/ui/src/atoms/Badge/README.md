@@ -48,6 +48,8 @@ It takes no focus.
 
 Folded into the prototype's Tag (spec 0072): a count is the prototype's `Count`, a round 20px pill in tabular figures, grey (`neutral`) or blue (`accent`, `tag-blue-*`); a label is a Tag's chip.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Badge too (a booking, menu or reservation page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Badge.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Badge.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step.
+
 **Differences from the prototype**: `accent` was a solid accent fill and is now the prototype's blue tint, since blue fills are for selection. `strong`, the `chip`, `chip-lg` and `fit` sizes, `isRound`, `dot`, `icon` and `isAtLeast` are kept. The prototype's ink count is not a tone yet.
 
 **Repeats from its replacer** (spec 0072, AC-4): the dot and its nine hues, as StatusDot draws them; they leave with this export.

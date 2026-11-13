@@ -1,18 +1,13 @@
-/* Avatar and AvatarStack, after the prototype's Avatar (spec 0072): initials or a picture on a soft hue tile
-   (tag-<hue>-bg, the initials in its text shade, semibold at 36% of the diameter), circles for people and rounded
-   squares (28% of the side) for companies, workspaces and pages. A stack overlaps by 22% of a face, each ringed in the
-   surface, and "+N" is a grey face of its own. It does not fan out on hover: a library stack opens nothing, and a lift
-   would promise that it does (spec 0072, rationale). */
+/* Avatar and AvatarStack: initials or a picture on a soft hue tile (tag-<hue>-bg
+   with the initials in its darker text shade, and no drawn ring), circles for
+   people and squares for companies, in six sizes from base.css's avatar scale.
+   The initials sit at about 40% of the diameter, at medium weight, with a line
+   box as tall as the letters' em so Geist's capitals land on the optical
+   centre. A stack overlaps them, each outlined in the surface colour. */
 @layer components {
-  .root,
-  .more {
-    --avatar: var(--avatar-sm);
-  }
-
   .root {
-    --avatar-bg: var(--tag-gray-bg);
-    --avatar-text: var(--tag-gray-text);
-    --avatar-initials: calc(var(--avatar) * 0.4);
+    --avatar: var(--avatar-sm);
+    --avatar-initials: var(--avatar-initials-sm);
 
     position: relative;
     display: inline-flex;
@@ -23,45 +18,58 @@
     block-size: var(--avatar);
     overflow: hidden;
     border-radius: var(--radius-full);
-    background: var(--avatar-bg);
-    color: var(--avatar-text);
-    font: var(--text-heading-strong);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-label);
     font-size: var(--avatar-initials);
     line-height: var(--avatar-initials);
+    letter-spacing: var(--tracking-label);
     user-select: none;
   }
 
-  :is(.root, .more)[data-size='xs'] {
+  .root[data-size='xs'] {
     --avatar: var(--avatar-xs);
-    --avatar-initials: calc(var(--avatar) * 0.45);
+    --avatar-initials: var(--avatar-initials-xs);
   }
 
-  :is(.root, .more)[data-size='md'] {
+  .root[data-size='md'] {
     --avatar: var(--avatar-md);
+    --avatar-initials: var(--avatar-initials-md);
   }
 
-  :is(.root, .more)[data-size='lg'] {
+  .root[data-size='lg'] {
     --avatar: var(--avatar-lg);
+    --avatar-initials: var(--avatar-initials-lg);
   }
 
-  :is(.root, .more)[data-size='title'] {
+  /* A record's picture heading its page or panel, beside its name (13 Oct reference batch 4). */
+  .root[data-size='title'] {
     --avatar: var(--avatar-title);
+    --avatar-initials: var(--avatar-initials-title);
   }
 
-  :is(.root, .more)[data-size='xl'] {
+  /* A person's picture heading their own page (a booking page's host). */
+  .root[data-size='xl'] {
     --avatar: var(--avatar-xl);
+    --avatar-initials: var(--avatar-initials-xl);
   }
 
-  :is(.root, .more)[data-size='hero'] {
+  /* A person's own picture at the top of their link page: the largest, and the only one with a column to itself. */
+  .root[data-size='hero'] {
     --avatar: var(--avatar-hero);
-  }
-
-  .root:not([data-size='sm'], [data-size='xs']) {
-    --avatar-initials: calc(var(--avatar) * 0.36);
+    --avatar-initials: var(--avatar-initials-hero);
   }
 
   .root[data-shape='square'] {
-    border-radius: calc(var(--avatar) * 0.28);
+    border-radius: var(--radius-xs);
+  }
+
+  .root[data-shape='square'][data-size='lg'] {
+    border-radius: var(--radius-sm);
+  }
+
+  .root[data-shape='square'][data-size='title'] {
+    border-radius: var(--radius-md);
   }
 
   /* A link page's rounded face (spec 0060, AC-13): the largest square takes the card corner. */
@@ -69,59 +77,66 @@
     border-radius: var(--radius-xl);
   }
 
+  .root[data-hue='gray'] {
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+
   .root[data-hue='red'] {
-    --avatar-bg: var(--tag-red-bg);
-    --avatar-text: var(--tag-red-text);
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
   }
 
   .root[data-hue='orange'] {
-    --avatar-bg: var(--tag-orange-bg);
-    --avatar-text: var(--tag-orange-text);
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
   }
 
   .root[data-hue='yellow'] {
-    --avatar-bg: var(--tag-yellow-bg);
-    --avatar-text: var(--tag-yellow-text);
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
   }
 
   .root[data-hue='lime'] {
-    --avatar-bg: var(--tag-lime-bg);
-    --avatar-text: var(--tag-lime-text);
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
   }
 
   .root[data-hue='green'] {
-    --avatar-bg: var(--tag-green-bg);
-    --avatar-text: var(--tag-green-text);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
   }
 
   .root[data-hue='sky'] {
-    --avatar-bg: var(--tag-sky-bg);
-    --avatar-text: var(--tag-sky-text);
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
   }
 
   .root[data-hue='blue'] {
-    --avatar-bg: var(--tag-blue-bg);
-    --avatar-text: var(--tag-blue-text);
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
   }
 
   .root[data-hue='purple'] {
-    --avatar-bg: var(--tag-purple-bg);
-    --avatar-text: var(--tag-purple-text);
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
   }
 
   .root[data-hue='ink'] {
-    --avatar-bg: var(--primary);
-    --avatar-text: var(--on-primary);
+    background: var(--text);
+    color: var(--surface);
   }
 
   /* A public page's brand colour (its brand stylesheet sets the accent): a business with no logo reads as its own. */
   .root[data-hue='accent'] {
-    --avatar-bg: var(--accent);
-    --avatar-text: var(--on-accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
-  /* A loaded picture's plate, after every hue so it wins: the near white on-accent in both themes, so a favicon's
-     clear parts and a dark logo read in dark mode too; a hairline edge holds it on a light page. */
+  /* A loaded picture's plate, after every hue so it wins: the near white `on-accent` in both themes, as logo lists
+     draw them, so a favicon's clear parts and a dark logo (GitHub's) read in dark mode too, where the page's own
+     surface swallowed them (1 November 2026); a hairline edge holds it on a light page. The initials and the hue
+     stay the fallback and the wait. */
   .root[data-picture='loaded'] {
     outline: var(--border-width-hairline) solid var(--border-subtle);
     outline-offset: calc(var(--border-width-hairline) * -1);
@@ -136,15 +151,20 @@
     object-fit: cover;
   }
 
-  /* A workspace's logo (spec 0060): the whole picture inside the tile, a hair in from its edge. */
+  /* A workspace's logo (spec 0060): the whole picture inside the tile, a hair (space-2) in from its edge, so a wide
+     wordmark is letterboxed rather than cut. */
   .root[data-fit='contain'] > .image {
     box-sizing: border-box;
     padding: var(--space-2);
     object-fit: contain;
   }
 
-  /* With its picture, loaded or on the way, a logo sits on a light plate in both themes with a hairline round it, the
-     letter held back, so the head never flashes from a dark tile to a light one. */
+  /* With its picture, loaded or still on the way, it sits on a light plate in both themes, a hairline round it, so
+     the head never flashes from a dark tile to a light one; the plate waits empty (the letter held back, since no
+     theme's ink is sure to read on it, and the name sits beside it). Logos are mostly dark ink on nothing, which
+     would vanish on the dark sidebar, and a plate that changed with the theme would change the logo's colours with
+     it. on-accent is the product's near white, the same in light and dark. A picture that failed has no image, so
+     its letter shows on the tile's own hue. */
   .root[data-fit='contain']:has(> .image) {
     outline: var(--border-width-hairline) solid var(--border);
     outline-offset: calc(-1 * var(--border-width-hairline));
@@ -152,8 +172,9 @@
     color: transparent;
   }
 
-  /* Waiting, the initials show and the picture is held back; the big sizes' picture then fades in. A fade, never a
-     move, so reduced motion keeps it. */
+  /* Waiting, at every size, the initials show and the picture is held back; a picture already in the browser's
+     cache skips straight to shown. The big sizes' picture then fades in over its initials (Avatar.tsx's FADES_IN);
+     the small ones show it at once. A fade, never a move, so reduced motion keeps it as it is. */
   .image[data-fade='waiting'] {
     opacity: 0;
   }
@@ -168,26 +189,25 @@
     align-items: center;
   }
 
-  .stack > * {
-    outline: var(--border-width-thick) solid var(--surface);
+  .stack > .root {
+    outline: var(--border-width-thick) solid var(--surface-raised);
   }
 
-  .stack > :not(:first-child) {
-    margin-inline-start: calc(var(--avatar) * -0.22);
+  .stack > .root:not(:first-child) {
+    margin-inline-start: calc(-1 * var(--space-4));
   }
 
   .more {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-inline-size: var(--avatar);
-    block-size: var(--avatar);
-    padding: 0 var(--space-4);
-    border-radius: var(--radius-full);
-    background: var(--surface-subtle);
+    margin-inline-start: var(--space-4);
     color: var(--text-secondary);
     font: var(--text-label);
-    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* Beside large faces (a team page's rail), "+N" reads at body size. */
+  .stack:is([data-size='lg'], [data-size='xl']) > .more {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   @media (forced-colors: active) {

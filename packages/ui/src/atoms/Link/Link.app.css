@@ -1,0 +1,73 @@
+/* Link's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Link.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* Link, after the prototype's Link (spec 0072): link coloured text whose underline strengthens over --duration-quick
+   on hover, and the prototype's outline focus ring. The underline stays faint at rest (the prototype has none) because
+   the link colour alone is under 3:1 against body text (WCAG 1.4.1). */
+@layer utilities.app-look {
+  .ws-link-root:where([data-scale='app'] *) {
+    /* Over the shipped module: its focus halo (focus is the ring). */
+    box-shadow: none;
+
+    border-radius: var(--radius-xs);
+    color: var(--link);
+    text-decoration: underline var(--border-width-hairline);
+    text-decoration-color: var(--accent-border);
+    text-underline-offset: var(--space-2);
+    outline: none;
+    transition-property: text-decoration-color, color;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-out);
+  }
+
+  /* Quiet: the text's own colour, its underline faint (border-strong) until hover or focus. */
+  .ws-link-root[data-tone='quiet']:where([data-scale='app'] *) {
+    color: inherit;
+    text-decoration-color: var(--border-strong);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-link-root[data-hovered]:where([data-scale='app'] *) {
+      text-decoration-color: currentcolor;
+    }
+  }
+
+  .ws-link-root[data-focus-visible]:where([data-scale='app'] *) {
+    text-decoration-color: currentcolor;
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  /* A link on its own line with its mark (Directions, a phone): the icon before the words, in the link's colour. */
+  .ws-link-root[data-icon]:where([data-scale='app'] *) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .ws-link-root[data-weight='strong']:where([data-scale='app'] *) {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .ws-link-text:where([data-scale='app'] *) {
+    color: inherit;
+  }
+
+  @media (forced-colors: active) {
+    .ws-link-root:where([data-scale='app'] *) {
+      color: LinkText;
+    }
+
+    .ws-link-root[data-focus-visible]:where([data-scale='app'] *) {
+      outline-color: Highlight;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-link-root:where([data-scale='app'] *) {
+      transition: none;
+    }
+  }
+}
