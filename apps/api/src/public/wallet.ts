@@ -123,6 +123,7 @@ function passResponse(bytes: Uint8Array, handle: string, cache: string): Respons
 /** Makes the pass of the Live page a handle names, or undefined: no certificate here, or no such Live page. */
 export type PagePassMaker = (
   handle: string,
+  workspaceId: string,
 ) => Promise<{ readonly handle: string; readonly bytes: Uint8Array } | undefined>;
 
 /**
@@ -134,7 +135,7 @@ export type PagePassMaker = (
 export function createPagePass(deps: WalletPassDeps): PagePassMaker | undefined {
   const make = deps.pass;
   if (make === undefined) return undefined;
-  return async (handle) => {
+  return async (handle, workspaceId) => {
     if (!HANDLE_PATTERN.test(handle)) return undefined;
     let owner;
     try {
@@ -142,6 +143,8 @@ export function createPagePass(deps: WalletPassDeps): PagePassMaker | undefined 
     } catch {
       return undefined;
     }
+    // The caller read the handle in its own workspace; a page of any other workspace is not its to hand out.
+    if (owner.workspaceId !== workspaceId) return undefined;
     const card = await cardOf(deps.db, owner.handle);
     const brand = await brandOf(deps, owner.workspaceId);
     const bytes = make({

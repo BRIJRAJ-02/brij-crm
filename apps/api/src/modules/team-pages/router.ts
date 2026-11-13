@@ -65,8 +65,13 @@ async function mailHandover(
   }
 }
 
-/** How many Wallet passes one person may ask Team pages for a minute: each one is signed. */
-const WALLET_PASSES = { window: 60, max: 240 } as const;
+/**
+ * How many Wallet passes Team pages makes: each one is signed, which holds the process for a moment, so the window
+ * is short. 40 in ten seconds a person (the screen asks one at a time, so a team's zip stays under it), and 80 a
+ * workspace, so several managers at once can't queue more.
+ */
+const WALLET_PASSES = { window: 10, max: 40 } as const;
+const WALLET_PASSES_WORKSPACE = { window: 10, max: 80 } as const;
 
 // Team link pages (spec 0070, slice 1): everyone's link page in the workspace for a holder of
 // `link_pages.manage_team` (checked in packages/core before anything is read), a handle claimed for someone, and who
@@ -90,10 +95,16 @@ export const teamPagesRouter = member.teamPages.router({
     const page = isOwn ? context.scope : await enterTeamLinkPage(context.scope, input.member);
     const { handle } = await getMyProfile(page);
     if (handle === undefined) throw none();
-    // Each pass is signed, which holds the process for a moment: 240 a minute a person is a team of 240 in one go.
-    const counted = await context.limiter.consumeRateLimit(`team-wallet-pass:${context.user.id}`, WALLET_PASSES);
-    if (!counted.allowed) throw apiError('LIMIT_REACHED', 'Too many passes at once. Try again in a minute.');
-    const made = await make(handle);
+    const mine = await context.limiter.consumeRateLimit(`team-wallet-pass:${context.user.id}`, WALLET_PASSES);
+    const ours = await context.limiter.consumeRateLimit(
+      `team-wallet-pass:ws:${context.scope.workspaceId}`,
+      WALLET_PASSES_WORKSPACE,
+    );
+    if (!mine.allowed || !ours.allowed) {
+      throw apiError('RATE_LIMITED', 'Too many passes at once. Wait a moment and try again.');
+    }
+    // Held to this workspace: the handle was read here, and the pass is only ever this workspace's page's.
+    const made = await make(handle, context.scope.workspaceId);
     if (made === undefined) throw none();
     return { name: `${made.handle}.pkpass`, data: Buffer.from(made.bytes).toString('base64') };
   }),

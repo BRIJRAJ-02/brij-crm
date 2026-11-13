@@ -32,6 +32,7 @@ export const teamStrings = {
   walletAll: 'Download all Wallet passes',
   walletZipped: (count: number) => `${count.toLocaleString()} Wallet ${count === 1 ? 'pass' : 'passes'} downloaded.`,
   walletFailed: 'The Wallet pass didn’t download. Try again.',
+  walletNotYours: 'Only an owner can download an owner’s Wallet pass.',
   walletAllFailed: 'The Wallet passes didn’t download. Try again.',
   walletSomeFailed: (count: number, missed: number) =>
     `${count.toLocaleString()} downloaded. ${missed.toLocaleString()} didn’t; try again for the rest.`,

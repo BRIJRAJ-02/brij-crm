@@ -57,6 +57,22 @@ type TeamState =
 /** A download under way: one page's code in one format, or every page's as one zip. */
 /** The media type of a `.pkpass`, so a phone that opens the saved file offers Wallet. */
 const WALLET_PASS_TYPE = 'application/vnd.apple.pkpass';
+/** A refusal that says the page isn't this manager's to open: an owner's page, to someone who isn't an owner. */
+const isNotMine = (error: unknown) => isDataError(error) && error.code === 'FORBIDDEN';
+/**
+ * One pass, asked again after a pause while the server says it is making too many at once: a large team's zip runs
+ * into that limit by design, and waiting a few seconds is all it asks.
+ */
+async function passWhenAllowed<Pass>(ask: () => Promise<Pass>): Promise<Pass> {
+  for (let tries = 0; ; tries += 1) {
+    try {
+      return await ask();
+    } catch (error) {
+      if (tries >= 6 || !(isDataError(error) && error.code === 'RATE_LIMITED')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+  }
+}
 /** `walleting` while every pass is fetched for the zip; any other value is one person's member id. */
 const ALL_PASSES = 'all';
 
@@ -157,9 +173,9 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         setWalleting(undefined);
         saveFile(new Blob([pass.bytes], { type: WALLET_PASS_TYPE }), pass.name);
       },
-      () => {
+      (error: unknown) => {
         setWalleting(undefined);
-        toasts.toast({ tone: 'danger', message: strings.walletFailed });
+        toasts.toast({ tone: 'danger', message: isNotMine(error) ? strings.walletNotYours : strings.walletFailed });
       },
     );
   };
@@ -172,10 +188,11 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
     let missed = 0;
     for (const page of walletPages) {
       try {
-        const pass = await data.teamPages.walletPass(slug, page.memberId);
+        const pass = await passWhenAllowed(() => data.teamPages.walletPass(slug, page.memberId));
         entries.push({ name: pass.name, bytes: pass.bytes });
-      } catch {
-        missed += 1;
+      } catch (error) {
+        // A page this manager may not open (an owner's, to an admin) is left out, not counted as a failure.
+        if (!isNotMine(error)) missed += 1;
       }
     }
     setWalleting(undefined);

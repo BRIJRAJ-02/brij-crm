@@ -233,6 +233,14 @@ describe('Team pages’ Apple Wallet passes (13 Nov 2026)', () => {
       await refusal(() => manager.teamPages.walletPass({ workspace: ada.slug, member: bea.memberId })),
     ).toMatchObject({ code: 'NOT_FOUND' });
 
+    // Someone of another workspace is nobody here, whoever asks.
+    const other = await memberWithWorkspace(app);
+    const [stranger] = (await other.client.teamPages.list({ workspace: other.slug })).pages;
+    if (stranger === undefined) throw new Error('No other member.');
+    expect(
+      await refusal(() => manager.teamPages.walletPass({ workspace: ada.slug, member: stranger.memberId })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+
     // Bea holds no `link_pages.manage_team`: somebody else's pass never comes from Team pages for her.
     const adaRow = listed.pages.find((page) => page.isSelf);
     if (adaRow === undefined) throw new Error('No own row.');
