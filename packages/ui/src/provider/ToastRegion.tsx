@@ -57,8 +57,8 @@ function useLift(region: HTMLElement | null, clearance: ToastClearance | undefin
 }
 
 /**
- * Draws the toasts at the bottom right, risen above an open drawer's, sheet's or panel's footer when they would
- * cover it. UiProvider renders it once; screens never do.
+ * Draws the toasts at the bottom right, risen above an open drawer's, sheet's or panel's footer, or a floating bar,
+ * when they would cover it. UiProvider renders it once; screens never do.
  */
 export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
   const [region, setRegion] = useState<HTMLDivElement | null>(null);
