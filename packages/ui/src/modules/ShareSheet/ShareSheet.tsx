@@ -4,7 +4,7 @@ import { downloadQr, type QrFileKind } from '../../atoms/QrCode/qr-file.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { useToasts } from '../../provider/context.ts';
-import { ReadyPanel, type ReadyPanelQrStyle } from '../ReadyPanel/ReadyPanel.tsx';
+import { ReadyPanel, type ReadyPanelQrSize, type ReadyPanelQrStyle } from '../ReadyPanel/ReadyPanel.tsx';
 import { shareableUrl } from './share-url.ts';
 import { strings } from './strings.ts';
 
@@ -40,6 +40,8 @@ export interface ShareSheetProps {
    * and in the saved PNG or SVG (spec 0074, AC-7403). Left out, the plain code.
    */
   readonly qrStyle?: ReadyPanelQrStyle;
+  /** `lg` for a code scanned from a screen across a table (the link page's, AC-7427); left out, the small code. */
+  readonly qrSize?: ReadyPanelQrSize;
 }
 
 /** Props for ShareColumn: ShareSheet's ways to share, without its dialog. */
@@ -58,6 +60,8 @@ export interface ShareColumnProps {
   readonly extra?: ReactNode;
   /** The code in a saved style (spec 0074, AC-7403). */
   readonly qrStyle?: ReadyPanelQrStyle;
+  /** The code's size (AC-7427): `lg` under the ways, for a code scanned across a table. Left out, `sm`. */
+  readonly qrSize?: ReadyPanelQrSize;
   /** Told when a download starts (`true`) and when it ends (`false`), so the sheet around it can wait for it. */
   readonly onSavingChange?: (isSaving: boolean) => void;
 }
@@ -75,6 +79,7 @@ export function ShareColumn({
   onEmbed,
   extra,
   qrStyle,
+  qrSize,
   onSavingChange,
 }: ShareColumnProps) {
   const toasts = useToasts();
@@ -99,6 +104,7 @@ export function ShareColumn({
       onDownloadQr={saveQr}
       {...(invite === undefined ? {} : { invite })}
       {...(qrStyle === undefined ? {} : { qrStyle })}
+      {...(qrSize === undefined ? {} : { qrSize })}
       {...(embedHref === undefined
         ? {}
         : {
@@ -122,7 +128,7 @@ export function ShareColumn({
 /**
  * The one share dialog (spec 0073, batch 2): every Share button opens it, and so does a first publish. The QR code
  * and the link with Copy link (the one primary), one row of Email, WhatsApp and More (the device's share sheet,
- * where there is one), Download (one press for a PNG, the SVG in the menu beside it) under the code, "Put it on your site" where the thing embeds, the
+ * where there is one), Download (a menu of PNG and SVG) under the code, "Put it on your site" where the thing embeds, the
  * thing's own ways, and a quiet footer line beside Done. It draws ShareColumn (ReadyPanel's `share` column) inside a
  * Modal, so a share looks the same everywhere, and it makes no request: the caller passes the address it already has.
  */
@@ -138,6 +144,7 @@ export function ShareSheet({
   extra,
   footer,
   qrStyle,
+  qrSize,
 }: ShareSheetProps) {
   const isShareable = shareableUrl(url) !== undefined;
   // A download reads the drawn code (and a centre picture) after the press, so the sheet stays open until the file
@@ -193,6 +200,7 @@ export function ShareSheet({
         {...(embedHref === undefined ? {} : { embedHref })}
         {...(extra === undefined ? {} : { extra })}
         {...(qrStyle === undefined ? {} : { qrStyle })}
+        {...(qrSize === undefined ? {} : { qrSize })}
       />
     </Modal>
   );

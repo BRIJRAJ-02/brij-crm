@@ -10,9 +10,10 @@ export const strings = {
   whatsapp: 'WhatsApp',
   /** The device's own share sheet. */
   more: 'More',
-  /** The QR code's download, under the code: one press saves the PNG; the menu beside it holds the SVG. */
+  /** The QR code's download button, under the code: its visible word, then its fuller name (it starts with the word). */
+  download: 'Download',
+  downloadName: 'Download QR code',
   downloadQr: 'Download the QR code',
-  downloadOther: 'Other formats',
   downloadPng: 'Download PNG',
   downloadSvg: 'Download SVG',
   qrLabel: 'QR code for the link',

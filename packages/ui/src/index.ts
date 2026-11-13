@@ -443,6 +443,7 @@ export {
   type ReadyPanelOnward,
   type ReadyPanelProps,
   type ReadyPanelQrKind,
+  type ReadyPanelQrSize,
   type ReadyPanelQrStyle,
 } from './modules/ReadyPanel/ReadyPanel.tsx';
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */

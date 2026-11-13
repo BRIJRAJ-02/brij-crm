@@ -202,19 +202,58 @@ export const Share: Story = {
     // The code and its download are one thing: Download sits right under the code (wide) or beside it (narrow), never
     // in the row of ways.
     const code = canvas.getByRole('img', { name: 'QR code for the link' }).getBoundingClientRect();
-    const save = canvas.getByRole('button', { name: 'Download PNG' });
+    const save = canvas.getByRole('button', { name: /^Download QR code/ });
     const saved = save.getBoundingClientRect();
     const isUnder = saved.top >= code.bottom && saved.top - code.bottom < 24;
     const isBeside = saved.left >= code.right && saved.left - code.right < 24;
     await expect(isUnder || isBeside).toBe(true);
     await expect(canvas.getByRole('group', { name: 'Send the link' })).not.toContainElement(save);
-    // The QR code saves as a PNG in one press, handed the code's own SVG; the SVG is in the menu beside it.
+    // The QR code saves as PNG or SVG from its menu, handed the code's own SVG.
     await userEvent.click(save);
+    await settleAnimations();
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
     await expect(args.onDownloadQr).toHaveBeenCalledWith('png', expect.any(SVGSVGElement));
     await waitFor(() => expect(save).not.toHaveAttribute('data-pending'));
-    await userEvent.click(canvas.getByRole('button', { name: 'Other formats' }));
+    await userEvent.click(save);
     await settleAnimations();
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Download SVG' }));
     await expect(args.onDownloadQr).toHaveBeenCalledWith('svg', expect.any(SVGSVGElement));
+  },
+};
+
+/**
+ * Share with the large code (spec 0074, AC-7427), as the link page's Share draws it: a code scanned from a screen
+ * across a table is `size-menu` wide, under the link and the ways at every width, its Download centred under it.
+ */
+export const ShareLargeCode: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    title: undefined,
+    variant: 'share',
+    link: 'https://timefix.com/priya',
+    shareTitle: '@priya',
+    qrSize: 'lg',
+    onDownloadQr: fn(() => Promise.resolve()),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await settleAnimations();
+    const code = canvas.getByRole('img', { name: 'QR code for the link' }).getBoundingClientRect();
+    // As wide as size-menu, which a probe in the panel measures (the token differs between the app and full size).
+    const probe = document.createElement('div');
+    probe.style.inlineSize = 'var(--size-menu)';
+    canvasElement.querySelector('[data-variant="share"]')?.append(probe);
+    const menu = probe.getBoundingClientRect().width;
+    probe.remove();
+    await expect(menu).toBeGreaterThan(0);
+    await expect(Math.round(code.width)).toBe(Math.round(menu));
+    // Under the ways, not beside them, in the dialog's width too.
+    const ways = canvas.getByRole('group', { name: 'Send the link' }).getBoundingClientRect();
+    await expect(code.top).toBeGreaterThanOrEqual(ways.bottom);
+    // Download right under the code, centred on the tile.
+    const saved = canvas.getByRole('button', { name: /^Download QR code/ }).getBoundingClientRect();
+    await expect(saved.top).toBeGreaterThanOrEqual(code.bottom);
+    await expect(saved.top - code.bottom).toBeLessThan(24);
+    const tile = canvas.getByRole('img', { name: 'QR code for the link' }).parentElement?.getBoundingClientRect();
+    await expect(Math.abs((tile?.left ?? 0) + (tile?.width ?? 0) / 2 - (saved.left + saved.width / 2))).toBeLessThan(2);
   },
 };

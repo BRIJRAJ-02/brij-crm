@@ -442,6 +442,8 @@ export function HeaderActions({
         // The handle names the page everywhere it is passed on: the email's subject, the code's name and its file.
         name={shareStrings.name(handle)}
         qrStyle={qrStyle}
+        // Scanned from a screen across a table, so the large code (spec 0074, AC-7427).
+        qrSize="lg"
         // Whose page the code opens (spec 0056, AC-5617).
         {...(workspaceName === undefined ? {} : { description: shareStrings.inWorkspace(workspaceName) })}
         // A page gone private while Share is open says so at the foot, with the switch's on beside it, since the

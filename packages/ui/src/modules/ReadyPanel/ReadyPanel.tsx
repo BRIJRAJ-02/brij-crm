@@ -2,12 +2,11 @@ import { useId, useRef, useState, type ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
-import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { QrCode, type QrCodeProps } from '../../atoms/QrCode/QrCode.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
-import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './ReadyPanel.module.css';
 import { strings } from './strings.ts';
 
@@ -76,7 +75,16 @@ export interface ReadyPanelProps {
    * screen and in what Download saves (ShareSheet's `qrStyle`, spec 0074). Left out, the plain code.
    */
   readonly qrStyle?: ReadyPanelQrStyle;
+  /**
+   * `share`: the code's size. `sm` (the default) is a small code on its tile beside the ways; `lg` is `size-menu`
+   * wide, under the ways at every width, for a code scanned from a screen across a table (the link page's Share,
+   * spec 0074, AC-7427).
+   */
+  readonly qrSize?: ReadyPanelQrSize;
 }
+
+/** How big `share`'s code is drawn: small beside the ways, or large under them. */
+export type ReadyPanelQrSize = 'sm' | 'lg';
 
 /** A QR code's saved style, as QrCode draws it: the modules' colour, a centre picture and a frame's label. */
 export type ReadyPanelQrStyle = Pick<QrCodeProps, 'colour' | 'picture' | 'frameLabel'>;
@@ -119,6 +127,7 @@ export function ReadyPanel({
   onward,
   invite,
   qrStyle,
+  qrSize = 'sm',
 }: ReadyPanelProps) {
   const isShare = variant === 'share';
   const titleId = useId();
@@ -187,6 +196,7 @@ export function ReadyPanel({
     <section
       className={styles.root}
       data-variant={variant}
+      data-qr={isShare && qrSize === 'lg' ? 'lg' : undefined}
       {...(title === undefined ? {} : { 'aria-labelledby': titleId })}
     >
       {/* With neither a heading nor a line (a pill in a dialog whose title says it), there is no head to draw. */}
@@ -242,33 +252,40 @@ export function ReadyPanel({
           {/* The code on a light tile of its own, its download right under it, so the code and its file are one thing. */}
           <div className={styles.code}>
             <div className={styles.tile} data-theme="light">
-              <QrCode ref={codeRef} value={link} label={qrLabel} size="sm" ground="clear" {...qrStyle} />
+              <QrCode
+                ref={codeRef}
+                value={link}
+                label={qrLabel}
+                size={qrSize === 'lg' ? 'md' : 'sm'}
+                ground="clear"
+                {...qrStyle}
+              />
             </div>
             {onDownloadQr !== undefined && (
-              // One press saves the PNG, the file most people want (spec 0074, the coordinator's call of 13 Nov:
-              // a download is never two presses); the SVG waits in the menu beside it.
-              <SplitButton
-                variant="secondary"
-                isPending={saving !== undefined}
-                onPress={() => {
-                  download('png');
-                }}
-                menuLabel={strings.downloadOther}
-                menu={
-                  <Menu
-                    label={strings.downloadQr}
-                    onAction={() => {
-                      download('svg');
-                    }}
-                  >
-                    <MenuItem id="svg" icon="download">
-                      {strings.downloadSvg}
-                    </MenuItem>
-                  </Menu>
-                }
-              >
-                {strings.downloadPng}
-              </SplitButton>
+              <MenuTrigger>
+                <Button
+                  icon="download"
+                  iconRight="chevron-down"
+                  variant="ghost"
+                  isPending={saving !== undefined}
+                  label={strings.downloadName}
+                >
+                  {strings.download}
+                </Button>
+                <Menu
+                  label={strings.downloadQr}
+                  onAction={(key) => {
+                    download(key === 'svg' ? 'svg' : 'png');
+                  }}
+                >
+                  <MenuItem id="png" icon="download">
+                    {strings.downloadPng}
+                  </MenuItem>
+                  <MenuItem id="svg" icon="download">
+                    {strings.downloadSvg}
+                  </MenuItem>
+                </Menu>
+              </MenuTrigger>
             )}
           </div>
         </div>

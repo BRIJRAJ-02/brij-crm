@@ -75,9 +75,8 @@ export const Default: Story = {
       'href',
       `https://wa.me/?text=${encodeURIComponent(ADDRESS)}`,
     );
-    // Download is one press for the PNG, with the SVG in the menu beside it.
-    await expect(sheet.getByRole('button', { name: 'Download PNG' })).toBeInTheDocument();
-    await expect(sheet.getByRole('button', { name: 'Other formats' })).toBeInTheDocument();
+    // Download under the code, a menu of PNG and SVG.
+    await expect(sheet.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
     // Done is the only other button in the footer, and the dialog opens on it: Enter and Esc both close it.
     const done = sheet.getByRole('button', { name: 'Done' });
     await waitFor(() => expect(done).toHaveFocus());
@@ -106,6 +105,20 @@ export const Styled: Story = {
     await expect(code).toHaveAttribute('data-framed');
     await expect(within(code).getByText('Scan me')).toBeInTheDocument();
     await expect(sheet.getByText('Your link page in Acme.')).toBeInTheDocument();
+  },
+};
+
+/** The link page's sheet (spec 0074, AC-7427): the large code under the ways, scanned from a screen across a table. */
+export const LargeCode: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { qrSize: 'lg', title: 'Share your link page', url: 'https://timefix.com/priya', name: '@priya' },
+  play: async () => {
+    const sheet = within(await openSheet());
+    const code = sheet.getByRole('img', { name: 'QR code for @priya' }).getBoundingClientRect();
+    const ways = sheet.getByRole('group', { name: 'Send the link' }).getBoundingClientRect();
+    await expect(code.top).toBeGreaterThanOrEqual(ways.bottom);
+    // Larger than the small code beside the ways (size-column-narrow) by far.
+    await expect(code.width).toBeGreaterThan(180);
   },
 };
 
@@ -184,7 +197,9 @@ export const DownloadFails: Story = {
       throw new Error('Blocked.');
     });
     try {
-      await userEvent.click(sheet.getByRole('button', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
+      await settleAnimations();
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
       await expect(await screen.findByText('The QR code didn’t save. Try again.')).toBeInTheDocument();
       await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     } finally {
@@ -209,7 +224,9 @@ export const DownloadHoldsOpen: Story = {
     const decode = spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(() => held);
     const save = spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     try {
-      await userEvent.click(sheet.getByRole('button', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
+      await settleAnimations();
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
       await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
       await expect(args.onOpenChange).not.toHaveBeenCalledWith(false);
       await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -277,7 +294,7 @@ export const Column: Story = {
     await expect(document.querySelector('[role="dialog"]')).toBeNull();
     await expect(canvas.getByRole('img', { name: 'QR code for Discovery call' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
-    await expect(canvas.getByRole('button', { name: 'Download PNG' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Put it on your site' })).toHaveAttribute(
       'href',
       '/w/acme/bookings/discovery-call/embed',
