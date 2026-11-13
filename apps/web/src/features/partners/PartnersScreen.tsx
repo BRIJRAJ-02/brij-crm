@@ -10,9 +10,11 @@ import {
   type DataLayer,
   type PartnerLogoUpload,
   type PartnerView,
+  type PartnerWalletLogoUpload,
   type PartnerWithSecret,
 } from '@crm/data';
 import {
+  AccentPicker,
   Avatar,
   Badge,
   Button,
@@ -21,6 +23,7 @@ import {
   DescriptionList,
   EmptyState,
   Field,
+  FieldGroup,
   FileDrop,
   Form,
   Modal,
@@ -36,6 +39,8 @@ import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { formRefusals } from '../settings/refusals.ts';
 import { AdminFailed, useAdminRetry } from '../admin/AdminParts.tsx';
 import { partnersStrings as strings } from './strings.ts';
+import { TIMEFIX_WALLET_COLOUR } from '@crm/contracts/wallet-card';
+import { walletCardPreview, walletLogoFrom } from './wallet-card.ts';
 
 /** Props for the Partners page. Only super admins reach it; the server checks every call on its own. */
 export interface PartnersScreenProps {
@@ -55,6 +60,9 @@ const COLUMNS: readonly TableColumn[] = [
 
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 const LOGO_MAX_BYTES = 200 * 1024;
+/** What a card logo may be picked from: types that keep a clear background. The browser draws the PNGs it sends. */
+const WALLET_LOGO_TYPES = ['image/png', 'image/webp'] as const;
+const WALLET_LOGO_MAX_BYTES = 5 * 1024 * 1024;
 
 /** One address a line, blank lines dropped. */
 const linesOf = (text: string) =>
@@ -251,6 +259,28 @@ function PartnerForm({
   const [logo, setLogo] = useState<PartnerLogoUpload | null | undefined>(undefined);
   const [logoPreview, setLogoPreview] = useState<string | undefined>(partner?.logoUrl);
   const [isTest, setTest] = useState(partner?.isTest ?? false);
+  // The Apple Wallet card (13 Nov 2026). The colour: undefined is Timefix's. The logo, as the form's own logo is:
+  // undefined unchanged, null taken away, else the new one, with the picture the preview draws it from.
+  const [walletColour, setWalletColour] = useState<string | undefined>(partner?.walletColour);
+  const [walletLogo, setWalletLogo] = useState<PartnerWalletLogoUpload | null | undefined>(undefined);
+  const [walletLogoSrc, setWalletLogoSrc] = useState<string | undefined>(partner?.walletLogoUrl);
+  // The logo on its card's colour, drawn again whenever either changes. The last picture stays until the new one is
+  // drawn, so the row never flickers back to empty while a colour is dragged; with no logo there is no picture.
+  const [walletDrawn, setWalletDrawn] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (walletLogoSrc === undefined) return undefined;
+    let isCurrent = true;
+    walletCardPreview(walletColour ?? TIMEFIX_WALLET_COLOUR, walletLogoSrc).then(
+      (src) => {
+        if (isCurrent && src !== undefined) setWalletDrawn(src);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [walletColour, walletLogoSrc]);
+  const walletPreview = walletLogoSrc === undefined ? undefined : walletDrawn;
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
 
@@ -273,6 +303,25 @@ function PartnerForm({
     }, unreadable);
   };
 
+  const pickWalletLogo = (files: readonly File[]) => {
+    const [file] = files;
+    if (file === undefined) return;
+    const unreadable = () =>
+      setRefusals((now) => [
+        ...now.filter((refusal) => refusal.attributeId !== 'walletLogo'),
+        { code: 'INPUT_INVALID', message: strings.form.walletLogoUnreadable, attributeId: 'walletLogo' },
+      ]);
+    walletLogoFrom(file).then((read) => {
+      if (read === undefined) {
+        unreadable();
+        return;
+      }
+      setRefusals((now) => now.filter((refusal) => refusal.attributeId !== 'walletLogo'));
+      setWalletLogo(read);
+      setWalletLogoSrc(`data:image/png;base64,${read.x3}`);
+    }, unreadable);
+  };
+
   const submit = () => {
     if (isBusy) return;
     const problems: FormRefusal[] = [];
@@ -287,28 +336,44 @@ function PartnerForm({
     const fields = { name: name.trim(), frameOrigins: linesOf(frames), redirectUris: linesOf(redirects), isTest };
     const failed = (error: unknown) => {
       setBusy(false);
-      setRefusals(formRefusals(error, ['name', 'logo', 'frameOrigins', 'redirectUris']));
+      setRefusals(formRefusals(error, ['name', 'logo', 'frameOrigins', 'redirectUris', 'walletColour', 'walletLogo']));
     };
     if (partner === undefined) {
       data.partners
-        .register({ ...fields, ...(logo === undefined || logo === null ? {} : { logo }) })
+        .register({
+          ...fields,
+          ...(logo === undefined || logo === null ? {} : { logo }),
+          ...(walletColour === undefined ? {} : { walletColour }),
+          ...(walletLogo === undefined || walletLogo === null ? {} : { walletLogo }),
+        })
         .then(onRegistered, failed);
     } else {
       data.partners
-        .update({ partnerId: partner.id, ...fields, ...(logo === undefined ? {} : { logo }) })
+        .update({
+          partnerId: partner.id,
+          ...fields,
+          ...(logo === undefined ? {} : { logo }),
+          // Only a colour that changed is sent; taking it away sends null, which goes back to Timefix's.
+          ...(walletColour === partner.walletColour ? {} : { walletColour: walletColour ?? null }),
+          ...(walletLogo === undefined ? {} : { walletLogo }),
+        })
         .then(onSaved, failed);
     }
   };
 
   const errorOf = (field: string) => refusals.find((refusal) => refusal.attributeId === field)?.message;
   const logoError = errorOf('logo');
+  const walletLogoError = errorOf('walletLogo');
+  const walletColourError = errorOf('walletColour');
   const title = partner === undefined ? strings.form.registerTitle : strings.form.editTitle(partner.name);
   const isChanged =
     name !== (partner?.name ?? '') ||
     frames !== (partner?.frameOrigins.join('\n') ?? '') ||
     redirects !== (partner?.redirectUris.join('\n') ?? '') ||
     isTest !== (partner?.isTest ?? false) ||
-    logo !== undefined;
+    logo !== undefined ||
+    walletLogo !== undefined ||
+    walletColour !== partner?.walletColour;
 
   return (
     <Modal
@@ -390,6 +455,44 @@ function PartnerForm({
           value={frames}
           onChange={setFrames}
         />
+        <FieldGroup
+          label={strings.form.wallet}
+          tone="heading"
+          hint={strings.form.walletHint}
+          {...(walletColourError === undefined ? {} : { error: walletColourError })}
+        >
+          <FileDrop
+            label={strings.form.walletLogo}
+            variant="row"
+            acceptedTypes={WALLET_LOGO_TYPES}
+            typesText={strings.form.walletLogoTypes}
+            maxSize={WALLET_LOGO_MAX_BYTES}
+            onFiles={pickWalletLogo}
+            {...(walletPreview === undefined
+              ? {}
+              : { preview: { src: walletPreview, alt: strings.form.walletLogoAlt } })}
+            {...(walletLogoError === undefined ? {} : { error: walletLogoError })}
+            // Taken away from the form only, as the logo above is: Save makes it so.
+            {...(walletLogoSrc === undefined
+              ? {}
+              : {
+                  onRemove: () => {
+                    setWalletLogo(partner?.walletLogoUrl === undefined ? undefined : null);
+                    setWalletLogoSrc(undefined);
+                  },
+                })}
+          />
+          <AccentPicker
+            label={strings.form.walletColour}
+            defaultName={strings.form.walletColourDefault}
+            defaultValue={TIMEFIX_WALLET_COLOUR}
+            quickPicks={[]}
+            hexPlacement="inline"
+            hexPlaceholder={TIMEFIX_WALLET_COLOUR}
+            onChange={setWalletColour}
+            {...(walletColour === undefined ? {} : { value: walletColour })}
+          />
+        </FieldGroup>
         <Switch
           label={strings.form.isTest}
           description={strings.form.isTestHint}

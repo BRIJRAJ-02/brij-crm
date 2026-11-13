@@ -24,6 +24,25 @@ export interface PartnerRow {
   readonly secretReplacedAt?: Date;
   /** A sandbox partner (spec 0070, AC-7035). */
   readonly isTest: boolean;
+  /** Its own Apple Wallet card's colour (`#rrggbb`), while it has one. */
+  readonly walletColour?: string;
+  /** Its own Wallet logo's version while it has one; undefined with none. */
+  readonly walletLogoVersion?: number;
+}
+
+/** A partner's Wallet logo: one PNG for each of Wallet's three scales. */
+export interface PartnerWalletLogo {
+  readonly x1: Buffer;
+  readonly x2: Buffer;
+  readonly x3: Buffer;
+}
+
+/** A partner's own Apple Wallet card, as a pass reads it: its name, and whichever of a colour and a logo it has. */
+export interface PartnerWalletCard {
+  readonly partnerId: string;
+  readonly name: string;
+  readonly colour?: string;
+  readonly logo?: PartnerWalletLogo;
 }
 
 /** A partner with its secret's hash, for the token exchange's check only. */
@@ -50,15 +69,19 @@ export interface NewPartner {
   readonly createdBy: string;
   /** A sandbox partner (spec 0070, AC-7035). */
   readonly isTest?: boolean;
+  readonly walletColour?: string;
+  readonly walletLogo?: PartnerWalletLogo;
 }
 
-/** A change to a partner: only the fields given; `logo: null` takes the logo away. */
+/** A change to a partner: only the fields given; `logo: null` takes the logo away, as `null` does the Wallet card's. */
 export interface PartnerChange {
   readonly name?: string;
   readonly logo?: { readonly bytes: Buffer; readonly type: string } | null;
   readonly frameOrigins?: readonly string[];
   readonly redirectUris?: readonly string[];
   readonly isTest?: boolean;
+  readonly walletColour?: string | null;
+  readonly walletLogo?: PartnerWalletLogo | null;
 }
 
 /**
@@ -89,6 +112,13 @@ export interface PartnerIdentity {
   ): Promise<PartnerRow | undefined>;
   /** The logo at this version only: any other version reads no bytes. */
   partnerLogo(clientId: string, version: number): Promise<PartnerLogo | undefined>;
+  /** The Wallet logo at this version only, at two pixels to the point: the console's preview of the card. */
+  partnerWalletLogo(clientId: string, version: number): Promise<PartnerLogo | undefined>;
+  /**
+   * The Apple Wallet card a pass wears (13 Nov 2026): of these partners, in the order given, the first that has a
+   * colour or a logo of its own, or undefined when none has. Only that one partner's logo is read. At most 20 ids.
+   */
+  partnerWalletCard(partnerIds: readonly string[]): Promise<PartnerWalletCard | undefined>;
   /**
    * The identity of a partner's managed member (spec 0070, AC-7020, AC-7021): the one already made for this workspace,
    * partner and external id, its name brought up to date, or a new one. A new identity's email is a made up address
@@ -224,6 +254,9 @@ const ROW = {
   updatedAt: partners.updatedAt,
   secretReplacedAt: partners.secretReplacedAt,
   isTest: partners.isTest,
+  walletColour: partners.walletColour,
+  hasWalletLogo: sql<boolean>`${partners.walletLogo} is not null`,
+  walletLogoVersion: partners.walletLogoVersion,
 };
 
 type Selected = {
@@ -239,6 +272,9 @@ type Selected = {
   updatedAt: Date | string;
   secretReplacedAt: Date | string | null;
   isTest: boolean;
+  walletColour: string | null;
+  hasWalletLogo: boolean;
+  walletLogoVersion: number;
 };
 
 const toRow = (row: Selected): PartnerRow => ({
@@ -253,6 +289,8 @@ const toRow = (row: Selected): PartnerRow => ({
   updatedAt: new Date(row.updatedAt),
   ...(row.secretReplacedAt === null ? {} : { secretReplacedAt: new Date(row.secretReplacedAt) }),
   isTest: row.isTest,
+  ...(row.walletColour === null ? {} : { walletColour: row.walletColour }),
+  ...(row.hasWalletLogo ? { walletLogoVersion: row.walletLogoVersion } : {}),
 });
 
 type Tx = Parameters<Parameters<NodePgDatabase<Record<string, unknown>>['transaction']>[0]>[0];
@@ -308,11 +346,21 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
             secretHint: partner.secretHint,
             createdBy: partner.createdBy,
             isTest: partner.isTest === true,
+            walletColour: partner.walletColour ?? null,
+            walletLogo: partner.walletLogo?.x1 ?? null,
+            walletLogo2x: partner.walletLogo?.x2 ?? null,
+            walletLogo3x: partner.walletLogo?.x3 ?? null,
+            walletLogoVersion: partner.walletLogo === undefined ? 0 : 1,
           })
           .returning(ROW);
         if (row === undefined) throw new Error('A partner just made could not be read back.');
         const made = toRow(row);
-        await logChange(tx, audit, made, { clientId: made.clientId, isTest: made.isTest });
+        await logChange(tx, audit, made, {
+          clientId: made.clientId,
+          isTest: made.isTest,
+          ...(partner.walletColour === undefined ? {} : { walletColour: partner.walletColour }),
+          ...(partner.walletLogo === undefined ? {} : { walletLogoChanged: true }),
+        });
         return made;
       });
     },
@@ -328,6 +376,17 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
             ...(change.frameOrigins === undefined ? {} : { frameOrigins: [...change.frameOrigins] }),
             ...(change.redirectUris === undefined ? {} : { redirectUris: [...change.redirectUris] }),
             ...(change.isTest === undefined ? {} : { isTest: change.isTest }),
+            ...(change.walletColour === undefined ? {} : { walletColour: change.walletColour }),
+            ...(change.walletLogo === undefined
+              ? {}
+              : change.walletLogo === null
+                ? { walletLogo: null, walletLogo2x: null, walletLogo3x: null }
+                : {
+                    walletLogo: change.walletLogo.x1,
+                    walletLogo2x: change.walletLogo.x2,
+                    walletLogo3x: change.walletLogo.x3,
+                    walletLogoVersion: sql`${partners.walletLogoVersion} + 1`,
+                  }),
             ...(change.logo === undefined
               ? {}
               : change.logo === null
@@ -344,6 +403,8 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         const changed = toRow(row);
         await logChange(tx, audit, changed, {
           logoChanged: change.logo !== undefined,
+          ...(change.walletColour === undefined ? {} : { walletColour: change.walletColour }),
+          ...(change.walletLogo === undefined ? {} : { walletLogoChanged: true }),
           ...(change.isTest === undefined ? {} : { isTest: change.isTest }),
         });
         return changed;
@@ -374,6 +435,61 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         .limit(1);
       if (row === undefined || row.bytes === null || row.type === null) return undefined;
       return { bytes: row.bytes, type: row.type, version: row.version };
+    },
+
+    async partnerWalletLogo(clientId, version) {
+      if (!CLIENT_ID.test(clientId) || !Number.isSafeInteger(version)) return undefined;
+      const [row] = await db
+        .select({ bytes: partners.walletLogo2x, version: partners.walletLogoVersion })
+        .from(partners)
+        .where(
+          and(
+            eq(partners.clientId, clientId),
+            eq(partners.walletLogoVersion, version),
+            isNotNull(partners.walletLogo2x),
+          ),
+        )
+        .limit(1);
+      if (row === undefined || row.bytes === null) return undefined;
+      return { bytes: row.bytes, type: 'image/png', version: row.version };
+    },
+
+    async partnerWalletCard(partnerIds) {
+      const ids = [...new Set(partnerIds.filter((id) => UUID.test(id)))].slice(0, 20);
+      if (ids.length === 0) return undefined;
+      // Which of them has a card, without its bytes: only the one that wins is read whole.
+      const having = await db
+        .select({ id: partners.id })
+        .from(partners)
+        .where(
+          and(
+            inArray(partners.id, ids),
+            sql`(${partners.walletColour} is not null or ${partners.walletLogo} is not null)`,
+          ),
+        );
+      const first = ids.find((id) => having.some((row) => row.id === id));
+      if (first === undefined) return undefined;
+      const [row] = await db
+        .select({
+          id: partners.id,
+          name: partners.name,
+          colour: partners.walletColour,
+          x1: partners.walletLogo,
+          x2: partners.walletLogo2x,
+          x3: partners.walletLogo3x,
+        })
+        .from(partners)
+        .where(eq(partners.id, first))
+        .limit(1);
+      if (row === undefined || (row.colour === null && row.x1 === null)) return undefined;
+      return {
+        partnerId: row.id,
+        name: row.name,
+        ...(row.colour === null ? {} : { colour: row.colour }),
+        ...(row.x1 === null || row.x2 === null || row.x3 === null
+          ? {}
+          : { logo: { x1: row.x1, x2: row.x2, x3: row.x3 } }),
+      };
     },
 
     async ensureManagedUser(person) {

@@ -2,7 +2,13 @@
 // be compared: a connect's `redirect_uri` must equal one character for character, so only an address already in its
 // one canonical spelling is taken. https only, except a loopback host over http (RFC 8252), for a partner's own
 // laptop and our sample partner page.
-import { PARTNER_LOGO_MAX_BYTES, type PartnerLogoUpload } from '@crm/contracts';
+import {
+  PARTNER_LOGO_MAX_BYTES,
+  PARTNER_WALLET_LOGO_MAX_BYTES,
+  type PartnerLogoUpload,
+  type PartnerWalletLogoUpload,
+} from '@crm/contracts';
+import { cleanPassLogo } from '../profile/pass-brand.ts';
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -69,4 +75,36 @@ export function readPartnerLogo(
 /** Our own address for a partner's logo; its version in the query, so a new logo is a new address. */
 export function partnerLogoPath(clientId: string, version: number): string {
   return `/api/public/partners/${clientId}/logo?v=${String(version)}`;
+}
+
+/** Our own address for a partner's Wallet logo, for the console's preview; its version in the query. */
+export function partnerWalletLogoPath(clientId: string, version: number): string {
+  return `/api/public/partners/${clientId}/wallet-logo?v=${String(version)}`;
+}
+
+/**
+ * A Wallet logo's three files when each is what a pass can carry (a still PNG no larger than Wallet's logo at its
+ * scale, under 100 KB), each with its text and anything after its end left behind, or the reason they aren't. The console's browser draws them, so a refusal here means a file that
+ * did not come from the console's own form.
+ */
+export function readPartnerWalletLogo(
+  upload: PartnerWalletLogoUpload,
+): { readonly x1: Buffer; readonly x2: Buffer; readonly x3: Buffer } | { readonly problem: string } {
+  const unreadable = { problem: 'That logo couldn’t be read. Try another PNG.' };
+  const files: Buffer[] = [];
+  for (const [data, scale] of [
+    [upload.x1, 1],
+    [upload.x2, 2],
+    [upload.x3, 3],
+  ] as const) {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return unreadable;
+    const bytes = Buffer.from(data, 'base64');
+    if (bytes.length === 0 || bytes.length > PARTNER_WALLET_LOGO_MAX_BYTES) return { problem: 'Use a smaller logo.' };
+    const clean = cleanPassLogo(bytes, scale);
+    if (clean === undefined) return unreadable;
+    files.push(Buffer.from(clean));
+  }
+  const [x1, x2, x3] = files;
+  if (x1 === undefined || x2 === undefined || x3 === undefined) return unreadable;
+  return { x1, x2, x3 };
 }

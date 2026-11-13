@@ -270,6 +270,7 @@ export type {
   PartnerLogoUpload,
   PartnerModule,
   PartnerView,
+  PartnerWalletLogoUpload,
   PartnerWithSecret,
   RegisterPartnerInput,
   UpdatePartnerInput,

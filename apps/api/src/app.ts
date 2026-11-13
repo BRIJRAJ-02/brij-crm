@@ -651,6 +651,16 @@ export function createApp({
       { clientId: c.req.param('clientId'), version: c.req.query('v'), address: c.get('clientIp') },
     ),
   );
+  // A partner's Wallet logo (13 Nov 2026), for the console's preview of its card: the same answer, the other picture.
+  app.get('/public/partners/:clientId/wallet-logo', (c) =>
+    partnerLogoResponse(
+      {
+        partnerLogo: (clientId, version) => identity.partnerWalletLogo(clientId, version),
+        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+      },
+      { clientId: c.req.param('clientId'), version: c.req.query('v'), address: c.get('clientIp') },
+    ),
+  );
   // The origins a partner may frame its embedded screens in (spec 0070, AC-7032): the edge asks it for each
   // `/embed/<clientId>/…` page, to send that page's `frame-ancestors`.
   const frameOrigins = createFrameOrigins({ partnerByClientId: (clientId) => identity.partnerByClientId(clientId) });
@@ -944,7 +954,13 @@ export function createApp({
 
   // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a
   // handle through the public booking door, which only that folder may open; the route itself is private.
-  mountWalletPass(app, { db, auth, pass: createApplePass(walletSettings) });
+  mountWalletPass(app, {
+    db,
+    auth,
+    pass: createApplePass(walletSettings),
+    // A partner's own card (13 Nov 2026): the registry's read, for the door's `readPassBrand`.
+    partners: { partnerWalletCard: (partnerIds) => identity.partnerWalletCard(partnerIds) },
+  });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {

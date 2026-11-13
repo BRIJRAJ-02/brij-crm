@@ -131,8 +131,8 @@ const PNG_KEPT = new Set([
   'fdAT',
 ]);
 
-/** A PNG without its text, `eXIf` and time chunks, every chunk's length checked. */
-function stripPng(bytes: Uint8Array): Stripped | undefined {
+/** A PNG without its text, `eXIf` and time chunks, every chunk's length checked, and nothing after its end. */
+export function stripPng(bytes: Uint8Array): Stripped | undefined {
   const kept: Uint8Array[] = [bytes.subarray(0, 8)];
   let at = 8;
   let width = 0;

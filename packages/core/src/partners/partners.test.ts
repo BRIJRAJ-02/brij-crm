@@ -8,11 +8,12 @@ import type { PartnerConnectRequest } from '@crm/contracts';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { enterAsPartner, enterWorkspace, NO_RULE_SOURCE } from '../access/door.ts';
+import { enterAsPartner, enterWorkspace, NO_RULE_SOURCE, readPassBrand } from '../access/door.ts';
 import { startWorkspace } from '../account/account.ts';
 import { listAuditEvents } from '../audit/audit.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
+import { writePng } from '../profile/png.ts';
 import { signedInNow, testScope } from '../testing.ts';
 import { approvePartnerConnect, denyPartnerConnect, partnerConnectOffer } from './connect.ts';
 import { disconnectApp, listConnectedApps, readPartnerConnection, setConnectedAppModules } from './connections.ts';
@@ -190,6 +191,92 @@ describe('the registry (AC-7010)', () => {
         ),
       ),
     ).toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+});
+
+describe('a partner’s Apple Wallet card (13 Nov 2026)', () => {
+  const file = (width: number, height: number) =>
+    Buffer.from(writePng(width, height, () => [255, 255, 255])).toString('base64');
+  const logo = { x1: file(160, 37), x2: file(320, 74), x3: file(480, 111) };
+
+  it('takes a colour and a logo, answers them on the partner, and gives both back up', async () => {
+    const made = await registerPartner(
+      { partners: identity },
+      { name: `Card ${tag()}`, frameOrigins: [], redirectUris: [REDIRECT], walletColour: '#13265b', walletLogo: logo },
+      audit(),
+    );
+    expect(made.partner.walletColour).toBe('#13265b');
+    expect(made.partner.walletLogoUrl).toBe(`/api/public/partners/${made.partner.clientId}/wallet-logo?v=1`);
+    const served = await identity.partnerWalletLogo(made.partner.clientId, 1);
+    expect(served?.type).toBe('image/png');
+    expect(served?.bytes.toString('base64')).toBe(logo.x2);
+    // An old version reads no bytes, as the partner's own logo's does.
+    expect(await identity.partnerWalletLogo(made.partner.clientId, 0)).toBeUndefined();
+
+    const cleared = await updatePartner(
+      { partners: identity },
+      { partnerId: made.partner.id, walletColour: null, walletLogo: null },
+      audit(),
+    );
+    expect(cleared.walletColour).toBeUndefined();
+    expect(cleared.walletLogoUrl).toBeUndefined();
+    expect(await identity.partnerWalletCard([made.partner.id])).toBeUndefined();
+  });
+
+  it('refuses a logo too large for a pass, or one that is no PNG', async () => {
+    const made = await partner();
+    for (const walletLogo of [
+      { ...logo, x1: file(200, 37) },
+      { ...logo, x3: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64') },
+    ]) {
+      expect(
+        await refusalOf(updatePartner({ partners: identity }, { partnerId: made.partner.id, walletLogo }, audit())),
+      ).toMatchObject({ code: 'CONFIG_INVALID' });
+    }
+    expect(await identity.partnerWalletCard([made.partner.id])).toBeUndefined();
+  });
+
+  it('dresses the passes of a workspace connected to it, until the workspace disconnects, and no other’s', async () => {
+    const made = await partner();
+    const ada = await owner();
+    const { request: asked, verifier } = request(made.partner.clientId);
+    const answer = await approvePartnerConnect(
+      ada.scope,
+      { partners: identity },
+      { request: asked, modules: ['link_pages'] },
+    );
+    const swapped = await exchangePartnerCode(
+      { db, partners: identity },
+      {
+        clientId: made.partner.clientId,
+        clientSecret: made.secret,
+        code: codeOf(answer.redirectTo).code,
+        redirectUri: REDIRECT,
+        codeVerifier: verifier,
+      },
+    );
+    if (!swapped.ok) throw new Error(swapped.message);
+    const deps = { db, partners: identity };
+    // Connected, but the partner has no card of its own: the pass stays Timefix's.
+    expect(await readPassBrand(deps, { workspaceId: ada.workspaceId })).toBeUndefined();
+
+    await updatePartner(
+      { partners: identity },
+      { partnerId: made.partner.id, walletColour: '#13265B', walletLogo: logo },
+      audit(),
+    );
+    const brand = await readPassBrand(deps, { workspaceId: ada.workspaceId });
+    expect(brand?.name).toBe(made.partner.name);
+    // Kept lowercase, whatever was typed.
+    expect(brand?.colour).toBe('#13265b');
+    expect(Buffer.from(brand?.logo?.x3 ?? []).toString('base64')).toBe(logo.x3);
+
+    // A workspace that never connected it wears nothing of it.
+    const bea = await owner();
+    expect(await readPassBrand(deps, { workspaceId: bea.workspaceId })).toBeUndefined();
+
+    await disconnectApp(ada.scope, { partners: identity }, { connectionId: swapped.connection.id });
+    expect(await readPassBrand(deps, { workspaceId: ada.workspaceId })).toBeUndefined();
   });
 });
 

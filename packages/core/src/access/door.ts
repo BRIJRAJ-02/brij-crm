@@ -12,7 +12,7 @@
 // nothing leaks whether a workspace exists.
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { createHash } from 'node:crypto';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
@@ -35,6 +35,7 @@ import {
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import { lockupLogoOf, memberNameOf, publicIdentityOf } from '../profile/identity.ts';
+import type { PassBrand } from '../profile/pass-brand.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { parsePartnerAccessToken } from '../partners/tokens.ts';
@@ -1234,6 +1235,42 @@ export async function findHandleOwner(
     memberNameOf(tx, owner.userId, owner.workspaceId),
   );
   return name === undefined ? owner : { ...owner, name };
+}
+
+/**
+ * The brand a person's Wallet pass wears in place of Timefix's (13 Nov 2026), or undefined for Timefix's own: the
+ * card of a partner their page's workspace is connected to for link pages. With more than one such partner that has
+ * a card, the oldest live connection's wins, so an app connected later doesn't change the card. A disconnected
+ * partner's card stops with the connection. Reads only the workspace's own connections, in its own transaction, and
+ * then the registry's card for those partners: nothing of the workspace's is answered but which card it wears.
+ * Exported only from `@crm/core/public`.
+ */
+export async function readPassBrand(
+  deps: { readonly db: Database; readonly partners: Pick<IdentityStore, 'partnerWalletCard'> },
+  owner: Pick<HandleOwner, 'workspaceId'>,
+): Promise<PassBrand | undefined> {
+  const connected = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    tx
+      .select({ partnerId: schema.partnerConnections.partnerId })
+      .from(schema.partnerConnections)
+      .where(
+        and(
+          isNull(schema.partnerConnections.disconnectedAt),
+          // The pass is a link page's: only a connection that shares link pages dresses it.
+          sql`'link_pages' = any(${schema.partnerConnections.modules})`,
+        ),
+      )
+      .orderBy(asc(schema.partnerConnections.createdAt), asc(schema.partnerConnections.id))
+      .limit(20),
+  );
+  if (connected.length === 0) return undefined;
+  const card = await deps.partners.partnerWalletCard(connected.map((row) => row.partnerId));
+  if (card === undefined) return undefined;
+  return {
+    name: card.name,
+    ...(card.colour === undefined ? {} : { colour: card.colour }),
+    ...(card.logo === undefined ? {} : { logo: card.logo }),
+  };
 }
 
 /**
