@@ -34,6 +34,7 @@ Reasoning, the options compared, the open calls the prototype leaves and the evi
 - **AC-7**: `design-system-guardian` reports nothing open on each tier before that tier is reported done.
 
 *Gate 1: load time*
+- **AC-8a**: _(The owner, 13 Nov: "trim, then accept the rest".)_ Phase 1 lands over `f81623f0c` by the amounts in rationale.md, Load debt; each screen phase that rewrites one of those pages brings its line back to or under its `f81623f0c` figure before it lands.
 - **AC-8**: Load time is measured per phase, on real pages (the owner, 12 Nov, replacing the first draft's 30% cut per tier, which tier 1 showed atoms cannot meet while keeping every behaviour). No line of `pnpm size` grows against the phase's base beyond content-hash noise (±20 B: a changed chunk renames the imports of every chunk that loads it). Each tier records its pages' `pnpm size` lines before and after in rationale.md. The real cuts are measured where duplicates fold away (tiers 2 and 3, each folded part's saving reported) and in the screen phases 4 to 9. `packages/ui/scripts/part-cost.ts` stays as reporting (the per folder table), not a gate.
 - **AC-9**: _(Folded into AC-8, 12 Nov: the totals of `apps/web/dist/assets` are reported beside the page lines, not gated, since every route chunk moves by content-hash noise.)_
 - **AC-10a**: `pnpm size` gates the workspace shell's CSS (the first load plus every stylesheet the `w.$slug` route imports statically) at its measurement plus 0.5 kB. _(Added 13 Nov, after a route chunk's CSS grew 18.6 kB unseen.)_
@@ -203,7 +204,7 @@ Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look
 3. Tier 1, batch 1b: Tag (+Badge, StatusDot), Avatar (+PersonLine), RecordChip (+LinkChip, Mention, Variable, RecordChipList), QrCode, satisfies **AC-1** to **AC-6**, **AC-12**, **AC-15**, **AC-16**
 4. Tier 1, batch 1c: Checkbox (+Radio, Switch), Slider, DragHandle, satisfies **AC-1** to **AC-6**
 5. Tier 1 gates: cost table, `pnpm size`, budgets lowered, guardian, `pnpm check`, satisfies **AC-7** to **AC-10**
-6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; sent back by the coordinator on 13 Nov; one look everywhere, the owner's decision 16; AC-8 not met on the guest pages, see rationale.md, One look everywhere)_
+6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; sent back by the coordinator on 13 Nov; one look everywhere, the owner's decision 16; then, the owner, 13 Nov: trim, then accept the rest as load debt the screen phases 4 to 9 pay back, see rationale.md, Load debt)_
 7. Tier 3, batches 3a to 3d, then its gates, satisfies **AC-1** to **AC-16** _(3a built 13 Nov; see rationale.md, Tier 3a after: the duplicates keep separate modules, so no bytes folded away)_
 8. Per tier, the landing car reshoots baselines through CI, satisfies **AC-17**
 

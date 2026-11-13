@@ -328,3 +328,31 @@ App routes, CSS and JavaScript gzipped (default level), index.html plus the rout
 | w.$slug.objects.$object | 29,811 → 30,855 (+1,044) | 457,049 → 457,070 (+21) |
 
 That growth is the prototype look's own rules and nothing else: the shell's +1,268 B spreads over 28 parts' modules (Field +249, CodeInput +154, `client` +132, EmptyState +131, Menu +121, Breadcrumbs +98, Checkbox +96 and smaller ones), against the token sheet's -126.
+
+### Trim, then accept the rest (the owner, 13 Nov)
+
+The owner's decision on phase 1's cost: one focused trim round, then accept what is left as debt that the screen phases pay back. The round went at the biggest causes (Field, Select, CodeInput, EmptyState), rewriting their rules smaller without changing what they draw. Gzip had already folded nearly all of the repetition: Field 2171 -> 2168 B, Select 1885 -> 1887 and CodeInput 1008 -> 1012 B (gzipped, Lightning CSS minified, level 9), and the Field and Select rewrites raised selector weights enough to change which state wins, so those were reverted. EmptyState's well is scoped to the block layouts instead of drawn and undone on a row: 744 -> 732 B, kept (bad345851). What these parts cost is the prototype's look itself (Field's filled box with its hover, focus, invalid and search states; Select's menu rows and phone code chip), not slack.
+
+### Load debt
+
+What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, measured on bad345851 (the guest pages by `pnpm size`, the app routes by `scratchpad/routecss.mjs`: index.html plus the route's static imports):
+
+| Page | JavaScript | CSS | Over the base |
+|---|---|---|---|
+| Hosted form | 205.91 -> 206.02 kB (+110 B) | 18.57 -> 19.28 kB (+710 B) | **+820 B** |
+| Booking page | 188.89 -> 188.89 kB (0) | 19.37 -> 19.50 kB (+130 B) | **+130 B** |
+| Sign in | 415,059 -> 415,057 B (-2) | 26,735 -> 27,547 B (+812) | **+810 B** |
+| Workspace shell (w.$slug) | 472,242 -> 472,272 B (+30) | 34,809 -> 36,066 B (+1,257) | **+1,287 B** |
+| Workspace index | 449,144 -> 449,145 B (+1) | 28,116 -> 29,108 B (+992) | **+993 B** |
+| An object's records | 457,049 -> 457,067 B (+18) | 29,811 -> 30,844 B (+1,033) | **+1,051 B** |
+
+**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB) and the workspace shell's CSS at 36.4 kB until then.
+
+### Merge notes (phase 1 + 2)
+
+Things phase 1 can't do because they live in phase 2's files, for the merge to pick up:
+- FormParts' `.card` remaps `--shadow-focus` and the night template's `--form-focus`; the ported Field, Select, Checkbox and Radio no longer read them (only PhoneField and FormParts itself do), so the remaps are a saving once PhoneField is ported.
+- FormParts' `.card` should remap `--text-body-sm` and `--text-body-sm-strong` to the body size, so the hosted form's labels, hints and errors read at 16px again (tier 2 did it there; the file is back at the base, and they read at the 13px step meanwhile).
+- BookingReceipt names no accent, so the manage booking page (a receipt with no BookingFrame round it) draws the app's ink primary; its root's accent name belongs in Button's primary chain (`--form-accent`, `--frame-accent`, `--look-accent`), or it remaps `--primary` itself as LinkPage and GuestLook do.
+- The guest menu's accent count is now the prototype's blue tag tint (`--tag-blue-bg`, `--tag-blue-text`), not the menu's brand fill; MenuList may want its own pill, owed to phase 8.
+- Field's `isTabular`, `aria-keyshortcuts` and the counter's `data-full` (about 64 B of the hosted form's JavaScript) are phase 2's to account for, since its NumberField and SearchField use them.
