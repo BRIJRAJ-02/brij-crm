@@ -336,6 +336,9 @@
     --page-accent-soft: var(--page-brand-soft, var(--accent-soft));
     --page-accent-border: var(--page-brand-accent, var(--accent-border));
     --page-ring: var(--page-brand-accent, var(--focus-ring));
+    /* The accent as a line or a mark (a Menu's or Select's check, a selected toggle's edge), as the booking page's and
+       the hosted form's are: the brand's accent, held at 3:1 on the page, else the library's. */
+    --page-accent-line: var(--page-brand-accent, var(--accent-text));
 
     box-sizing: border-box;
     display: flex;
@@ -366,6 +369,7 @@
     --accent-soft: var(--page-accent-soft);
     --accent-border: var(--page-accent-border);
     --focus-ring: var(--page-ring);
+    --accent-text: var(--page-accent-line);
   }
 
   /* An editor's draft of one block (spec 0060, AC-16): the page's own ground and look, in a slice. */

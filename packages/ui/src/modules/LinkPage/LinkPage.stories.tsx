@@ -584,6 +584,17 @@ export const Branded: Story = {
     await expect(root?.style.getPropertyValue('--brand-accent')).toBe('#e65708');
     const row = canvasElement.querySelector('a[href^="/"]');
     await expect(row === null ? '' : getComputedStyle(row).backgroundColor).toBe('rgb(230, 87, 8)');
+    // The page's popups (its PopupHost) wear the brand too (spec 0074): the accent, a Button's primary, the focus ring
+    // and the accent as a line or a mark (a menu's check), never the app's blue.
+    const host = canvasElement.querySelector('[data-popup-host]');
+    await expect(host).not.toBeNull();
+    for (const name of ['--accent', '--primary', '--focus-ring', '--accent-text']) {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      host?.append(probe);
+      await expect(getComputedStyle(probe).color, name).toBe('rgb(230, 87, 8)');
+      probe.remove();
+    }
   },
 };
 
