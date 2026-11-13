@@ -444,6 +444,16 @@ Tiers 3b to 3d added to the signed in pages' lines (the shell look on every scre
 
 The hosted form's and booking page's lines are `pnpm size`'s; the rest are `scratchpad/t3m.mjs`'s, in bytes. Against port-1's tip, every page's JavaScript differs by main's wallet card and content-hash noise only (the entry's chunk map and the minifier's renamed imports, -18 to +29 B a page), and phase 2 adds nothing to any page but ReadyPanel's `invite` (+17 B, on the pages that draw ReadyPanel). The CSS over port-1 is the merge notes' own (FormParts +41 B, BookingFrame +20 B, BookingReceipt +21 B) and Tag's three custom property fallbacks (+14 B, on screens with tags), which carry AiTag's look.
 
+**Phase 3's own (feat/port-3, spec 0074, rebased onto feat/port-12; measured against port-12's tip, a466062db, the same way).** Every guest page and every other signed in page came out lighter than port-12 (spec 0074's build note); three routes grew, each by a phase 3 feature on its first load, and are debt here, paid back by the phase that rewrites that page:
+
+| Page | JavaScript | CSS | Over port-12 | Cause | Paid back by |
+|---|---|---|---|---|---|
+| A table view (records, `objects.$object_.views.$viewId`) | 835,423 -> 835,827 B (+404) | 66,711 -> 66,632 B (-79) | **+325 B** | The record panel opening from loaded data: its place line ("People · 3 of 120"), J and K, its sections opening once the record shows (+529 B in the route), and AppShell's `--shell-panel-top` observer (+234 B, on every signed in page) | Phase 5 (spec 0076, records) |
+| Bookings › Pages (`bookings.pages`) | 499,408 -> 500,380 B (+972) | 37,717 -> 37,565 B (-152) | **+820 B** | Share on each card: the share sheet's loader (`LazyShareSheet`, 441 B) and the booking page sheet's lazy shell (about 500 B, its chunk list), LinksScreen's Share item (+72 B), AppShell's observer | Phase 6 (bookings) |
+| Captures › Links (`captures.links.index`) | 497,555 -> 498,402 B (+847) | 37,717 -> 37,565 B (-152) | **+695 B** | The same Share on each card (one LinksScreen draws both lists) | Phase 7 (captures) |
+
+The CSS fall on both lists, and part of every page's JavaScript fall, is the chunk regrouping from BookingFoot's split (Avatar's rules now ship in one file with Callout's), not a cut in those pages' own code; the rule below applies to these three lines as it does to phase 1's, at or under port-12's figure.
+
 **The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then; on the merged branch, the hosted form's JavaScript at 206.5 kB and the first load's at 297.2 kB (see `.size-limit.js`).
 
 ### Merge notes (phase 1 + 2)

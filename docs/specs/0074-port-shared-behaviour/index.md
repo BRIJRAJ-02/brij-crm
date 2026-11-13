@@ -234,25 +234,25 @@ Measurements (gzip; `pnpm size` lines, then each touched route's static closure 
 
 The batch 5 column is its first commit (6ed3ef427); the review fixes after it are in the final `pnpm size`. Where a line grew past 20 B it is said here rather than hidden: the hosted form's and booking page's JavaScript grew by about 200 B and their CSS by 30 to 40 B in batch 4, which is PopupHost and React Aria's portal provider itself (the spec's "JavaScript only" budget for those pages; no CSS file of its own after the review). Batch 3's +632 B of CSS on the editors is PublishBar's stylesheet, which they load for the first time. The share code is measured again at the phase's end (AC-7418, amended).
 
-**Rebased onto feat/port-12 (13 November 2026).** Phase 3 now sits on phases 0, 1 and 2 merged (a466062db); its conflicts kept phase 1's look and phase 3's behaviour, the popup hosts read spec 0071's `size-bar`, BookingFoot left BookingFrame for a file and stylesheet of its own (the guest menu drew the frame for its foot alone), the forms' live dialog, both Share tabs' column and the booking page's share sheet load apart from the editors, and the record panel's keys line takes the command palette's foot hint look (no "·"); per page against port-12's tip, gzipped bytes, CSS then JavaScript (`t3m.mjs`, entry plus the route's static imports; every guest page lighter, app routes over it only by phase 3's own features: the share sheet's loader on the booking links lists, the record panel's place, keys and sections on a table view, and AppShell's `--shell-panel-top` observer, +234 B on every signed in page, which the chunk reshuffle more than pays):
+**Rebased onto feat/port-12 (13 November 2026).** Phase 3 now sits on phases 0, 1 and 2 merged (a466062db); its conflicts kept phase 1's look and phase 3's behaviour, the popup hosts read spec 0071's `size-bar`, BookingFoot left BookingFrame for a file and stylesheet of its own (the guest menu drew the frame for its foot alone), the forms' live dialog, both Share tabs' column and the booking page's share sheet load apart from the editors, the record panel's keys line takes the command palette's foot hint look (no "·"), AC-7427 (`qrSize`, the link page's Share draws the large code) and AC-7426's stories (MenuList, LinkPage and BookingFrame `SheetBarHeight`) are built, LinkPage maps `--accent-text` to the brand for its popups, and ReadyPanel's Download is the ghost menu again (the SplitButton was not the prototype's control, whose QR download is two one press buttons, PNG and SVG; phase 1's look stands until a screen phase ports it, so AC-7428's one press PNG is open); per page against port-12's tip, gzipped bytes (`t3m.mjs`, entry plus the route's static imports; every guest page lighter, and three app routes over it only by phase 3's own features, listed with their cause as load debt in spec 0072's rationale, "Load debt"):
 
 | Page | CSS | JS | Total |
 |---|---|---|---|
-| Booking page | -317 | -322 | -639 |
-| Hosted form | +28 (PopupHost's host rule) | -102 | -74 |
-| Menu page | -4,544 | -5,305 | -9,849 |
-| Reserve page | -295 | -400 | -695 |
-| Business page | -295 | -348 | -643 |
-| Public profile | -279 | -259 | -538 |
-| Manage booking | -317 | -336 | -653 |
-| Sign in | -152 | -180 | -332 |
-| Workspace shell, index, an object's records | -152 | -93, -101, -92 | -245, -253, -244 |
-| Settings, an object's tab; bookings list | -152 | -43; -130 | -195; -282 |
-| Link page editor | -3,175 | -1,335 | -4,510 |
-| Captures › Links; Bookings › Pages | -152 | +1,053; +1,180 | +901; +1,028 (Share on each card: the sheet's loader 441 B, its lazy shell 504 B, LinksScreen +79) |
-| Form editor; booking page editor | -972; -962 | -4,136; -3,769 | -5,108; -4,731 |
-| Menus; business page settings | +121; -1,503 | -2,057; -1,003 | -1,936; -2,506 |
-| A table view (records) | -79 | +520 | +441 (the record panel's place, J/K and sections, +524 in the route) |
+| Booking page | -317 | -484 | -801 |
+| Hosted form | +28 (PopupHost's host rule) | -274 | -246 |
+| Menu page | -4,544 | -5,490 | -10,034 |
+| Reserve page | -295 | -572 | -867 |
+| Business page | -295 | -528 | -823 |
+| Public profile | -262 | -428 | -690 |
+| Manage booking | -317 | -518 | -835 |
+| Sign in | -152 | -346 | -498 |
+| Workspace shell, index, an object's records | -152 | -324, -296, -294 | -476, -448, -446 |
+| Settings, an object's tab; bookings list | -152 | -169; -279 | -321; -431 |
+| Link page editor | -3,158 | -1,468 | -4,626 |
+| Form editor; booking page editor | -972; -945 | -4,290; -3,946 | -5,262; -4,891 |
+| Menus; business page settings | +121; -1,503 | -2,259; -1,241 | -2,138; -2,744 |
+| Captures › Links; Bookings › Pages | -152 | +847; +972 | **+695; +820** (Share on each card: the sheet's loader 441 B, its lazy shell about 500 B, LinksScreen +72) |
+| A table view (records) | -79 | +404 | **+325** (the record panel's place, J/K and sections, +529 in the route) |
 
 ### Open after batches 2 to 5
 

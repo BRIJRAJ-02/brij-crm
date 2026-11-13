@@ -158,8 +158,8 @@ export default [
   // their addresses are read up front by the command menu, and a contact card gained its second and third email,
   // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
   // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
-  // Spec 0074 rebased onto phases 0 to 2 (13 November 2026): 296.48 kB measured, so the line comes down to 296.9 kB.
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '296.9 kB', gzip: true, running: false },
+  // Spec 0074 rebased onto phases 0 to 2 (13 November 2026): 296.34 kB measured, so the line comes down to 296.8 kB.
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '296.8 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '8.3 kB', gzip: true, running: false },
   // Spec 0072: the workspace shell's CSS (above), at the measurement plus 0.5 kB (35.86 kB on 13 November 2026, after
   // phase 1's tiers 1 to 3a and the trim round; 34.61 kB at f81623f0c). Tier 3b (13 November) took it to 36.08 kB
@@ -178,10 +178,10 @@ export default [
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
   // 13 November 2026, spec 0074 (port phase 3, AC-7417): the guest pages no longer carry the app's handle code, only an
   // address's shape (`@crm/contracts/handle-address`), which more than pays for PopupHost. Measured 205.72 kB on
-  // phase 2's base; rebased onto phases 0 to 2 (whose merged form measured 206.03 kB), 205.92 kB, so the line sits at
-  // that plus at most 0.5 kB, under the merge's 206.5 kB; the booking page's lines likewise (188.45 and 19.22 kB, the
+  // phase 2's base; rebased onto phases 0 to 2 (whose merged form measured 206.03 kB), 205.75 kB, so the line sits at
+  // that plus at most 0.5 kB, under the merge's 206.5 kB; the booking page's lines likewise (188.28 and 19.22 kB, the
   // foot's own stylesheet and file taking the frame off the pages that draw only the foot).
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.4 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.2 kB', gzip: true, running: false },
   // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
@@ -209,7 +209,7 @@ export default [
   },
   // Spec 0072, tier 3d (13 November 2026): 188.78 kB, 110 B less, once the public profile page imports
   // LinkListToolbar from its own file; the measurement plus 0.5 kB.
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '188.9 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '188.7 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).
