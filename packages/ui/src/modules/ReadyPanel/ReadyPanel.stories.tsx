@@ -252,10 +252,12 @@ export const ShareLargeCode: Story = {
     // Under the ways, not beside them, in the dialog's width too.
     const ways = canvas.getByRole('group', { name: 'Send the link' }).getBoundingClientRect();
     await expect(code.top).toBeGreaterThanOrEqual(ways.bottom);
-    // Download right under the code, centred on the tile.
+    // The downloads right under the code (their line, then PNG and SVG), centred on the tile.
+    const line = canvas.getByText('For a card, a table, a poster or a slide.').getBoundingClientRect();
+    await expect(line.top).toBeGreaterThanOrEqual(code.bottom);
+    await expect(line.top - code.bottom).toBeLessThan(24);
     const saved = canvas.getByRole('group', { name: 'Download the QR code' }).getBoundingClientRect();
-    await expect(saved.top).toBeGreaterThanOrEqual(code.bottom);
-    await expect(saved.top - code.bottom).toBeLessThan(24);
+    await expect(saved.top).toBeGreaterThanOrEqual(line.bottom);
     const tile = canvas.getByRole('img', { name: 'QR code for the link' }).parentElement?.getBoundingClientRect();
     await expect(Math.abs((tile?.left ?? 0) + (tile?.width ?? 0) / 2 - (saved.left + saved.width / 2))).toBeLessThan(2);
   },
