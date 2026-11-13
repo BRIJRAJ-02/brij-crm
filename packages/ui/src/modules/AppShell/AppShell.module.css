@@ -32,13 +32,15 @@
 
   .skip:focus-visible {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--space-2);
+    outline-offset: var(--border-width-focus);
   }
 
+  /* Inset by what the main column's card is, so the sidebar's head sits on the TopBar's row. */
   .sidebar {
     display: flex;
     flex: none;
     min-block-size: 0;
+    padding-block: calc(var(--space-8) + var(--border-width-hairline)) var(--space-8);
   }
 
   .main {
@@ -54,6 +56,9 @@
     background: var(--surface);
     box-shadow: var(--shadow-xs);
     outline: none;
+    /* What the card's inset and edge take from the window's height, for a view that sizes itself to the window
+       (PreviewLayout's sticky preview). */
+    --shell-inset-block: calc(2 * (var(--space-8) + var(--border-width-hairline)));
   }
 
   /* The sidebar's own space-8 inset is the gap before the surface. */
@@ -109,11 +114,21 @@
      TopBar's back the way up (`hidden`), or the sidebar alone as the whole screen's list (`full`). */
   @container app-shell (width < 480px) {
     /* The page takes the whole screen beside the rail, edge to edge. */
+    .sidebar {
+      padding-block: 0;
+    }
+
+    /* A hairline keeps the rail and the page apart, the canvas and surface being about 1.1:1. */
     .main {
       margin: 0;
       border: none;
       border-radius: 0;
       box-shadow: none;
+      --shell-inset-block: calc(0 * var(--space-8));
+    }
+
+    .sidebar + .main {
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     }
 
     .root[data-phone-sidebar='hidden'] > .sidebar {

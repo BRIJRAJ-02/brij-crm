@@ -68,7 +68,7 @@ For an editor whose preview is what guests see, beside a long list (a menu). Why
 
 ## Timefix prototype (spec 0072)
 
-Folded into AppShell (its aside beside the page) and AuthLayout (its preview half) in the prototype; it keeps its own module (decision 14), since none of its props line up with either. Its look already follows theirs: the preview column behind a `border-subtle` hairline, the phone with a hairline, `radius-xl` and `shadow-xs`. Spec 0072 changes one rule: a long preview's screen, focused, shows the outline ring (`border-width-focus`, `focus-ring`, `space-2` out) round the phone, in place of the accent edge and halo; in forced colours the ring shows as the system colour.
+Takes its look from AppShell and AuthLayout (spec 0072): the prototype folds it into AppShell (its aside beside the page) and AuthLayout (its preview half); it keeps its own module (decision 14), since none of its props line up with either. Its look already follows theirs, and its sticky preview subtracts the shell card's inset (`--shell-inset-block`, which AppShell sets) from the window's height: the preview column behind a `border-subtle` hairline, the phone with a hairline, `radius-xl` and `shadow-xs`. Spec 0072 changes one rule: a long preview's screen, focused, shows the outline ring (`border-width-focus`, `focus-ring`, `border-width-focus` out) round the phone, in place of the accent edge and halo; in forced colours the ring shows as the system colour.
 
 Repeats from AppShell and AuthLayout: the hairline before a side column (AppShell's `.panel`, AuthLayout's `.side`). Those leave with this export when the editors move to AppShell's aside (phase 2's AsideLayout) in their screen phases.
 

@@ -47,7 +47,7 @@ Not in the artifact.
 
 ## Timefix prototype (spec 0072)
 
-Takes its look from the prototype's role powers, on the library's one-role shape: the summary is the prototype's note (`text-body-sm` in `text-tertiary`), the areas are Disclosure folds `space-12` apart, and each opened fold lists its powers as the prototype's power rows: at least `size-row` tall (`space-4` above and below a wrapped one), `text-body`, a `border-subtle` hairline between them, the ones held at full contrast after a success check, the ones not held in `text-tertiary` after a minus. The folds open with Disclosure's accordion motion (transitions.dev 21), and several may be open.
+Takes its look from the prototype's role powers, on the library's one-role shape: the summary is the prototype's note (`text-body-sm` in `text-tertiary`), the areas are Disclosure folds `space-12` apart, and each opened fold lists its powers as the prototype's power rows: at least `size-control-sm` tall (`space-4` above and below a wrapped one; the prototype's 44px rows hold two lines and checkboxes, these one line, so they keep the library's density), `text-body`, a `border-subtle` hairline between them, the ones held at full contrast after a success check, the ones not held in `text-tertiary` after a minus. The folds open with Disclosure's accordion motion (transitions.dev 21), and several may be open.
 
 **Use it for** what a role lets someone do: Settings › Members' role guide and the Invite dialog. **Don't use it for** one person's access (show their role) or picking a role (Select with described options).
 

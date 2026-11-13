@@ -351,7 +351,7 @@ function HeadingRow({
   readonly isCollapsed: boolean;
 }) {
   return (
-    <span className={styles.workspace}>
+    <span className={styles.workspace} data-heading="">
       <Tooltip content={back.label} placement={isCollapsed ? 'end' : 'bottom'}>
         <ButtonLink variant="ghost" icon="arrow-left" label={back.label} href={back.href} />
       </Tooltip>

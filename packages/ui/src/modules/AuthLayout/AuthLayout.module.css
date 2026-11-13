@@ -46,8 +46,8 @@
 
   /* The split screen (owner, 22 October 2026): two panels edge to edge, the full height of the window, with no
      card, border or margin around them. On a phone the task's panel is the whole screen and the preview is left
-     out; from bp-page-compact up the task takes about a third and the preview the rest (the owner, 27 October
-     2026: the task's panel was too wide for what it holds, one column of fields). */
+     out; from bp-page-compact up the task takes 5 parts and the preview 6, its column size-dialog wide (the Timefix
+     prototype, spec 0072, replacing the owner's 27 October 36/64 split; the prototype is the look the owner approved). */
   .screen {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

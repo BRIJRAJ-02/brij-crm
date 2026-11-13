@@ -789,6 +789,27 @@ export const Reorder: Story = {
   },
 };
 
+/**
+ * Pressed on an item with a grip and a menu (spec 0072, the tier 3b review): the row washes with the item, as a bare
+ * item does, rather than staying clear because the item inside it is drawn transparent.
+ */
+export const RowPressed: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <CustomisableSidebar onReorder={fn()} onHide={fn()} />,
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const people = canvas.getByRole('link', { name: 'People' });
+    const row = people.parentElement;
+    if (row === null) throw new Error('No row.');
+    const clear = getComputedStyle(row).backgroundColor;
+    await userEvent.pointer([{ keys: '[MouseLeft>]', target: people }]);
+    await waitFor(() => expect(people).toHaveAttribute('data-pressed'));
+    await waitFor(() => expect(getComputedStyle(row).backgroundColor).not.toBe(clear));
+    // Let go away from the link, so the press ends without following it.
+    await userEvent.pointer([{ target: canvasElement }, { keys: '[/MouseLeft]', target: canvasElement }]);
+    await waitFor(() => expect(people).not.toHaveAttribute('data-pressed'));
+  },
+};
+
 /** An item's menu: More opens Hide from sidebar. */
 export const ItemMenu: Story = {
   render: () => <CustomisableSidebar onReorder={fn()} onHide={fn()} />,

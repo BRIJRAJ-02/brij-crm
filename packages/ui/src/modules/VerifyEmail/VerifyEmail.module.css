@@ -25,6 +25,7 @@
   .wait {
     color: var(--text-tertiary);
     font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     font-variant-numeric: tabular-nums;
   }
 

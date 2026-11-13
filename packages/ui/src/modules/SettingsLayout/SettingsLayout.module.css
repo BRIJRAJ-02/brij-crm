@@ -175,6 +175,7 @@
   /* A row's description is a step quieter than the page's. */
   .rowText > .description {
     font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
   }
 
   .actions {
@@ -456,6 +457,12 @@
     color: var(--text);
     font: var(--text-body-lg-strong);
     letter-spacing: var(--tracking-body-lg-strong);
+  }
+
+  /* Under a TopBar, whose title is text-heading, a section's title takes the same step rather than outrank it. */
+  .page[data-header='bar'] .sectionTitle {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   .sectionDescription {

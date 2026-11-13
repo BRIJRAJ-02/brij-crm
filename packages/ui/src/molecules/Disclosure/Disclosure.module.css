@@ -168,9 +168,9 @@
     /* Never under WCAG's 24px target: at the app's density the label's line and padding alone come to 22px. */
     min-block-size: var(--size-control-sm);
     padding-block: var(--space-4);
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-12);
     border-radius: var(--radius-sm);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }

@@ -1,6 +1,6 @@
-/* SectionBar: the start controls, the heading (SettingsLayout's section
-   head: text-body-lg-strong over a text-body-sm line), and the end controls
-   pushed to the end, wrapping on a narrow container. */
+/* SectionBar: the start controls, the heading (text-heading, a step under
+   the page's TopBar title it sits below, over a text-body-sm line), and the
+   end controls pushed to the end, wrapping on a narrow container. */
 @layer components {
   .root {
     display: flex;
@@ -32,8 +32,8 @@
   .title {
     margin: 0;
     color: var(--text);
-    font: var(--text-body-lg-strong);
-    letter-spacing: var(--tracking-body-lg-strong);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* A quiet heading: a place in time (the week's dates), so the controls round it lead. */

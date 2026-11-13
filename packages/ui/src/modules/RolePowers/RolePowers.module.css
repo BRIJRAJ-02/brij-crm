@@ -45,7 +45,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    min-block-size: var(--size-row);
+    min-block-size: var(--size-control-sm);
     padding-block: var(--space-4);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

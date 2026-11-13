@@ -1,7 +1,7 @@
 /* OptionsEditor, in the look of the Timefix prototype's options editor (spec 0072): the group's label in
    text-body-sm-strong and its "N of 500" over the rows on one surface-subtle tray (space-6 in, radius-md), rows
-   size-control tall and space-2 apart: the drag handle, the colour, the label (whose Field sits flush on the tray at
-   rest, as the prototype's name does, and turns white with its accent edge when typed in), for a stage its outcome
+   size-control tall and space-2 apart, each a surface strip: the drag handle, the colour, the label (a Field, its
+   filled box on the strip), for a stage its outcome
    and target days, the row's menu. A row being dragged lifts; the keyboard's row takes the outline ring just inside
    it. Add option sits under the tray; archived options under it, muted. */
 @layer components {
@@ -58,6 +58,7 @@
     min-block-size: var(--size-control);
     padding-inline: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
+    background: var(--surface);
     outline: none;
   }
 

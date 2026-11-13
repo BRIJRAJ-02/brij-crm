@@ -51,7 +51,7 @@
   /* No chevron to fold by (a sub section, or everything open under a search): the title keeps the column it would
      have, on the tiles' edge. */
   .head[data-inset] {
-    padding-inline-start: calc(var(--space-16) + var(--space-6));
+    padding-inline-start: calc(var(--space-12) + var(--space-6) + var(--space-4));
   }
 
   .heading {
@@ -102,7 +102,7 @@
 
   .fold:focus-visible {
     outline: var(--border-width-focus) solid var(--focus-ring);
-    outline-offset: var(--space-2);
+    outline-offset: var(--border-width-focus);
   }
 
   /* The grip's column in a row under it, so the title starts on the rows' tiles. */

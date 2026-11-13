@@ -16,7 +16,9 @@
     block-size: 100%;
     background: var(--canvas);
     --nav-current: var(--surface);
-    --nav-lift: var(--shadow-xs), 0 0 0 var(--border-width-hairline) var(--border-subtle);
+    /* The current pill's edge is control-border: 3:1 and more on the canvas and on a card in both themes, since the
+       surface pill alone is about 1.1:1 (the prototype's border-subtle ring). */
+    --nav-lift: var(--shadow-xs), 0 0 0 var(--border-width-hairline) var(--control-border);
   }
 
   .head {
@@ -45,6 +47,12 @@
     letter-spacing: var(--tracking-body-strong);
     text-align: start;
     outline: none;
+  }
+
+  /* The settings sidebar's heading row: the page's name, a step above its items. */
+  .workspace[data-heading] {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
   /* A labelled group's label: a folding section's quiet label, with no chevron
@@ -92,7 +100,7 @@
   .railTop {
     display: flex;
     flex-direction: column;
-    gap: var(--border-width-hairline);
+    gap: var(--space-2);
   }
 
   .body {
@@ -138,9 +146,14 @@
     text-align: start;
     text-decoration: none;
     outline: none;
+  }
+
+  .item,
+  .row {
     transition:
       background-color var(--duration-quick) var(--ease-smooth-out),
-      color var(--duration-quick) var(--ease-smooth-out);
+      color var(--duration-quick) var(--ease-smooth-out),
+      box-shadow var(--duration-quick) var(--ease-smooth-out);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -161,7 +174,7 @@
   .item[aria-current='page'] {
     color: var(--text);
     background: var(--nav-current, var(--surface-selected));
-    box-shadow: var(--nav-lift, none);
+    box-shadow: var(--nav-lift, 0 0 0 var(--border-width-hairline) var(--control-border));
   }
 
   /* Inside, since the body clips. */
@@ -189,15 +202,22 @@
     box-shadow: none;
   }
 
-  .row:has(> .item[aria-current='page']) {
-    background: var(--nav-current, var(--surface-selected));
-    box-shadow: var(--nav-lift, none);
-  }
-
+  /* Hover, then press, then the current page's pill: each rule after the one it beats. */
   @media (hover: hover) and (pointer: fine) {
-    .row:hover:not(:has(> .item[aria-current='page'])) {
+    .row:hover {
       background: var(--surface-hover);
     }
+  }
+
+  /* The row draws its item's press too, since the item inside it stays transparent; the current page's pill, after
+     it, wins. */
+  .row:has(> .item[data-pressed]) {
+    background: var(--surface-selected);
+  }
+
+  .row:has(> .item[aria-current='page']) {
+    background: var(--nav-current, var(--surface-selected));
+    box-shadow: var(--nav-lift, 0 0 0 var(--border-width-hairline) var(--control-border));
   }
 
   /* The grip and the menu are drawn small, so they stand far enough apart that each keeps a 24px target of its own
@@ -264,21 +284,20 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    padding: var(--space-8);
+    padding: var(--space-8) var(--space-12);
   }
 
   /* The rail while a section loads: a tile mark centred in each item's place. */
   .railLoading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: calc(var(--size-nav-item) - var(--space-20));
-    padding-block: calc((var(--size-nav-item) - var(--space-20)) / 2);
+    display: grid;
+    grid-auto-rows: var(--size-nav-item);
+    row-gap: var(--space-2);
+    place-items: center;
   }
 
   .empty {
     margin: 0;
-    padding: var(--space-4) var(--space-8);
+    padding: var(--space-4) var(--space-12);
     color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
@@ -294,7 +313,6 @@
   @container app-shell (width < 480px) {
     .root[data-full] {
       inline-size: 100%;
-      border-inline-end: none;
     }
   }
 
@@ -335,7 +353,7 @@
   }
 
   @media (forced-colors: active) {
-    .item[aria-current='page'] {
+    .item[aria-current='page']:not([data-focus-visible]) {
       outline: var(--border-width-hairline) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-hairline));
     }

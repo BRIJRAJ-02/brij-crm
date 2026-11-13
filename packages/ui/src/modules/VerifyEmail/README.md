@@ -50,7 +50,7 @@ Not in the artifact.
 
 ## Timefix prototype (spec 0072)
 
-Folded into SignInForm in the prototype (its code page). It already renders CodeInput, so its boxes are the prototype's; its own module draws the lines: where the code went in `text-body` `text-secondary` with the address in `text-body-strong`, the resend wait a step quieter in `text-body-sm` `text-tertiary` with tabular figures, as the prototype's countdown. Repeats no rules of SignInForm's.
+Takes its look from SignInForm (spec 0072): the prototype folds it into SignInForm (its code page). It already renders CodeInput, so its boxes are the prototype's; its own module draws the lines: where the code went in `text-body` `text-secondary` with the address in `text-body-strong`, the resend wait a step quieter in `text-body-sm` `text-tertiary` with tabular figures, as the prototype's countdown. Repeats no rules of SignInForm's.
 
 **Use it for** the code step of sign in. **Don't use it for** re-checking a signed in person (a Dialog with CodeInput).
 
