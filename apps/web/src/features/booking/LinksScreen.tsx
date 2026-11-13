@@ -200,7 +200,12 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         ? {
             actions: (
               <Tooltip content={strings.share}>
-                <Button variant="ghost" icon="share" label={strings.share} onPress={() => setSharing(page)} />
+                <Button
+                  variant="ghost"
+                  icon="share"
+                  label={strings.shareNamed(page.title)}
+                  onPress={() => setSharing(page)}
+                />
               </Tooltip>
             ),
           }

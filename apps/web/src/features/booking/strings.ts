@@ -20,6 +20,8 @@ export const strings = {
   sectionChanged: (section: string) => `${section} changed`,
   /** Share: the one share sheet for a page (spec 0074, AC-7406). */
   share: 'Share',
+  /** A reader's Share on a card, named for its page so a screen reader tells the cards apart; its tooltip says Share. */
+  shareNamed: (title: string) => `Share ${title}`,
   shareSheet: {
     title: (title: string) => `Share ${title}`,
     invite: 'Pick a time that suits you:',

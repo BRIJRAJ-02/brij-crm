@@ -252,7 +252,8 @@ describe('sharing a booking page from its card (spec 0074, AC-7406)', () => {
   it('offers a reader Share on the card, with none of the ways that change the page', async () => {
     await renderLinks([{ ...pageOf('p1', 'Bea’s chat'), canChange: false, ownerName: 'Bea', handle: 'bea' }]);
     expect(page.getByRole('button', { name: 'More for Bea’s chat' }).query()).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: 'Share' }));
+    // Named for its page, as the ⋯ beside an editor's card is, so a list of buttons tells the cards apart.
+    await userEvent.click(page.getByRole('button', { name: 'Share Bea’s chat', exact: true }));
     const sheet = page.getByRole('dialog', { name: 'Share Bea’s chat' });
     await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
     expect(sheet.getByRole('link', { name: 'Share specific times' }).query()).toBeNull();
