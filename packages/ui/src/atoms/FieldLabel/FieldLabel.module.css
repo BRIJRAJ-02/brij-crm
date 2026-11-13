@@ -1,15 +1,20 @@
-/* FieldLabel: a control's name in the text colour at text-body-sm-strong (the Timefix prototype's field label, spec
-   0072), an aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
+/* FieldLabel: a control's name in text-secondary at text-label (text-label-strong for a group's question), an
+   aside a step quieter on the same line, and an InfoTip beside it in a row that keeps the label's height. */
 @layer components {
-  /* `--label-colour` lets a surface give its labels another colour (a branded hosted form); the default is the text
-     colour, as the prototype's labels are. */
+  /* `--label-colour` lets a surface that reads at another size name its labels in the text colour (a hosted form,
+     where grey labels read weaker than the placeholders under them); the app keeps the secondary grey. */
   .label {
-    color: var(--label-colour, var(--text));
-    font: var(--text-body-sm-strong);
-    letter-spacing: var(--tracking-body-sm-strong);
+    color: var(--label-colour, var(--text-secondary));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
-  /* A section's heading over labelled values: a step above the terms under it in size. */
+  .label[data-tone='strong'] {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* A section's heading over labelled values: a step above the terms under it in size, weight and colour. */
   .label[data-tone='heading'] {
     color: var(--text);
     font: var(--text-body-strong);

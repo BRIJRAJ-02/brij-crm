@@ -310,8 +310,9 @@ export function Field({
       ? { 'data-1p-ignore': true, 'data-lpignore': 'true', 'data-bwignore': true, 'data-form-type': 'other' }
       : {}),
     ...(isVerbatim ? { autoCapitalize: 'off', autoCorrect: 'off', spellCheck: false } : {}),
-    ...(isTabular ? { 'data-tabular': true } : {}),
-    ...(keyShortcuts === undefined ? {} : { 'aria-keyshortcuts': keyShortcuts }),
+    // Unset, React leaves both attributes off.
+    'data-tabular': isTabular || undefined,
+    'aria-keyshortcuts': keyShortcuts,
     ...(variant === 'composer' && isMultiline ? { 'data-composer': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),

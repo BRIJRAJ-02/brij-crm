@@ -43,6 +43,8 @@ Every popover shares one padding scale from `styles/base.css`: a list (Menu, Sel
 
 Takes its look from the prototype's Popover: `surface-raised`, a `border-subtle` hairline, `radius-xl` and `shadow-md`, in body type. Motion is transitions.dev 05 menu dropdown as the prototype's CSS has it: it grows from the trigger's anchor point, `scale-medium` to 1 over `duration-fast` on `ease-smooth-out`, and leaves to `scale-tiny` with a fade over `duration-quick`, ignoring the pointer while it goes. Reduced motion keeps the fade and drops the scale.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Popover too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Popover.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Popover.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
+
 **Use it for** a short panel tied to a button (share, notify, a filter), inside a `DialogTrigger` with `label`. Menu, Select, DatePicker and IconPicker already render it; never wrap them again. **Don't use it for** a form of several steps (a Modal) or an icon's hover label (Tooltip).
 
 **States**: closed, opening, open, closing; opened from the keyboard it appears and leaves at once (house rule, the prototype animates either way).

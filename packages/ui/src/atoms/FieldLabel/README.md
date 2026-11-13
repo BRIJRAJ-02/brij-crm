@@ -39,6 +39,8 @@ The label reads `--label-colour` before the text colour (the default since spec 
 
 Takes its look from the prototype's Field label (spec 0072): `text-body-sm-strong` in the text colour (was `text-label` in `text-secondary`), the aside in `text-tertiary` at the regular weight. `--label-colour` still lets a surface recolour it.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw FieldLabel too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `FieldLabel.module.css` is the shipped look, which every page loads, and the prototype's look described here is `FieldLabel.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
+
 **Differences from the prototype**: `tone="heading"` (a section's heading over labelled values) and the InfoTip beside the label are kept. `tone="strong"` now draws the same as the default, since the prototype's label is already the strong one.
 
 **Repeats from its replacer** (AC-4): the label's font and colour, as Field's own label draws them through this atom; nothing else.

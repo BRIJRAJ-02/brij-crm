@@ -118,6 +118,16 @@ describe('stylelint house rules', () => {
     expect(reset.rules).not.toContain('selector-max-type');
   });
 
+  it("gives a part's app look one compound for the app's scope, and no more, and still no element selectors", async () => {
+    const look = 'packages/ui/src/Button/Button.app.css';
+    const scoped = await lintCss(".ws-a-root:where([data-scale='app'] *) .ws-a-box { color: var(--text); }", look);
+    const deeper = await lintCss('.ws-a-root .ws-a-box .ws-a-icon .ws-a-dot { color: var(--text); }', look);
+    const element = await lintCss('button { color: var(--text); }', look);
+    expect(scoped.rules).toEqual([]);
+    expect(deeper.rules).toContain('selector-max-compound-selectors');
+    expect(element.rules).toContain('selector-max-type');
+  });
+
   it('leaves packages/tokens alone, since it defines the raw values', async () => {
     const { ignored } = await lintCss(':root { --color-text: #1a1a1a; }', 'packages/tokens/src/tokens.css');
     expect(ignored).toBe(true);

@@ -44,6 +44,8 @@ Not in the artifact.
 
 Takes its look from the prototype's Field error (spec 0072): the alert mark and the message in `danger` at `text-body-sm`, `space-6` apart, the mark on the first line when the message wraps.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw FieldError too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `FieldError.module.css` is the shipped look, which every page loads, and the prototype's look described here is `FieldError.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
+
 **Differences from the prototype**: `inset="check"` (a checkbox group's error under its boxes) is kept. It doesn't fade in by itself; Field's own error does.
 
 **Repeats from its replacer** (AC-4): the error line's type, gap and alignment, the same rules as Field's `.error`; they leave with this export.

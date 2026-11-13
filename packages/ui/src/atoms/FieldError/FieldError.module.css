@@ -1,14 +1,13 @@
-/* FieldError: the alert mark and the message, in the danger colour at text-body-sm (the Timefix prototype's field
-   error, spec 0072); a message that wraps keeps the mark on its first line. */
+/* FieldError: the alert mark and the message on one line, in the danger colour at the label size. */
 @layer components {
   .root {
     display: flex;
-    gap: var(--space-6);
-    align-items: flex-start;
+    gap: var(--space-4);
+    align-items: center;
     margin: 0;
     color: var(--danger);
-    font: var(--text-body-sm);
-    letter-spacing: var(--tracking-body-sm);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .root[data-inset='check'] {

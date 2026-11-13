@@ -15,6 +15,8 @@ import {
 import { PanelPushContext, type PanelWidth } from '../../molecules/Panel/Panel.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { breakpointToken } from '../../lib/token-values.ts';
+// The app's look for parts guests also draw (spec 0072, decision 16): every app screen sits in one of the layouts.
+import '../../app-look.ts';
 import styles from './AppShell.module.css';
 import { strings } from './strings.ts';
 

@@ -38,6 +38,8 @@ Not in the artifact. `tone` is required, and `info` has no fill or edge.
 
 Takes its look from the prototype's Callout: success, warning and danger sit on their soft ground (`success-soft`, `warning-soft`, `danger-soft`) with no edge, `radius-lg`, `space-12` by `space-16` in, `space-12` between the icon and the words; the words are the text colour (`text-secondary` under a title, the title `text-body-strong`) and the icon takes the tone's colour. In a bar (`CalloutBar`) there is no ground, so a toned line takes its colour on its words too.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Callout too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Callout.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Callout.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
+
 **Use it for** a state that stays until what it describes changes (an import that skipped rows, a sync that stopped). **Don't use it for** something that just happened (a toast), a field's error (under the field) or an explanation of how a screen works.
 
 **States**: info (a plain line), success, warning, danger (announced), with or without a title, with actions; inline, banner, in a bar.

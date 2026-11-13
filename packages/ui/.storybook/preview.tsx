@@ -4,6 +4,8 @@
 import type { Decorator, Preview } from '@storybook/react-vite';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import '../src/styles/app.css';
+// The app's look for parts guests also draw (spec 0072, decision 16), under data-scale="app" only, as in the app.
+import '../src/app-look.ts';
 import type { KeyboardPlatform } from '../src/atoms/Kbd/shortcuts.ts';
 import { createFixedClock } from '../src/provider/clock.ts';
 import { createToasts } from '../src/provider/toasts.tsx';

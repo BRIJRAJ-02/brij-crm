@@ -1,0 +1,141 @@
+/* Popover's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Popover.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* Popover: the Timefix prototype's overlay surface (spec 0072), the raised surface every menu, select and picker
+   opens in: radius-xl, a hairline and shadow-md. It grows from its trigger (React Aria's --trigger-anchor-point,
+   transitions.dev 05: scale-medium to 1 over duration-fast), leaves faster to scale-tiny with a fade, and skips the
+   animation when opened from the keyboard. Its gap to the trigger is a margin on the placed side, so it comes from a
+   token. */
+@layer utilities.app-look {
+  .ws-popover-root:where([data-scale='app'] *) {
+    /* Fallbacks; React Aria sets both inline while the popover is open. */
+    --trigger-width: auto;
+    --trigger-anchor-point: top left;
+
+    box-sizing: border-box;
+    max-inline-size: calc(100vw - 2 * var(--space-16));
+    /* The content scrolls, never the surface: a scrollbar here would change
+       the width a virtualised menu measures, and loop. */
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+    transform-origin: var(--trigger-anchor-point);
+  }
+
+  /* A select: at least its trigger's width, wider when an option needs it (a time in a narrow field), so an
+     option never wraps; never past the window. */
+  .ws-popover-root[data-width='trigger']:where([data-scale='app'] *) {
+    inline-size: max-content;
+    min-inline-size: var(--trigger-width);
+  }
+
+  /* 240px, the artifact's menu width, or the trigger's when that is wider. */
+  .ws-popover-root[data-width='menu']:where([data-scale='app'] *) {
+    min-inline-size: max(var(--trigger-width), var(--size-menu));
+  }
+
+  /* A list whose options wrap (a role with its line below): a menu wide, or the trigger's width when wider, and
+     no wider, so a long line wraps instead of stretching the list out of the dialog it opened in. */
+  .ws-popover-root[data-width='list']:where([data-scale='app'] *) {
+    inline-size: max(var(--trigger-width), var(--size-menu));
+  }
+
+  /* A small panel of rows with their controls at the end (a person's access on the Members page): the dialog's
+     width, so a row keeps its name and its controls on one line; never past the window. */
+  .ws-popover-root[data-width='panel']:where([data-scale='app'] *) {
+    inline-size: var(--size-dialog);
+  }
+
+  /* A builder (filters, sorts): the wide dialog's width, never past the window. Content sized by a container
+     query has no width of its own, so it needs one here. */
+  .ws-popover-root[data-width='builder']:where([data-scale='app'] *) {
+    inline-size: var(--size-dialog-wide);
+  }
+
+  .ws-popover-root[data-placement='bottom']:where([data-scale='app'] *) {
+    margin-block-start: var(--space-4);
+  }
+
+  .ws-popover-root[data-placement='top']:where([data-scale='app'] *) {
+    margin-block-end: var(--space-4);
+  }
+
+  .ws-popover-root[data-placement='right']:where([data-scale='app'] *) {
+    margin-inline-start: var(--space-4);
+  }
+
+  .ws-popover-root[data-placement='left']:where([data-scale='app'] *) {
+    margin-inline-end: var(--space-4);
+  }
+
+  .ws-popover-dialog:where([data-scale='app'] *) {
+    box-sizing: border-box;
+    max-block-size: inherit;
+    padding: var(--popover-panel-inset);
+    overflow: auto;
+    outline: none;
+  }
+
+  .ws-popover-root[data-entering]:where([data-scale='app'] *) {
+    animation: ws-popover-app-grow var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .ws-popover-root[data-exiting]:where([data-scale='app'] *) {
+    animation: ws-popover-app-shrink var(--duration-quick) var(--ease-smooth-out) forwards;
+    pointer-events: none;
+  }
+
+  .ws-popover-root[data-opened-by='keyboard'][data-entering]:where([data-scale='app'] *),
+  .ws-popover-root[data-opened-by='keyboard'][data-exiting]:where([data-scale='app'] *) {
+    animation: none;
+  }
+
+  @keyframes ws-popover-app-grow {
+    from {
+      opacity: 0;
+      scale: var(--scale-medium);
+    }
+  }
+
+  @keyframes ws-popover-app-shrink {
+    to {
+      opacity: 0;
+      scale: var(--scale-tiny);
+    }
+  }
+
+  @keyframes ws-popover-app-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes ws-popover-app-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-popover-root[data-entering]:where([data-scale='app'] *) {
+      animation-name: ws-popover-app-fade-in;
+    }
+
+    .ws-popover-root[data-exiting]:where([data-scale='app'] *) {
+      animation-name: ws-popover-app-fade-out;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .ws-popover-root:where([data-scale='app'] *) {
+      border-color: CanvasText;
+    }
+  }
+}

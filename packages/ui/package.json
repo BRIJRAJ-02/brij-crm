@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "sideEffects": [
-    "./src/styles/*.css"
+    "./src/styles/*.css",
+    "./src/app-look.ts",
+    "./src/**/*.app.css"
   ],
   "exports": {
     ".": "./src/index.ts",

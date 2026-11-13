@@ -1,6 +1,5 @@
-/* SocialLinks: the Timefix prototype's social row (spec 0072): icon only ghost link Buttons in the tier 1 pill look,
-   space-4 apart so the hit areas meet without overlapping, pulled in by half a box less half a mark so the first mark
-   lines up with the text above. */
+/* SocialLinks: a row of icon only ghost link Buttons (30px boxes, 34px hit areas), space-4 apart so the hit areas
+   meet without overlapping, pulled in by half a box less half a mark so the first mark lines up with the text above. */
 /* How far a mark lifts under the pointer, and how long the marks take to arrive one after another: none by default,
    so the app's settings stay still; the public pages (BookingFrame, LinkPage) set both on their roots. */
 @property --social-lift {
@@ -28,14 +27,11 @@
     list-style: none;
   }
 
-  /* On a public page the marks arrive one after another, and one under the pointer lifts a touch, its neighbours rising
-     by the prototype's 0.45 falloff (transitions.dev 11, avatar group hover; its second step, 0.2, would take a third
-     compound selector, past the house limit), all of it CSS (no work per
-     item in script): up on the smooth-out curve, back down with the strong bounce. The app sets no lift, so its
-     settings stay still. */
+  /* On a public page the marks arrive one after another, and one under the pointer lifts a touch, settling back as
+     it leaves: the person's links read as something to reach for. */
   .item {
     display: flex;
-    transition: translate var(--duration-medium) var(--ease-bounce-strong);
+    transition: translate var(--duration-fast) var(--ease-smooth-out);
     animation: social-in var(--social-arrive) var(--ease-smooth-out) backwards;
     animation-delay: calc(var(--social-index, 0) * var(--social-arrive) / 6);
   }
@@ -43,13 +39,7 @@
   @media (hover: hover) and (pointer: fine) {
     .item:hover {
       translate: 0 calc(-1 * var(--social-lift));
-      transition-timing-function: var(--ease-smooth-out);
-    }
-
-    .item:hover + .item,
-    .item:has(+ .item:hover) {
-      translate: 0 calc(-0.45 * var(--social-lift));
-      transition-timing-function: var(--ease-smooth-out);
+      transition-duration: var(--duration-quick);
     }
   }
 
@@ -58,10 +48,7 @@
       animation-name: social-fade;
     }
 
-    .item,
-    .item:hover,
-    .item:hover + .item,
-    .item:has(+ .item:hover) {
+    .item:hover {
       translate: none;
     }
   }

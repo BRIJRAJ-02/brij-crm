@@ -1,0 +1,514 @@
+/* Select's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Select.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* Select: the Timefix prototype's Select (spec 0072). The Field's label above a trigger drawn as a Field's filled box
+   (surface-subtle, no edge at rest, the fill deepening under the pointer; open or focused, white with the accent edge
+   and the accent-border ring, the chevron turned), showing the value as a tag, a dot or text. Its list opens in the
+   Popover at the trigger's width, with the prototype's menu rows (size-control tall, radius-md, a wash on the
+   focused one, never a scale) and a check on the chosen one. */
+@layer utilities.app-look {
+  .ws-select-root:where([data-scale='app'] *) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .ws-select-trigger:where([data-scale='app'] *) {
+    /* Over the shipped module: its control shadow and focus halo (the prototype's trigger is flat; focus is the ring). */
+    box-shadow: none;
+
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: var(--size-control);
+    /* Not the button's UA 1px: the height comes from block-size, the words centred in it. */
+    padding-block: 0;
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: start;
+    outline: none;
+    transition:
+      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-select-root:not([data-variant='inline'], [data-variant='cell'], [data-variant='prefix'], [data-disabled]):where(
+        [data-scale='app'] *
+      )
+      .ws-select-trigger:not([data-pressed], [aria-expanded='true'])[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  /* Open, pressed or reached by the keyboard: a typed in Field's white fill, accent edge and accent-border ring. */
+  .ws-select-trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']):where([data-scale='app'] *) {
+    border-color: var(--accent-text);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  }
+
+  /* The chevron turns over while the list is open (the prototype's, duration-fast on the smooth curve). It is the
+     trigger's last child (the Icon Select draws there; the shipped module has no holder for it). */
+  .ws-select-trigger:where([data-scale='app'] *) > :last-child {
+    transition: rotate var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .ws-select-trigger[aria-expanded='true']:where([data-scale='app'] *) > :last-child {
+    rotate: 180deg;
+  }
+
+  .ws-select-root[data-size='sm']:where([data-scale='app'] *) .ws-select-trigger {
+    block-size: var(--size-control-sm);
+    padding-inline: var(--space-8);
+    gap: var(--space-6);
+  }
+
+  .ws-select-root[data-invalid]:where([data-scale='app'] *) .ws-select-trigger {
+    border-color: var(--danger);
+  }
+
+  .ws-select-root[data-disabled]:where([data-scale='app'] *) .ws-select-trigger {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* Locked, not a different control: the same filled box with no chevron and no hover, so it is plainly not
+     something to press, and the value keeps the text colour so it stays as readable as its neighbours (owner,
+     1 November 2026: a locked select reads as the same kind of control as the selects beside it). */
+  .ws-select-root[data-readonly]:where([data-scale='app'] *) .ws-select-trigger {
+    cursor: default;
+  }
+
+  /* In a grid cell the cell is the trigger: the value where the display had
+     it, no box, and no ring of its own, focused, hovered or pressed. */
+  .ws-select-root[data-variant='cell']:where([data-scale='app'] *) {
+    flex: 1;
+    align-self: stretch;
+  }
+
+  .ws-select-root[data-variant='cell']:where([data-scale='app'] *) .ws-select-trigger {
+    block-size: 100%;
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Inline in a line of text (a booking page's time zone): the value and its
+     chevron as text, no box; the keyboard's focus draws the outline.
+     DeferredSelect.module.css draws the same closed trigger before this
+     loads: change the two together. */
+  .ws-select-root[data-variant='inline']:where([data-scale='app'] *) {
+    /* Both axes' worth of hugging: in a flex parent align-self does it; in a table cell or a description the root
+       fills the slot, so its own column keeps the trigger to its content and the chevron beside the value. */
+    align-self: flex-start;
+    align-items: flex-start;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* No border at its start, so the value's first letter stands where plain text in the same column does ("Owner" over
+     "Member"). */
+  .ws-select-root[data-variant='inline']:where([data-scale='app'] *) .ws-select-trigger {
+    border-inline-start-width: 0;
+    inline-size: auto;
+    max-inline-size: 100%;
+    block-size: auto;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  /* A time of day (weekly hours): one width for every time, wide enough for the longest ("12:00 AM",
+     "Midnight"), and figures of one width, so a row's "to" and buttons never move when a time changes. */
+  .ws-select-root[data-variant='time']:where([data-scale='app'] *) {
+    flex: none;
+    inline-size: calc(var(--size-column-min) + var(--space-24));
+  }
+
+  .ws-select-root[data-variant='time']:where([data-scale='app'] *) .ws-select-trigger {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
+     the error edge; this draws a chip and a rule after itself. The flag, the code and a small chevron sit close
+     together, the code at its own width: a width kept for the longest code ("+998") left a hole before the
+     chevron for every short one (the owner, 21 October 2026). */
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *) {
+    flex-direction: row;
+    align-self: stretch;
+    align-items: center;
+    gap: var(--space-4);
+    /* The prototype's chip sits space-4 from the box's edge, whatever Field's padding at its size and variant. */
+    margin-inline-start: calc(var(--space-4) - var(--field-pad-inline, var(--space-12)));
+  }
+
+  /* The rule between the code and the number: half the box's height, border-strong. */
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *)::after {
+    content: '';
+    flex: none;
+    inline-size: var(--border-width-hairline);
+    block-size: 50%;
+    background: var(--border-strong);
+  }
+
+  /* The prototype's code chip: a small rounded button inside the box, filled surface-selected under the pointer and
+     while its list is open, its code in medium weight, tabular figures. */
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *) .ws-select-trigger {
+    gap: var(--space-4);
+    inline-size: auto;
+    block-size: calc(100% - var(--space-12));
+    padding-inline: var(--space-8) var(--space-6);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    box-shadow: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ws-select-short:where([data-scale='app'] *) {
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *) .ws-select-short {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .ws-select-value:where([data-scale='app'] *) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* The prefix's flag and code sit close together. */
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *) .ws-select-value {
+    gap: var(--space-4);
+  }
+
+  /* "+N" past maxVisible chosen options: the field set's more chip, as text inside the field's button. */
+  .ws-select-more:where([data-scale='app'] *) {
+    /* Over the shipped module: its hairline (the prototype's +n is a filled tag). */
+    border: 0;
+
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    /* The prototype's 22px small tag: three space-2 steps under a small control. */
+    block-size: calc(var(--size-control-sm) - 3 * var(--space-2));
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--surface-selected);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .ws-select-placeholder:where([data-scale='app'] *) {
+    color: var(--text-tertiary);
+  }
+
+  .ws-select-plain:where([data-scale='app'] *) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ws-select-plain[data-nothing]:where([data-scale='app'] *) {
+    color: var(--text-tertiary);
+  }
+
+  /* showsMarks: the closed field grows to name every choice in full, so what is chosen is never cut off. */
+  .ws-select-root[data-marks]:where([data-scale='app'] *) .ws-select-trigger {
+    block-size: auto;
+    min-block-size: var(--size-control);
+    padding-block: var(--space-4);
+  }
+
+  .ws-select-root[data-marks]:where([data-scale='app'] *) .ws-select-value {
+    white-space: normal;
+  }
+
+  .ws-select-hint:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  /* Searchable: the search field over the list, which scrolls under it. */
+  .ws-select-searchable:where([data-scale='app'] *) {
+    display: flex;
+    flex-direction: column;
+    max-block-size: inherit;
+  }
+
+  .ws-select-search:where([data-scale='app'] *) {
+    flex: none;
+    padding: var(--popover-inset) var(--popover-inset) 0;
+  }
+
+  /* A setting beside the search (`searchAside`): the field takes the room, the setting its own width, and a hairline
+     under the row sets them apart from the list. */
+  .ws-select-search[data-aside]:where([data-scale='app'] *) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block-end: var(--popover-inset);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .ws-select-search[data-aside]:where([data-scale='app'] *) > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .ws-select-empty:where([data-scale='app'] *) {
+    display: block;
+    padding: var(--popover-item-block) var(--popover-item-inline);
+    color: var(--text-tertiary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .ws-select-list:where([data-scale='app'] *) {
+    box-sizing: border-box;
+    max-block-size: inherit;
+    padding: var(--popover-inset);
+    overflow: auto;
+    outline: none;
+  }
+
+  .ws-select-searchable:where([data-scale='app'] *) .ws-select-list {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* One setting that belongs with the choice, under the list (`popoverFoot`): the booking page's clock. */
+  .ws-select-popover-foot:where([data-scale='app'] *) {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    padding: var(--popover-inset);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .ws-select-option:where([data-scale='app'] *) {
+    /* Over the shipped module: its inset focus halo (a focused option takes the row's fill). */
+    box-shadow: none;
+
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    min-block-size: var(--size-control);
+    padding-block: var(--popover-item-block);
+    padding-inline: var(--popover-item-inline);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+    transition: background-color var(--duration-quick) var(--ease-out);
+  }
+
+  /* Options wash, never scale: the focused one surface-hover, a pressed one surface-selected. */
+  .ws-select-option[data-focused]:where([data-scale='app'] *) {
+    background: var(--surface-hover);
+  }
+
+  .ws-select-option[data-pressed]:where([data-scale='app'] *) {
+    background: var(--surface-selected);
+  }
+
+  .ws-select-option[data-focus-visible]:where([data-scale='app'] *) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: calc(-1 * var(--border-width-focus));
+  }
+
+  /* A disabled option fades what it shows, not itself, so the keyboard's ring on it keeps its full contrast. */
+  .ws-select-option[data-disabled]:where([data-scale='app'] *) > * {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* A disabled option takes the keyboard's focus, so its reason is read, but nothing fills it: the pointer passing
+     over it marks nothing, as when the keyboard skipped it, and only the keyboard's ring says where focus is. */
+  .ws-select-option[data-disabled][data-focused]:where([data-scale='app'] *) {
+    background: none;
+  }
+
+  /* Clear and Create, and an option set apart (isApart), sit under a hairline, apart from the options above. */
+  .ws-select-option[data-clear]:where([data-scale='app'] *),
+  .ws-select-option[data-apart]:where([data-scale='app'] *) {
+    margin-block-start: var(--space-4);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: 0;
+  }
+
+  .ws-select-option[data-clear]:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+  }
+
+  /* A group's heading over its options (`group`): quiet, as a Menu section's. */
+  .ws-select-group-heading:where([data-scale='app'] *) {
+    padding-block: var(--space-8) var(--space-4);
+    padding-inline: var(--popover-item-inline);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .ws-select-section:where([data-scale='app'] *) + .ws-select-section {
+    margin-block-start: var(--space-4);
+  }
+
+  .ws-select-description:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  /* Why it can't be chosen stays readable; only the option itself fades. */
+  .ws-select-option[data-disabled]:where([data-scale='app'] *) > .ws-select-description {
+    opacity: 1;
+  }
+
+  .ws-select-check:where([data-scale='app'] *) {
+    display: inline-flex;
+    margin-inline-start: auto;
+    color: var(--accent-text);
+  }
+
+  /* A quiet value at the option's end (`trailing`), before the check, in figures of one width. */
+  .ws-select-trailing:where([data-scale='app'] *) {
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .ws-select-trailing:where([data-scale='app'] *) + .ws-select-check {
+    margin-inline-start: 0;
+  }
+
+  /* chosenLook="filled": the chosen option sits on the soft accent, its check beside it. */
+  .ws-select-option[data-chosen-look='filled'][data-selected]:not([data-focused]):where([data-scale='app'] *) {
+    background: var(--accent-soft);
+  }
+
+  /* The rest keep the check's room, so every option's trailing value lines up in one column. */
+  .ws-select-option[data-chosen-look='filled']:not([data-selected]):where([data-scale='app'] *) {
+    padding-inline-end: calc(var(--popover-item-inline) + var(--size-icon) - var(--space-2) + var(--space-8));
+  }
+
+  /* optionDescription="below": the label, its line under it (wrapping), and the check centred at the end. */
+  .ws-select-option[data-description='below']:where([data-scale='app'] *) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-8);
+    row-gap: 0;
+  }
+
+  .ws-select-option[data-description='below']:where([data-scale='app'] *) .ws-select-description {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .ws-select-option[data-description='below']:where([data-scale='app'] *) .ws-select-check {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  /* The inline and prefix triggers' own pressed, open and focused looks, after every rest look they outrank. */
+  .ws-select-root[data-variant='inline']:where([data-scale='app'] *)
+    .ws-select-trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .ws-select-root[data-variant='inline']:where([data-scale='app'] *) .ws-select-trigger[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *)
+    .ws-select-trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    background: var(--surface-selected);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-select-root[data-variant='prefix']:not([data-disabled]):where([data-scale='app'] *)
+      .ws-select-trigger[data-hovered] {
+      background: var(--surface-selected);
+    }
+  }
+
+  /* The code button's own mark when the keyboard reaches it: the Field's ring takes in the number too, and with
+     no caret on the button nothing else said which part had focus. */
+  .ws-select-root[data-variant='prefix']:where([data-scale='app'] *) .ws-select-trigger[data-focus-visible] {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: 0;
+  }
+
+  /* Refused: the danger edge keeps a danger-soft ring while open or focused. */
+  .ws-select-root[data-invalid]:not([data-variant='cell'], [data-variant='inline'], [data-variant='prefix']):where(
+      [data-scale='app'] *
+    )
+    .ws-select-trigger:is([data-focus-visible], [data-pressed], [aria-expanded='true']) {
+    box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft);
+  }
+
+  /* In a popover the popover's own edge frames the trigger: focus is the accent edge alone, as a Field's there;
+     a refused one keeps its halo (its edge stays danger), and the prefix has a mark of its own. */
+  .ws-select-root[data-in-popover]:not([data-invalid], [data-variant='prefix']):where([data-scale='app'] *)
+    .ws-select-trigger:is([data-focus-visible], [data-pressed]) {
+    box-shadow: none;
+  }
+
+  @media (forced-colors: active) {
+    .ws-select-trigger:where([data-scale='app'] *) {
+      border-color: ButtonText;
+    }
+
+    .ws-select-option[data-focused]:where([data-scale='app'] *) {
+      background: Highlight;
+      color: HighlightText;
+    }
+
+    .ws-select-option[data-disabled][data-focused]:where([data-scale='app'] *) {
+      background: Canvas;
+      color: GrayText;
+    }
+
+    .ws-select-option[data-disabled][data-focus-visible]:where([data-scale='app'] *) {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-select-trigger:where([data-scale='app'] *) > :last-child {
+      transition: none;
+    }
+  }
+}

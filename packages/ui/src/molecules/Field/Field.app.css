@@ -1,0 +1,615 @@
+/* Field's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Field.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* Field: the Timefix prototype's filled input (spec 0072). A text-body-sm-strong label over a box filled with
+   surface-subtle and no edge at rest; under the pointer the fill deepens; typed in, it turns white with a 1px accent
+   edge and a 2px accent-border ring. An error turns the edge danger (its ring danger-soft) and its message fades in
+   below. Read only keeps the fill and shows a lock; disabled fades it. The search variant is the prototype's outlined
+   pill with an icon; the copy variant is read only but drawn live, with a Copy button at its end. A wrapping field
+   starts one line tall and grows as its text wraps; a counter shows only near the limit. The title variant has no box
+   at all, in the note title type. */
+@layer utilities.app-look {
+  /* `--field-pad-inline`: the box's inline padding per size and variant, which a part inside the box can read (the
+     phone code chip sits space-4 from the box's edge whatever the padding). */
+  .ws-field-root:where([data-scale='app'] *) {
+    --field-pad-inline: var(--space-12);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .ws-field-box:where([data-scale='app'] *) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    block-size: var(--size-control);
+    padding-inline: var(--field-pad-inline);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text);
+    cursor: text;
+    transition:
+      border-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
+  }
+
+  /* `after`: the box, then controls beside it on its line. */
+  .ws-field-line:where([data-scale='app'] *) {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .ws-field-line:where([data-scale='app'] *) > .ws-field-box {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .ws-field-after:where([data-scale='app'] *) {
+    display: inline-flex;
+    flex: none;
+    gap: var(--space-4);
+    align-items: center;
+  }
+
+  /* At rest the fill alone; under a pointer it deepens to surface-hover (not while typed in, read only or disabled). */
+  @media (hover: hover) and (pointer: fine) {
+    .ws-field-root:not([data-readonly], [data-disabled], [data-variant='cell'], [data-variant='underline']):where(
+        [data-scale='app'] *
+      )
+      .ws-field-box:hover:not(:focus-within) {
+      background: var(--surface-hover);
+    }
+  }
+
+  /* Typed in: white, the accent edge (accent-text, which holds 3:1 on the surface in dark too) and the accent-border
+     ring outside it, as box-shadow so nothing moves. */
+  .ws-field-box:focus-within:where([data-scale='app'] *) {
+    border-color: var(--accent-text);
+    background: var(--field-focus-fill, var(--surface));
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  }
+
+  .ws-field-root[data-size='sm']:where([data-scale='app'] *),
+  .ws-field-root[data-variant='cell']:where([data-scale='app'] *) {
+    --field-pad-inline: var(--space-8);
+  }
+
+  .ws-field-root[data-size='sm']:where([data-scale='app'] *) .ws-field-box {
+    block-size: var(--size-control-sm);
+    gap: var(--space-6);
+  }
+
+  /* The large field (a form question's words) and `guest` (a guest page's field, sized for a thumb): the prototype's
+     large field, size-control-lg tall, roomier and rounder, its words in body-lg. */
+  .ws-field-root:is([data-size='lg'], [data-size='guest']):where([data-scale='app'] *) {
+    --field-pad-inline: var(--space-16);
+  }
+
+  .ws-field-root:is([data-size='lg'], [data-size='guest']):where([data-scale='app'] *) .ws-field-box {
+    block-size: var(--size-control-lg);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Search: the prototype's outlined pill on the surface, its edge stepping up to border-strong under the pointer. */
+  .ws-field-root[data-variant='search']:where([data-scale='app'] *) .ws-field-box {
+    padding-inline: var(--space-12) var(--space-4);
+    border-color: var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+  }
+
+  .ws-field-box[data-multiline]:where([data-scale='app'] *) {
+    align-items: flex-start;
+    block-size: auto;
+    padding-block: var(--space-6);
+  }
+
+  /* The size sets a single line's height; a textarea grows with its text at any size. */
+  .ws-field-root[data-size='sm']:where([data-scale='app'] *) .ws-field-box[data-multiline] {
+    block-size: auto;
+  }
+
+  /* A filling textarea takes its column's spare height; with none to spare, this changes nothing. */
+  .ws-field-root[data-filling]:where([data-scale='app'] *),
+  .ws-field-root[data-filling]:where([data-scale='app'] *) .ws-field-box {
+    flex: 1;
+  }
+
+  .ws-field-root[data-filling]:where([data-scale='app'] *) .ws-field-box {
+    align-items: stretch;
+  }
+
+  .ws-field-input:where([data-scale='app'] *) {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+    resize: none;
+  }
+
+  /* A phone zooms the page into a field whose text is under 16px (iOS Safari), so under a finger every field's text
+     is 16px and the page stays put as it is tapped (the owner, 2 November 2026). */
+  @media (pointer: coarse) {
+    .ws-field-input:where([data-scale='app'] *) {
+      /* stylelint-disable-next-line unit-disallowed-list -- the size iOS needs to not zoom; no text token is 16px */
+      --touch-text: 16px;
+
+      font-size: var(--touch-text);
+    }
+  }
+
+  .ws-field-input:where([data-scale='app'] *)::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  /* `isTabular`: figures of one width, so a number or an amount lines up as it changes (NumberField passes it). */
+  .ws-field-input[data-tabular]:where([data-scale='app'] *) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A browser's autofill paints the input its own colour: clip that paint to the text, which is drawn over it in
+     the text colour, so a filled value never shows a second box inside any variant's box (the owner, 22 October
+     2026). */
+  .ws-field-input:autofill:where([data-scale='app'] *) {
+    background-clip: text;
+    -webkit-text-fill-color: var(--text);
+  }
+
+  .ws-field-input:where([data-scale='app'] *)::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .ws-field-box[data-multiline]:where([data-scale='app'] *) .ws-field-input {
+    min-block-size: calc(3 * var(--space-20));
+    field-sizing: content;
+    white-space: pre-wrap;
+  }
+
+  /* A wrapping field: one body line in the box's single line height (a body
+     line, the hairlines and space-4 above and below make size-input; space-2
+     makes the small size), then a line more as its text wraps. */
+  .ws-field-box[data-wrapping]:where([data-scale='app'] *) {
+    align-items: flex-start;
+    block-size: auto;
+    min-block-size: var(--size-control);
+    padding-block: var(--space-4);
+  }
+
+  .ws-field-root[data-size='sm']:where([data-scale='app'] *) .ws-field-box[data-wrapping] {
+    min-block-size: var(--size-control-sm);
+    padding-block: var(--space-2);
+  }
+
+  .ws-field-box[data-wrapping]:where([data-scale='app'] *) .ws-field-input {
+    field-sizing: content;
+    overflow-wrap: anywhere;
+  }
+
+  /* A composer (a comment being written): one body line at rest, a line more as its text grows, ten at most
+     (a body line is space-20), then it scrolls. */
+  .ws-field-root[data-variant='composer']:where([data-scale='app'] *) .ws-field-box[data-multiline] {
+    padding-block: var(--space-4);
+  }
+
+  .ws-field-input[data-composer]:where([data-scale='app'] *) {
+    min-block-size: var(--space-20);
+    max-block-size: calc(10 * var(--space-20));
+    overflow-y: auto;
+  }
+
+  /* A multiline value to copy is code (an embed snippet, a form's HTML): the Code atom's monospace face. */
+  .ws-field-input[data-code]:where([data-scale='app'] *) {
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+    /* Code shows every character as typed: no ligatures ("</" and "://" stay apart). */
+    font-variant-ligatures: none;
+    font-feature-settings:
+      'liga' 0,
+      'calt' 0;
+  }
+
+  .ws-field-prefix:where([data-scale='app'] *),
+  .ws-field-suffix:where([data-scale='app'] *) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-tertiary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  /* A text prefix (an address's fixed start, "timefix.com/ada/") gives way first when the box is narrow, cut with
+     an ellipsis, so the input after it keeps room to type in. */
+  .ws-field-prefix[data-text]:where([data-scale='app'] *) {
+    display: block;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ws-field-prefix[data-text]:where([data-scale='app'] *) + .ws-field-input {
+    min-inline-size: var(--size-column-min);
+  }
+
+  /* A name inside the box: one width for every field in the stack, so their values line up, closed by a hairline
+     divider with the box's gap on either side (the owner, 5 November 2026). Button's field variant draws the same. */
+  .ws-field-root[data-prefix-width='label']:where([data-scale='app'] *) .ws-field-prefix[data-text] {
+    flex: none;
+    align-self: center;
+    inline-size: var(--size-column-min);
+    padding-inline-end: var(--space-6);
+    border-inline-end: var(--border-width-hairline) solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  .ws-field-lock:where([data-scale='app'] *) {
+    display: inline-flex;
+    color: var(--text-tertiary);
+  }
+
+  .ws-field-foot:where([data-scale='app'] *) {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  .ws-field-hint:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .ws-field-suggestions:where([data-scale='app'] *) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .ws-field-counter:where([data-scale='app'] *) {
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font: var(--text-caption);
+    letter-spacing: var(--tracking-caption);
+    font-variant-numeric: tabular-nums;
+    transition: color var(--duration-quick) var(--ease-out);
+  }
+
+  /* At the limit the count turns danger, as the prototype's does. */
+  .ws-field-counter[data-full]:where([data-scale='app'] *) {
+    color: var(--danger);
+  }
+
+  .ws-field-error:where([data-scale='app'] *) {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+    color: var(--danger);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+    /* An error fades in on the field that caused it, as the edge turns red; it goes when the field is fixed. The
+       element stays while the field is invalid, so a message that replaces another changes in place, with no
+       second fade (the story ErrorChangesInPlace). */
+    /* It opens to its own height, so the fields under it move down smoothly rather than jumping a line (stageshow's
+       form-error). */
+    interpolate-size: allow-keywords;
+    animation: ws-field-app-field-error-in var(--duration-medium) var(--ease-smooth-out) backwards;
+  }
+
+  /* In a grid cell: on a raised surface under the cell, over the rows below,
+     as wide as it needs, drawn like a popover so it never sits on nothing. */
+  /* The widest a floating error runs: a menu's width and space-48, as InfoTip's bubble. */
+  .ws-field-root[data-error-floats]:where([data-scale='app'] *) {
+    --field-error-measure: calc(var(--size-menu) + var(--space-48));
+
+    position: relative;
+  }
+
+  .ws-field-root[data-error-floats]:where([data-scale='app'] *) .ws-field-error {
+    position: absolute;
+    z-index: var(--z-popover);
+    inset-block-start: 100%;
+    inset-inline-start: 0;
+    box-sizing: border-box;
+    /* Its sentence's width, up to a measure, and never narrower than the cell;
+       neither wider than the room it may show in (--float-room, set by
+       keepInside), which also slides it in from an edge (--float-shift). */
+    inline-size: max-content;
+    min-inline-size: min(100%, var(--float-room, 100%));
+    max-inline-size: min(var(--field-error-measure), var(--float-room, var(--field-error-measure)));
+    margin-block-start: var(--space-4);
+    translate: var(--float-shift, 0);
+    padding: var(--space-6) var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    white-space: normal;
+  }
+
+  /* No room under the cell (the last rows of a grid): over it instead. */
+  .ws-field-root[data-error-floats]:where([data-scale='app'] *) .ws-field-error[data-float-above] {
+    inset-block: auto 100%;
+    margin-block: 0 var(--space-4);
+  }
+
+  .ws-field-root[data-invalid]:where([data-scale='app'] *) .ws-field-box {
+    border-color: var(--danger);
+    transition-duration: var(--duration-medium);
+  }
+
+  .ws-field-root[data-disabled]:where([data-scale='app'] *) .ws-field-box {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  /* Read only keeps its fill when focused (the edge below says it has focus). */
+  .ws-field-root[data-readonly]:where([data-scale='app'] *) {
+    --field-focus-fill: var(--surface-subtle);
+  }
+
+  .ws-field-root[data-readonly]:where([data-scale='app'] *) .ws-field-box {
+    cursor: default;
+  }
+
+  /* The copy variant: read only, yet drawn as a live field (its hover, the
+     normal focus edge and ring), since a link to copy is not a value someone
+     was refused. Its Copy button sits flush at the end. */
+  .ws-field-root[data-variant='copy']:where([data-scale='app'] *) .ws-field-box {
+    padding-inline-end: var(--space-2);
+    cursor: text;
+  }
+
+  /* In a grid cell the cell is the field: it fills the cell, keeps the cell's
+     padding and text line, and draws no box or ring of its own, focused or
+     refused. The cell draws the one focus ring, and the danger edge while the
+     value is refused. */
+  .ws-field-root[data-variant='cell']:where([data-scale='app'] *) {
+    flex: 1;
+    align-self: stretch;
+  }
+
+  .ws-field-root[data-variant='cell']:where([data-scale='app'] *) .ws-field-box {
+    block-size: 100%;
+    padding-inline: var(--field-pad-inline);
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* A page's own title (a note's): no box, border or fill at rest, in the note
+     title type, so it reads as the page's heading and not as a form; under the
+     pointer a soft fill, and focused the field's ring (rules at the end). Read only it stays plain text (after the
+     read only box it undoes), and a refusal shows as the line under it. */
+  .ws-field-root[data-variant='title']:where([data-scale='app'] *) .ws-field-box {
+    block-size: auto;
+    min-block-size: 0;
+    /* A little room around the words, given back by the margin, so a hover's fill frames them without moving them. */
+    margin-inline: calc(-1 * var(--space-6));
+    padding: var(--space-2) var(--space-6);
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    box-shadow: none;
+    outline: var(--border-width-hairline) solid transparent;
+    outline-offset: calc(-1 * var(--border-width-hairline));
+    cursor: text;
+    transition:
+      outline-color var(--duration-quick) var(--ease-out),
+      background-color var(--duration-quick) var(--ease-out),
+      box-shadow var(--duration-quick) var(--ease-out);
+  }
+
+  /* Underline: a public form's one large answer (One at a time, Typeform's way): no box or fill, a thick line in
+     the accent under the words; a refusal turns the line danger. */
+  .ws-field-root[data-variant='underline']:where([data-scale='app'] *) .ws-field-box {
+    padding-inline: 0;
+    border-width: 0 0 var(--border-width-thick);
+    border-color: var(--accent-text);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Focus doubles the line, under it, so the field moves nothing and the change reads at a glance. */
+  .ws-field-root[data-variant='underline']:where([data-scale='app'] *) .ws-field-box:focus-within {
+    box-shadow: 0 var(--border-width-thick) 0 var(--accent-text);
+  }
+
+  .ws-field-root[data-variant='underline'][data-invalid]:where([data-scale='app'] *) .ws-field-box {
+    border-color: var(--danger);
+  }
+
+  /* Read only: the plain border's line, so it never reads as waiting for an answer. */
+  .ws-field-root[data-variant='underline'][data-readonly]:where([data-scale='app'] *) .ws-field-box {
+    border-color: var(--border);
+  }
+
+  .ws-field-root:is([data-size='lg'], [data-size='guest']):where([data-scale='app'] *) .ws-field-input {
+    font: var(--text-body-lg);
+    letter-spacing: var(--tracking-body-lg);
+  }
+
+  /* Under a finger it keeps the 16px a phone needs not to zoom, as every field does. */
+  @media (pointer: coarse) {
+    .ws-field-root:is([data-size='lg'], [data-size='guest']):where([data-scale='app'] *) .ws-field-input {
+      font-size: var(--touch-text);
+    }
+  }
+
+  .ws-field-root[data-variant='title']:where([data-scale='app'] *) .ws-field-input {
+    font: var(--text-title-lg);
+    letter-spacing: var(--tracking-title-lg);
+  }
+
+  .ws-field-root[data-readonly]:where([data-scale='app'] *) .ws-field-box:focus-within {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  /* The copy variant's hover and focus, after the read only ones they undo. */
+  @media (hover: hover) and (pointer: fine) {
+    .ws-field-root[data-variant='copy']:where([data-scale='app'] *) .ws-field-box:hover:not(:focus-within) {
+      background: var(--surface-hover);
+    }
+  }
+
+  .ws-field-root[data-variant='copy']:where([data-scale='app'] *) .ws-field-box:focus-within {
+    border-color: var(--accent-text);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  }
+
+  /* Search, small: less room before its icon. Under the pointer its edge steps up to border-strong. */
+  .ws-field-root[data-variant='search'][data-size='sm']:where([data-scale='app'] *) .ws-field-box {
+    padding-inline-start: var(--space-8);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-field-root[data-variant='search']:not([data-disabled]):where([data-scale='app'] *)
+      .ws-field-box:hover:not(:focus-within) {
+      border-color: var(--border-strong);
+      background: var(--surface);
+    }
+  }
+
+  /* Typed in, the pill wears the accent edge with its ring, as every field does. */
+  .ws-field-root[data-variant='search']:where([data-scale='app'] *) .ws-field-box:focus-within {
+    border-color: var(--accent-text);
+  }
+
+  /* A refused field, typed in: the danger edge keeps, its ring danger-soft. */
+  .ws-field-root[data-invalid]:not([data-variant='cell']):where([data-scale='app'] *) .ws-field-box:focus-within {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft);
+  }
+
+  /* A refused underlined answer: the danger line takes focus's place rather than a blue one stacking under it
+     (critique, 5 November 2026), the doubled line kept while it has focus. After the focus rules it outranks. */
+  .ws-field-root[data-variant='underline'][data-invalid]:where([data-scale='app'] *) .ws-field-box:focus-within {
+    box-shadow: 0 var(--border-width-thick) 0 var(--danger);
+  }
+
+  /* A read only title reached with Tab shows no caret, so keyboard focus
+     outlines it in accent-line; writing in an editable one stays ring free. */
+  .ws-field-root[data-variant='title'][data-readonly]:where([data-scale='app'] *)
+    .ws-field-box:has([data-focus-visible]) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+
+  .ws-field-copy:where([data-scale='app'] *) {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .ws-field-root[data-align='end']:where([data-scale='app'] *) .ws-field-input {
+    text-align: end;
+  }
+
+  /* The quiet line under a title (variant="title" size="sm"): the same no box field, in body type and secondary
+     colour, so a form's line under its headline reads as its subtitle rather than a boxed input. */
+  .ws-field-root[data-variant='title'][data-size='sm']:where([data-scale='app'] *) .ws-field-input {
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  /* In a popover (a grid cell's editor, a list's search) the popover's own edge frames the field: its focus is
+     the accent edge alone, since a halo inside the popover read as a second ring around it. A refused field
+     keeps its halo: its edge stays danger, so the halo is its only sign of focus. */
+  .ws-field-root[data-in-popover]:not([data-invalid]):where([data-scale='app'] *) .ws-field-box:focus-within {
+    box-shadow: none;
+  }
+
+  @media (forced-colors: active) {
+    .ws-field-box:where([data-scale='app'] *) {
+      border-color: CanvasText;
+    }
+
+    .ws-field-box:focus-within:where([data-scale='app'] *) {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+
+    /* The grid cell outlines itself. */
+    .ws-field-root[data-variant='cell']:where([data-scale='app'] *) .ws-field-box {
+      border-color: transparent;
+    }
+
+    .ws-field-root[data-variant='cell']:where([data-scale='app'] *) .ws-field-box:focus-within {
+      outline: none;
+    }
+  }
+
+  /* Asked for less motion, the error fades in where it stands: no opening height. */
+  @media (prefers-reduced-motion: reduce) {
+    .ws-field-error:where([data-scale='app'] *) {
+      animation-name: ws-field-app-field-error-fade;
+    }
+  }
+
+  @keyframes ws-field-app-field-error-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes ws-field-app-field-error-in {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  /* Editable, it says so under the pointer and while typed in: a soft fill, as Notion's and Linear's titles do
+     (the owner, 5 November 2026: "this doesn't look editable"). */
+  @media (hover: hover) and (pointer: fine) {
+    .ws-field-root[data-variant='title']:not([data-readonly]):where([data-scale='app'] *) .ws-field-box:hover {
+      outline-color: var(--border-subtle);
+      background: var(--surface-hover);
+    }
+  }
+
+  /* Typed in, it is a field: the raised fill and the accent ring every field wears. */
+  .ws-field-root[data-variant='title']:not([data-readonly]):where([data-scale='app'] *) .ws-field-box:focus-within {
+    outline-color: var(--accent-text);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  }
+
+  /* `guest`, continued: a note's box and the words in the field (its box is beside the small size, above). */
+  .ws-field-root:is([data-size='lg'], [data-size='guest']):where([data-scale='app'] *) .ws-field-box[data-multiline] {
+    block-size: auto;
+    padding-block: var(--space-12);
+  }
+
+  /* Reached with Tab, a read only value shows no caret, so it takes the outline ring (a value to copy keeps its
+     typed in look). */
+  .ws-field-root[data-readonly]:not([data-variant='copy'], [data-variant='title']):where([data-scale='app'] *)
+    .ws-field-box:has([data-focus-visible]) {
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
+  }
+}
