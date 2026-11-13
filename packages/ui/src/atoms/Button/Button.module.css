@@ -1,7 +1,6 @@
-/* Button, ToggleButton, SplitButton and ButtonGroup: 26px controls with a 13px medium label.
-   Every look is a data attribute declared once, here. States read React Aria's
-   attributes (data-hovered, data-pressed, data-focus-visible, data-disabled,
-   data-pending, data-selected). */
+/* Button, ToggleButton, SplitButton and ButtonGroup, after the Timefix prototype's Button (spec 0072): pills, an ink
+   primary, a white secondary with a hairline, a grey soft, a bare ghost and a red danger. Blue only marks a selection.
+   Every look is a data attribute declared once, here, on React Aria's state attributes. */
 /* How long a changed label takes to resolve in: none by default, so a page opts in. */
 @property --label-swap {
   syntax: '<time>';
@@ -16,57 +15,49 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    gap: var(--space-6);
+    gap: var(--space-4);
     block-size: var(--size-control-sm);
-    padding-block: 0;
-    padding-inline: var(--space-8);
+    padding: 0 var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-control);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
     color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body-sm-strong);
     text-decoration: none;
     white-space: nowrap;
     outline: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    transition:
-      background-color var(--duration-quick) var(--ease-out),
-      border-color var(--duration-quick) var(--ease-out),
-      color var(--duration-quick) var(--ease-out),
-      scale var(--duration-quick) var(--ease-press, var(--ease-smooth-out));
+    transition-property: background-color, border-color, box-shadow, color, scale;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-smooth-out);
   }
 
-  /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
-     public booking page, which sets it on its own root (1 November 2026). It eases on --ease-press when a page sets
-     one (the guest menu's overshoot, after checklabs), else ease-out. */
+  /* Nothing shrinks in the app (--scale-press is 1); a public page sets its own on its root, and its --ease-press. */
   .root[data-pressed]:not([data-disabled]) {
+    transition-timing-function: var(--ease-press, var(--ease-smooth-out));
     scale: var(--scale-press);
   }
 
   .label {
-    /* The blur a changed label resolves out of (transitions.dev's text swap), a literal until the artifact has a
-       blur token. */
-    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    /* The blur a changed label resolves out of (transitions.dev's text swap): public pages only, since --label-swap
+       is 0s in the app. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token */
     --swap-blur: 2px;
 
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* A changed label resolves in over --label-swap: 0s in the app, where nothing moves; the public booking page sets
-     it on its own root (1 November 2026), as it does --scale-press. */
   .label[data-swapped],
   .label[data-reserve] > [data-swapped] {
     animation: label-swap var(--label-swap) var(--ease-in-out);
   }
 
-  /* A label that may swap (Copy link, Copied): both take one cell, the wider sets the width, the other hides. */
+  /* A label that may swap (Copy link, Copied): both take one cell, the wider sets the width. */
   .label[data-reserve] {
     display: inline-grid;
-    /* The shorter label sits by its icon, not centred in the wider one's room. */
     justify-items: start;
   }
 
@@ -78,8 +69,6 @@
     visibility: hidden;
   }
 
-  /* An amount after the label (Add to your picks · £9.50): steady figures, so a changing price never shifts the
-     label. A full width button's label takes the room, so the amount sits at the end. */
   .amount {
     display: inline-flex;
     font-variant-numeric: tabular-nums;
@@ -91,22 +80,19 @@
     gap: var(--space-2);
   }
 
-  /* A touch only device has no keys to press: the keycaps go, as ShortcutHelp leaves held keys out there. */
   @media (hover: none) and (pointer: coarse) {
     .keys {
       display: none;
     }
   }
 
-  /* In a dialog on a phone (Modal's scrim container, where the footer's buttons stack) the keycaps go too: a
-     phone width dialog is rarely driven by keys, and they crowd the stacked buttons' labels. */
   @container modal-scrim (width < 480px) {
     .keys {
       display: none;
     }
   }
 
-  /* Sizes */
+  /* Sizes. md is the prototype's sm (28), lg its md (36), xl its lg (44). */
   .root[data-full-width] {
     inline-size: 100%;
   }
@@ -121,73 +107,55 @@
     text-align: start;
   }
 
-  .root[data-size='lg'] {
-    position: relative;
-    block-size: var(--size-control);
-  }
-
-  /* Drawn at 30px (size-input), pressed at 32: an invisible pixel past the border all round (the inset counts
-     from inside the border), so a large control (a link card's footer) can't be missed. Nothing drawn changes. */
-  .root[data-size='lg']::after {
-    position: absolute;
-    inset: calc(-1 * var(--space-2));
-    content: '';
-  }
-
-  /* A page's own call to action outside the app (the marketing site's hero and footer): 36px, the title's label,
-     more room at the sides. Inside the app, nothing is this size: a screen's buttons stay md or lg. */
-  .root[data-size='xl'] {
-    gap: var(--space-8);
-    block-size: calc(var(--size-control) + var(--space-6));
-    padding-inline: var(--space-16);
-    font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
-  }
-
-  /* A public page's control under a thumb (a link page's Save contact, Share and social links): 44px, the target a
-     finger needs (WCAG 2.5.5), with the icon at full size. Inside the app, nothing is this size. */
-  .root[data-size='touch'] {
-    gap: var(--space-8);
-    block-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
-    padding-inline: var(--space-16);
-  }
-
-  /* A hosted form's own button (Continue, OK, Send; the owner, 5 November 2026: "button looks ugly", OK was nearly
-     square): the height of the form's fields beside it (size-input, raised by the public form), room at the sides
-     and at least twice its height wide, so a two letter word still reads as a button. Inside the app, nothing is
-     this size. */
+  .root[data-size='lg'],
   .root[data-size='public'] {
-    gap: var(--space-8);
+    gap: var(--space-6);
     block-size: var(--size-control);
+    padding-inline: var(--space-16);
+    font: var(--text-body-strong);
+  }
+
+  .root[data-size='xl'],
+  .root[data-size='touch'] {
+    gap: var(--space-6);
+    block-size: var(--size-control-lg);
+    padding-inline: var(--space-20);
+    font: var(--text-heading);
+  }
+
+  .root[data-size='touch'] {
+    padding-inline: var(--space-16);
+    font: var(--text-body-strong);
+  }
+
+  /* A hosted form's own button: at least twice its height wide, so OK never draws a square. */
+  .root[data-size='public'] {
     min-inline-size: calc(2 * var(--size-control));
     padding-inline: var(--space-20);
     font: var(--text-heading);
-    letter-spacing: var(--tracking-heading);
-  }
-
-  .root[data-icon-only][data-size='touch'] {
-    inline-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
-    padding-inline: 0;
-  }
-
-  /* Fully rounded: a pill with a label, a circle when the icon or mark stands alone (a link page's social links). */
-  .root[data-round] {
-    border-radius: var(--radius-full);
   }
 
   /* A chip's height, for an icon only Remove beside a chip inside a field's box. */
   .root[data-size='sm'] {
-    position: relative;
-    block-size: var(--size-chip);
+    block-size: var(--space-20);
     padding-inline: var(--space-4);
-    border-radius: var(--radius-sm);
   }
 
-  /* Drawn at a chip's size, pressed at 24px (WCAG 2.5.8), and wider still under a finger. */
-  .root[data-size='sm']::after {
+  /* lg and sm are pressed past what is drawn (WCAG 2.5.8): lg 2px all round, sm to 28px tall, wider under a finger. */
+  .root:is([data-size='lg'], [data-size='sm']) {
+    position: relative;
+  }
+
+  .root:is([data-size='lg'], [data-size='sm'])::after {
     position: absolute;
     inset: calc(-1 * var(--space-2));
+    border-radius: inherit;
     content: '';
+  }
+
+  /* sm reaches a 28px control's height, past 24 at either scale. */
+  .root[data-size='sm']::after {
+    inset: calc((var(--space-20) - var(--size-control-sm)) / 2);
   }
 
   @media (pointer: coarse) {
@@ -201,16 +169,25 @@
     padding-inline: 0;
   }
 
-  .root[data-icon-only][data-size='lg'] {
+  .root[data-icon-only]:is([data-size='lg'], [data-size='public']) {
     inline-size: var(--size-control);
+    min-inline-size: 0;
+  }
+
+  .root[data-icon-only]:is([data-size='xl'], [data-size='touch']) {
+    inline-size: var(--size-control-lg);
   }
 
   .root[data-icon-only][data-size='sm'] {
-    inline-size: var(--size-chip);
+    inline-size: var(--space-20);
   }
 
-  /* A collapsible label in a narrow bar (its container, a phone): the icon
-     alone, square like an icon only button; `label` keeps the name. */
+  /* isRound is the default shape now; kept so callers that ask for it read the same. */
+  .root[data-round] {
+    border-radius: var(--radius-full);
+  }
+
+  /* A collapsible label in a narrow bar: the icon alone, round like an icon only button; `label` keeps the name. */
   @container (inline-size < 480px) {
     .root[data-collapsible] {
       inline-size: var(--size-control-sm);
@@ -223,96 +200,99 @@
   }
 
   /* Variants */
+  /* Ink in the app. On a guest page, which names its accent at its root (the hosted form --form-accent, a booking page
+     --frame-accent, a menu --look-accent: the brand's colour where the page wears one), the page's accent, so the brand
+     reaches the one action as it always has, in an editor's preview too. LinkPage and GuestLook remap --primary
+     themselves. */
   .root[data-variant='primary'] {
-    border-color: var(--accent-hover);
-    background: var(--accent);
-    box-shadow: var(--shadow-primary);
-    color: var(--on-accent);
+    /* stylelint-disable csstools/value-no-unknown-custom-properties -- the guest pages' own accent names, set at their roots */
+    --primary-fill: var(--form-accent, var(--frame-accent, var(--look-accent, var(--primary))));
+    --primary-fill-hover: var(--form-accent-hover, var(--frame-accent-hover, var(--look-accent, var(--primary-hover))));
+
+    border-color: transparent;
+    background: var(--primary-fill);
+    box-shadow: none;
+    color: var(--form-on-accent, var(--frame-on-accent, var(--look-on-accent, var(--on-primary))));
+    /* stylelint-enable csstools/value-no-unknown-custom-properties */
   }
 
-  /* Danger keeps the raised surface and turns its label and edge red: red text
-     holds 4.5:1 in both themes, where white on a red fill would not in dark. */
+  .root[data-variant='soft'] {
+    border-color: transparent;
+    background: var(--surface-subtle);
+    box-shadow: none;
+  }
+
+  /* Red words and edge on the white pill: the start of something destructive. */
   .root[data-variant='danger'] {
     border-color: var(--danger);
     color: var(--danger);
   }
 
-  /* The final destructive commit (Delete or Archive in a confirm) fills red,
-     from its own fill token, which stays dark enough in dark for a white label. Its edge is the fill and its hover the fill
-     a step toward the text colour (danger-hover, which drew both, retired in spec 0072's tier 1, decision 3). */
+  /* The final destructive commit: the prototype's danger, a red fill. */
   .root[data-variant='danger-solid'] {
     border-color: transparent;
     background: var(--danger);
+    box-shadow: none;
     color: var(--on-danger);
   }
 
-  /* A quiet text action at label size, for a card's footer (first run's Sign out and Back): no box at rest, the
-     control's height kept for its hit area. */
-  .root[data-variant='link'] {
-    padding-inline: var(--space-4);
+  .root:is([data-variant='ghost'], [data-variant='ghost-danger'], [data-variant='link'], [data-variant='dashed']) {
     border-color: transparent;
     background: transparent;
     box-shadow: none;
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
   }
 
-  /* A value that opens something, in a list of values (a member's Scheduling access in their details): it reads as its
-     text with a chevron, in line with the plain values above and below, as Select's inline variant does. */
+  /* A quiet text action at label size (first run's Sign out and Back). */
+  .root[data-variant='link'] {
+    padding-inline: var(--space-4);
+    font: var(--text-label);
+  }
+
+  /* The prototype's Add row: a dashed edge, no fill. */
+  .root[data-variant='dashed'] {
+    border-style: dashed;
+    border-color: var(--border-strong);
+  }
+
+  /* A value that opens something, in a list of values: its text and a chevron, in line with the values round it. */
   .root[data-variant='value'] {
     block-size: auto;
     padding: 0;
-    border-color: transparent;
-    border-inline-start-width: 0;
+    border: 0;
     background: transparent;
     box-shadow: none;
     color: inherit;
     font: inherit;
-    letter-spacing: inherit;
   }
 
-  .root[data-variant='ghost'],
-  .root[data-variant='ghost-danger'] {
-    border-color: transparent;
-    background: transparent;
-    box-shadow: none;
-    color: var(--text-secondary);
-  }
-
-  /* An icon standing among brand marks (a website in a row of social links) takes the text colour, as the black
-     marks do. */
+  /* An icon standing among brand marks takes the text colour, as the black marks do. */
   .root[data-icon-mark] {
     color: var(--text);
   }
 
-  /* Trouble that asks for a look (a Team day's issues): the orange tag's fill and words, AA on each other. */
+  /* Trouble that asks for a look (a Team day's issues): the orange tag's fill and words. */
   .root[data-variant='warning'] {
-    border-color: var(--tag-orange-border);
+    border-color: transparent;
     background: var(--tag-orange-bg);
     box-shadow: none;
     color: var(--tag-orange-text);
   }
 
-  .root[data-variant='dashed'] {
-    border-style: dashed;
-    border-color: var(--control-border);
-    background: transparent;
-    box-shadow: none;
-    color: var(--text-secondary);
-  }
-
-  /* A picker among Fields (a form question's answer type): a Field's box exactly, its size-input height, quiet
-     field-border edge, raised fill and no drop, the value in body type at the start and the chevrons at the end. */
+  /* A picker among Fields (a question's answer type): a Field's box exactly, its value at the start: the prototype's
+     filled input (spec 0072, tier 2), surface-subtle with no edge at rest. */
   .root[data-variant='field'] {
     display: flex;
     inline-size: 100%;
     justify-content: flex-start;
+    gap: var(--space-8);
     block-size: var(--size-control);
-    border-color: var(--border-subtle);
+    padding-inline: var(--space-12);
+    border-color: transparent;
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
     box-shadow: none;
     font: var(--text-body);
-    letter-spacing: var(--tracking-body);
   }
 
   .root[data-variant='field'] .label {
@@ -327,18 +307,19 @@
     overflow: hidden;
     inline-size: var(--size-column-min);
     padding-inline-end: var(--space-6);
-    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-end: var(--border-width-hairline) solid var(--border);
     color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
     text-align: start;
     text-overflow: ellipsis;
   }
 
-  /* Its menu open: the accent edge and halo a Field wears while typed in. */
+  /* Its menu open: white, the accent edge and the accent-border ring a Field wears while typed in. */
   .root[data-variant='field'][aria-expanded='true'] {
     border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
+    background: var(--surface);
+    box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
   }
 
   /* Disabled (a question whose type can't change), it reads as a read only Field: filled, no edge, full strength. */
@@ -348,44 +329,74 @@
     opacity: 1;
   }
 
-  /* States. Selected (a ToggleButton held down) carries the accent line, which
-     holds 3:1 against its own soft fill and the surface in both themes (the
-     plain accent fell to 2.8:1 on its fill in dark). */
-  .root[data-selected],
-  .root[data-expanded]:not([data-variant='danger']) {
+  /* A trigger whose menu or panel is open stays pressed. */
+  .root[data-expanded]:not([data-variant='primary'], [data-variant='danger'], [data-variant='danger-solid']),
+  .root[aria-expanded='true']:not(
+      [data-variant='primary'],
+      [data-variant='field'],
+      [data-variant='danger'],
+      [data-variant='danger-solid']
+    ) {
+    background: var(--surface-selected);
+    color: var(--text);
+  }
+
+  /* An open danger disclosure (Cancel booking with its confirm open) keeps its red, on the red tint. */
+  .root[data-variant='danger'][data-expanded] {
+    background: var(--danger-soft);
+  }
+
+  /* Selected (a ToggleButton held down): blue marks the selection. */
+  .root[data-selected] {
     border-color: var(--accent-text);
     background: var(--accent-soft);
     box-shadow: none;
-    color: var(--text);
+    color: var(--accent-text);
   }
 
   /* A strong selection (isSelectionStrong): the accent fill a selected day or time wears beside it. */
   .root[data-selected][data-selection='strong'] {
-    border-color: var(--accent);
+    border-color: transparent;
     background: var(--accent);
     color: var(--on-accent);
   }
 
-  /* An open danger disclosure (Cancel booking with its confirm open) keeps its red, on a faint danger tint. */
-  .root[data-variant='danger'][data-expanded] {
-    background: var(--tag-red-bg);
-    box-shadow: none;
-  }
-
   @media (hover: hover) and (pointer: fine) {
-    .root:not([data-selected], [data-expanded])[data-hovered] {
+    .root:not([data-selected], [data-expanded], [aria-expanded='true'])[data-hovered] {
+      border-color: var(--border-strong);
       background: var(--surface-hover);
     }
 
-    .root[data-variant='primary'][data-hovered] {
-      background: var(--accent-hover);
+    .root:is(
+        [data-variant='ghost'],
+        [data-variant='ghost-danger'],
+        [data-variant='link'],
+        [data-variant='dashed']
+      )[data-hovered] {
+      color: var(--text);
     }
 
-    .root[data-variant='value']:not([data-selected], [data-expanded])[data-hovered] {
-      background: transparent;
+    .root:is([data-variant='ghost'], [data-variant='ghost-danger'], [data-variant='link'])[data-hovered] {
+      border-color: transparent;
     }
 
+    .root[data-variant='primary']:not([data-expanded])[data-hovered] {
+      border-color: transparent;
+      background: var(--primary-fill-hover);
+    }
+
+    .root[data-variant='soft']:not([data-expanded])[data-hovered] {
+      border-color: transparent;
+      background: var(--surface-selected);
+    }
+
+    .root[data-variant='danger'][data-hovered] {
+      border-color: var(--danger);
+    }
+
+    /* Darker in light and lighter in dark: always further from its words. */
     .root[data-variant='danger-solid'][data-hovered] {
+      border-color: transparent;
       background: color-mix(in oklab, var(--danger) 88%, var(--text));
     }
 
@@ -393,70 +404,52 @@
       color: var(--danger);
     }
 
-    .root[data-variant='warning']:not([data-selected], [data-expanded])[data-hovered] {
+    .root[data-variant='value'][data-hovered] {
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .root[data-variant='warning']:not([data-expanded])[data-hovered] {
       border-color: var(--tag-orange-text);
       background: var(--tag-orange-bg);
     }
 
-    /* A field's hover, as Field's: the edge steps up to control-border and the fill stays. */
-    .root[data-variant='field']:not([aria-expanded='true'], [data-focus-visible])[data-hovered] {
-      border-color: var(--control-border);
-      background: var(--surface-raised);
-    }
-
-    .root[data-variant='ghost'][data-hovered],
-    .root[data-variant='link'][data-hovered],
-    .root[data-variant='dashed'][data-hovered] {
-      color: var(--text);
+    .root[data-variant='field']:not([aria-expanded='true'], [data-disabled])[data-hovered] {
+      background: var(--surface-hover);
     }
   }
 
+  /* Pressed, the colour deepens and the size never changes (no press scale in the app). */
+  .root[data-pressed]:not(
+      [data-disabled],
+      [data-selected],
+      [data-variant='primary'],
+      [data-variant='danger-solid'],
+      [data-variant='value'],
+      [data-variant='warning']
+    ) {
+    background: var(--surface-selected);
+  }
+
+  .root[data-variant='primary'][data-pressed] {
+    background: var(--primary-fill-hover);
+  }
+
+  /* The prototype's focus ring: 2px outside, on every variant. */
   .root[data-focus-visible] {
-    border-color: var(--accent-text);
-    box-shadow: var(--shadow-focus);
-  }
-
-  /* As Select's inline: an outline clear of its text, since it has no box to light up. */
-  .root[data-variant='value'][data-focus-visible] {
-    border-color: transparent;
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-thick);
-    box-shadow: none;
-  }
-
-  .root[data-variant='danger'][data-focus-visible] {
-    border-color: var(--danger);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: var(--border-width-focus);
   }
 
   .root[data-variant='ghost-danger'][data-focus-visible] {
     color: var(--danger);
   }
 
-  .root[data-variant='primary'][data-focus-visible] {
-    box-shadow: var(--shadow-primary), var(--shadow-focus);
-  }
-
-  /* A filled or red edged button can't show focus by turning its edge accent
-     (the primary's edge is already blue, the danger's stays red), and the
-     faint halo alone is under 3:1 (WCAG 1.4.11). So the 1px accent ring sits
-     just outside, past a 1px gap of the surface. */
-  .root[data-variant='primary'][data-focus-visible],
-  .root[data-variant='danger'][data-focus-visible],
-  .root[data-variant='danger-solid'][data-focus-visible],
-  .root[data-variant='warning'][data-focus-visible] {
-    outline: var(--border-width-hairline) solid var(--accent-text);
-    outline-offset: var(--border-width-hairline);
-  }
-
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
   }
 
-  .root[data-pending] {
-    opacity: var(--opacity-busy);
-  }
-
-  /* SplitButton: two buttons sharing one edge */
+  /* SplitButton: two pills sharing one edge. */
   .split {
     display: inline-flex;
     flex: none;
@@ -469,29 +462,27 @@
 
   .root[data-split='end'] {
     margin-inline-start: calc(var(--border-width-hairline) * -1);
-    padding-inline: var(--space-4);
+    padding-inline: var(--space-6) var(--space-8);
     border-start-start-radius: 0;
     border-end-start-radius: 0;
   }
 
-  /* The halves' seam: a step darker than the fill (on-accent-kbd, a white wash, retired in spec 0072's tier 1). No
-     guest page draws a SplitButton; the app's look draws its own seam. */
   .root[data-split='end'][data-variant='primary'] {
-    border-inline-start-color: var(--accent-hover);
+    border-inline-start-color: color-mix(in srgb, currentcolor 30%, transparent);
   }
 
-  .root[data-split][data-focus-visible] {
+  .root[data-split][data-focus-visible],
+  .group > .root[data-focus-visible] {
     position: relative;
     z-index: var(--z-raised);
   }
 
-  /* ButtonGroup: buttons joined as SplitButton's halves are, every inner edge
-     shared, one outer radius and one drop for the whole group. */
+  /* ButtonGroup: buttons joined as SplitButton's halves are, one pill for the whole group. */
   .group {
     display: inline-flex;
     flex: none;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-control);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-xs);
   }
 
   .group[data-layout='joined'] > .root {
@@ -504,28 +495,27 @@
   }
 
   .group[data-layout='joined'] > .root:first-child {
-    border-start-start-radius: var(--radius-md);
-    border-end-start-radius: var(--radius-md);
+    border-start-start-radius: var(--radius-full);
+    border-end-start-radius: var(--radius-full);
   }
 
   .group[data-layout='joined'] > .root:last-child {
-    border-start-end-radius: var(--radius-md);
-    border-end-end-radius: var(--radius-md);
+    border-start-end-radius: var(--radius-full);
+    border-end-end-radius: var(--radius-full);
   }
 
-  /* A row: each button its own, spaced and wrapping, with no shared drop. */
-  .group[data-layout='row'] {
+  .group:is([data-layout='row'], [data-layout='line']) {
     display: flex;
-    flex-wrap: wrap;
     gap: var(--space-8);
     box-shadow: none;
   }
 
-  /* A row that never wraps: in a table's fitted cell a wrapping row stacks its buttons. */
+  .group[data-layout='row'] {
+    flex-wrap: wrap;
+  }
+
   .group[data-layout='line'] {
     display: inline-flex;
-    gap: var(--space-8);
-    box-shadow: none;
   }
 
   /* A quiet link leading the line stands its word on the edge of what's above it. */
@@ -533,22 +523,13 @@
     margin-inline-start: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
   }
 
-  .group > .root[data-focus-visible] {
-    position: relative;
-    z-index: var(--z-raised);
-  }
-
   @media (forced-colors: active) {
     .root {
       border-color: ButtonText;
     }
 
-    .root[data-focus-visible],
-    .root[data-variant='primary'][data-focus-visible],
-    .root[data-variant='danger'][data-focus-visible],
-    .root[data-variant='danger-solid'][data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: var(--border-width-hairline);
+    .root[data-focus-visible] {
+      outline-color: Highlight;
     }
 
     .root[data-selected] {
@@ -577,6 +558,10 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition-property: background-color, border-color, color;
+    }
+
     .root[data-pressed]:not([data-disabled]) {
       scale: none;
     }

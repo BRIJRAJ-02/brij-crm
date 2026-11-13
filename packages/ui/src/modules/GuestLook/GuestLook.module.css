@@ -48,6 +48,10 @@
     --accent-border: color-mix(in oklab, var(--guest-ink) 16%, var(--guest-card));
     --accent-soft: var(--guest-chip);
     --on-accent: var(--guest-on-ink);
+    /* Button's primary is ink in the app; here it is the page's ink (spec 0072). */
+    --primary: var(--guest-ink);
+    --primary-hover: var(--guest-ink);
+    --on-primary: var(--guest-on-ink);
     --link: var(--guest-text);
     /* The focus token's own shape in the ink: a field's edge and a button's ring carry the 3:1 mark. A solid ring here
        filled a primary's gap, so a focused Continue only grew. */

@@ -358,6 +358,10 @@
     --accent: var(--page-accent);
     --accent-hover: var(--page-accent-hover);
     --on-accent: var(--page-on-accent);
+    /* Button's primary is ink in the app; here it is the page's accent, as it always was (spec 0072). */
+    --primary: var(--page-accent);
+    --primary-hover: var(--page-accent-hover);
+    --on-primary: var(--page-on-accent);
     --link: var(--page-link);
     --accent-soft: var(--page-accent-soft);
     --accent-border: var(--page-accent-border);
@@ -1575,11 +1579,16 @@
     gap: var(--space-8);
   }
 
-  /* A touch control's height, as Button's touch size writes it. */
+  /* A time's height, as the times card writes it, and the card's own action at Button's touch size (size-control-lg
+     since spec 0072). */
   .holdChip,
   .holdMore {
     display: flex;
     block-size: calc(var(--size-control) + var(--space-12) + var(--space-2));
+  }
+
+  .holdMore {
+    block-size: var(--size-control-lg);
   }
 
   .holdChip {
