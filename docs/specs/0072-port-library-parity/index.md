@@ -29,13 +29,14 @@ Reasoning, the options compared, the open calls the prototype leaves and the evi
 - **AC-3**: Every prop, export, variant and behaviour the library part had at the base commit (`f81623f0c`) still exists and still works: `src/index.test.ts` passes unchanged except for additions, every existing story's assertions still pass or were rewritten to test the same behaviour, and no file under `apps/` changes in phase 1 except where a call site needs a new required prop (none is planned).
 - **AC-4**: A library part the prototype folds into another (*Folded parts*) keeps its export and props and takes its replacer's look, its rules written from the replacer's. Where it can render the replacer without changing its props, it does, and keeps no CSS of its own. Its remaining copy of the replacer's rules is listed in its README and is deleted with the folded export in the screen phase that moves its last caller (rationale, decision 14). _(Changed during the tier 1 build, 12 Nov: the first draft asked for `composes` across folders, which the house rule "one component owns its styles" forbids. Accepted by the owner and the coordinator, 12 Nov.)_
 - **AC-5**: Each part's README gains the prototype README's missing content (use it for, don't use it for, the consumer provides, states, interaction) in the library's own prop names, and a short **Differences from the prototype** list naming every kept library behaviour the prototype lacks and every prop name that differs.
-- **AC-6a**: A part a guest page draws keeps its shipped CSS module (`f81623f0c`) as the look every page loads, and its prototype look is `<Part>.app.css` in `@layer utilities.app-look` under `:where([data-scale='app'] *:not(:is(<guest roots>) *))`, loaded only through `src/app-look.ts` by the app's layouts and the stories; `src/app-look.test.ts` passes. _(Added 13 Nov by the coordinator's ruling on tier 2, decision 16.)_
+- **AC-6a**: One look everywhere: each part's own CSS module carries the prototype's look for the app and the guest pages alike, and a guest page's primary button wears that page's accent, so its brand reaches it. _(Added 13 Nov: the owner, decision 16.)_
 - **AC-6**: The house rules hold on every part: no press scale in the app (`--scale-press` is 1; public pages set their own), no blur in app motion, hover only under `(hover: hover) and (pointer: fine)`, reduced motion keeps fades and drops movement, focus is the prototype's outline ring (`--border-width-focus` solid `--focus-ring`, 2px offset) on `[data-focus-visible]`, and the legacy tokens 0071 marked "Phase 1" are no longer used by the parts this phase ports.
 - **AC-7**: `design-system-guardian` reports nothing open on each tier before that tier is reported done.
 
 *Gate 1: load time*
 - **AC-8**: Load time is measured per phase, on real pages (the owner, 12 Nov, replacing the first draft's 30% cut per tier, which tier 1 showed atoms cannot meet while keeping every behaviour). No line of `pnpm size` grows against the phase's base beyond content-hash noise (±20 B: a changed chunk renames the imports of every chunk that loads it). Each tier records its pages' `pnpm size` lines before and after in rationale.md. The real cuts are measured where duplicates fold away (tiers 2 and 3, each folded part's saving reported) and in the screen phases 4 to 9. `packages/ui/scripts/part-cost.ts` stays as reporting (the per folder table), not a gate.
 - **AC-9**: _(Folded into AC-8, 12 Nov: the totals of `apps/web/dist/assets` are reported beside the page lines, not gated, since every route chunk moves by content-hash noise.)_
+- **AC-10a**: `pnpm size` gates the workspace shell's CSS (the first load plus every stylesheet the `w.$slug` route imports statically) at its measurement plus 0.5 kB. _(Added 13 Nov, after a route chunk's CSS grew 18.6 kB unseen.)_
 - **AC-10**: After each tier, every `apps/web/.size-limit.js` budget this phase moved is set to the new measurement plus 0.5 kB of headroom, with a comment naming this spec and the date. _(Changed 12 Nov: the first draft's "rounded up to the next 0.1 kB" left as little as 0.01 kB, which CI's hash noise turns red.)_
 
 *Gate 2: security*
@@ -176,7 +177,7 @@ A folded part keeps its export, its props and its stories. Where it can render i
 - One look per family: a folded part draws its replacer's look, and its repeated rules leave with its export.
 - Tokens only; no `zoom`, no press scale in the app, no blur in app motion.
 - No baseline is written outside CI's pinned image.
-- A guest page draws every part with the look and bytes it shipped with until that page's own port phase; the prototype's look of a part guests also draw is its `<Part>.app.css`, which only the app loads (decision 16, 13 Nov).
+- One look per part, everywhere (decision 16, 13 Nov).
 - A tier lands only with its three gates green.
 
 ### Security model
@@ -202,7 +203,7 @@ Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look
 3. Tier 1, batch 1b: Tag (+Badge, StatusDot), Avatar (+PersonLine), RecordChip (+LinkChip, Mention, Variable, RecordChipList), QrCode, satisfies **AC-1** to **AC-6**, **AC-12**, **AC-15**, **AC-16**
 4. Tier 1, batch 1c: Checkbox (+Radio, Switch), Slider, DragHandle, satisfies **AC-1** to **AC-6**
 5. Tier 1 gates: cost table, `pnpm size`, budgets lowered, guardian, `pnpm check`, satisfies **AC-7** to **AC-10**
-6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; sent back by the coordinator on 13 Nov: guest pages keep their shipped look and cost, decision 16, which brings the hosted form's and booking page's CSS under the base; two JavaScript lines stay over, see rationale.md, Tier 2 after the coordinator's ruling)_
+6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; sent back by the coordinator on 13 Nov; one look everywhere, the owner's decision 16; AC-8 not met on the guest pages, see rationale.md, One look everywhere)_
 7. Tier 3, batches 3a to 3d, then its gates, satisfies **AC-1** to **AC-16** _(3a built 13 Nov; see rationale.md, Tier 3a after: the duplicates keep separate modules, so no bytes folded away)_
 8. Per tier, the landing car reshoots baselines through CI, satisfies **AC-17**
 
