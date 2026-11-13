@@ -615,94 +615,9 @@
     outline: none;
   }
 
-  /* The foot: "Powered by" over the wordmark, then the claim link. */
-  .foot {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-8);
-  }
-
-  .brand {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-4);
-    border-radius: var(--radius-xs);
-    color: inherit;
-    text-decoration: none;
-  }
-
-  .powered {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-kbd);
-    text-transform: uppercase;
-  }
-
-  .wordmark {
-    display: block;
-    block-size: var(--space-20);
-    inline-size: auto;
-  }
-
-  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. A page that pins its
-     own look sends one mark instead (`scheme`), and none of the rules below touch it. */
-  .wordmark[data-scheme='dark'] {
-    display: none;
-  }
-
-  :root[data-theme='dark'] .wordmark[data-scheme='light'] {
-    display: none;
-  }
-
-  :root[data-theme='dark'] .wordmark[data-scheme='dark'] {
-    display: block;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) .wordmark[data-scheme='light'] {
-      display: none;
-    }
-
-    :root:not([data-theme='light']) .wordmark[data-scheme='dark'] {
-      display: block;
-    }
-  }
-
-  /* A page that pins a scheme of its own inside the document (a template: Night dark, Studio light) wins over the
-     document's, so the wordmark reads on the page it sits on. */
-  :not(:root)[data-theme='dark'] .wordmark[data-scheme='light'] {
-    display: none;
-  }
-
-  :not(:root)[data-theme='dark'] .wordmark[data-scheme='dark'] {
-    display: block;
-  }
-
-  :not(:root)[data-theme='light'] .wordmark[data-scheme='light'] {
-    display: block;
-  }
-
-  :not(:root)[data-theme='light'] .wordmark[data-scheme='dark'] {
-    display: none;
-  }
-
-  .claim {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-4);
-    border-radius: var(--radius-xs);
-    color: var(--text-secondary);
-    text-decoration: none;
-    font: var(--text-body);
-    transition: color var(--duration-quick) var(--ease-out);
-  }
-
-  .brand:focus-visible,
-  .claim:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-text);
-    outline-offset: var(--border-width-thick);
+  /* Where the frame puts its foot: nothing of its own below the page breakpoint, the rail's foot card above it. */
+  .railFoot {
+    display: contents;
   }
 
   /* `compact` keeps the stacked layout however wide the window is (27 October 2026): a page drawn in something
@@ -788,24 +703,17 @@
       grid-area: 1 / 2 / span 2;
     }
 
-    .root:not([data-compact]) .foot[data-placement='rail'] {
+    /* The foot's card (BookingFoot draws what is in it, stretched across the card). */
+    .root:not([data-compact]) .railFoot {
+      --booking-foot-align: stretch;
+
+      display: block;
       grid-area: 2 / 1;
       align-self: end;
-      align-items: stretch;
       padding: var(--space-12) var(--space-16);
       border: var(--border-width-hairline) solid var(--border);
       border-radius: var(--radius-lg);
       background: var(--surface-raised);
-    }
-
-    .foot[data-placement='rail'] .brand {
-      align-items: flex-start;
-    }
-
-    .foot[data-placement='rail'] .claim {
-      justify-content: space-between;
-      padding-block-start: var(--space-8);
-      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     }
 
     .root:not([data-compact]) .panes[data-panes='two'] {
@@ -959,12 +867,6 @@
     .stage[data-moved][data-enter='back'] .cover,
     .stage[data-enter='back'] .under:not([inert]) {
       animation-name: cover-in;
-    }
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .claim:hover {
-      color: var(--text);
     }
   }
 

@@ -6,7 +6,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
+import { BookingFoot } from '../BookingFrame/BookingFoot.tsx';
 import {
   BusinessGallery,
   BusinessHours,

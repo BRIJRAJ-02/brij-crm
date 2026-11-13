@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
-import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
+import { BookingFoot } from '../BookingFrame/BookingFoot.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage, LinkPageThumbnail, LinkPageTile, type LinkPageBlock, type PageLook } from './LinkPage.tsx';

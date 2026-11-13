@@ -41,8 +41,8 @@ export {
   type BookingDetailsOutcome,
   type BookingDetailsValues,
 } from '../modules/BookingDetails/BookingDetails.tsx';
+export { BookingFoot } from '../modules/BookingFrame/BookingFoot.tsx';
 export {
-  BookingFoot,
   BookingFrame,
   /** An address nobody holds (25 Oct 2026): the offer to claim it, and the one action. */
   BookingHandleOffer,

@@ -5,7 +5,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
+import { BookingFoot } from '../BookingFrame/BookingFoot.tsx';
 import { LinkPage, type LinkPageBlock, type LinkPagePicture, type PageLook } from './LinkPage.tsx';
 
 const PLAIN: PageLook = {

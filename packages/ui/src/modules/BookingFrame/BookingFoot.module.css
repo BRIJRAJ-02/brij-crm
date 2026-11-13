@@ -1,0 +1,114 @@
+/* BookingFoot: "Powered by Timefix" at the foot of every public page (spec 0058, AC-26). Its own stylesheet, so a
+   page that draws only the foot (the guest menu) loads none of BookingFrame's. On a booking page's rail it sits in
+   BookingFrame's card, which stretches it across (`--booking-foot-align`). */
+@layer components {
+  /* "Powered by" over the wordmark, then the claim link: centred, or stretched across the card a page puts it in
+     (`--booking-foot-align`, BookingFrame's rail card). */
+  .foot {
+    display: flex;
+    flex-direction: column;
+    align-items: var(--booking-foot-align, center);
+    gap: var(--space-8);
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .powered {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
+  }
+
+  .wordmark {
+    display: block;
+    block-size: var(--space-20);
+    inline-size: auto;
+  }
+
+  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. A page that pins its
+     own look sends one mark instead (`scheme`), and none of the rules below touch it. */
+  .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .wordmark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .wordmark[data-scheme='dark'] {
+      display: block;
+    }
+  }
+
+  /* A page that pins a scheme of its own inside the document (a template: Night dark, Studio light) wins over the
+     document's, so the wordmark reads on the page it sits on. */
+  :not(:root)[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :not(:root)[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  :not(:root)[data-theme='light'] .wordmark[data-scheme='light'] {
+    display: block;
+  }
+
+  :not(:root)[data-theme='light'] .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
+  .claim {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font: var(--text-body);
+    transition: color var(--duration-quick) var(--ease-out);
+  }
+
+  .brand:focus-visible,
+  .claim:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-text);
+    outline-offset: var(--border-width-thick);
+  }
+
+  /* In the rail's card: the wordmark from the start, the claim across the card under a hairline. */
+  @media (width >= 1024px) {
+    .foot[data-placement='rail'] .brand {
+      align-items: flex-start;
+    }
+
+    .foot[data-placement='rail'] .claim {
+      justify-content: space-between;
+      padding-block-start: var(--space-8);
+      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .claim:hover {
+      color: var(--text);
+    }
+  }
+}

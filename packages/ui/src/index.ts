@@ -396,15 +396,14 @@ export {
   type BookingDetailsProps,
   type BookingDetailsValues,
 } from './modules/BookingDetails/BookingDetails.tsx';
+export { BookingFoot, type BookingFootProps } from './modules/BookingFrame/BookingFoot.tsx';
 export {
-  BookingFoot,
   BookingFrame,
   BookingHandleOffer,
   BookingMessage,
   BookingProfile,
   BookingProfileSection,
   type BookingFact,
-  type BookingFootProps,
   type BookingFrameProps,
   type PageBrand,
   type BookingHandleOfferProps,

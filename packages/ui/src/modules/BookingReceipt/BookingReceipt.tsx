@@ -11,7 +11,7 @@ import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { SuccessCheck } from '../../atoms/SuccessCheck/SuccessCheck.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { DescriptionList, type DescriptionItem } from '../../molecules/DescriptionList/DescriptionList.tsx';
-import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
+import { BookingFoot } from '../BookingFrame/BookingFoot.tsx';
 import styles from './BookingReceipt.module.css';
 import { strings } from './strings.ts';
 
