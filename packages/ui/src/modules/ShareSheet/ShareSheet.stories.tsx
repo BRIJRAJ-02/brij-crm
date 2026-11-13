@@ -75,8 +75,9 @@ export const Default: Story = {
       'href',
       `https://wa.me/?text=${encodeURIComponent(ADDRESS)}`,
     );
-    // Download under the code, a menu of PNG and SVG.
-    await expect(sheet.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
+    // Under the code, PNG and SVG, one press each (the prototype's pair, AC-7428).
+    await expect(sheet.getByRole('button', { name: /^PNG/ })).toBeInTheDocument();
+    await expect(sheet.getByRole('button', { name: /^SVG/ })).toBeInTheDocument();
     // Done is the only other button in the footer, and the dialog opens on it: Enter and Esc both close it.
     const done = sheet.getByRole('button', { name: 'Done' });
     await waitFor(() => expect(done).toHaveFocus());
@@ -197,9 +198,7 @@ export const DownloadFails: Story = {
       throw new Error('Blocked.');
     });
     try {
-      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
-      await settleAnimations();
-      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: /^PNG/ }));
       await expect(await screen.findByText('The QR code didn’t save. Try again.')).toBeInTheDocument();
       await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     } finally {
@@ -224,9 +223,7 @@ export const DownloadHoldsOpen: Story = {
     const decode = spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(() => held);
     const save = spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     try {
-      await userEvent.click(sheet.getByRole('button', { name: /^Download QR code/ }));
-      await settleAnimations();
-      await userEvent.click(await screen.findByRole('menuitem', { name: 'Download PNG' }));
+      await userEvent.click(sheet.getByRole('button', { name: /^PNG/ }));
       await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
       await expect(args.onOpenChange).not.toHaveBeenCalledWith(false);
       await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -294,7 +291,7 @@ export const Column: Story = {
     await expect(document.querySelector('[role="dialog"]')).toBeNull();
     await expect(canvas.getByRole('img', { name: 'QR code for Discovery call' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
-    await expect(canvas.getByRole('button', { name: /^Download QR code/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^PNG/ })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Put it on your site' })).toHaveAttribute(
       'href',
       '/w/acme/bookings/discovery-call/embed',

@@ -128,7 +128,7 @@ export function ShareColumn({
 /**
  * The one share dialog (spec 0073, batch 2): every Share button opens it, and so does a first publish. The QR code
  * and the link with Copy link (the one primary), one row of Email, WhatsApp and More (the device's share sheet,
- * where there is one), Download (a menu of PNG and SVG) under the code, "Put it on your site" where the thing embeds, the
+ * where there is one), PNG and SVG (one press each) under the code, "Put it on your site" where the thing embeds, the
  * thing's own ways, and a quiet footer line beside Done. It draws ShareColumn (ReadyPanel's `share` column) inside a
  * Modal, so a share looks the same everywhere, and it makes no request: the caller passes the address it already has.
  */

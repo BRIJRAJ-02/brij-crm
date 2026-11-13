@@ -163,11 +163,34 @@
     max-inline-size: 100%;
   }
 
-  /* The code and its download. Narrow: a row, the tile then Download beside it at the tile's foot. */
+  /* The code and its downloads. Narrow: a row, the tile then the downloads beside it at the tile's foot. */
   .code {
     display: flex;
     gap: var(--space-12);
     align-items: flex-end;
+  }
+
+  /* The prototype's pair (spec 0074, AC-7428): a quiet line saying what the code is for, then PNG and SVG, each one
+     press, side by side. */
+  .save {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    align-items: flex-start;
+    max-inline-size: var(--size-column);
+  }
+
+  .saveHint {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body-sm);
+    letter-spacing: var(--tracking-body-sm);
+  }
+
+  .saveButtons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
   }
 
   /* A quiet light tile, the code's quiet zone and a little more inside it, in either theme: scanners want dark on
@@ -209,8 +232,13 @@
 
     .code {
       flex-direction: column;
-      gap: var(--space-4);
+      gap: var(--space-8);
       align-items: center;
+    }
+
+    .save {
+      align-items: center;
+      text-align: center;
     }
   }
 
@@ -218,8 +246,13 @@
      at every width, centred, its download centred under the tile. */
   .root[data-qr='lg'] .code {
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-8);
     align-items: center;
+  }
+
+  .root[data-qr='lg'] .save {
+    align-items: center;
+    text-align: center;
   }
 
   @container (inline-size >= 480px) {

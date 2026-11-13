@@ -10,12 +10,14 @@ export const strings = {
   whatsapp: 'WhatsApp',
   /** The device's own share sheet. */
   more: 'More',
-  /** The QR code's download button, under the code: its visible word, then its fuller name (it starts with the word). */
-  download: 'Download',
-  downloadName: 'Download QR code',
+  /** The QR code's downloads, under the code (the prototype's pair): what they are for, then each file in one press. */
+  saveHint: 'For a card, a table, a poster or a slide.',
+  png: 'PNG',
+  svg: 'SVG',
+  /** Each button's full name, starting with its word (WCAG 2.5.3). */
+  pngName: 'PNG, download the QR code',
+  svgName: 'SVG, download the QR code',
   downloadQr: 'Download the QR code',
-  downloadPng: 'Download PNG',
-  downloadSvg: 'Download SVG',
   qrLabel: 'QR code for the link',
   preview: 'Preview',
   /** The success mark's name for screen readers. */

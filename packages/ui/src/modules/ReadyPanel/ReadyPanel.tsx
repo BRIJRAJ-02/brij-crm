@@ -6,7 +6,6 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { QrCode, type QrCodeProps } from '../../atoms/QrCode/QrCode.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
-import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './ReadyPanel.module.css';
 import { strings } from './strings.ts';
 
@@ -262,30 +261,38 @@ export function ReadyPanel({
               />
             </div>
             {onDownloadQr !== undefined && (
-              <MenuTrigger>
-                <Button
-                  icon="download"
-                  iconRight="chevron-down"
-                  variant="ghost"
-                  isPending={saving !== undefined}
-                  label={strings.downloadName}
-                >
-                  {strings.download}
-                </Button>
-                <Menu
-                  label={strings.downloadQr}
-                  onAction={(key) => {
-                    download(key === 'svg' ? 'svg' : 'png');
-                  }}
-                >
-                  <MenuItem id="png" icon="download">
-                    {strings.downloadPng}
-                  </MenuItem>
-                  <MenuItem id="svg" icon="download">
-                    {strings.downloadSvg}
-                  </MenuItem>
-                </Menu>
-              </MenuTrigger>
+              // The prototype's pair (spec 0074, AC-7428): each file in one press, under a line saying what it is for.
+              <div className={styles.save}>
+                <p className={styles.saveHint}>{strings.saveHint}</p>
+                <div className={styles.saveButtons} role="group" aria-label={strings.downloadQr}>
+                  <Button
+                    icon="download"
+                    size="sm"
+                    variant="secondary"
+                    label={strings.pngName}
+                    isPending={saving === 'png'}
+                    isDisabled={saving === 'svg'}
+                    onPress={() => {
+                      download('png');
+                    }}
+                  >
+                    {strings.png}
+                  </Button>
+                  <Button
+                    icon="download"
+                    size="sm"
+                    variant="ghost"
+                    label={strings.svgName}
+                    isPending={saving === 'svg'}
+                    isDisabled={saving === 'png'}
+                    onPress={() => {
+                      download('svg');
+                    }}
+                  >
+                    {strings.svg}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </div>

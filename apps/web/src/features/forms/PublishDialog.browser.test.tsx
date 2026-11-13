@@ -91,8 +91,8 @@ describe('the live dialog after the first publish (AC-6, T44)', () => {
     expect(page.getByRole('link', { name: 'Email' }).element().getAttribute('href')).toMatch(/^mailto:/);
     expect(page.getByRole('link', { name: 'WhatsApp' }).element().getAttribute('href')).toMatch(/^https:\/\/wa\.me\//);
     // The QR code's download sits with the code, not in the row (PNG or SVG from its menu).
-    await expect.element(page.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
-    expect(ways.contains(page.getByRole('button', { name: /^Download QR code/ }).element())).toBe(false);
+    await expect.element(page.getByRole('button', { name: /^PNG/ })).toBeVisible();
+    expect(ways.contains(page.getByRole('button', { name: /^PNG/ }).element())).toBe(false);
     // No embed tiles or code here: one row to the Share tab, where they are set up with a preview.
     expect(page.getByRole('radiogroup').query()).toBeNull();
     expect(page.getByRole('textbox', { name: /Embed snippet/ }).query()).toBeNull();

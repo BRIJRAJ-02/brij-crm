@@ -249,7 +249,7 @@ describe('Share, on the one share sheet (spec 0074, AC-7404)', () => {
     await expect.element(sheet.getByText('Your link page in Acme.')).toBeVisible();
     await expect.element(sheet.getByRole('img', { name: 'QR code for @ada' })).toBeInTheDocument();
     await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'primary');
-    await expect.element(sheet.getByRole('button', { name: /^Download QR code/ })).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: /^PNG/ })).toBeVisible();
     await expect.element(sheet.getByRole('link', { name: 'Open page' })).toBeVisible();
     expect(sheet.getByRole('link', { name: 'Open page' }).element().getAttribute('href')).toMatch(/\/ada$/);
     await expect.element(sheet.getByRole('button', { name: 'Share links' })).toBeVisible();

@@ -35,7 +35,7 @@ Use it for sharing any public page: a form, a booking page, the link page and te
 - `footer` is one quiet line at the footer's start, beside Done ("Answers go to People · Change"), the Modal's `hint`.
 - `qrSize="lg"` draws the code large (`size-menu` wide) under the link and the ways, for a code scanned from a screen across a table: the link page's Share (spec 0074, AC-7427). ShareColumn takes it too. Story: `LargeCode`.
 - `qrStyle` draws the code in a saved style (the link page's colour, centre picture and frame label, spec 0061, AC-6124), on screen and in the saved PNG or SVG (spec 0074, AC-7403). Left out, the plain code.
-- Copy link is the sheet's one primary; Done is secondary and takes focus as the sheet opens, so Enter and Esc both close it. Download, under the code, is a menu of Download PNG and Download SVG, both through `downloadQr` (beside QrCode, `atoms/QrCode/qr-file.ts`); if the browser refuses, a toast says so. While a file is being made the sheet waits for it: Esc, a click outside and the title bar's close wait (Modal's `isBusy`), and Done pressed meanwhile closes the sheet once the file is saved, so a code is never saved half drawn (spec 0074).
+- Copy link is the sheet's one primary; Done is secondary and takes focus as the sheet opens, so Enter and Esc both close it. Under the code, PNG and SVG save the code in one press each (the prototype's pair, AC-7428), both through `downloadQr` (beside QrCode, `atoms/QrCode/qr-file.ts`); if the browser refuses, a toast says so. While a file is being made the sheet waits for it: Esc, a click outside and the title bar's close wait (Modal's `isBusy`), and Done pressed meanwhile closes the sheet once the file is saved, so a code is never saved half drawn (spec 0074).
 - It makes no request and reads no setting: the caller passes the address it already has.
 
 ## ShareColumn
@@ -52,7 +52,7 @@ Open (the link, the QR code, the ways, Download), styled (`qrStyle`), with an in
 
 ## Keyboard
 
-Focus opens on Done. Tab goes the title bar's close button (×), Copy link, Email, WhatsApp, More (where the device has a share sheet), Download (Enter or the arrows open its menu of PNG and SVG), Put it on your site, the thing's own ways, then Done. Esc closes.
+Focus opens on Done. Tab goes the title bar's close button (×), Copy link, Email, WhatsApp, More (where the device has a share sheet), PNG, SVG, Put it on your site, the thing's own ways, then Done. Esc closes.
 
 ## Differences from the artifact
 
