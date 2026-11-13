@@ -23,7 +23,7 @@
 
   /* A wide screen: optically centred, a little above the middle. The offset
      is half of what the window's height leaves around a reference block (the
-     narrow card's: size-panel; the split card's: size-page-card and a bar),
+     narrow card's size-panel; the split screen centres its task instead),
      never the card's own height, so the card holds still between steps and
      as a refusal makes it taller. A phone keeps the fixed offset above, so
      the card stays put when the keyboard opens. */
