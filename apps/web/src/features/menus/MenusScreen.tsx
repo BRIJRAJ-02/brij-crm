@@ -19,6 +19,7 @@ import { useHospitality } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
+  EditorStatus,
   EmptyState,
   Field,
   focusLater,
@@ -125,6 +126,8 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   const [isPublishing, setPublishing] = useState(false);
   // The publish bar's moment after a publish from it: Published, then the menu's state again.
   const [isJustPublished, setJustPublished] = useState(false);
+  // A later publish the server refused: the bar says why until the next try.
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // Share and the end of a publish open the share sheet: its code loads once the screen is idle (spec 0074).
@@ -236,10 +239,12 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
       return;
     }
     setPublishing(true);
+    setRefusal(undefined);
     const refused = await store.publish(slug);
     setPublishing(false);
     if (refused !== undefined) {
-      said(refused);
+      // Said in the bar, where Publish was pressed, as every editor's bar says a refusal (spec 0074).
+      setRefusal(refused.message);
       return;
     }
     // The bar says Published, then Live again (spec 0074, AC-7407).
@@ -374,8 +379,11 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
         </MenuTrigger>
       </>
     ) : (
-      // The menu's state is the publish bar's to say (spec 0074, AC-7407).
-      picker
+      // The menu's state is the publish bar's to say (spec 0074, AC-7407); a reader has no bar, so it stays here.
+      <>
+        {picker}
+        {draft.canEdit ? null : <EditorStatus tone={isLive && !draft.hidden ? 'live' : 'draft'} text={statusText} />}
+      </>
     );
 
   // The header's ⋯ (checklabs': Duplicate menu, Discard changes, Delete): only what can be done here. Duplicate menu
@@ -417,24 +425,34 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
   // (the review says why when something is in the way); a hidden menu says so; Discard draft asks first (AC-7408).
   const barStatus: PublishBarStatus = isPublishing
     ? 'publishing'
-    : isJustPublished
-      ? 'published'
-      : !isLive || draft.changes > 0
-        ? 'draft'
-        : 'live';
+    : refusal !== undefined
+      ? 'error'
+      : isJustPublished
+        ? 'published'
+        : !isLive || draft.changes > 0
+          ? 'draft'
+          : 'live';
   const publishBar =
     !draft.canEdit || (draft.menus.length === 0 && !isLive) ? null : (
       <PublishBar
         status={barStatus}
-        changes={isLive ? [] : [strings.firstPublishChange]}
+        changes={[]}
         changeCount={isLive ? draft.changes : 1}
+        liveText={strings.liveBar}
+        {...(isLive ? {} : { draftText: strings.notPublishedBar })}
         isPaused={isLive && draft.hidden}
         pausedText={strings.hiddenBar}
+        {...(refusal === undefined ? {} : { problem: { message: refusal } })}
         onPublish={() => {
           if (!isLive || blocker !== undefined) setOpen({ kind: 'publish' });
           else void publishNow();
         }}
-        {...(isLive && draft.changes > 0 ? { onDiscard: () => void store.discard(slug).then(said) } : {})}
+        {...(isLive && draft.changes > 0
+          ? {
+              onDiscard: () => void store.discard(slug).then(said),
+              discardWords: { title: strings.discardQuestion, text: strings.discardLine },
+            }
+          : {})}
       />
     );
   const actions =

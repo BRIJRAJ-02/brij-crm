@@ -156,7 +156,8 @@ test.describe('the booking journey’s edges', () => {
     const field = page.getByRole('textbox', { name: /Web address/ });
     await field.fill('first-call');
     await page.getByRole('button', { name: /^Save/ }).click();
-    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled({ timeout: 10_000 });
+    // The bar's Publish goes once nothing is left to publish (spec 0074).
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0, { timeout: 10_000 });
     const after = await publicAddress(page, slug, pageId);
     expect(after).toMatch(/\/first-call$/);
 
@@ -222,7 +223,8 @@ test.describe('the booking journey’s edges', () => {
     // Said before Save: the address people already have stops working.
     await expect(page.getByText(/Old address stops working on save/)).toBeVisible();
     await page.getByRole('button', { name: /^Save/ }).click();
-    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled({ timeout: 10_000 });
+    // The bar's Publish goes once nothing is left to publish (spec 0074).
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0, { timeout: 10_000 });
     const after = await publicAddress(page, slug, pageId);
     expect(after).toMatch(/\/b\/[A-Za-z0-9_-]+$/);
 

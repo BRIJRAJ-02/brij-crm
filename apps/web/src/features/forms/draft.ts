@@ -16,6 +16,7 @@ import * as list from '../questions/questions.ts';
 import { keepBreaks, renameStepKeys, type Flow } from '../questions/steps.ts';
 import type { PlannedAttribute, QuestionChange } from '../questions/questions.ts';
 import { isSavable } from '../routing/facts.ts';
+import { barStrings } from './bar-strings.ts';
 import { strings } from './strings.ts';
 
 /** A new question at the end: Short text, no label yet ("Untitled question"), not filed, optional. */
@@ -158,23 +159,23 @@ export function publishAttributesOf(
 
 /** The parts of a form the publish bar names, in the order the editor shows them (spec 0074, AC-7407). */
 const PART_NAMES: Readonly<Partial<Record<keyof FormDocument, string>>> = {
-  headline: strings.changeParts.headline,
-  subheading: strings.changeParts.subheading,
-  buttonText: strings.changeParts.buttonText,
-  layout: strings.changeParts.layout,
-  steps: strings.changeParts.steps,
-  endings: strings.changeParts.endings,
-  after: strings.changeParts.after,
-  look: strings.changeParts.look,
-  language: strings.changeParts.language,
-  targets: strings.changeParts.targets,
-  scoreFiledOn: strings.changeParts.score,
-  routing: strings.changeParts.routing,
-  confirmation: strings.changeParts.confirmation,
-  saveProgress: strings.changeParts.saveProgress,
-  closing: strings.changeParts.closing,
-  closedMessage: strings.changeParts.closing,
-  spam: strings.changeParts.spam,
+  headline: barStrings.parts.headline,
+  subheading: barStrings.parts.subheading,
+  buttonText: barStrings.parts.buttonText,
+  layout: barStrings.parts.layout,
+  steps: barStrings.parts.steps,
+  endings: barStrings.parts.endings,
+  after: barStrings.parts.after,
+  look: barStrings.parts.look,
+  language: barStrings.parts.language,
+  targets: barStrings.parts.targets,
+  scoreFiledOn: barStrings.parts.score,
+  routing: barStrings.parts.routing,
+  confirmation: barStrings.parts.confirmation,
+  saveProgress: barStrings.parts.saveProgress,
+  closing: barStrings.parts.closing,
+  closedMessage: barStrings.parts.closing,
+  spam: barStrings.parts.spam,
 };
 
 /**
@@ -190,12 +191,12 @@ export function formChanges(draft: FormDocument, live: FormDocument): readonly s
   const questions = [
     ...draft.questions.flatMap((question) => {
       const was = before.get(question.id);
-      if (was === undefined) return [strings.changeQuestionAdded(label(question))];
-      return sameValue(was, question) ? [] : [strings.changeQuestionChanged(label(question))];
+      if (was === undefined) return [barStrings.questionAdded(label(question))];
+      return sameValue(was, question) ? [] : [barStrings.questionChanged(label(question))];
     }),
     ...live.questions
       .filter((question) => !after.has(question.id))
-      .map((question) => strings.changeQuestionRemoved(label(question))),
+      .map((question) => barStrings.questionRemoved(label(question))),
   ];
   // A reorder with nothing else changed is a change too.
   const reordered =
@@ -213,12 +214,12 @@ export function formChanges(draft: FormDocument, live: FormDocument): readonly s
   const parts = new Set<string>();
   for (const key of keys) {
     if (key === 'questions' || key === 'filedBefore') continue;
-    if (!sameValue(draft[key], live[key])) parts.add(PART_NAMES[key] ?? strings.changeParts.settings);
+    if (!sameValue(draft[key], live[key])) parts.add(PART_NAMES[key] ?? barStrings.parts.settings);
   }
   return [
     ...questions,
-    ...(reordered ? [strings.changeQuestionsOrder] : []),
-    ...[...parts].map((part) => strings.changePart(part)),
+    ...(reordered ? [barStrings.questionsOrder] : []),
+    ...[...parts].map((part) => barStrings.part(part)),
   ];
 }
 

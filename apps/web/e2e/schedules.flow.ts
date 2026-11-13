@@ -132,8 +132,8 @@ test.describe('availability schedules', () => {
     // 2026: one Save changes, live).
     await page.goto(`${pageUrl}?tab=hours`);
     await pick(page, 'Schedule', 'Evenings');
-    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(page.getByText('Changes saved').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Publish' })).toContainText(/Published|Live/);
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 20));
 
     // A second browser on the same schedule's editor sees a save from the first (AC-977).
@@ -160,8 +160,8 @@ test.describe('availability schedules', () => {
     expect(shared).toMatch(new RegExp(`(/b/${key ?? ''}|/[a-z0-9-]+/[a-z0-9-]+)$`));
     await page.goto(`${pageUrl}?tab=hours`);
     await setAllDays(page, '6:00 PM', '9:00 PM');
-    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(page.getByText('Changes saved').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Publish' })).toContainText(/Published|Live/);
     if (!LIVE) await reader.reload();
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('9:00 PM', {
       timeout: LIVE_MS,

@@ -54,8 +54,6 @@ export const strings = {
   publishing: 'Publishing…',
   published: 'Published',
   discard: 'Discard',
-  discardQuestion: 'Discard your unpublished changes?',
-  discardLine: 'The menus go back to what guests see now. Sold out stays as it is.',
   keepEditing: 'Keep editing',
   discardChanges: 'Discard changes',
   changes: (count: number) => (count === 1 ? '1 change not published' : `${String(count)} changes not published`),
@@ -363,14 +361,15 @@ export const strings = {
   days: { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' },
   // The editor's flows after checklabs' (5 November 2026): the split Publish, Items as a table, the tab bar's search.
   publishGoLive: 'Publish & go live',
-  publishDrafts: (count: number) => `Publish · ${count === 1 ? '1 draft' : `${String(count)} drafts`}`,
   view: 'View',
-  /** The publish bar (spec 0074, AC-7407): a first publish's one change, and a hidden menu's state. */
-  firstPublishChange: 'The menu goes live for the first time',
+  /** The publish bar (spec 0074, AC-7407): what it says while hidden, live or never published. */
   hiddenBar: 'Hidden: guests see that the menu isn’t available',
-  shareMenu: 'Share menu',
+  liveBar: 'Live: guests see this menu',
+  notPublishedBar: 'Not published yet',
+  /** Discard draft's confirm, in the menu's words. */
+  discardQuestion: 'Discard your unpublished changes?',
+  discardLine: 'The menus go back to what guests see now. Sold out stays as it is.',
   openNewTab: 'Open in new tab',
-  publishedToast: 'Published. Guests see your changes now.',
   allItems: 'All items',
   allItemsLine: 'Every item, in the order your menus read.',
   availableCount: (count: number) => `${String(count)} available`,

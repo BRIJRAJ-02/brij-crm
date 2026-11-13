@@ -11,6 +11,7 @@ export const strings = {
   versions: 'Versions',
   versionsLoading: 'Loading versions…',
   versionsNone: 'No versions yet',
+  versionsFailed: 'Versions didn’t load. Open the menu again to try.',
   version: (version: number) => `Version ${String(version)}`,
   current: 'Live',
   /** The current version's mark while the page is paused: it is published, but guests can't book it. */
@@ -23,4 +24,5 @@ export const strings = {
   discardText: 'Guests keep seeing the page as it is now.',
   keep: 'Keep the draft',
   discardDraft: 'Discard draft',
+  discardFailed: 'The draft wasn’t discarded. Try again.',
 } as const;

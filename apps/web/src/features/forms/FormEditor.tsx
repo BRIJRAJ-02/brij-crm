@@ -96,6 +96,7 @@ import { objectSettingsHref } from '../settings/nav.ts';
 import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
+import { barStrings } from './bar-strings.ts';
 import { strings } from './strings.ts';
 import { strings as questionStrings } from '../questions/strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
@@ -883,13 +884,9 @@ export function FormEditor(props: FormEditorProps) {
     : isPublished || tab === 'settings'
       ? tab
       : 'form';
-  // What guests don't see yet (spec 0074, AC-7407): read from the two documents the editor holds; before the first
-  // publish the whole form is the change, and a draft the server holds apart with no difference here is one change.
-  const changeLines = !isPublished
-    ? [strings.firstPublishChange]
-    : form.live === undefined
-      ? []
-      : formChanges(draft, form.live);
+  // What visitors don't see yet (spec 0074, AC-7407): read from the two documents the editor holds, once per change to
+  // either, not on every render; a draft the server holds apart with no difference here is one change.
+  const changeLines = useMemo(() => (form.live === undefined ? [] : formChanges(draft, form.live)), [draft, form.live]);
   const changeCount = !isPublished || isChanged || form.hasUnpublished ? Math.max(changeLines.length, 1) : 0;
   const barStatus: PublishBarStatus = isPublishing
     ? 'publishing'
@@ -898,17 +895,11 @@ export function FormEditor(props: FormEditorProps) {
       : changeCount > 0
         ? 'draft'
         : 'live';
-  const discardDraft = () => {
-    discard().then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.discarded });
-        focusLater(() => moreRef.current);
-      },
-      (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
-      },
-    );
-  };
+  // The bar's confirm stays open and busy while the discard saves; a refusal is said inside it (as its own confirm was).
+  const discardDraft = () =>
+    discard().then(() => {
+      toasts.toast({ tone: 'success', message: strings.discarded });
+    });
   const notices = (
     <>
       {/* The head of every editor of a published thing (spec 0074, AC-7407): Changes, Discard draft (asks first,
@@ -916,18 +907,24 @@ export function FormEditor(props: FormEditorProps) {
       {canManage && (
         <PublishBar
           status={barStatus}
-          changes={changeLines}
+          changes={isPublished ? changeLines : []}
           changeCount={changeCount}
+          liveText={barStrings.live}
+          {...(isPublished ? {} : { draftText: barStrings.notPublished })}
           isPaused={form.status === 'paused'}
-          pausedText={strings.pausedBar}
+          pausedText={barStrings.paused}
           onPublish={publish}
-          {...(canDiscard(form, isChanged) ? { onDiscard: discardDraft } : {})}
+          {...(canDiscard(form, isChanged)
+            ? { onDiscard: discardDraft, discardWords: { title: strings.discardTitle, text: strings.discardText } }
+            : {})}
         />
       )}
+      {/* A manager's bar says it is paused, so their notice keeps only its line and Resume; a reader has no bar, so the
+          notice says it with its title. */}
       {form.status === 'paused' && (
         <Callout
           tone="warning"
-          title={strings.pausedTitle}
+          {...(canManage ? {} : { title: strings.pausedTitle })}
           {...(canManage ? { actions: <Button onPress={() => setStatus('live')}>{strings.resume}</Button> } : {})}
         >
           {strings.pausedText}

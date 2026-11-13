@@ -26,8 +26,8 @@ export const pageStrings = {
   shareTitle: 'Share your business page',
   /** After the first publish (spec 0074, AC-7407). */
   liveTitle: 'Your business page is live',
-  /** The bar's one change before the first publish. */
-  firstPublishChange: 'The page goes live for the first time',
+  /** The publish bar while live: since when (spec 0074, AC-7407). */
+  liveSince: (date: string) => `Live: published ${date}`,
   shareInvite: 'Find us here:',
   /** Address. */
   address: 'Address',
@@ -48,7 +48,6 @@ export const pageStrings = {
   firstAddressText: 'Pick a short address for your page, such as your business’s name.',
   suggestedAddressText: 'We started it from your business’s name. Claim it, or change it first.',
   /** Publish needs. */
-  fixFirst: 'Before you publish',
   fixInBusiness: 'Open Business',
   fixPlace: 'Open place',
   fixServices: 'Open Services',

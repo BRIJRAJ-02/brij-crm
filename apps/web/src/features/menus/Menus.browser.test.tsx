@@ -256,7 +256,7 @@ describe('the Menus editor', () => {
     // Sold out is a quick button on an item's row and in its ⋯ on Structure; the Items tab keeps the switch.
     await expect.element(page.getByRole('button', { name: 'More for Oysters' }).first()).toBeInTheDocument();
     // The first publish is the bar's Publish (spec 0074, AC-7407), through the review and its checks.
-    await expect.element(page.getByText('1 change not published')).toBeVisible();
+    await expect.element(page.getByText('Not published yet')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await expect.element(review.getByText(/Give Oysters a price, then publish/)).toBeVisible();
@@ -281,7 +281,7 @@ describe('the Menus editor', () => {
     await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
   });
 
-  it('puts focus on the header’s Share after a first publish, never on the page (spec 0074, AC-7428)', async () => {
+  it('keeps focus off the page after a first publish: on the bar, where Publish was (spec 0074, AC-7428)', async () => {
     // The draft turns live when Publish lands, as the real store's does, so the bar's Publish goes.
     const listeners = new Set<() => void>();
     let state: HospitalityHeldState<MenuDraft> = { status: 'ready', value: DRAFT, isSaving: false };
@@ -320,7 +320,9 @@ describe('the Menus editor', () => {
     await expect.element(sheet.getByRole('button', { name: 'Done' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     await expect.poll(() => document.querySelector('[role="dialog"]')).toBeNull();
-    await expect.element(page.getByRole('button', { name: 'Share', exact: true })).toHaveFocus();
+    // Publish went with the publish; focus is on the bar's own status line, never the page body.
+    await expect.poll(() => document.activeElement === document.body).toBe(false);
+    await expect.element(page.getByRole('region', { name: 'Publish' }).getByRole('status')).toHaveFocus();
   });
 
   it('publishes drafts from the bar at once, shares from the header, and asks before Discard draft', async () => {
@@ -352,7 +354,7 @@ describe('the Menus editor', () => {
       .toHaveAttribute('href', expect.stringContaining('/m/AbCdEfGhIjKlMnOp'));
     // Discard draft asks first, the action on its danger button (AC-7408); ⋯ keeps Delete and no Discard.
     await userEvent.click(page.getByRole('button', { name: 'Discard draft' }));
-    const ask = page.getByRole('alertdialog', { name: 'Discard the draft?' });
+    const ask = page.getByRole('alertdialog', { name: 'Discard your unpublished changes?' });
     await expect
       .element(ask.getByRole('button', { name: 'Discard draft' }))
       .toHaveAttribute('data-variant', 'danger-solid');

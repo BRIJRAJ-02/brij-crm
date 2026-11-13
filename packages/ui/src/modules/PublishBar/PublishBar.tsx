@@ -1,7 +1,9 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
 import styles from './PublishBar.module.css';
@@ -51,12 +53,29 @@ export interface PublishBarProps {
    * `changes.length`.
    */
   readonly changeCount?: number;
+  /**
+   * What the bar says with nothing to publish, for a thing that isn't a booking page ("Live: visitors can send this
+   * form"). Default: "Live: guests see this page".
+   */
+  readonly liveText?: string;
+  /**
+   * What the bar says in place of the count for a thing never published ("Not published yet"); Changes is then not
+   * offered, since everything is new. Left out, the count.
+   */
+  readonly draftText?: string;
   readonly onPublish: () => void;
+  /** Publish's keys, shown on it and pressed from anywhere in the editor by the caller ("⌘↵"). */
+  readonly publishKbd?: string;
   /**
    * Drops the changes, once the person says so in Discard's confirm. Left out, no Discard draft: a page never
-   * published has nothing to go back to.
+   * published has nothing to go back to. A promise keeps the confirm open and busy until it settles; a rejection's
+   * message is said inside it, so Discard can be tried again.
    */
-  readonly onDiscard?: () => void;
+  readonly onDiscard?: () => void | Promise<void>;
+  /** Discard's confirm in the editor's own words: its question and the line under it. Default: the draft's. */
+  readonly discardWords?: { readonly title: string; readonly text: string };
+  /** The versions couldn't be read: the menu says so, and opening it again reads again. */
+  readonly versionsFailed?: boolean;
   /** The draft as a guest would see it, signed in only: a link that opens in a new tab. Left out, no Preview. */
   readonly previewHref?: string;
   /** The last published versions, newest first; undefined while they load. Left out with `onVersions`, no menu. */
@@ -65,6 +84,17 @@ export interface PublishBarProps {
   readonly onVersions?: () => void;
   /** A version picked to bring back as the draft. */
   readonly onRestore?: (version: number) => void;
+}
+
+/**
+ * Publish or Discard draft goes once there is nothing left to publish: focus that was on it lands on the bar's own
+ * status line, never on the page (spec 0074).
+ */
+function focusStatusLine(line: RefObject<HTMLParagraphElement | null>): void {
+  focusLater(() => {
+    const active = document.activeElement;
+    return active === null || active === document.body ? line.current : undefined;
+  });
 }
 
 /**
@@ -81,9 +111,14 @@ export function PublishBar({
   problem,
   isPaused = false,
   pausedText = strings.paused,
+  liveText = strings.live,
+  draftText,
   changeCount,
   onPublish,
+  publishKbd,
   onDiscard,
+  discardWords,
+  versionsFailed = false,
   previewHref,
   versions,
   onVersions,
@@ -91,10 +126,43 @@ export function PublishBar({
 }: PublishBarProps) {
   const [isShowingChanges, setShowingChanges] = useState(false);
   const [isAsking, setAsking] = useState(false);
+  const [isDiscarding, setDiscarding] = useState(false);
+  const [discardFailure, setDiscardFailure] = useState<string | undefined>(undefined);
   const listId = useId();
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const keepFocus = () => {
+    focusStatusLine(statusRef);
+  };
+  const publishPressed = useRef(false);
   const count = changeCount ?? changes.length;
   const hasChanges = count > 0 && status !== 'published';
-  const hasList = hasChanges && changes.length > 0;
+  const hasList = hasChanges && changes.length > 0 && draftText === undefined;
+  useEffect(() => {
+    if (!publishPressed.current || status === 'publishing') return;
+    publishPressed.current = false;
+    focusStatusLine(statusRef);
+  }, [status]);
+  const discard = () => {
+    const done = onDiscard?.();
+    if (done === undefined) {
+      setAsking(false);
+      keepFocus();
+      return;
+    }
+    setDiscarding(true);
+    setDiscardFailure(undefined);
+    done.then(
+      () => {
+        setDiscarding(false);
+        setAsking(false);
+        keepFocus();
+      },
+      (error: unknown) => {
+        setDiscarding(false);
+        setDiscardFailure(error instanceof Error && error.message !== '' ? error.message : strings.discardFailed);
+      },
+    );
+  };
   const isBusy = status === 'publishing';
   const said = status === 'published' ? 'published' : hasChanges ? 'draft' : isPaused ? 'paused' : 'live';
   return (
@@ -106,7 +174,7 @@ export function PublishBar({
       data-open={(isShowingChanges && hasList) || undefined}
     >
       <div className={styles.row}>
-        <p className={styles.status} role="status">
+        <p ref={statusRef} className={styles.status} role="status" tabIndex={-1}>
           {/* Keyed by what it says, so a change of state crossfades in (the icon and words swap, nothing moves). */}
           <span key={said} className={styles.said} data-said={said}>
             {said === 'published' ? (
@@ -117,7 +185,7 @@ export function PublishBar({
             ) : said === 'draft' ? (
               <>
                 <span className={styles.dot} aria-hidden="true" />
-                <span>{strings.notPublished(count)}</span>
+                <span>{draftText ?? strings.notPublished(count)}</span>
               </>
             ) : said === 'paused' ? (
               <>
@@ -127,7 +195,7 @@ export function PublishBar({
             ) : (
               <>
                 <Icon name="circle-check" size="sm" />
-                <span>{strings.live}</span>
+                <span>{liveText}</span>
               </>
             )}
           </span>
@@ -155,7 +223,13 @@ export function PublishBar({
               </Button>
               <Menu
                 label={strings.versions}
-                emptyLabel={versions === undefined ? strings.versionsLoading : strings.versionsNone}
+                emptyLabel={
+                  versionsFailed
+                    ? strings.versionsFailed
+                    : versions === undefined
+                      ? strings.versionsLoading
+                      : strings.versionsNone
+                }
                 onAction={(key) => onRestore(Number(key))}
                 disabledKeys={(versions ?? []).filter((one) => one.isCurrent).map((one) => String(one.version))}
               >
@@ -178,35 +252,55 @@ export function PublishBar({
             </ButtonLink>
           )}
           {hasChanges && onDiscard !== undefined && (
-            <ModalTrigger isOpen={isAsking} onOpenChange={setAsking}>
+            <ModalTrigger
+              isOpen={isAsking}
+              onOpenChange={(open) => {
+                if (isDiscarding) return;
+                setDiscardFailure(undefined);
+                setAsking(open);
+              }}
+            >
               <Button variant="ghost" isDisabled={isBusy}>
                 {strings.discard}
               </Button>
               <Modal
-                title={strings.discardTitle}
+                title={discardWords?.title ?? strings.discardTitle}
                 variant="confirm"
                 tone="danger"
+                isBusy={isDiscarding}
                 actions={
                   <>
-                    <Button slot="close">{strings.keep}</Button>
-                    <Button
-                      variant="danger-solid"
-                      onPress={() => {
-                        setAsking(false);
-                        onDiscard();
-                      }}
-                    >
+                    <Button slot="close" isDisabled={isDiscarding}>
+                      {strings.keep}
+                    </Button>
+                    <Button variant="danger-solid" isPending={isDiscarding} onPress={discard}>
                       {strings.discardDraft}
                     </Button>
                   </>
                 }
               >
-                {strings.discardText}
+                {discardFailure === undefined ? (
+                  (discardWords?.text ?? strings.discardText)
+                ) : (
+                  <>
+                    <Callout tone="danger">{discardFailure}</Callout>
+                    {discardWords?.text ?? strings.discardText}
+                  </>
+                )}
               </Modal>
             </ModalTrigger>
           )}
           {(hasChanges || status === 'published') && (
-            <Button variant="primary" isPending={isBusy} isDisabled={status === 'published'} onPress={onPublish}>
+            <Button
+              variant="primary"
+              isPending={isBusy}
+              isDisabled={status === 'published'}
+              {...(publishKbd === undefined || status === 'published' ? {} : { kbd: publishKbd })}
+              onPress={() => {
+                publishPressed.current = true;
+                onPublish();
+              }}
+            >
               {status === 'published' ? strings.published : strings.publish}
             </Button>
           )}
@@ -225,8 +319,9 @@ export function PublishBar({
       )}
       {hasList && (
         <ul className={styles.changes} id={listId} hidden={!isShowingChanges}>
-          {changes.map((change) => (
-            <li key={change} className={styles.change}>
+          {/* Two changes can read the same (two untitled questions changed): keyed by place too. */}
+          {changes.map((change, index) => (
+            <li key={`${String(index)}:${change}`} className={styles.change}>
               {change}
             </li>
           ))}

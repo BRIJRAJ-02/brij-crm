@@ -40,10 +40,12 @@ import {
   Skeleton,
   Switch,
   type PublishBarStatus,
+  useFormatSettings,
   usePhotoCrop,
   type Toasts,
 } from '@crm/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { publicBookingOrigin } from '../booking/links.ts';
 import {
   brandSettingsHref,
@@ -198,6 +200,8 @@ export interface BusinessPageScreenProps {
 /** Settings › Business › Page. */
 export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenProps) {
   const state = useHospitality(store.held(slug));
+  const navigate = useNavigate();
+  const { locale } = useFormatSettings();
   const texts = useDraftTexts();
   const [isPublishing, setPublishing] = useState(false);
   // Share (spec 0074, AC-7406), and the end of a first publish (AC-7407): the one share sheet, its code loaded once
@@ -266,12 +270,15 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
         saidTimer.current = setTimeout(() => setSaid(undefined), PUBLISHED_MS);
       }
     } else if (refused.data?.refusals?.some((each) => each.field === 'handle') === true) {
+      // Said on the address field, where it is fixed; the bar doesn't say it twice.
       setAddressRefused(refused.message);
-      setSaid({ status: 'error', message: refused.message });
       focusLater(() => addressRef.current);
     } else setSaid({ status: 'error', message: refused.message });
   };
   const discard = () => {
+    // What is still being typed is part of the draft, so it goes out first and is discarded with the rest.
+    texts.flushAll();
+    setSaid(undefined);
     void store.discard(slug).then((refused) => {
       toasts.toast(
         refused === undefined
@@ -280,19 +287,52 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
       );
     });
   };
-  // What guests don't see yet: the server's sentences; a page never published goes live whole; typing not yet saved
-  // counts as one change, so Publish (which sends it first) is offered at once.
+  // What guests don't see yet: the server's sentences; typing not yet saved counts as one change, so Publish (which
+  // sends it first) is offered at once. A page never published says so in place of a count.
   const isWaiting = view.published === undefined || view.hasChanges || texts.isTyping;
-  const changeLines =
-    view.changes.length > 0 ? view.changes : view.published === undefined ? [words.firstPublishChange] : [];
-  const changeCount = isWaiting ? Math.max(changeLines.length, 1) : 0;
+  const changeCount = isWaiting ? Math.max(view.changes.length, 1) : 0;
+  // What Publish would refuse, said in the bar with the way to fix it, as a refused Publish is (spec 0074).
+  const fixHref =
+    view.problem === undefined
+      ? undefined
+      : view.problem.fix === 'services'
+        ? servicesSettingsHref(slug)
+        : view.problem.fix === 'staff'
+          ? staffSettingsHref(slug)
+          : view.problem.fix === 'shifts'
+            ? shiftsSettingsHref(slug)
+            : view.problem.placeId === undefined
+              ? businessSettingsHref(slug)
+              : placeTablesHref(slug, view.problem.placeId);
+  const fixLabel =
+    view.problem?.fix === 'services'
+      ? words.fixServices
+      : view.problem?.fix === 'staff'
+        ? words.fixStaff
+        : view.problem?.fix === 'shifts'
+          ? words.fixShifts
+          : view.problem?.placeId === undefined
+            ? words.fixInBusiness
+            : words.fixPlace;
+  const problem =
+    said?.status === 'error'
+      ? { message: said.message }
+      : view.problem !== undefined && view.handle !== undefined && fixHref !== undefined
+        ? { message: view.problem.message, fix: { label: fixLabel, onFix: () => void navigate({ href: fixHref }) } }
+        : undefined;
   const barStatus: PublishBarStatus = isPublishing
     ? 'publishing'
-    : said !== undefined
-      ? said.status
-      : changeCount > 0
-        ? 'draft'
-        : 'live';
+    : said?.status === 'published'
+      ? 'published'
+      : problem !== undefined
+        ? 'error'
+        : changeCount > 0
+          ? 'draft'
+          : 'live';
+  const liveSince =
+    view.published === undefined
+      ? undefined
+      : new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(view.published.at));
   return (
     <SettingsPage
       title={words.title}
@@ -336,45 +376,15 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
           Discard draft (asks first) and Publish. */}
       <PublishBar
         status={barStatus}
-        changes={changeLines}
+        changes={view.published === undefined ? [] : view.changes}
         changeCount={changeCount}
-        {...(said?.status === 'error' ? { problem: { message: said.message } } : {})}
+        {...(liveSince === undefined ? { draftText: words.notPublished } : { liveText: words.liveSince(liveSince) })}
+        {...(problem === undefined ? {} : { problem })}
         onPublish={() => void publish()}
-        {...(view.published === undefined ? {} : { onDiscard: discard })}
+        {...(view.published !== undefined && view.hasChanges
+          ? { onDiscard: discard, discardWords: { title: words.discardAsk, text: words.discardText } }
+          : {})}
       />
-      {view.problem !== undefined && view.handle !== undefined && (
-        <Callout
-          tone="warning"
-          title={words.fixFirst}
-          actions={
-            <ButtonLink
-              href={
-                view.problem.fix === 'services'
-                  ? servicesSettingsHref(slug)
-                  : view.problem.fix === 'staff'
-                    ? staffSettingsHref(slug)
-                    : view.problem.fix === 'shifts'
-                      ? shiftsSettingsHref(slug)
-                      : view.problem.placeId === undefined
-                        ? businessSettingsHref(slug)
-                        : placeTablesHref(slug, view.problem.placeId)
-              }
-            >
-              {view.problem.fix === 'services'
-                ? words.fixServices
-                : view.problem.fix === 'staff'
-                  ? words.fixStaff
-                  : view.problem.fix === 'shifts'
-                    ? words.fixShifts
-                    : view.problem.placeId === undefined
-                      ? words.fixInBusiness
-                      : words.fixPlace}
-            </ButtonLink>
-          }
-        >
-          {view.problem.message}
-        </Callout>
-      )}
       <AddressSection
         // A new address (another tab's, or this one's answer) starts the field again from it.
         key={view.handle ?? `suggested:${view.suggestedHandle ?? ''}`}

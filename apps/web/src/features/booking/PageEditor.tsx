@@ -195,7 +195,10 @@ const STEPS: SelectItem[] = [
 /** Whether a setting waits in the draft for Publish (spec 0068, AC-6810), as against one that goes live on save. */
 const isDraftedKey = (key: string): boolean => (BOOKING_DRAFT_KEYS as readonly string[]).includes(key);
 
-/** One published version, as the Versions dialog lists it. */
+/** How long the bar says Published before it says the page is live again (as the link page's bar). */
+const PUBLISHED_MS = 1600;
+
+/** One published version, as the bar's Versions menu lists it. */
 interface PageVersionRow {
   readonly version: number;
   readonly isCurrent: boolean;
@@ -421,21 +424,29 @@ export function PageEditor({
   // "Changes saved", once: a newer save's toast replaces the last one rather than stacking.
   const savedToast = useRef<string | undefined>(undefined);
   // On a hidden page the toast offers Make live, since saving alone doesn't let guests book it.
+  // The bar says Published for a moment (spec 0074, AC-7407); a hidden page also says, with Make live, that guests
+  // still can't book it.
+  const [isJustPublished, setJustPublished] = useState(false);
+  const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(publishedTimer.current), []);
   const sayChangesSaved = (makeLive?: () => void) => {
+    setJustPublished(true);
+    clearTimeout(publishedTimer.current);
+    publishedTimer.current = setTimeout(() => setJustPublished(false), PUBLISHED_MS);
     if (savedToast.current !== undefined) toasts.dismiss(savedToast.current);
-    savedToast.current = toasts.toast(
+    savedToast.current =
       makeLive === undefined
-        ? { tone: 'success', message: strings.changesSaved }
-        : {
+        ? undefined
+        : toasts.toast({
             tone: 'success',
-            message: strings.changesSavedHidden,
+            message: strings.publishedHidden,
             action: { label: strings.makeLive, onAction: makeLive },
-          },
-    );
+          });
   };
   // The header's ⋯: where focus goes once an action from it has left.
   const moreRef = useRef<HTMLButtonElement>(null);
   const [versions, setVersions] = useState<readonly PageVersionRow[] | undefined>(undefined);
+  const [isVersionsFailed, setVersionsFailed] = useState(false);
   // A version picked while the draft holds changes waits for a yes (spec 0068, AC-6812): restoring replaces them.
   const [restoreAsked, setRestoreAsked] = useState<number | undefined>(undefined);
   // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
@@ -793,21 +804,28 @@ export function PageEditor({
     setFailure(undefined);
     setVersions(undefined);
   };
+  const versionsAsked = useRef(0);
   const readVersions = () => {
+    // Opened twice quickly, only the newest read is shown.
+    const mine = (versionsAsked.current += 1);
     setVersions(undefined);
+    setVersionsFailed(false);
     data.bookingPages.versions(slug, page.id).then(
-      (list) =>
+      (list) => {
+        if (mine !== versionsAsked.current) return;
         setVersions(
           list.versions.map((one) => ({
             version: one.version,
             isCurrent: one.isCurrent,
             label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
           })),
-        ),
+        );
+      },
       () => {
-        // The bar's Versions menu closes on its own; the failure is said, and the menu reads again next time.
+        // The bar's Versions menu says they didn't load; opening it again reads again.
+        if (mine !== versionsAsked.current) return;
         setVersions([]);
-        toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed });
+        setVersionsFailed(true);
       },
     );
   };
@@ -980,9 +998,11 @@ export function PageEditor({
     ? 'publishing'
     : failure !== undefined
       ? 'error'
-      : barChanges.length > 0
-        ? 'draft'
-        : 'live';
+      : isJustPublished
+        ? 'published'
+        : barChanges.length > 0
+          ? 'draft'
+          : 'live';
   /** Save changes (and ⌘↵): a field that needs a fix says so and shows its section; else everything saves, live. */
   const saveNow = (): Promise<boolean> => {
     if (!canSave) return Promise.resolve(true);
@@ -1290,11 +1310,34 @@ export function PageEditor({
                     <PublishBar
                       status={barStatus}
                       changes={barChanges}
-                      {...(failure === undefined ? {} : { problem: { message: failure.message } })}
-                      isPaused={page.status !== 'live'}
+                      {...(failure === undefined
+                        ? {}
+                        : {
+                            problem: {
+                              message: failure.message,
+                              // A refused setting in another section: the way there (it opens itself on a refusal).
+                              ...(refusedTab === undefined || refusedTab === shown
+                                ? {}
+                                : {
+                                    fix: {
+                                      label: strings.goTo(tabLabel[refusedTab]),
+                                      onFix: () => onTabChange(refusedTab),
+                                    },
+                                  }),
+                            },
+                          })}
+                      isPaused={!(liveShown ?? page.status === 'live')}
+                      pausedText={strings.hiddenBar}
                       onPublish={() => void saveNow()}
-                      {...(isDirty ? { onDiscard: discardChanges } : {})}
+                      {...(canSave ? { publishKbd: '⌘↵' } : {})}
+                      {...(isDirty
+                        ? {
+                            onDiscard: discardChanges,
+                            discardWords: { title: strings.discardUnsaved, text: strings.discardUnsavedText },
+                          }
+                        : {})}
                       {...(versions === undefined ? {} : { versions })}
+                      versionsFailed={isVersionsFailed}
                       onVersions={readVersions}
                       onRestore={askRestore}
                     />
@@ -1318,25 +1361,6 @@ export function PageEditor({
                           : {})}
                     >
                       {bookingProblem.text}
-                    </Callout>
-                  )}
-                  {/* A refused save says why where it happened, with the way to the section to fix. */}
-                  {failure !== undefined && (
-                    <Callout
-                      tone="danger"
-                      title={strings.notSaved}
-                      isAnnounced
-                      {...(refusedTab === undefined || refusedTab === shown
-                        ? {}
-                        : {
-                            actions: (
-                              <Button onPress={() => onTabChange(refusedTab)}>
-                                {strings.goTo(tabLabel[refusedTab])}
-                              </Button>
-                            ),
-                          })}
-                    >
-                      {failure.message}
                     </Callout>
                   )}
                   {isWeekDirty && week.error !== undefined && <Callout tone="danger">{week.error}</Callout>}

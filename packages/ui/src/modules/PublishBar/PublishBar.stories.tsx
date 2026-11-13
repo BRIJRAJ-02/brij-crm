@@ -111,6 +111,54 @@ export const Hidden: Story = {
   },
 };
 
+/** Never published: "Not published yet" in place of the count, nothing to open under Changes (spec 0074). */
+export const NotPublishedYet: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <PublishBar
+        status="draft"
+        changes={[]}
+        changeCount={1}
+        draftText="Not published yet"
+        liveText="Live: visitors can send this form"
+        onPublish={args.onPublish}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('Not published yet');
+    await expect(canvas.queryByRole('button', { name: 'Changes' })).toBeNull();
+  },
+};
+
+/** A discard that fails: the confirm stays open, says why, and Discard draft can be pressed again (spec 0074). */
+export const DiscardFails: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onDiscard: fn(() => Promise.reject(new Error('Someone else changed it. Load theirs first.'))) },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Discard draft' }));
+    await settleAnimations();
+    const ask = within(document.body).getByRole('alertdialog');
+    await userEvent.click(within(ask).getByRole('button', { name: 'Discard draft' }));
+    await expect(await within(ask).findByText('Someone else changed it. Load theirs first.')).toBeInTheDocument();
+    await expect(within(ask).getByRole('button', { name: 'Discard draft' })).toBeEnabled();
+  },
+};
+
+/** Versions that didn't load: the menu says so rather than "No versions yet" (spec 0074). */
+export const VersionsFailed: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { status: 'live', changes: [], versions: [], versionsFailed: true },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Versions' }));
+    await settleAnimations();
+    await expect(
+      await within(document.body).findByText('Versions didn’t load. Open the menu again to try.'),
+    ).toBeInTheDocument();
+  },
+};
+
 /** One change: the count in the singular. */
 export const OneChange: Story = {
   args: { changes: ['Length 30 min → 45 min'] },

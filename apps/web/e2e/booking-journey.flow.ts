@@ -56,7 +56,8 @@ test.describe('the booking journey', () => {
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Added 1 field to Person.')).toBeVisible();
     // Saved means saved: Save changes rests once the question is filed (late trap #58).
-    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled({ timeout: 10_000 });
+    // The bar's Publish goes once nothing is left to publish (spec 0074).
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0, { timeout: 10_000 });
     // The Share section shows the address, with Copy link beside it.
     const address = await shareAddress(page, editor);
 
