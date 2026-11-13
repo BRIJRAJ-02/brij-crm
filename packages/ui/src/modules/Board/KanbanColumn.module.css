@@ -4,7 +4,8 @@
    column. A size-control head of the option's dot, title in body strong and its count in the quiet label type, then
    white cards space-8 apart (the list's own gap): surface, a border-subtle hairline, radius-lg and shadow-xs, the edge and shadow-sm
    under the pointer, the outline ring on focus. A card being moved leaves a dashed border-strong slot on
-   surface-subtle (its lifted copy rides above at shadow-md); a column taking a drop draws the accent-border ring. */
+   surface-subtle (its lifted copy rides above at shadow-md); a column taking a drop draws an accent-text ring (3:1 and more on its shell in both themes; the prototype's
+   accent-border was 1.3:1). */
 @layer components {
   .root {
     display: flex;
@@ -139,9 +140,9 @@
     writing-mode: horizontal-tb;
   }
 
-  /* A card from elsewhere is over it: the accent-border ring, inside its edge so the scrolling board never clips it. */
+  /* A card from elsewhere is over it: the accent-text ring, inside its edge so the scrolling board never clips it. */
   .root[data-over] {
-    outline: var(--border-width-focus) solid var(--accent-border);
+    outline: var(--border-width-focus) solid var(--accent-text);
     outline-offset: calc(-1 * var(--border-width-focus));
   }
 

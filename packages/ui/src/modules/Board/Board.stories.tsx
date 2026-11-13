@@ -1,3 +1,4 @@
+import { contrastRatio } from '@crm/contracts/brand-colour';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
@@ -150,6 +151,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** A computed `rgb(…)` colour as a hex, for a contrast check. */
+function hexOf(colour: string): string {
+  const [r = 0, g = 0, b = 0] = (colour.match(/\d+(\.\d+)?/g) ?? []).map(Number);
+  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** Deals by stage: a column per status, the archived one while it still has a card, and the empty one hidden. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
@@ -178,7 +185,21 @@ export const MoveByKeyboard: Story = {
     // Lifted: focus waits on the move itself, away from the grid's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('region', { name: /Qualified/ })).toHaveAttribute('data-over'));
+    const qualified = canvas.getByRole('region', { name: /Qualified/ });
+    await waitFor(() => expect(qualified).toHaveAttribute('data-over'));
+    // The column taking the drop says so with a ring of 3:1 or more against its own ground, in light and in dark.
+    const root = document.documentElement;
+    const before = root.dataset.theme;
+    try {
+      for (const theme of ['light', 'dark']) {
+        root.dataset.theme = theme;
+        const style = getComputedStyle(qualified);
+        await expect(contrastRatio(hexOf(style.outlineColor), hexOf(style.backgroundColor))).toBeGreaterThanOrEqual(3);
+      }
+    } finally {
+      if (before === undefined) delete root.dataset.theme;
+      else root.dataset.theme = before;
+    }
     await userEvent.keyboard('{ArrowRight}');
     await waitFor(() => expect(canvas.getByRole('region', { name: /Proposal/ })).toHaveAttribute('data-over'));
     await userEvent.keyboard('{Enter}');
