@@ -84,7 +84,7 @@ import { createOutsideFetch, createPinnedFetch, OUTSIDE_TIMEOUT_MS, type Outside
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
 import { createWalletLinks } from './wallet/wallet.ts';
 import { createApplePass } from './public/apple-pass.ts';
-import { mountWalletPass } from './public/wallet.ts';
+import { createPagePass, mountWalletPass } from './public/wallet.ts';
 import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
@@ -463,6 +463,15 @@ export function createApp({
     ...(appleWallet === undefined ? {} : { apple: appleWallet }),
   };
   const walletLinks = createWalletLinks(walletSettings);
+  // What makes a page's Apple pass: the public routes below, and Team pages' download of its people's passes.
+  const walletPassDeps = {
+    db,
+    auth,
+    pass: createApplePass(walletSettings),
+    // A partner's own card (13 Nov 2026): the registry's read, for the door's `readPassBrand`.
+    partners: { partnerWalletCard: (partnerIds: readonly string[]) => identity.partnerWalletCard(partnerIds) },
+  };
+  const pagePass = createPagePass(walletPassDeps);
   // Our own public origins: an address on one that names a booking page, form or handle stays in one workspace.
   const publicOrigins = [
     ...new Set([
@@ -604,6 +613,8 @@ export function createApp({
         },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
+        // A Live page's pass for whoever may hand it on (13 Nov 2026): Team pages' downloads.
+        pagePass,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -802,13 +813,7 @@ export function createApp({
   // handle through the public booking door, which only that folder may open; the route itself is private.
   // Mounted before the public booking routes: their `/public/handles/:handle/:slug` would otherwise take
   // `pass.pkpass` for a page's slug and answer that no such page exists (found live, 13 Nov 2026).
-  mountWalletPass(app, {
-    db,
-    auth,
-    pass: createApplePass(walletSettings),
-    // A partner's own card (13 Nov 2026): the registry's read, for the door's `readPassBrand`.
-    partners: { partnerWalletCard: (partnerIds) => identity.partnerWalletCard(partnerIds) },
-  });
+  mountWalletPass(app, walletPassDeps);
   mountPublicBooking(app, {
     db,
     draftPreview: (session, entry) => mayPreviewDraft({ db, rules }, entry, session.user.id, doorSession(session)),

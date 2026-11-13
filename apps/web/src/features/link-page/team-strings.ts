@@ -36,6 +36,16 @@ export const teamStrings = {
   zipped: (count: number) => `${count.toLocaleString()} QR ${count === 1 ? 'code' : 'codes'} downloaded.`,
   zipFailed: 'The QR codes didn’t download. Try again.',
   qrFailed: 'The QR code didn’t download. Try again.',
+  walletPass: 'Download Wallet pass',
+  walletAll: 'Download all Wallet passes',
+  walletZipped: (count: number) => `${count.toLocaleString()} Wallet ${count === 1 ? 'pass' : 'passes'} downloaded.`,
+  walletFailed: 'The Wallet pass didn’t download. Try again.',
+  walletNotYours: 'Only an owner can download an owner’s Wallet pass.',
+  walletAllFailed: 'The Wallet passes didn’t download. Try again.',
+  walletSomeFailed: (count: number, missed: number) =>
+    `${count.toLocaleString()} downloaded. ${missed.toLocaleString()} didn’t; try again for the rest.`,
+  walletZipName: (workspace: string) =>
+    `${workspace.trim().replace(/\s+/g, '-').toLowerCase() || 'team'}-wallet-passes.zip`,
   copied: 'Link copied.',
   loadFailed: 'Team pages didn’t load.',
   retry: 'Try again',

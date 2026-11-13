@@ -581,6 +581,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       checkHandle: os.teamPages.checkHandle.handler(notServed),
       suggestHandle: os.teamPages.suggestHandle.handler(notServed),
       editedBy: os.teamPages.editedBy.handler(notServed),
+      walletPass: os.teamPages.walletPass.handler(notServed),
     },
     profile: {
       get: os.profile.get.handler(notServed),

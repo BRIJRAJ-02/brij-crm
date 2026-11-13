@@ -3,6 +3,8 @@ import {
   addPageOnlyPerson,
   cancelLoginInvite,
   cancelPageInvite,
+  enterTeamLinkPage,
+  getMyProfile,
   inviteToClaimLogin,
   inviteToManagePage,
   checkTeamHandle,
@@ -17,6 +19,7 @@ import {
   type PageInviteToSend,
 } from '@crm/core';
 import { renderMemberInvite } from '@crm/emails';
+import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
@@ -62,6 +65,14 @@ async function mailHandover(
   }
 }
 
+/**
+ * How many Wallet passes Team pages makes: each one is signed, which holds the process for a moment, so the window
+ * is short. 40 in ten seconds a person (the screen asks one at a time, so a team's zip stays under it), and 80 a
+ * workspace, so several managers at once can't queue more.
+ */
+const WALLET_PASSES = { window: 10, max: 40 } as const;
+const WALLET_PASSES_WORKSPACE = { window: 10, max: 80 } as const;
+
 // Team link pages (spec 0070, slice 1): everyone's link page in the workspace for a holder of
 // `link_pages.manage_team` (checked in packages/core before anything is read), a handle claimed for someone, and who
 // last changed the caller's own page. Editing a member's page goes through the `profile.*` procedures with `member`.
@@ -69,9 +80,34 @@ async function mailHandover(
 // identity login (`context.pageOnlyUsers`), never the app's.
 export const teamPagesRouter = member.teamPages.router({
   // Inside a connected app's frame, a login invitation's address is left out (spec 0070, AC-7023).
-  list: member.teamPages.list.handler(({ context }) =>
-    listTeamLinkPages(context.scope, new Date(), { fromFrame: context.embed !== undefined }),
-  ),
+  list: member.teamPages.list.handler(async ({ context }) => {
+    const listed = await listTeamLinkPages(context.scope, new Date(), { fromFrame: context.embed !== undefined });
+    return context.pagePass === undefined ? listed : { ...listed, hasWallet: true };
+  }),
+  // One person's Apple Wallet pass (13 Nov 2026). The team door first (`link_pages.manage_team`, then an active
+  // member of this workspace; the caller's own row is their own page), then the pass their Live page offers anyone.
+  walletPass: member.teamPages.walletPass.handler(async ({ context, input }) => {
+    const none = () => apiError('NOT_FOUND', 'There’s no Wallet pass for this page. Make the page Live first.');
+    const make = context.pagePass;
+    if (make === undefined) throw none();
+    const { principal } = context.scope.access;
+    const isOwn = principal.kind === 'member' && principal.memberId === input.member;
+    const page = isOwn ? context.scope : await enterTeamLinkPage(context.scope, input.member);
+    const { handle } = await getMyProfile(page);
+    if (handle === undefined) throw none();
+    const mine = await context.limiter.consumeRateLimit(`team-wallet-pass:${context.user.id}`, WALLET_PASSES);
+    const ours = await context.limiter.consumeRateLimit(
+      `team-wallet-pass:ws:${context.scope.workspaceId}`,
+      WALLET_PASSES_WORKSPACE,
+    );
+    if (!mine.allowed || !ours.allowed) {
+      throw apiError('RATE_LIMITED', 'Too many passes at once. Wait a moment and try again.');
+    }
+    // Held to this workspace: the handle was read here, and the pass is only ever this workspace's page's.
+    const made = await make(handle, context.scope.workspaceId);
+    if (made === undefined) throw none();
+    return { name: `${made.handle}.pkpass`, data: Buffer.from(made.bytes).toString('base64') };
+  }),
   claim: member.teamPages.claim.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       claimTeamHandle(context.scope, { member: input.member, handle: input.handle }, sourceOf(context)),
