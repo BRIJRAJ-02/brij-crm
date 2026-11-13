@@ -15,7 +15,7 @@
     gap: var(--space-16);
     margin-inline: auto;
     padding-block-end: calc(var(--size-topbar) * 2);
-    max-inline-size: calc(var(--size-panel) + var(--size-column-max) + var(--space-32) * 3);
+    max-inline-size: calc(var(--size-panel) + var(--size-measure) + var(--space-32) * 3);
   }
 
   /* The header: the name, its kind and whether it is open, its one line, and where it is. */
@@ -87,7 +87,7 @@
 
   .description {
     margin: 0;
-    max-inline-size: var(--size-column-max);
+    max-inline-size: var(--size-measure);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     color: var(--text-secondary);
@@ -212,7 +212,7 @@
 
   .about {
     margin: 0;
-    max-inline-size: var(--size-column-max);
+    max-inline-size: var(--size-measure);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     white-space: pre-line;
@@ -220,7 +220,7 @@
 
   .amenities {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-column) + var(--size-column-min)), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-20) * 14), 1fr));
     gap: var(--space-8) var(--space-16);
     margin: 0;
     padding: 0;
@@ -376,7 +376,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .head > *,
+    /* The header's lines keep their fade and drop the rise. */
+    .head > * {
+      --distance-medium: 0;
+    }
+
     .bar {
       animation: none;
     }

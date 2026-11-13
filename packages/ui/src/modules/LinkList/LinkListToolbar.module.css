@@ -1,0 +1,23 @@
+/* LinkListToolbar: the search field (size-column-wide at most) with the list's action at the other end. Its own
+   module, so a page that draws only the search loads none of LinkList's. A LinkList it heads gives it room through
+   --link-toolbar-block and --link-toolbar-inline (compact, and on a page). */
+@layer components {
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--link-toolbar-block, 0) var(--link-toolbar-inline, 0);
+  }
+
+  .search {
+    flex: 0 1 var(--size-column-wide);
+    min-inline-size: 0;
+  }
+
+  .listActions {
+    display: flex;
+    flex: none;
+    gap: var(--space-8);
+  }
+}

@@ -66,7 +66,9 @@ export {
 } from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
-export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';
+export { LinkList, type LinkRow } from '../modules/LinkList/LinkList.tsx';
+/** The profile's search over its links, from its own file, so a page that draws only it loads none of the list. */
+export { LinkListToolbar } from '../modules/LinkList/LinkListToolbar.tsx';
 /** The link page at `/<handle>` (spec 0051): the person, their blocks in their order, the foot. */
 export {
   LinkPage,

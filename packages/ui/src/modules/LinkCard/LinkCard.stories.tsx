@@ -200,7 +200,7 @@ export const Pending: Story = {
   },
 };
 
-/** Focused from the keyboard: the whole card takes the outline ring (in forced colours, the title draws an outline). */
+/** Focused from the keyboard: the whole card takes the outline ring, kept as it is in forced colours. */
 export const Focused: Story = {
   play: async ({ canvas }) => {
     await userEvent.tab();

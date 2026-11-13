@@ -410,11 +410,5 @@
     .sheet {
       border-color: CanvasText;
     }
-
-    /* Shadows go in forced colours, so focus draws a real outline. */
-    .title[data-focus-visible] {
-      outline: var(--border-width-thick) solid Highlight;
-      outline-offset: var(--border-width-hairline);
-    }
   }
 }

@@ -112,7 +112,7 @@ References (Mobbin, 20 October 2026):
 
 **Hover:** fine pointer only; the edge turns `border` and the card takes `shadow-xs`.
 
-**Focus:** focus on the title rings the whole card with the outline ring. In forced colours the title draws a Highlight outline.
+**Focus:** focus on the title rings the whole card with the outline ring, which forced colours keep as it is.
 
 The switch and the buttons have their own hover, focus and pressed states. Nothing moves on press.
 

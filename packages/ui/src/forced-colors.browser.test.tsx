@@ -33,7 +33,10 @@ describe('forced colours', () => {
     await Story.run();
     const focused = document.activeElement;
     if (!(focused instanceof HTMLElement)) throw new Error('the story left nothing focused');
-    const style = getComputedStyle(focused);
+    // The ring may sit on the focused element or on the part round it (LinkCard rings the whole card, spec 0072).
+    let ringed: HTMLElement | null = focused;
+    while (ringed !== null && getComputedStyle(ringed).outlineStyle === 'none') ringed = ringed.parentElement;
+    const style = getComputedStyle(ringed ?? focused);
     expect(style.outlineStyle).not.toBe('none');
     expect(Number.parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
   });

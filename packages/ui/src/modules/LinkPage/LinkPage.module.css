@@ -290,8 +290,7 @@
     --scale-press: var(--scale-medium);
     --label-swap: var(--duration-fast);
     --social-arrive: var(--duration-fast);
-    /* stylelint-disable-next-line unit-disallowed-list -- a lift with no token, the public pages' own */
-    --social-lift: 2px;
+    --social-lift: var(--space-2);
     --page-surface: var(--surface);
     --page-text: var(--text);
     --page-text-quiet: var(--text-secondary);
@@ -887,9 +886,11 @@
   }
 
   /* Every row lifts 2px with a soft shadow under the pointer and eases down while held (the prototype's link
-     buttons; the press is the public pages' own `--scale-press`). */
+     buttons; the press is the public pages' own `--scale-press`). The hover is its parent's (the list item, a bento
+     cell, a folder's heading), which never moves: keyed on the row, a pointer in the band the lift leaves would drop
+     it and the row would flicker. What doesn't move the row (the end mark, Night's glow) stays the row's own. */
   @media (hover: hover) and (pointer: fine) {
-    .block:not([data-loading], [data-inert], [data-ghost]):hover {
+    :hover > .block:not([data-loading], [data-inert], [data-ghost]) {
       background: var(--page-card-hover);
       box-shadow: var(--shadow-sm);
       transform: translateY(calc(var(--social-lift) * -1));
@@ -1017,7 +1018,7 @@
 
   /* A booking page's row (the v5 mock): its border a step stronger and its chevron nudged on, under the pointer. */
   @media (hover: hover) and (pointer: fine) {
-    .block[data-row='page']:hover {
+    :hover > .block[data-row='page'] {
       border-color: var(--border-strong);
     }
 
@@ -1050,14 +1051,15 @@
   }
 
   /* After the lift, so a held row drops it and eases down. */
-  .block:not([data-loading], [data-inert]):active {
+  .block:not([data-loading], [data-inert], [data-ghost]):active {
     transform: scale(var(--scale-press));
   }
 
   /* Reduced motion: no row lifts, eases down or nudges its chevron; the colours still change. */
   @media (prefers-reduced-motion: reduce) {
-    .block:not([data-loading], [data-inert]):is(:hover, :active),
-    .block[data-row='page'] .end {
+    :hover > .block:not([data-loading], [data-inert], [data-ghost]),
+    .block:not([data-loading], [data-inert], [data-ghost]):active,
+    .block[data-row='page']:hover .end {
       transform: none;
       translate: none;
     }

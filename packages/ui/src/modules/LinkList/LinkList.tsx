@@ -10,11 +10,14 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
-import { Field } from '../../molecules/Field/Field.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './LinkList.module.css';
+import { LinkListToolbar } from './LinkListToolbar.tsx';
 import type { RowGrip, RowOrderProps } from './RowOrder.tsx';
 import { strings } from './strings.ts';
+
+/** LinkList's search and action, in their own file (the guest profile page draws only these); kept here too. */
+export { LinkListToolbar, type LinkListToolbarProps } from './LinkListToolbar.tsx';
 
 /** A row's on or off switch: a booking page's visibility, a form's Accepting. */
 export interface LinkToggle {
@@ -199,52 +202,6 @@ export interface LinkListProps {
   readonly hasRowMotion?: boolean;
   /** With `hasRowMotion`: a leaving row finished closing up (or its motion couldn't run), so the screen drops it. */
   readonly onLeft?: (id: string) => void;
-}
-
-/** Props for LinkListToolbar. */
-export interface LinkListToolbarProps {
-  /** The search field's name ("Search booking pages"). */
-  readonly searchLabel: string;
-  readonly query: string;
-  readonly onQueryChange: (query: string) => void;
-  /** After the search: the list's own action (New booking page, New form). */
-  readonly actions?: ReactNode;
-  /** While the list loads or failed, the search waits. */
-  readonly isSearchDisabled?: boolean;
-  /** `sm` sits in a tab strip; `md` (the default) above the rows. */
-  readonly size?: 'sm' | 'md';
-}
-
-/**
- * LinkList's search and action, for a page that draws them elsewhere: Captures puts them at the end of its
- * Links · Forms strip (the owner's call, 20 October 2026), with the list's `query` held by the page.
- */
-export function LinkListToolbar({
-  searchLabel,
-  query,
-  onQueryChange,
-  actions,
-  isSearchDisabled = false,
-  size = 'md',
-}: LinkListToolbarProps) {
-  return (
-    <div className={styles.toolbar} data-size={size}>
-      <span className={styles.search}>
-        <Field
-          label={searchLabel}
-          isLabelHidden
-          placeholder={strings.search}
-          variant="search"
-          type="search"
-          size={size}
-          value={query}
-          onChange={onQueryChange}
-          isDisabled={isSearchDisabled}
-        />
-      </span>
-      {actions !== undefined && <div className={styles.listActions}>{actions}</div>}
-    </div>
-  );
 }
 
 /** How long a leaving row may take before it goes anyway: about 2.5 × `duration-fast`, well past its motion. */

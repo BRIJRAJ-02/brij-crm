@@ -32,11 +32,11 @@ Not in the artifact yet; it goes with the next `pnpm ui:artifact` publish. Its s
 
 The prototype's BusinessPage is Fresha's venue page (cover, services, a person to see, the booking card in steps); the library's is the owner's restaurant page after checklabs (gallery, menu, About, hours, location, Reserve), the public business page, which the owner approved on 24 October. One look (decision 16) on a guest page: only what visibly differs and costs nothing moved.
 
-- **Header**: the name `text-title-lg`, the facts `text-body` in `text-secondary`, as the prototype's. Its lines now rise as the prototype's do: `duration-very-slow` on `ease-smooth-out` from `distance-medium` below, `duration-stagger` apart (the fourth and fifth lines together, as before, which saves a rule). Reduced motion: no rise.
+- **Header**: the name `text-title-lg`, the facts `text-body` in `text-secondary`, as the prototype's. Its lines now rise as the prototype's do: `duration-very-slow` on `ease-smooth-out` from `distance-medium` below, `duration-stagger` apart (the fourth and fifth lines together, as before, which saves a rule). Reduced motion: no rise, the lines still fade in.
 - **Section tabs**: sticky under the top, `text-body-strong` in `text-secondary`, current in `text`, as the prototype's Tabs. Focus is the outline ring (`border-width-focus` solid `focus-ring`) just inside the tab, since the tabs scroll sideways and clip an outside ring (was `shadow-focus-inset`).
 - **Menu rows** (BusinessMenu) take the prototype's service rows: `space-12` of room between hairlines (was 16), the name `text-body-lg-strong` (500 16/24, was `text-heading`), the price `text-heading` (500 15/22, was `text-body-strong`).
 - **Gallery**: a photo's focus is the outline ring just inside its clipped corner, in `focus-ring` (was the accent at `border-width-thick`); the forced colours override went, since an outline shows there by itself.
-- **Amenities**: their column's least width is `size-column` + `size-column-min` (280, was the legacy `size-measure-sm`).
+- **Amenities**: their column's least width is fourteen `space-20` steps (280, was the legacy `size-measure-sm`; `size-sidebar` is the sidebar's own). The page's, About's and the menu's measure is `size-measure` (640, was the legacy table column's `size-column-max`).
 
 **Use it for** a place's public page at its handle. **Don't use it for** a person's link page (LinkPage) or a booking page.
 

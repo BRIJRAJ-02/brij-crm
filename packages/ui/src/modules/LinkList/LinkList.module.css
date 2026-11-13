@@ -1,5 +1,5 @@
 /* LinkList (spec 0025's Cal.com alignment, the event types list; the Timefix prototype's list card, spec 0072): a
-   search field (size-column-wide at most) with the list's action at the other end, then rows about 60px tall, parted
+   search field with the list's action at the other end (LinkListToolbar, its own module), then rows about 60px tall, parted
    by a border-subtle hairline in a surface box with a border-subtle edge and radius-lg corners. Each row opens its
    link: surface-hover under a pointer and while pressed (a wash, never a scale), the outline ring just inside the
    row from the keyboard. Left: the title (body-strong, the text colour) with the address inline in the muted
@@ -22,24 +22,6 @@
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-12);
-  }
-
-  .search {
-    flex: 0 1 var(--size-column-wide);
-    min-inline-size: 0;
-  }
-
-  .listActions {
-    display: flex;
-    flex: none;
-    gap: var(--space-8);
   }
 
   .root {
@@ -607,17 +589,16 @@
   }
 
   /* Compact: the list is the container, so its rows can drop the facts when it is narrow. */
+  /* LinkListToolbar's room (its own module): space-8 above and below in compact, the page's gutter on a page. */
   .frame[data-density='compact'] {
+    --link-toolbar-block: var(--space-8);
+
     gap: 0;
     container-type: inline-size;
   }
 
-  .frame[data-density='compact'] .toolbar {
-    padding-block: var(--space-8);
-  }
-
-  .frame[data-placement='page'] .toolbar {
-    padding-inline: var(--space-16);
+  .frame[data-placement='page'] {
+    --link-toolbar-inline: var(--space-16);
   }
 
   .frame[data-density='compact'] .root {

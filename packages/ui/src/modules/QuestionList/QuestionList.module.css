@@ -4,7 +4,7 @@
    tile, the question (muted while untitled) with Required beside it, and
    under it, muted, the type, its choices and where it is filed; a chevron
    at the end. The drag handle shows on hover or focus for a pointer. An
-   open card fills its head and shows its editor under a hairline. A card a
+   open card takes the accent edge and shows its editor under a hairline. A card a
    publish refused takes the danger edge. A dragged card fades; the drop
    line is a thick accent rule.
 
@@ -382,7 +382,7 @@
       pointer-events: none;
     }
 
-    /* The chevron answers a pointer too, so an open head (which keeps its selected fill) still reacts. */
+    /* The chevron answers a pointer too, beside the head's hover fill. */
     .head:hover .chevron {
       color: var(--text);
     }
@@ -636,6 +636,11 @@
     /* Lifted, where the shadow and surface are gone. */
     .row[data-dragging] {
       outline: var(--border-width-thick) solid Highlight;
+    }
+
+    /* Open, where the accent ring is gone: the edge takes the selection colour. */
+    .row[data-open] {
+      border-color: Highlight;
     }
   }
 }

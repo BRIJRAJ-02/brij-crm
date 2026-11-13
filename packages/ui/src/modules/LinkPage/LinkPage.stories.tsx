@@ -1371,3 +1371,35 @@ export const BrandedFocusRing: Story = {
     await expect(getComputedStyle(row).outlineColor).toBe('rgb(230, 87, 8)');
   },
 };
+
+/**
+ * With no brand the ring falls back to the library's own `focus-ring`, through the same chain of names. A cycle in
+ * that chain would leave the outline the text's colour, so the play reads the token outside the page and matches it.
+ */
+export const FocusRingWithoutBrand: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    settleEntrance(canvasElement);
+    const row = canvas.getByRole('link', { name: /Intro call/ });
+    await userEvent.tab();
+    while (document.activeElement !== row && canvasElement.contains(document.activeElement)) {
+      await userEvent.tab();
+    }
+    await expect(row).toHaveFocus();
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--focus-ring)';
+    canvasElement.append(probe);
+    const token = getComputedStyle(probe).color;
+    probe.remove();
+    const ring = getComputedStyle(row);
+    await expect(ring.outlineStyle).toBe('solid');
+    await expect(ring.outlineColor).toBe(token);
+    await expect(ring.outlineColor).not.toBe(ring.color);
+  },
+};

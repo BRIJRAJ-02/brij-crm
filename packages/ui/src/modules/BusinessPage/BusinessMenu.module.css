@@ -62,7 +62,7 @@
     overflow: hidden;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-    max-inline-size: var(--size-column-max);
+    max-inline-size: var(--size-measure);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     color: var(--text-secondary);
