@@ -15,6 +15,7 @@ import { HostsCard } from './HostsCard.tsx';
 import { LinksScreen } from './LinksScreen.tsx';
 import { NewPageDialog } from './NewPageDialog.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
+import { TeamLinksMenu } from './TeamLinksMenu.tsx';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { strings } from './strings.ts';
 
@@ -359,5 +360,38 @@ describe('A workspace link’s Hosts', () => {
     await expect.element(page.getByRole('button', { name: rotationStrings.host.addHost })).toBeVisible();
     expect(update).not.toHaveBeenCalled();
     await checkEverywhere('hosts-picked');
+  });
+});
+
+describe('Team links › Share (spec 0074, AC-7406)', () => {
+  it('shares the workspace link in the one share sheet, beside its one press Copy link', async () => {
+    const workspaceLink = pageOf('2', 'Talk to us', {
+      kind: 'round_robin',
+      scope: 'workspace',
+      canChange: false,
+      hosts: { fixed: [], rotations: [ROSTER.id] },
+    });
+    const data = {
+      bookingPages: {
+        view: () => held({ status: 'ready' as const, items: [workspaceLink], pendingIds: new Set<string>() }),
+      },
+      rotations: { view: () => held({ status: 'ready' as const, items: [ROSTER], pendingIds: new Set<string>() }) },
+    } as unknown as DataLayer;
+    shown = await renderInApp(() => <TeamLinksMenu slug="acme" />, {
+      data,
+      pattern: '/w/$slug/captures/links',
+      at: '/w/acme/captures/links',
+      permissions: ['booking.admin'],
+    });
+    await userEvent.click(page.getByRole('button', { name: strings.teamLinks }));
+    // Copy link is still there, one press; Share sits beside it.
+    await expect.element(page.getByRole('menuitem', { name: strings.copyLink })).toBeVisible();
+    await userEvent.click(page.getByRole('menuitem', { name: strings.share }));
+    const sheet = page.getByRole('dialog', { name: 'Share Talk to us' });
+    await expect.element(sheet.getByRole('img', { name: 'QR code for Talk to us' })).toBeInTheDocument();
+    // A member who can't change the workspace link gets no ways that change it.
+    expect(sheet.getByRole('link', { name: 'Offer specific times' }).query()).toBeNull();
+    expect(sheet.getByRole('link', { name: 'Put it on your site' }).query()).toBeNull();
+    await checkEverywhere('share-workspace-link', () => document.querySelector('[role="dialog"]'));
   });
 });

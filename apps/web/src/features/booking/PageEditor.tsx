@@ -123,6 +123,7 @@ import { insightsHref } from '../insights/search.ts';
 import { activityStrings } from './activity-strings.ts';
 import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
 import { ShareTimesCard } from './ShareTimesCard.tsx';
+import { BookingShareSheet, usePreloadBookingShare } from './BookingShareSheet.tsx';
 import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
@@ -377,6 +378,9 @@ export function PageEditor({
   // Sharing (spec 0037, AC-1331): whoever may change the page sees its editors; only an admin changes them.
   const canShare = useCan('booking.admin');
   const [isSharing, setSharing] = useState(false);
+  // Share: the one share sheet for this page (spec 0074, AC-7406), its code loaded when the editor is idle.
+  const [isShareOpen, setShareOpen] = useState(false);
+  usePreloadBookingShare();
   // Mounted from its first opening on, so the dialog keeps its rows while it plays its exit.
   const [hasShared, setShared] = useState(false);
   const { toasts } = useRouteContext({ from: '__root__' });
@@ -1094,6 +1098,10 @@ export function PageEditor({
                 isIconOnly
               />
             </Tooltip>
+            {/* Share beside the one press Copy link: the link, its QR code and the page's own ways, in one sheet. */}
+            <Tooltip content={strings.share}>
+              <Button variant="ghost" icon="share" label={strings.share} onPress={() => setShareOpen(true)} />
+            </Tooltip>
             <Tooltip content={strings.previewTip}>
               <Button
                 variant="ghost"
@@ -1177,6 +1185,12 @@ export function PageEditor({
         ),
         body: (
           <>
+            <BookingShareSheet
+              slug={slug}
+              page={isShareOpen ? page : undefined}
+              isOwnPage={isOwnPage}
+              onClose={() => setShareOpen(false)}
+            />
             <Modal
               title={sharingStrings.title}
               isOpen={isSharing}

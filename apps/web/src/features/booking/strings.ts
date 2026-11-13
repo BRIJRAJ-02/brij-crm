@@ -16,6 +16,15 @@ export const strings = {
   addLinkOnlyPage: 'New link only page',
   newButton: 'New',
   copyLink: 'Copy link',
+  /** Share: the one share sheet for a page (spec 0074, AC-7406). */
+  share: 'Share',
+  shareSheet: {
+    title: (title: string) => `Share ${title}`,
+    invite: 'Pick a time that suits you:',
+    offerTimes: 'Offer specific times',
+    oneTimeLink: 'One-time link',
+    addToLinkPage: 'Add to link page',
+  },
   more: (title: string) => `More for ${title}`,
   openNewTab: 'Open in a new tab',
   visibility: 'Visibility',

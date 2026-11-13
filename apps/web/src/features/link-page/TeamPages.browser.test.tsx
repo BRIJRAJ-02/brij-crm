@@ -319,6 +319,20 @@ describe('Invite to manage their page (9 Nov 2026)', () => {
   );
 });
 
+describe('Share (spec 0074, AC-7406)', () => {
+  it('shares a page from its row in the one share sheet, keeping Copy link and the downloads', async () => {
+    await renderTeam(layerWith(ready).data);
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share Bea Rao’s page' });
+    await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    await expect.element(sheet.getByRole('link', { name: 'Open page' })).toBeVisible();
+    await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+    await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+  });
+});
+
 describe('QR codes (AC-7003)', () => {
   it('offers PNG and SVG on a page’s row, and nothing to download for a row with no page', async () => {
     await renderTeam(layerWith(ready).data);

@@ -39,6 +39,11 @@ import { CancelPageInvite, PageInviteDialog } from './PageInviteDialog.tsx';
 import { useLinkPagePlace } from './place.tsx';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
 import { teamStrings as strings } from './team-strings.ts';
+import { shareStrings } from './share-strings.ts';
+import { lazyShareSheet } from '../share/LazyShareSheet.tsx';
+
+/** The one share sheet, loaded apart from the screen's first paint (spec 0074, AC-7419). */
+const { ShareSheet, usePreload: usePreloadSheet } = lazyShareSheet(() => import('../share/share-sheet.ts'));
 
 /** Props for Team pages. */
 export interface TeamPagesScreenProps {
@@ -82,6 +87,11 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   // A page only person being handed their page, and one whose open invitation is being cancelled.
   const [inviting, setInviting] = useState<TeamLinkPage | undefined>(undefined);
   const [uninviting, setUninviting] = useState<TeamLinkPage | undefined>(undefined);
+  // Share from a row's ⋯ (spec 0074, AC-7406): the page last shared stays drawn while the sheet plays its exit.
+  const [sharing, setSharing] = useState<TeamLinkPage | undefined>(undefined);
+  const [shared, setShared] = useState<TeamLinkPage | undefined>(undefined);
+  if (sharing !== undefined && sharing !== shared) setShared(sharing);
+  usePreloadSheet();
   // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks);
   // the frame has no workspace access to read, so it is never drawn there (AC-7046).
   const canInvite = useCan('members.invite');
@@ -153,6 +163,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           if (key === 'uninvite' || key === 'unlogin') setUninviting(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
+          if (key === 'share') setSharing(page);
           // One download at a time: a second press while one is drawn waits for it rather than being lost.
           if ((key === 'png' || key === 'svg') && drawing === undefined) {
             setDrawing({ kind: 'one', handle: page.handle, format: key });
@@ -170,6 +181,9 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
             </MenuItem>
             <MenuItem id="copy" icon="copy">
               {strings.copyLink}
+            </MenuItem>
+            <MenuItem id="share" icon="share">
+              {strings.share}
             </MenuItem>
             <MenuItem id="open" icon="external-link" href={publicProfileUrl(page.handle)} isExternal>
               {strings.openPage}
@@ -385,6 +399,22 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                     toasts.toast({ tone: 'success', message: strings.claimed(claimed.handle, claimed.name) });
                   }
                 }}
+              />
+            )}
+            {shared?.handle === undefined ? null : (
+              <ShareSheet
+                isOpen={sharing !== undefined}
+                onOpenChange={(isOpen) => {
+                  if (!isOpen) setSharing(undefined);
+                }}
+                title={strings.shareTitle(shared.name)}
+                url={publicProfileUrl(shared.handle)}
+                name={shareStrings.name(shared.handle)}
+                extra={
+                  <ButtonLink variant="ghost" icon="external-link" href={publicProfileUrl(shared.handle)} isExternal>
+                    {strings.openPage}
+                  </ButtonLink>
+                }
               />
             )}
             {adding !== undefined && (

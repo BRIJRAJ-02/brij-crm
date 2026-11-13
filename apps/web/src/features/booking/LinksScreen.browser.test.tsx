@@ -212,3 +212,27 @@ describe('hiding a booking page from its card', () => {
     expect(document.body.textContent).not.toContain('Quick chat is hidden');
   });
 });
+
+describe('sharing a booking page from its card (spec 0074, AC-7406)', () => {
+  it('opens the one share sheet with the page’s own ways, and the card keeps its one press Copy link', async () => {
+    await renderLinks([pageOf('p1', 'Quick chat')]);
+    // Copy link stays on the card, one press (owner, 5 November 2026).
+    await expect.element(page.getByRole('button', { name: /Copy link/ }).first()).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'More for Quick chat' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Share' }));
+    const sheet = page.getByRole('dialog', { name: 'Share Quick chat' });
+    await expect.element(sheet.getByRole('img', { name: 'QR code for Quick chat' })).toBeInTheDocument();
+    await expect.element(sheet.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    await expect
+      .element(sheet.getByRole('link', { name: 'Offer specific times' }))
+      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share');
+    await expect.element(sheet.getByRole('link', { name: 'One-time link' })).toBeVisible();
+    await expect
+      .element(sheet.getByRole('link', { name: 'Put it on your site' }))
+      .toHaveAttribute('href', '/w/acme/captures/links/p1?tab=share');
+    // No handle, so the page isn't on a link page: nothing offers to add it.
+    expect(sheet.getByRole('link', { name: 'Add to link page' }).query()).toBeNull();
+    await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+    await expect.poll(() => openDialog('dialog')).toBeNull();
+  });
+});

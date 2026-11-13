@@ -22,6 +22,9 @@ export const teamStrings = {
   claim: 'Claim link',
   copyLink: 'Copy link',
   openPage: 'Open page',
+  /** Share: the one share sheet for a member's page (spec 0074, AC-7406). */
+  share: 'Share',
+  shareTitle: (name: string) => `Share ${name}’s page`,
   qrPng: 'Download QR code (PNG)',
   qrSvg: 'Download QR code (SVG)',
   downloadAll: 'Download all QR codes',

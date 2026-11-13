@@ -6,8 +6,10 @@
 // out, never shown turned off; with nothing to offer, the menu isn't there.
 import { useCaptureList } from '@crm/data/react';
 import { Button, Menu, MenuItem, MenuSection, MenuTrigger } from '@crm/ui';
+import { useState } from 'react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCan } from '../workspace/WorkspacePage.tsx';
+import { BookingShareSheet, usePreloadBookingShare } from './BookingShareSheet.tsx';
 import { bookingsSettingsHref, linksHref, pageEditorHref, publicBookingUrl } from './links.ts';
 import { strings } from './strings.ts';
 import { followsEveryone } from './team-readiness.ts';
@@ -32,6 +34,9 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
   const canManageTeams = useCan('booking.manage');
   const list = useCaptureList(data.bookingPages.view(slug));
   const rotations = useCaptureList(data.rotations.view(slug));
+  // Share the workspace link: the one share sheet (spec 0074, AC-7406), beside its one press Copy link.
+  const [isSharing, setSharing] = useState(false);
+  usePreloadBookingShare();
   // While the pages load, the button holds its place (turned off) for anyone who may have something in it, so New
   // never shifts when it arrives (design review, 5 November 2026).
   if (list.status === 'loading' || rotations.status === 'loading') {
@@ -68,62 +73,76 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
     );
   };
   return (
-    <MenuTrigger>
-      <Button icon="users" iconRight="chevron-down" label={strings.teamLinks} isLabelCollapsible>
-        {strings.teamLinks}
-      </Button>
-      <Menu
-        label={strings.teamLinks}
-        onAction={(key) => {
-          if (key === 'copy' && workspace !== undefined) copy(publicBookingUrl(workspace));
-          if (key === 'edit' && workspace !== undefined) {
-            void navigate({ href: pageEditorHref(slug, workspace.id, 'hosts') });
-          }
-          if (key === 'new-workspace') {
-            if (onNew === undefined) void navigate({ href: `${linksHref(slug)}?new=workspace` });
-            else onNew('workspace');
-          }
-          if (key === 'new-team-link') {
-            if (onNew === undefined) void navigate({ href: `${linksHref(slug)}?new=team-link` });
-            else onNew('team-link');
-          }
-          if (key === 'teams') void navigate({ href: bookingsSettingsHref(slug, 'teams') });
-        }}
-      >
-        {hasWorkspaceItems ? (
-          <MenuSection label={strings.workspaceLink}>
-            {canCopy && (
-              <MenuItem id="copy" icon="copy">
-                {strings.copyLink}
-              </MenuItem>
-            )}
-            {workspace?.canChange === true && (
-              <MenuItem id="edit" icon="pencil">
-                {strings.editHoursAndHosts}
-              </MenuItem>
-            )}
-            {canMake && (
-              <MenuItem id="new-workspace" icon="plus">
-                {strings.addWorkspaceLink}
-              </MenuItem>
-            )}
-          </MenuSection>
-        ) : null}
-        {canMakeTeamLink || canManageTeams ? (
-          <MenuSection label={strings.teamsSection}>
-            {canMakeTeamLink ? (
-              <MenuItem id="new-team-link" icon="git-branch" description={strings.teamLinkLine}>
-                {strings.addTeamLink}
-              </MenuItem>
-            ) : null}
-            {canManageTeams ? (
-              <MenuItem id="teams" icon="users">
-                {strings.manageTeams}
-              </MenuItem>
-            ) : null}
-          </MenuSection>
-        ) : null}
-      </Menu>
-    </MenuTrigger>
+    <>
+      <MenuTrigger>
+        <Button icon="users" iconRight="chevron-down" label={strings.teamLinks} isLabelCollapsible>
+          {strings.teamLinks}
+        </Button>
+        <Menu
+          label={strings.teamLinks}
+          onAction={(key) => {
+            if (key === 'copy' && workspace !== undefined) copy(publicBookingUrl(workspace));
+            if (key === 'share') setSharing(true);
+            if (key === 'edit' && workspace !== undefined) {
+              void navigate({ href: pageEditorHref(slug, workspace.id, 'hosts') });
+            }
+            if (key === 'new-workspace') {
+              if (onNew === undefined) void navigate({ href: `${linksHref(slug)}?new=workspace` });
+              else onNew('workspace');
+            }
+            if (key === 'new-team-link') {
+              if (onNew === undefined) void navigate({ href: `${linksHref(slug)}?new=team-link` });
+              else onNew('team-link');
+            }
+            if (key === 'teams') void navigate({ href: bookingsSettingsHref(slug, 'teams') });
+          }}
+        >
+          {hasWorkspaceItems ? (
+            <MenuSection label={strings.workspaceLink}>
+              {canCopy && (
+                <MenuItem id="copy" icon="copy">
+                  {strings.copyLink}
+                </MenuItem>
+              )}
+              {canCopy && (
+                <MenuItem id="share" icon="share">
+                  {strings.share}
+                </MenuItem>
+              )}
+              {workspace?.canChange === true && (
+                <MenuItem id="edit" icon="pencil">
+                  {strings.editHoursAndHosts}
+                </MenuItem>
+              )}
+              {canMake && (
+                <MenuItem id="new-workspace" icon="plus">
+                  {strings.addWorkspaceLink}
+                </MenuItem>
+              )}
+            </MenuSection>
+          ) : null}
+          {canMakeTeamLink || canManageTeams ? (
+            <MenuSection label={strings.teamsSection}>
+              {canMakeTeamLink ? (
+                <MenuItem id="new-team-link" icon="git-branch" description={strings.teamLinkLine}>
+                  {strings.addTeamLink}
+                </MenuItem>
+              ) : null}
+              {canManageTeams ? (
+                <MenuItem id="teams" icon="users">
+                  {strings.manageTeams}
+                </MenuItem>
+              ) : null}
+            </MenuSection>
+          ) : null}
+        </Menu>
+      </MenuTrigger>
+      <BookingShareSheet
+        slug={slug}
+        page={isSharing && canCopy ? workspace : undefined}
+        isOwnPage={false}
+        onClose={() => setSharing(false)}
+      />
+    </>
   );
 }

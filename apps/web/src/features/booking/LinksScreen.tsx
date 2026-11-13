@@ -29,6 +29,7 @@ import { managedPageHref, pageEditorHref, publicBookingUrl, type PageTab } from 
 import { cardFacts, cardIcon, cardPeople } from './page-card.ts';
 import { liveRefusal, setPageLive } from './page-status.ts';
 import { PageStatusMenu } from './PageStatusMenu.tsx';
+import { BookingShareSheet, usePreloadBookingShare } from './BookingShareSheet.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { strings } from './strings.ts';
 import { deletePageWithUndo } from './delete-page.ts';
@@ -80,6 +81,9 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const templateList = useCaptureList(data.managedPages.view(slug));
   const [deletingTemplate, setDeletingTemplate] = useState<ManagedPageView | undefined>(undefined);
   const create = useCapturesCreate();
+  // Share from a card's ⋯: the one share sheet (spec 0074, AC-7406), its code loaded once the list is idle.
+  const [sharing, setSharing] = useState<BookingPageView | undefined>(undefined);
+  usePreloadBookingShare();
   const removal = useUndoableRemove(data, slug);
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
@@ -202,6 +206,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                   label={strings.more(page.title)}
                   onAction={(key) => {
                     if (key === 'view') globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
+                    if (key === 'share') setSharing(page);
                     if (key === 'duplicate') duplicate(page);
                     if (key === 'hours') open(page.id, 'hours');
                     if (key === 'embed') open(page.id, 'share');
@@ -210,6 +215,10 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                 >
                   <MenuItem id="view" icon="external-link" isDisabled={!isLive}>
                     {strings.pageCard.viewLive}
+                  </MenuItem>
+                  {/* Share beside the card's one press Copy link: the link, its QR code and the page's own ways. */}
+                  <MenuItem id="share" icon="share">
+                    {strings.share}
                   </MenuItem>
                   {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's,
                       nor one they only edit (spec 0037, AC-1331). */}
@@ -263,42 +272,54 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         data.bookingPages.view(slug).reload();
       }}
       dialogs={
-        // Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the question
-        // says so in as many words, since getting these two the wrong way round loses people's pages.
-        <Modal
-          title={managedStrings.deleteTitle(deletingTemplate?.title ?? '')}
-          variant="confirm"
-          tone="danger"
-          isOpen={deletingTemplate !== undefined}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) setDeletingTemplate(undefined);
-          }}
-          actions={
-            <>
-              <Button slot="close">{managedStrings.deleteKeep}</Button>
-              <Button
-                variant="danger-solid"
-                onPress={() => {
-                  const gone = deletingTemplate;
-                  setDeletingTemplate(undefined);
-                  if (gone === undefined) return;
-                  data.managedPages.remove(slug, gone.id).then(
-                    () => {
-                      toasts.toast({ tone: 'success', message: managedStrings.deleted(gone.title) });
-                      // The card's menu went with it: focus goes to the page's title rather than falling to the page.
-                      focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
-                    },
-                    failed(managedStrings.deleteFailed(gone.title)),
-                  );
-                }}
-              >
-                {managedStrings.deleteAction}
-              </Button>
-            </>
+        <>
+          <BookingShareSheet
+            slug={slug}
+            page={sharing}
+            isOwnPage={sharing !== undefined && sharing.ownerName === undefined && sharing.scope !== 'workspace'}
+            onClose={() => setSharing(undefined)}
+          />
+          {
+            // Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the question
+            // says so in as many words, since getting these two the wrong way round loses people's pages.
+            <Modal
+              title={managedStrings.deleteTitle(deletingTemplate?.title ?? '')}
+              variant="confirm"
+              tone="danger"
+              isOpen={deletingTemplate !== undefined}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) setDeletingTemplate(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close">{managedStrings.deleteKeep}</Button>
+                  <Button
+                    variant="danger-solid"
+                    onPress={() => {
+                      const gone = deletingTemplate;
+                      setDeletingTemplate(undefined);
+                      if (gone === undefined) return;
+                      data.managedPages.remove(slug, gone.id).then(
+                        () => {
+                          toasts.toast({ tone: 'success', message: managedStrings.deleted(gone.title) });
+                          // The card's menu went with it: focus goes to the page's title rather than falling to the page.
+                          focusLater(() =>
+                            document.activeElement === document.body ? pageHeading(document) : undefined,
+                          );
+                        },
+                        failed(managedStrings.deleteFailed(gone.title)),
+                      );
+                    }}
+                  >
+                    {managedStrings.deleteAction}
+                  </Button>
+                </>
+              }
+            >
+              <p>{managedStrings.deleteText(deletingTemplate?.members.length ?? 0)}</p>
+            </Modal>
           }
-        >
-          <p>{managedStrings.deleteText(deletingTemplate?.members.length ?? 0)}</p>
-        </Modal>
+        </>
       }
     />
   );
