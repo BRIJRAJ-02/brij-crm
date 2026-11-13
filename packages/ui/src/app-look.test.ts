@@ -24,8 +24,10 @@ describe('the app look', () => {
   it('exists for the parts guests draw that phase 1 restyled', () => {
     expect(APP_LOOKS).toEqual([
       'atoms/Button/Button.app.css',
+      'atoms/Checkbox/Checkbox.app.css',
       'atoms/FieldError/FieldError.app.css',
       'atoms/FieldLabel/FieldLabel.app.css',
+      'atoms/Radio/Radio.app.css',
       'molecules/Callout/Callout.app.css',
       'molecules/ChoiceChips/ChoiceChips.app.css',
       'molecules/Field/Field.app.css',
@@ -52,7 +54,8 @@ describe('the app look', () => {
   it.each(APP_LOOKS)('%s applies only in the app, in the app-look layer', (look) => {
     const css = readFileSync(path.join(SRC, look), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     const selectors = [...css.matchAll(/([^{};]+)\{/g)]
-      .map((match) => (match[1] ?? '').trim())
+      // One line each, as Prettier may wrap a long scope over three.
+      .map((match) => (match[1] ?? '').replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim())
       .filter((selector) => selector.startsWith('.') || selector.includes(',.') || selector.includes(', .'));
     expect(selectors.length).toBeGreaterThan(0);
     for (const group of selectors) {

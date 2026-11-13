@@ -1,0 +1,169 @@
+/* Checkbox's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw Checkbox.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. The guest menu's rows (CheckboxRow,
+   passed in by a thin wrapper) keep the shipped look, so nothing here reaches into them. */
+/* Checkbox, after the prototype's Checkbox (spec 0072): an 18px box with a 1.5px control-border edge on the surface;
+   checked and indeterminate fill it with the accent, and the tick draws itself in from the start (transitions.dev 25).
+   Pressing changes nothing's size. States read React Aria's attributes. */
+/* stylelint-disable selector-max-compound-selectors -- the guest rows' exclusion, :not(:where(…)), is part of the
+   app's scope, not a reach into another component; every selector is the module's own plus that scope. */
+@layer utilities.app-look {
+  /* The box's side, on the field and on the root alone (CheckboxMark draws the root with no field). */
+  .ws-checkbox-field:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)),
+  .ws-checkbox-root:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    --check: calc(var(--space-16) + var(--space-2));
+  }
+
+  .ws-checkbox-field:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    display: inline-flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* Positioned, so React Aria's visually hidden input stays inside the control and never stretches a scroller. */
+  .ws-checkbox-root:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ws-checkbox-box:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    /* Over the shipped module: its drop shadow and focus halo (focus is the ring). */
+    box-shadow: none;
+
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--check);
+    block-size: var(--check);
+    margin-block-start: calc((1lh - var(--check)) / 2);
+    border: calc((var(--border-width-hairline) + var(--border-width-thick)) / 2) solid var(--control-border);
+    border-radius: var(--radius-xs);
+    background: var(--check-rest, var(--surface));
+    color: var(--on-accent);
+    transition: var(--duration-quick) var(--ease-smooth-out);
+    transition-property: background-color, border-color;
+  }
+
+  .ws-checkbox-tick:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    display: inline-flex;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path var(--duration-quick) var(--ease-smooth-out);
+  }
+
+  .ws-checkbox-root[data-selected]:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *))
+    .ws-checkbox-tick {
+    clip-path: none;
+    transition: clip-path var(--duration-medium) var(--ease-smooth-out) var(--duration-stagger);
+  }
+
+  /* The edge is accent-text, which holds 3.5:1 on selected rows and raised surfaces in dark too. */
+  .ws-checkbox-root:is([data-selected], [data-indeterminate]):where([data-scale='app'] *):not(
+      :where([data-variant='row'], [data-variant='row'] *)
+    )
+    .ws-checkbox-box {
+    border-color: var(--accent-text);
+    background: var(--accent);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-checkbox-root[data-hovered]:not([data-selected], [data-indeterminate], [data-disabled]):where(
+        [data-scale='app'] *
+      ):not(:where([data-variant='row'], [data-variant='row'] *))
+      .ws-checkbox-box {
+      border-color: var(--check-hover-edge, var(--text-secondary));
+    }
+  }
+
+  .ws-checkbox-root[data-focus-visible]:where([data-scale='app'] *):not(
+      :where([data-variant='row'], [data-variant='row'] *)
+    )
+    .ws-checkbox-box {
+    outline: var(--check-focus, var(--border-width-focus) solid var(--focus-ring));
+    outline-offset: var(--border-width-focus);
+  }
+
+  .ws-checkbox-root[data-invalid]:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *))
+    .ws-checkbox-box {
+    border-color: var(--danger);
+  }
+
+  /* The control and its label fade; a description under it stays readable. */
+  .ws-checkbox-root[data-disabled]:where([data-scale='app'] *):not(
+      :where([data-variant='row'], [data-variant='row'] *)
+    ) {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* `leading`: after the box (a calendar's colour dot and name), centred on the first line, shrinking so a long
+     name is cut with an ellipsis rather than mid letter. */
+  .ws-checkbox-root:has(> .ws-checkbox-leading):where([data-scale='app'] *):not(
+      :where([data-variant='row'], [data-variant='row'] *)
+    ) {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .ws-checkbox-leading:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: 1lh;
+    overflow: hidden;
+  }
+
+  .ws-checkbox-label[data-described]:where([data-scale='app'] *):not(
+      :where([data-variant='row'], [data-variant='row'] *)
+    ) {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* Under the label, past the box (the error line too, through FieldError's `inset`). */
+  .ws-checkbox-description:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+    padding-inline-start: calc(var(--check) + var(--space-8));
+    color: var(--text-secondary);
+    font: var(--text-body-sm-tight);
+    letter-spacing: var(--tracking-body-sm-tight);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-checkbox-box:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)),
+    .ws-checkbox-tick:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)),
+    .ws-checkbox-root[data-selected]:where([data-scale='app'] *):not(
+        :where([data-variant='row'], [data-variant='row'] *)
+      )
+      .ws-checkbox-tick {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .ws-checkbox-box:where([data-scale='app'] *):not(:where([data-variant='row'], [data-variant='row'] *)) {
+      border-color: ButtonText;
+    }
+
+    .ws-checkbox-root:is([data-selected], [data-indeterminate]):where([data-scale='app'] *):not(
+        :where([data-variant='row'], [data-variant='row'] *)
+      )
+      .ws-checkbox-box {
+      background: Highlight;
+      color: HighlightText;
+    }
+
+    .ws-checkbox-root[data-focus-visible]:where([data-scale='app'] *):not(
+        :where([data-variant='row'], [data-variant='row'] *)
+      )
+      .ws-checkbox-box {
+      outline-color: Highlight;
+    }
+  }
+}

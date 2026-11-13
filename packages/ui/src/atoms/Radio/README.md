@@ -51,6 +51,8 @@ Tab enters the group at the chosen choice; arrow keys move and choose; Tab leave
 
 Folded into the prototype's Checkbox (spec 0072): 18px circles with a 1.5px `control-border` edge; the chosen one fills with the accent and an 8px dot scales in over `--duration-quick`. A horizontal group sits 24px apart.
 
+**Two looks until the guest phases (spec 0072, decision 16).** Guests draw Radio too (a hosted form or a booking page), and guest pages keep their shipped look and cost until their own port phase (6 to 8). So `Radio.module.css` is the shipped look, which every page loads, and the prototype's look described here is `Radio.app.css`: the module's own class names, in the `utilities.app-look` layer, only under `<html data-scale="app">`, loaded by `src/app-look.ts` from the app's layouts and the stories. Change the app's look there, and the shipped look in the module; `app-look.test.ts` keeps their class names in step. The two merge back into the module when the guest pages take the prototype's look.
+
 **Differences from the prototype**: the card, letter and row variants (public forms, the guest menu) are the library's own and keep their look, with the outline focus ring.
 
 **Repeats from its replacer** (spec 0072, AC-4): the 18px control, its 1.5px edge and the checked fill, as Checkbox's box draws them; they leave with this export.
