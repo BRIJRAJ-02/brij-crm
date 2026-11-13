@@ -14,11 +14,16 @@
     text-align: center;
   }
 
-  /* A block's glyph sits in the prototype's well: a round raised tile a large control wide, a soft drop and a
-     hairline ring, the glyph in the secondary grey. A row's mark (below) stays bare. */
+  /* A row's mark is bare, in tertiary at the row's icon size; a block's glyph sits in the prototype's well: a round
+     raised tile a large control wide, a soft drop and a hairline ring, the glyph in the secondary grey. */
   .icon {
-    display: inline-grid;
+    display: inline-flex;
     flex: none;
+    color: var(--text-tertiary);
+  }
+
+  .root:not([data-layout='row']) .icon {
+    display: inline-grid;
     place-items: center;
     inline-size: var(--size-control-lg);
     block-size: var(--size-control-lg);
@@ -95,17 +100,6 @@
     padding-block: 0;
     padding-inline: var(--space-8);
     text-align: start;
-  }
-
-  /* A row's mark is bare: no well, at the row's icon size. */
-  .root[data-layout='row'] .icon {
-    display: inline-flex;
-    inline-size: auto;
-    block-size: auto;
-    margin: 0;
-    background: none;
-    box-shadow: none;
-    color: var(--text-tertiary);
   }
 
   .root[data-layout='row'] .title {
