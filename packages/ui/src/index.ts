@@ -764,3 +764,15 @@ export { SiteIconsContext } from './provider/site-icons.ts';
 export { formatDate, formatDay, formatRelative, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';
 export { usePublicScale } from './theme/use-public-scale.ts';
+
+// Spec 0073 (port phase 2, library additions), batch 1: the prototype parts built as thin wrappers over the library.
+// Kept in one block (and pinned in one list in index.test.ts) so parallel port lanes merge cleanly.
+export { NumberField, type NumberFieldProps } from './molecules/NumberField/NumberField.tsx';
+export { parseNumber, type NumberFieldMode, type ParsedNumber } from './molecules/NumberField/number.ts';
+export { PresenceGroup, type PresenceGroupProps, type PresencePerson } from './atoms/Avatar/PresenceGroup.tsx';
+export { SEARCH_DEBOUNCE_MS, SearchField, type SearchFieldProps } from './molecules/SearchField/SearchField.tsx';
+export { TimeSelect, type TimeSelectProps } from './molecules/TimeSelect/TimeSelect.tsx';
+export { formatTime, timeOptions, type HourCycle, type TimeOption } from './molecules/TimeSelect/time-options.ts';
+// Batch 2: ShareSheet, the one share dialog, and saving a drawn QR code as a file beside QrCode.
+export { downloadQr, qrPng, qrSvg, saveFile, type QrFileKind } from './atoms/QrCode/qr-file.ts';
+export { ShareSheet, type ShareSheetProps } from './modules/ShareSheet/ShareSheet.tsx';

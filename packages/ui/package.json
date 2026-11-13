@@ -13,6 +13,7 @@
     "./vite": "./src/vite.ts",
     "./grid": "./src/grid.ts",
     "./charts": "./src/charts.ts",
+    "./ai": "./src/ai.ts",
     "./photo": "./src/photo.ts",
     "./alignment-probe": "./src/lib/alignment-probe.ts",
     "./editor": "./src/editor/index.ts",

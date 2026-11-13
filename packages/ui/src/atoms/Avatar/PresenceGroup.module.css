@@ -1,0 +1,98 @@
+/* PresenceGroup (spec 0073, AC-7308): overlapping avatars, each ringed in the surface colour with a status dot at
+   its foot, then "+n" in AvatarStack's look. The hovered or focused avatar lifts distance-small and its neighbours
+   half that, at the hover pace (transitions.dev's avatar group hover, without its grow). Its own stylesheet, so the
+   booking page, which draws AvatarStack, never carries it. */
+@layer components {
+  .root {
+    --presence-avatar: var(--avatar-sm);
+
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .root[data-size='md'] {
+    --presence-avatar: var(--avatar-md);
+  }
+
+  .item {
+    position: relative;
+    display: inline-grid;
+    border-radius: var(--radius-full);
+    outline: var(--border-width-thick) solid var(--surface-raised);
+    transition: translate var(--duration-quick) var(--ease-in-out);
+  }
+
+  .item:not(:first-child) {
+    margin-inline-start: calc(-1 * var(--space-4));
+  }
+
+  .item:focus-visible {
+    z-index: var(--z-raised);
+    box-shadow: var(--shadow-focus);
+    translate: 0 calc(-1 * var(--distance-small));
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .item:hover {
+      z-index: var(--z-raised);
+      translate: 0 calc(-1 * var(--distance-small));
+    }
+
+    .item:hover + .item,
+    .item:has(+ .item:hover) {
+      translate: 0 calc(-0.5 * var(--distance-small));
+    }
+  }
+
+  .dot {
+    position: absolute;
+    inset-block-end: calc(-1 * var(--border-width-hairline));
+    inset-inline-end: calc(-1 * var(--border-width-hairline));
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border: var(--border-width-thick) solid var(--surface-raised);
+    border-radius: var(--radius-full);
+    background: var(--dot-green);
+  }
+
+  .item[data-status='idle'] .dot {
+    background: var(--dot-yellow);
+  }
+
+  /* "+n" as AvatarStack draws it: the label in the secondary colour, a step clear of the last face. */
+  .more {
+    margin-inline-start: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item {
+      transition: none;
+      translate: none;
+    }
+
+    .item:focus-visible,
+    .item:hover,
+    .item:hover + .item,
+    .item:has(+ .item:hover) {
+      translate: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .item:focus-visible {
+      outline-color: Highlight;
+    }
+
+    .dot {
+      background: CanvasText;
+    }
+
+    .item[data-status='idle'] .dot {
+      background: Canvas;
+    }
+  }
+}

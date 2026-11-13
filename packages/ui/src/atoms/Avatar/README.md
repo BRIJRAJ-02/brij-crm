@@ -30,13 +30,28 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 - `AvatarStack` shows `max` avatars and "+N", and names everyone in it for screen readers.
 - `total` counts people the stack stands for but wasn't given (a public team page sends only 4 faces and how many more), so "+N" counts them too. `label` replaces the names as the stack's accessible name ("Team of 6") where names aren't for reading out.
 
+## PresenceGroup
+
+Who else is looking at the same thing now (spec 0073, AC-7308, the prototype's Presence group): overlapping avatars, each with a status dot (active `dot-green`, idle `dot-yellow`), then "+n".
+
+```tsx
+<PresenceGroup people={viewers} />
+<PresenceGroup people={viewers} max={3} size="md" />
+```
+
+- `people`: `id`, `name`, optional `src` and `hue`, `status` (`active` or `idle`) and `activity` ("Editing Pricing") for the tooltip. Hand it only people the access door lets the viewer see, in the order to draw them (active first, then the most recent); it draws what it is given.
+- It draws at most `max` (4) avatars and one "+n", and its accessible name says how many are here and at most `max` names, then "and n others", so 1,000 viewers cost what four do (AC-7324).
+- Each avatar is a tab stop named with its status in words ("Maya Ross, away"), with a Tooltip saying what they are doing ("Maya Ross · Editing Pricing · Away"; "Here now" or "Away" when the screen gives no activity), so status never rests on the dot's colour alone. The hovered or focused one lifts `distance-small` at the hover pace (`duration-quick`), its neighbours half that; reduced motion keeps them still. Nothing grows: the prototype's 1.05 has no token, and the app keeps sizes still. In forced colours the focused avatar's ring turns `Highlight`.
+- "+n" is AvatarStack's: the label in the secondary colour.
+- Why a wrapper beside AvatarStack and not props on it: AvatarStack is in the booking page's first load, whose CSS budget has no room, and the dots, tooltips and lift are app only. So it is its own file with its own stylesheet (`PresenceGroup.module.css`), composing Avatar and Tooltip. Stories: `Atoms/PresenceGroup`.
+
 ## States
 
 Picture (on the near white plate), initials, a picture still loading (initials on the hue), a picture that failed (initials). A stack: names read out, or its `label` with "+N" counting `total` (a team page).
 
 ## Keyboard
 
-It takes no focus.
+It takes no focus. PresenceGroup's avatars are tab stops, each showing its tooltip on focus.
 
 ## Differences from the artifact
 

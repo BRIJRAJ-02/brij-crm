@@ -1,0 +1,136 @@
+/* AIAssist: the conversation and the prompt, with no frame of its own (the screen hosts it in a Panel or a Card,
+   whose title, subtitle and close it uses). The conversation scrolls between the top and the prompt. Motion is the
+   app's: the answer's newest words fade in, the status line's steps swap through TextSwap under a sweeping light,
+   and the row under an answer arrives through Reveal's drop; no blur and no press scale, and under reduced motion
+   only the fades stay. */
+@layer components {
+  .root {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-block-size: 0;
+    max-block-size: 100%;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .body {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    border-radius: var(--radius-md);
+  }
+
+  .body:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-text);
+    outline-offset: var(--border-width-hairline);
+  }
+
+  .start {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .headline {
+    margin: 0;
+    font: var(--text-body-lg-strong);
+  }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  /* The question as the person's own bubble, drawn as BookingChat draws a speech bubble: its corner on the person's
+     side is the small one. */
+  .question {
+    align-self: flex-end;
+    max-inline-size: 80%;
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-xl);
+    border-end-end-radius: var(--radius-xs);
+    background: var(--surface-subtle);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* A light passing across the status words (transitions.dev's shimmer text): the words' own colour, a lighter band
+     sweeping through. Under reduced motion the band holds still. */
+  .shimmer {
+    background-image: linear-gradient(90deg, var(--text-secondary) 35%, var(--text) 50%, var(--text-secondary) 65%);
+    background-size: 300% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: sweep var(--duration-pulse) var(--ease-linear) infinite;
+  }
+
+  /* Line breaks in an answer are kept; a long word or address wraps rather than widening the slot. */
+  .answer {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  /* Only the newest piece fades in; everything before it is settled text. */
+  .fresh {
+    animation: fade var(--duration-medium) var(--ease-smooth-out) backwards;
+  }
+
+  .stopped {
+    margin-inline-start: var(--space-4);
+    color: var(--text-tertiary);
+  }
+
+  .prompt {
+    flex: none;
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes sweep {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer {
+      animation: none;
+      background-image: none;
+      color: var(--text-secondary);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .question {
+      border-color: CanvasText;
+    }
+
+    .shimmer {
+      background-image: none;
+      color: CanvasText;
+    }
+  }
+}

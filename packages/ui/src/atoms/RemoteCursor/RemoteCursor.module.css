@@ -1,5 +1,6 @@
 /* RemoteCursor: a 2px caret in dot-<hue>, with the person's name on a flag in
-   their tag colours, so the name holds its contrast. */
+   their tag colours, so the name holds its contrast. The pointer variant (spec 0073, AC-7309) is an arrow in
+   dot-<hue> with the name on a pill in the same tag colours, placed by translate and gliding between points. */
 @layer components {
   .root {
     position: relative;
@@ -8,7 +9,7 @@
     block-size: var(--size-chip);
     margin-inline: calc(-1 * var(--border-width-hairline));
     vertical-align: text-bottom;
-    border-inline-start: var(--border-width-thick) solid var(--dot-gray);
+    border-inline-start: var(--border-width-thick) solid var(--cursor-dot, var(--dot-gray));
   }
 
   .flag {
@@ -26,76 +27,67 @@
     user-select: none;
   }
 
-  .root[data-hue='gray'] {
+  :is(.root, .pointer)[data-hue='gray'] {
     --flag-bg: var(--tag-gray-bg);
     --flag-border: var(--tag-gray-border);
     --flag-text: var(--tag-gray-text);
-
-    border-inline-start-color: var(--dot-gray);
+    --cursor-dot: var(--dot-gray);
   }
 
-  .root[data-hue='red'] {
+  :is(.root, .pointer)[data-hue='red'] {
     --flag-bg: var(--tag-red-bg);
     --flag-border: var(--tag-red-border);
     --flag-text: var(--tag-red-text);
-
-    border-inline-start-color: var(--dot-red);
+    --cursor-dot: var(--dot-red);
   }
 
-  .root[data-hue='orange'] {
+  :is(.root, .pointer)[data-hue='orange'] {
     --flag-bg: var(--tag-orange-bg);
     --flag-border: var(--tag-orange-border);
     --flag-text: var(--tag-orange-text);
-
-    border-inline-start-color: var(--dot-orange);
+    --cursor-dot: var(--dot-orange);
   }
 
-  .root[data-hue='yellow'] {
+  :is(.root, .pointer)[data-hue='yellow'] {
     --flag-bg: var(--tag-yellow-bg);
     --flag-border: var(--tag-yellow-border);
     --flag-text: var(--tag-yellow-text);
-
-    border-inline-start-color: var(--dot-yellow);
+    --cursor-dot: var(--dot-yellow);
   }
 
-  .root[data-hue='lime'] {
+  :is(.root, .pointer)[data-hue='lime'] {
     --flag-bg: var(--tag-lime-bg);
     --flag-border: var(--tag-lime-border);
     --flag-text: var(--tag-lime-text);
-
-    border-inline-start-color: var(--dot-lime);
+    --cursor-dot: var(--dot-lime);
   }
 
-  .root[data-hue='green'] {
+  :is(.root, .pointer)[data-hue='green'] {
     --flag-bg: var(--tag-green-bg);
     --flag-border: var(--tag-green-border);
     --flag-text: var(--tag-green-text);
-
-    border-inline-start-color: var(--dot-green);
+    --cursor-dot: var(--dot-green);
   }
 
-  .root[data-hue='sky'] {
+  :is(.root, .pointer)[data-hue='sky'] {
     --flag-bg: var(--tag-sky-bg);
     --flag-border: var(--tag-sky-border);
     --flag-text: var(--tag-sky-text);
-
-    border-inline-start-color: var(--dot-sky);
+    --cursor-dot: var(--dot-sky);
   }
 
-  .root[data-hue='blue'] {
+  :is(.root, .pointer)[data-hue='blue'] {
     --flag-bg: var(--tag-blue-bg);
     --flag-border: var(--tag-blue-border);
     --flag-text: var(--tag-blue-text);
-
-    border-inline-start-color: var(--dot-blue);
+    --cursor-dot: var(--dot-blue);
   }
 
-  .root[data-hue='purple'] {
+  :is(.root, .pointer)[data-hue='purple'] {
     --flag-bg: var(--tag-purple-bg);
     --flag-border: var(--tag-purple-border);
     --flag-text: var(--tag-purple-text);
-
-    border-inline-start-color: var(--dot-purple);
+    --cursor-dot: var(--dot-purple);
   }
 
   .root[data-hue] .flag {
@@ -104,7 +96,79 @@
     color: var(--flag-text);
   }
 
+  .pointer {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    z-index: var(--z-sticky);
+    display: block;
+    pointer-events: none;
+    translate: var(--cursor-x, 0) var(--cursor-y, 0);
+    transition: translate var(--duration-quick) var(--ease-smooth-out);
+  }
+
+  /* The arrow, tip at the point: a shape cut from a square, so it needs no icon in the registry. */
+  .arrow {
+    display: block;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    background: var(--cursor-dot, var(--dot-gray));
+    clip-path: polygon(16% 9%, 16% 86%, 37% 65%, 52% 97%, 66% 91%, 51% 59%, 79% 59%);
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+
+  .pill {
+    position: absolute;
+    inset-block-start: var(--space-16);
+    inset-inline-start: var(--space-12);
+    padding: var(--space-2) var(--space-6);
+    border: var(--border-width-hairline) solid var(--flag-border, var(--tag-gray-border));
+    border-radius: var(--radius-full);
+    background: var(--flag-bg, var(--tag-gray-bg));
+    color: var(--flag-text, var(--tag-gray-text));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    transform-origin: top left;
+    transition:
+      opacity var(--duration-quick) var(--ease-out),
+      scale var(--duration-quick) var(--ease-smooth-out);
+  }
+
+  .pointer[data-idle] .pill {
+    opacity: 0;
+    scale: var(--scale-large);
+  }
+
+  .pointer[data-idle] .arrow {
+    opacity: var(--opacity-busy);
+  }
+
+  /* Reduced motion jumps to each point and keeps the idle fade, without the pill's shrink. */
+  @media (prefers-reduced-motion: reduce) {
+    .pointer {
+      transition: none;
+    }
+
+    .pill {
+      transition: opacity var(--duration-quick) var(--ease-out);
+    }
+
+    .pointer[data-idle] .pill {
+      scale: none;
+    }
+  }
+
   @media (forced-colors: active) {
+    .arrow {
+      background: Highlight;
+    }
+
+    .pill {
+      border-color: CanvasText;
+    }
+
     .root {
       border-inline-start-color: Highlight;
     }

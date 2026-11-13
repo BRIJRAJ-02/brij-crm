@@ -137,6 +137,11 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 // 18.57 and 19.37, over AC-8; both budgets sit at the measurement plus 0.5 kB (19.8 and 20 kB) until the coordinator and
 // the owner settle that gap (spec 0072, rationale, "One look everywhere").
 export default [
+  // 12 November 2026, spec 0073 (port phase 2, AC-7313): every line tightened to its measurement plus at most 0.5 kB,
+  // as the owner asked ("cut it a lot"); lines already within 0.5 kB of their measurement stay. Measured after batch 1
+  // on feat/port-2: first load 296.56 kB and 7.86 kB, hosted form 205.91 kB, step layouts 5.74 kB, signature and
+  // ranking 6.25 kB, booking page 188.9 kB. A port phase that needs more room raises a line in its own spec, with
+  // the measurement.
   // 300 kB from 2 November 2026 (the owner, "raise it to 300"): the CRM UI pass (follows, sample data, Excel import
   // and export) took the first load to 252.34 kB, and the cars behind it add a little more. Room for those, not a
   // licence to grow: keep trimming toward the old line.
@@ -144,7 +149,7 @@ export default [
   // their addresses are read up front by the command menu, and a contact card gained its second and third email,
   // phone and website. A whole shared chunk was taken back out of the first load before asking, and it was still
   // about 80 bytes over. Raising this is a spec change, so it is the owner's call every time.
-  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '297.2 kB', gzip: true, running: false },
+  { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '297 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '8.3 kB', gzip: true, running: false },
   // Spec 0072: the workspace shell's CSS (above), at the measurement plus 0.5 kB (35.86 kB on 13 November 2026, after
   // phase 1's tiers 1 to 3a and the trim round; 34.61 kB at f81623f0c). Tier 3b (13 November) took it to 36.08 kB
@@ -161,7 +166,7 @@ export default [
   // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
   // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.5 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.4 kB', gzip: true, running: false },
   // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
@@ -174,7 +179,7 @@ export default [
   {
     name: 'Form step layouts, lazy (gzipped)',
     path: inDist([...steps.js, ...steps.css]),
-    limit: '6.3 kB',
+    limit: '6.2 kB',
     gzip: true,
     running: false,
   },
@@ -183,7 +188,7 @@ export default [
   {
     name: 'Form signature and ranking, lazy (gzipped)',
     path: inDist([...batchTwo.js, ...batchTwo.css]),
-    limit: '6.9 kB',
+    limit: '6.7 kB',
     gzip: true,
     running: false,
   },
