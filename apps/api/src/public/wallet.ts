@@ -120,6 +120,45 @@ function passResponse(bytes: Uint8Array, handle: string, cache: string): Respons
   });
 }
 
+/** Makes the pass of the Live page a handle names, or undefined: no certificate here, or no such Live page. */
+export type PagePassMaker = (
+  handle: string,
+  workspaceId: string,
+) => Promise<{ readonly handle: string; readonly bytes: Uint8Array } | undefined>;
+
+/**
+ * The pass a Live page offers, made for somebody who may hand it on (13 November 2026): Team pages' download of one
+ * person's pass, or everyone's. The same read as the public route's, so it makes nothing a visitor to the page could
+ * not save themselves; a Private page, or a handle no one holds, answers undefined. The code is tagged as the
+ * owner's own, since the person it is handed to is who will carry it. Undefined where Apple has no certificate.
+ */
+export function createPagePass(deps: WalletPassDeps): PagePassMaker | undefined {
+  const make = deps.pass;
+  if (make === undefined) return undefined;
+  return async (handle, workspaceId) => {
+    if (!HANDLE_PATTERN.test(handle)) return undefined;
+    let owner;
+    try {
+      owner = await findHandleOwner({ db: deps.db }, handle, { withPageName: true });
+    } catch {
+      return undefined;
+    }
+    // The caller read the handle in its own workspace; a page of any other workspace is not its to hand out.
+    if (owner.workspaceId !== workspaceId) return undefined;
+    const card = await cardOf(deps.db, owner.handle);
+    const brand = await brandOf(deps, owner.workspaceId);
+    const bytes = make({
+      ...(brand === undefined ? {} : { brand }),
+      handle: owner.handle,
+      name: owner.name.trim() === '' ? owner.handle : owner.name,
+      ...(owner.bio === '' ? {} : { bio: owner.bio }),
+      ...(card === undefined ? {} : { card }),
+      hue: owner.theme.hue,
+    });
+    return { handle: owner.handle, bytes };
+  };
+}
+
 /** Mounts both pass routes. The app mounts under `/api`, so the paths drop it here. */
 export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps: WalletPassDeps): void {
   const limiter = createMemoryLimiter();

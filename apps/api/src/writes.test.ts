@@ -154,6 +154,8 @@ const READS: ReadonlySet<string> = new Set([
   // Team link pages (spec 0070): the list, and who last changed the caller's own page.
   'teamPages.list',
   'teamPages.editedBy',
+  // A member's Apple Wallet pass for a team page manager (13 Nov 2026): made and answered, nothing stored.
+  'teamPages.walletPass',
   // Add a page's handle check and suggestion as it is typed (9 Nov 2026).
   'teamPages.checkHandle',
   'teamPages.suggestHandle',

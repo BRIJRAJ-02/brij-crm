@@ -6627,6 +6627,20 @@ export function createDataLayer({
     teamPages: {
       list: (workspace: string): Promise<TeamLinkPages> =>
         call((options) => api.teamPages.list({ workspace }, options)),
+      /**
+       * One person's Apple Wallet pass (13 Nov 2026), as the file's name and its bytes: Team pages saves one, or
+       * zips everyone's. Read fresh each time (a pass is signed when it is asked for) and never kept.
+       */
+      walletPass: (
+        workspace: string,
+        member: string,
+      ): Promise<{ readonly name: string; readonly bytes: Uint8Array<ArrayBuffer> }> =>
+        call((options) => api.teamPages.walletPass({ workspace, member }, options)).then((pass) => {
+          const binary = atob(pass.data);
+          const bytes = new Uint8Array(binary.length);
+          for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+          return { name: pass.name, bytes };
+        }),
       claim: (workspace: string, member: string, handle: string): Promise<TeamLinkPage> =>
         call((options) => api.teamPages.claim({ workspace, member, handle, mutationId: mintId() }, options)),
       /**

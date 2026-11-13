@@ -5,6 +5,7 @@
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import forge from 'node-forge';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../../edge.ts';
@@ -153,5 +154,99 @@ describe('someone else’s link page through the api (AC-7001 to AC-7004)', () =
     const listed = await ada.client.teamPages.list({ workspace: ada.slug });
     expect(listed.pages.map((page) => page.name).sort()).toEqual(['Ada', 'Bea', 'Cy']);
     expect((await cy.client.teamPages.editedBy({ workspace: ada.slug })).last?.name).toBe('Ada');
+  });
+});
+
+/** A certificate and key of this test's own: nothing here ever touches a real Pass Type ID certificate. */
+function selfSigned(commonName: string): { readonly certificatePem: string; readonly privateKeyPem: string } {
+  const keys = forge.pki.rsa.generateKeyPair(2048);
+  const certificate = forge.pki.createCertificate();
+  certificate.publicKey = keys.publicKey;
+  certificate.serialNumber = '01';
+  certificate.validity.notBefore = new Date('2026-01-01T00:00:00Z');
+  certificate.validity.notAfter = new Date('2027-01-01T00:00:00Z');
+  const name = [{ name: 'commonName', value: commonName }];
+  certificate.setSubject(name);
+  certificate.setIssuer(name);
+  certificate.sign(keys.privateKey, forge.md.sha256.create());
+  return {
+    certificatePem: forge.pki.certificateToPem(certificate),
+    privateKeyPem: forge.pki.privateKeyToPem(keys.privateKey),
+  };
+}
+
+describe('Team pages’ Apple Wallet passes (13 Nov 2026)', () => {
+  it('says nothing of passes, and makes none, where Apple has no certificate', async () => {
+    const ada = await memberWithWorkspace(app);
+    const listed = await ada.client.teamPages.list({ workspace: ada.slug });
+    expect(listed.hasWallet).toBeUndefined();
+    const [self] = listed.pages.filter((page) => page.isSelf);
+    if (self === undefined) throw new Error('No own row.');
+    expect(
+      await refusal(() => ada.client.teamPages.walletPass({ workspace: ada.slug, member: self.memberId })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('hands a manager the pass of a Live page, never a Private one’s, and nobody without the permission', async () => {
+    const signer = selfSigned('Pass Type ID: pass.com.timefix.linkpage');
+    const env = {
+      ...testEnv(),
+      WALLET_PASSES: 'on' as const,
+      APPLE_WALLET_PASS_TYPE_ID: 'pass.com.timefix.linkpage',
+      APPLE_WALLET_TEAM_ID: 'ABCDE12345',
+      APPLE_WALLET_CERTIFICATE: signer.certificatePem,
+      APPLE_WALLET_KEY: signer.privateKeyPem,
+      APPLE_WALLET_WWDR: selfSigned('Apple WWDR CA').certificatePem,
+    };
+    // The same databases and sign in secrets, so the first app's sessions are this one's too.
+    const walletApp = createApp({
+      services: testServices(env, {
+        db,
+        identity,
+        mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }),
+      }),
+      env,
+    });
+    const ada = await memberWithWorkspace(app);
+    const [row] = await testQuery<{ id: string }>(ownerUrl, `select id::text as id from workspaces where slug = $1`, [
+      ada.slug,
+    ]);
+    if (row === undefined) throw new Error('No workspace.');
+    const bea = await joined(row.id, ada.slug, 'Bea', 'member');
+    const manager = rpcClient(walletApp, ada.cookie);
+
+    const listed = await manager.teamPages.list({ workspace: ada.slug });
+    expect(listed.hasWallet).toBe(true);
+
+    // Bea claimed her own handle, so her page is Live: her pass is a real zip, named for her handle.
+    const beaRow = listed.pages.find((page) => page.memberId === bea.memberId);
+    expect(beaRow?.isLive).toBe(true);
+    const pass = await manager.teamPages.walletPass({ workspace: ada.slug, member: bea.memberId });
+    expect(pass.name).toBe(`${beaRow?.handle ?? ''}.pkpass`);
+    const bytes = Buffer.from(pass.data, 'base64');
+    expect(bytes.subarray(0, 2).toString('latin1')).toBe('PK');
+    expect(bytes.includes(Buffer.from('pass.json'))).toBe(true);
+
+    // Made Private, her page offers no pass to anyone, a manager included.
+    await manager.profile.show({ workspace: ada.slug, member: bea.memberId, live: false, mutationId: newId() });
+    expect(
+      await refusal(() => manager.teamPages.walletPass({ workspace: ada.slug, member: bea.memberId })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+
+    // Someone of another workspace is nobody here, whoever asks.
+    const other = await memberWithWorkspace(app);
+    const [stranger] = (await other.client.teamPages.list({ workspace: other.slug })).pages;
+    if (stranger === undefined) throw new Error('No other member.');
+    expect(
+      await refusal(() => manager.teamPages.walletPass({ workspace: ada.slug, member: stranger.memberId })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+
+    // Bea holds no `link_pages.manage_team`: somebody else's pass never comes from Team pages for her.
+    const adaRow = listed.pages.find((page) => page.isSelf);
+    if (adaRow === undefined) throw new Error('No own row.');
+    const member = rpcClient(walletApp, bea.cookie);
+    expect(
+      await refusal(() => member.teamPages.walletPass({ workspace: ada.slug, member: adaRow.memberId })),
+    ).toMatchObject({ code: 'FORBIDDEN' });
   });
 });
