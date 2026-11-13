@@ -140,10 +140,12 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* The chosen segment's pill takes the control edge (control-border, 3:1 and more on the grey track in both themes,
+     WCAG 1.4.11): white on surface-subtle alone is 1.1:1, too faint to say which segment is chosen. */
   .ws-segmented-control-thumb:where([data-scale='app'] *) {
     position: absolute;
     inset: 0;
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-full);
     background: var(--surface-raised);
     box-shadow: var(--shadow-xs);

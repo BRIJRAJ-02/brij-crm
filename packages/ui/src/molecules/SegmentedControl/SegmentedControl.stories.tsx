@@ -1,6 +1,7 @@
+import { contrastRatio } from '@crm/contracts/brand-colour';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -53,6 +54,44 @@ export const Default: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
     await expect(args.onChange).toHaveBeenCalledWith('board');
+  },
+};
+
+/** A computed `rgb(…)` colour as a hex, for the contrast check. */
+function hexOf(colour: string): string {
+  const [r = 0, g = 0, b = 0] = (colour.match(/\d+(\.\d+)?/g) ?? []).map(Number);
+  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The chosen segment says so with an edge, not only a white pill (WCAG 1.4.11, spec 0072): the thumb's edge holds 3:1
+ * against the grey track in light and in dark.
+ */
+export const ChosenEdge: Story = {
+  render: (args) => (
+    <Stage direction="column">
+      {(['light', 'dark'] as const).map((theme) => (
+        <div key={theme} data-theme={theme}>
+          <SegmentedControl {...args} />
+        </div>
+      ))}
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const tracks = canvas.getAllByRole('radiogroup', { name: 'View' });
+    await expect(tracks).toHaveLength(2);
+    for (const track of tracks) {
+      const chosen = within(track).getByRole('radio', { name: 'Table' }).closest('label');
+      const thumb = [...(chosen?.querySelectorAll('*') ?? [])].find(
+        // The pill: drawn, so it has an edge (the radio's hidden input sits there too, with none).
+        (element) =>
+          getComputedStyle(element).position === 'absolute' && getComputedStyle(element).borderTopStyle !== 'none',
+      );
+      if (thumb === undefined) throw new Error('the chosen segment draws no pill');
+      const edge = hexOf(getComputedStyle(thumb).borderTopColor);
+      const ground = hexOf(getComputedStyle(track).backgroundColor);
+      await expect(contrastRatio(edge, ground)).toBeGreaterThanOrEqual(3);
+    }
   },
 };
 
