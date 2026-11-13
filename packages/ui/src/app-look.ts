@@ -6,12 +6,14 @@
 // when the guest pages take the prototype's look in their own port phases (6 to 8) and each part has one look again.
 import './atoms/Button/Button.app.css';
 import './atoms/Checkbox/Checkbox.app.css';
+import './atoms/DragHandle/DragHandle.app.css';
 import './atoms/FieldError/FieldError.app.css';
 import './atoms/FieldLabel/FieldLabel.app.css';
 import './atoms/Radio/Radio.app.css';
 import './molecules/Callout/Callout.app.css';
 import './molecules/ChoiceChips/ChoiceChips.app.css';
 import './molecules/Field/Field.app.css';
+import './molecules/FieldGroup/FieldGroup.app.css';
 import './molecules/Popover/Popover.app.css';
 import './molecules/SegmentedControl/SegmentedControl.app.css';
 import './molecules/Select/Select.app.css';

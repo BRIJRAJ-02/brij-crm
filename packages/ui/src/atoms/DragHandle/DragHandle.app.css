@@ -1,0 +1,89 @@
+/* DragHandle's app look (spec 0072, decision 16): the Timefix prototype's look, for the app only. Guests draw DragHandle.module.css
+   alone, as shipped; the app loads this file too (through src/app-look.ts), and it wins in the later utilities.app-look
+   layer, under <html data-scale="app">. Its classes are the module's own names (ws-<part>-<local>). Write it as the
+   module was written; app-look.test.ts checks every class here exists in the module. */
+/* DragHandle, after the prototype's DragHandle (spec 0072): a six dot grip drawn 20 by 28 in text-tertiary, washed and
+   text-secondary under the pointer, the focus ring on keyboard focus, the grab cursor, and accent while lifted. */
+@layer utilities.app-look {
+  .ws-drag-handle-root:where([data-scale='app'] *) {
+    /* Over the shipped module: its centring of the grid's track and its focus halo (focus is the ring). */
+    justify-content: normal;
+    box-shadow: none;
+
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--space-20);
+    block-size: var(--size-control-sm);
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: grab;
+    outline: none;
+    touch-action: none;
+    transition-property: color, background-color;
+    transition-duration: var(--duration-quick);
+    transition-timing-function: var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ws-drag-handle-root:hover:where([data-scale='app'] *) {
+      background: var(--surface-hover);
+      color: var(--text-secondary);
+    }
+  }
+
+  .ws-drag-handle-root:focus-visible:where([data-scale='app'] *) {
+    color: var(--text-secondary);
+    outline: var(--border-width-focus) solid var(--focus-ring);
+    outline-offset: 0;
+  }
+
+  .ws-drag-handle-root:active:where([data-scale='app'] *),
+  .ws-drag-handle-root[data-lifted]:where([data-scale='app'] *) {
+    cursor: grabbing;
+  }
+
+  .ws-drag-handle-root[data-lifted]:where([data-scale='app'] *) {
+    color: var(--accent);
+  }
+
+  /* Pressed past what is drawn to at least 24px wide (WCAG 2.5.8), and wider still under a finger. */
+  .ws-drag-handle-root:where([data-scale='app'] *)::after {
+    position: absolute;
+    inset: 0 calc(-1 * var(--space-4));
+    content: '';
+  }
+
+  @media (pointer: coarse) {
+    .ws-drag-handle-root:where([data-scale='app'] *)::after {
+      inset: calc(-1 * var(--space-4)) calc(-1 * var(--space-6));
+    }
+  }
+
+  /* Against an edge that clips (a settings table's gutter), the hit area grows toward the end instead. */
+  .ws-drag-handle-root[data-reach='end']:where([data-scale='app'] *)::after {
+    inset-inline: 0 calc(-1 * var(--space-8));
+  }
+
+  @media (pointer: coarse) {
+    .ws-drag-handle-root[data-reach='end']:where([data-scale='app'] *)::after {
+      inset-inline: 0 calc(-1 * var(--space-12));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ws-drag-handle-root:where([data-scale='app'] *) {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .ws-drag-handle-root:focus-visible:where([data-scale='app'] *) {
+      outline-color: Highlight;
+    }
+  }
+}
