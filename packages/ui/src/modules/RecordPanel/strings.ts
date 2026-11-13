@@ -14,8 +14,10 @@ export const strings = {
   /** The keys at the panel's foot (spec 0074, AC-7412): "J K next and previous · Esc close". */
   keyNext: 'J',
   keyPrevious: 'K',
-  keyClose: 'Esc',
+  keyClose: 'ESC',
   hintStep: 'next and previous',
   hintBetween: ' · ',
   hintClose: 'close',
+  /** Said as a step lands: "Globex, Companies · 2 of 3". */
+  stepped: (name: string, place: string) => `${name}, ${place}`,
 } as const;

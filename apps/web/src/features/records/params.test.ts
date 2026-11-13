@@ -29,6 +29,14 @@ describe('stepsAround', () => {
     expect(stepsAround(1, 4, idAt)).toEqual({ at: 2, of: 4, previous: 'a', next: 'c' });
   });
 
+  it('says the list’s own count, a floor past the count cap (spec 0074, AC-7412)', () => {
+    expect(stepsAround(1, 4, idAt, { count: 10_000, atLeast: true })).toMatchObject({
+      at: 2,
+      of: 10_000,
+      isOfAtLeast: true,
+    });
+  });
+
   it('leaves out the step past either end', () => {
     expect(stepsAround(0, 4, idAt)).toEqual({ at: 1, of: 4, next: 'b' });
     expect(stepsAround(3, 4, idAt)).toEqual({ at: 4, of: 4, previous: 'c' });

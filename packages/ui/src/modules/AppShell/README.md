@@ -51,9 +51,13 @@ Takes its look from the prototype's AppShell, which also replaces PreviewLayout 
 
 **The consumer provides** `sidebar`, `topBar`, `viewBar`, `toolbar`, `banner`, `panel`, `viewKey`, `phoneSidebar` and the view as `children`.
 
-**States**: sidebar open (`Default`) or a rail (`Rail`); without a sidebar (`WithoutSidebar`); a side panel (`WithPanel`) and a panel pushing the page (`PushedByPanel`); a banner; a phone's page and list (`PhonePage`, `PhoneList`); the skip link focused (`SkipLink`).
+**States**: sidebar open (`Default`) or a rail (`Rail`); without a sidebar (`WithoutSidebar`); a side panel (`WithPanel`) and a panel pushing the page (`PushedByPanel`) and the record panel floating over the view (`FloatingInTheView`, below); a banner; a phone's page and list (`PhonePage`, `PhoneList`); the skip link focused (`SkipLink`).
 
 **Differences from the prototype**
 - Kept library behaviour: the skip link, `viewBar`, `banner`, `AppShellSlot`, `viewKey`, `phoneSidebar`, `AppShellContext`, the compact fold below `bp-page-compact`, and a Panel's push (`pushesPage`).
 - The phone's inset drops at the shell's 480px container width, the library's phone line (the prototype's is a 40rem media query).
-- Not here, owed to phase 2's and the shell phase's parts: the TopBar's and Toolbar's look (their own modules), the phone tab bar (`mobileNav`, which the library doesn't have), `PageBody`'s padding, and the aside's panel reveal (AsideLayout, phase 2; the library's side panel is `panel`, or a Panel). A Panel that pushes the page lies over the card's end edge and the canvas strip beyond it (the page's content is never under it); a floating panel inset like the card is owed to the shell phase.
+- Not here, owed to phase 2's and the shell phase's parts: the TopBar's and Toolbar's look (their own modules), the phone tab bar (`mobileNav`, which the library doesn't have), `PageBody`'s padding, and the aside's panel reveal (AsideLayout, phase 2; the library's side panel is `panel`, or a Panel). A Panel that pushes the page lies over the card's end edge and the canvas strip beyond it (the page's content is never under it); the record panel's floating Panel starts under the bars and floats over the card (spec 0074, below); one inset exactly like the card's is owed to the shell phase.
+
+## Where the content area starts (spec 0074, batch 5)
+
+AppShell writes `--shell-panel-top` on its content area: the content area's top (under however many bars the page has: the top bar, the view's bar, the toolbar, a banner) plus `space-8`. The floating Panel (the record panel) starts there, so it floats over the content area at its full height and never covers a bar (AC-7411). One ResizeObserver on the content area keeps it right: a bar that changes height changes the content area's size too. Outside AppShell the variable is absent and the panel sits `space-8` from the window's top. The `FloatingInTheView` story measures it.

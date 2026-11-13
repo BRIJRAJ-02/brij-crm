@@ -8,6 +8,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -196,6 +197,15 @@ export function RecordPanel({
             <div className={styles.stepping}>
               <ProgressBar label={strings.loading} isLabelHidden isIndeterminate />
             </div>
+          )}
+          {/* A step changes the heading and the place line, which are said only as the panel opens: a polite line says
+              where a step landed (spec 0074, AC-7412). */}
+          {hasSteps && (
+            <VisuallyHidden>
+              <span role="status">
+                {record !== undefined && place !== undefined ? strings.stepped(record.name, place) : ''}
+              </span>
+            </VisuallyHidden>
           )}
           {notice !== undefined && <div className={styles.notice}>{notice}</div>}
           {stats.length > 0 && record !== undefined && (

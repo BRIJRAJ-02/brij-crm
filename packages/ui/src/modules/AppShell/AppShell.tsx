@@ -131,6 +131,23 @@ export function AppShell({
     };
   }, []);
   const pushed = isCompact || pushes.length === 0 ? undefined : pushes.includes('lg') ? 'lg' : 'md';
+  // Where the content area starts, under however many bars the page has (the top bar, the view's bar, the toolbar, a
+  // banner): the record panel floats from there (spec 0074, AC-7411). Bars change height rarely (a banner comes or
+  // goes, the window resizes), and each changes the content area's own size, so one observer keeps it right with no
+  // work while nothing moves.
+  const placeContent = useCallback((content: HTMLDivElement | null) => {
+    if (content === null) return undefined;
+    const place = () => {
+      const top = Math.round(content.getBoundingClientRect().top);
+      content.style.setProperty('--shell-panel-top', `calc(${String(top)}px + var(--space-8))`);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   // One object while the width class holds, so a panel opening (AppShell's state) doesn't re-render every reader.
   const shell = useMemo(() => ({ isCompact, isFull: false, isPhone }), [isCompact, isPhone]);
   const sidebarShell = useMemo(
@@ -159,7 +176,7 @@ export function AppShell({
             {viewBar}
             {toolbar}
             {banner}
-            <div className={styles.content}>
+            <div ref={placeContent} className={styles.content}>
               <div key={viewKey} className={styles.view}>
                 {children}
               </div>

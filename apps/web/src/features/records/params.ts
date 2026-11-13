@@ -74,6 +74,8 @@ export interface PeekSteps {
   /** Where the record is in the list, counted from 1, and how many the list has: "3 of 120" (spec 0074, AC-7412). */
   readonly at: number;
   readonly of: number;
+  /** The list's count is a floor (a view past the count cap): "3 of 10,000+". */
+  readonly isOfAtLeast?: true;
   readonly previous?: string;
   readonly next?: string;
   readonly isPreviousPending?: true;
@@ -88,13 +90,16 @@ export function stepsAround(
   index: number | undefined,
   count: number,
   idAt: (index: number) => string | undefined,
+  /** The list's own count, as its bar says it, when it differs from the rows reached (a view past the count cap). */
+  total?: { readonly count: number; readonly atLeast: boolean },
 ): PeekSteps | undefined {
   if (index === undefined || index < 0 || index >= count) return undefined;
   const previous = index > 0 ? idAt(index - 1) : undefined;
   const next = index < count - 1 ? idAt(index + 1) : undefined;
   return {
     at: index + 1,
-    of: count,
+    of: total?.count ?? count,
+    ...(total?.atLeast === true ? { isOfAtLeast: true as const } : {}),
     ...(previous === undefined ? {} : { previous }),
     ...(next === undefined ? {} : { next }),
     // A row the list has but hasn't loaded: the step stays on, and loads it.

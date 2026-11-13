@@ -43,9 +43,12 @@ export interface PeekParts {
   readonly notes?: NoteList;
   readonly comments?: RecordComments;
   readonly files?: RecordFilesSource;
-  /** A section whose read failed: the panel says so in that section, with Try again. */
-  readonly failed?: true;
+  /** The sections whose read failed: each says so in its own place, with Try again. */
+  readonly failed?: ReadonlySet<PeekSection>;
 }
+
+/** One of the panel's sections, as its own read lands or fails. */
+export type PeekSection = 'related' | 'feed' | 'open' | 'notes' | 'comments' | 'files';
 
 /** The record and what the panel draws at once, from the caches and the store (AC-7413). */
 export async function openPeekCore(
@@ -82,12 +85,12 @@ export function openPeekParts(
   recordId: string,
   take: (part: Omit<PeekParts, 'recordId'>) => void,
 ): void {
-  const failed = () => take({ failed: true });
-  void data.activity.forRecord(slug, recordId, object.id).then((feed) => take({ feed }), failed);
-  void data.tasks.forRecord(slug, recordId, 'open', object.id).then((open) => take({ open }), failed);
-  void data.notes.forRecord(slug, recordId, object.id).then((notes) => take({ notes }), failed);
-  void data.comments.forRecord(slug, recordId).then((comments) => take({ comments }), failed);
-  void data.files.forRecord(slug, recordId).then((files) => take({ files }), failed);
+  const failed = (section: PeekSection) => () => take({ failed: new Set([section]) });
+  void data.activity.forRecord(slug, recordId, object.id).then((feed) => take({ feed }), failed('feed'));
+  void data.tasks.forRecord(slug, recordId, 'open', object.id).then((open) => take({ open }), failed('open'));
+  void data.notes.forRecord(slug, recordId, object.id).then((notes) => take({ notes }), failed('notes'));
+  void data.comments.forRecord(slug, recordId).then((comments) => take({ comments }), failed('comments'));
+  void data.files.forRecord(slug, recordId).then((files) => take({ files }), failed('files'));
   void data.objects
     .list(slug)
     .then((objects) => {
@@ -108,5 +111,5 @@ export function openPeekParts(
         ),
       );
     })
-    .then((related) => take({ related }), failed);
+    .then((related) => take({ related }), failed('related'));
 }

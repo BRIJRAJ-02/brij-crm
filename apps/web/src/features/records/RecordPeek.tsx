@@ -22,7 +22,7 @@ import { TasksTab } from '../tasks/TasksTab.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
-import { openPeekCore, openPeekParts, type PeekCore, type PeekParts } from './peek.ts';
+import { openPeekCore, openPeekParts, type PeekCore, type PeekParts, type PeekSection } from './peek.ts';
 import { RecordDetails } from './RecordDetails.tsx';
 import { RelatedSections } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
@@ -106,25 +106,32 @@ function RecordPeekPanel(props: RecordPeekProps) {
     const open = () => {
       // Try again asks every section afresh; the ones already in stay drawn meanwhile.
       setParts((before) => {
-        if (before?.recordId !== recordId || before.failed === undefined) return before;
+        if (before?.recordId !== recordId || before.failed === undefined || before.failed.size === 0) return before;
         const { failed: _failed, ...kept } = before;
         return kept;
       });
+      // Any step after this one waits a moment, even one taken before this record lands (holding ↓ on a cold cache).
+      isShowing.current = true;
       openPeekCore(data, slug, attributes, recordId).then(
         (core) => {
           if (!isCurrent) return;
-          isShowing.current = true;
           setHeld(core);
           setFailedFor(undefined);
+          // The sections open once the record shows (their reads wait on nothing it doesn't: caches), so the record
+          // before it keeps its own sections until this one replaces it, and a record that failed opens none.
+          openPeekParts(data, slug, object, attributes, recordId, (part) => {
+            if (!isCurrent) return;
+            setParts((before) =>
+              before?.recordId === recordId
+                ? { ...before, ...part, failed: new Set([...(before.failed ?? []), ...(part.failed ?? [])]) }
+                : { recordId, ...part },
+            );
+          });
         },
         () => {
           if (isCurrent) setFailedFor(recordId);
         },
       );
-      openPeekParts(data, slug, object, attributes, recordId, (part) => {
-        if (!isCurrent) return;
-        setParts((before) => (before?.recordId === recordId ? { ...before, ...part } : { recordId, ...part }));
-      });
     };
     const timer = isShowing.current ? setTimeout(open, STEP_SETTLE_MS) : undefined;
     if (timer === undefined) open();
@@ -189,6 +196,7 @@ export const RecordPeek = memo(
     before.steps?.isNextPending === after.steps?.isNextPending &&
     before.steps?.at === after.steps?.at &&
     before.steps?.of === after.steps?.of &&
+    before.steps?.isOfAtLeast === after.steps?.isOfAtLeast &&
     (before.steps === undefined) === (after.steps === undefined),
 );
 
@@ -274,7 +282,9 @@ function LoadedPeek(
   const commentCount = useCommentCount(parts?.comments);
   const fileCount = useRecordFileCount(parts?.files);
   // A section still opening: its Skeleton, or where its read failed, the failure with Try again.
-  const waiting = <PeekSectionWaiting isFailed={parts?.failed === true} onRetry={props.onRetryPart} />;
+  const waiting = (section: PeekSection) => (
+    <PeekSectionWaiting isFailed={parts?.failed?.has(section) === true} onRetry={props.onRetryPart} />
+  );
   const link = useMemo(() => recordLinks(slug, sources.objects), [slug, sources.objects]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
@@ -308,7 +318,11 @@ function LoadedPeek(
     isOpen: true,
     onClose,
     // Where it is in the list beside it: "People · 3 of 120" (AC-7412).
-    ...(props.steps === undefined ? {} : { place: strings.place(object.pluralName, props.steps.at, props.steps.of) }),
+    ...(props.steps === undefined
+      ? {}
+      : {
+          place: strings.place(object.pluralName, props.steps.at, props.steps.of, props.steps.isOfAtLeast === true),
+        }),
     onOpenPage: openPage,
     isStepping: props.isStepping,
     ...stepProps(props, props.loadStep),
@@ -352,7 +366,7 @@ function LoadedPeek(
           />
           {!isLost &&
             (parts?.related === undefined ? (
-              waiting
+              waiting('related')
             ) : (
               <RelatedSections
                 slug={slug}
@@ -370,7 +384,7 @@ function LoadedPeek(
       label: strings.activity,
       content:
         parts?.feed === undefined ? (
-          waiting
+          waiting('feed')
         ) : (
           <ActivityTab
             feed={parts.feed}
@@ -386,7 +400,7 @@ function LoadedPeek(
       ...tabCount(notesTotal),
       content:
         parts?.notes === undefined ? (
-          waiting
+          waiting('notes')
         ) : (
           <NotesTab list={parts.notes} members={members} canAdd={canEdit} onOpenNote={setNote} onOpenLog={setLog} />
         ),
@@ -397,7 +411,7 @@ function LoadedPeek(
       ...tabCount(openTotal),
       content:
         parts?.open === undefined ? (
-          waiting
+          waiting('open')
         ) : (
           <TasksTab
             slug={slug}
@@ -417,7 +431,7 @@ function LoadedPeek(
       ...tabCount(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }),
       content:
         parts?.comments === undefined ? (
-          waiting
+          waiting('comments')
         ) : (
           <CommentsTab
             slug={slug}
@@ -435,7 +449,7 @@ function LoadedPeek(
       ...tabCount(fileCount === undefined ? undefined : { count: fileCount, atLeast: false }),
       content:
         parts?.files === undefined ? (
-          waiting
+          waiting('files')
         ) : (
           <FilesTab slug={slug} recordId={recordId} files={parts.files} members={members} isReadOnly={isLost} />
         ),

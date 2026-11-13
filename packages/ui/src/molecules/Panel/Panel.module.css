@@ -1,7 +1,8 @@
 /* Panel: a full height sheet at the end of the page, on surface-raised with a
-   hairline edge and shadow-lg; the floating variant sits below the top bar and
-   space-8 in from the other edges with a hairline border all round and radius-xl. It slides in with ease-smooth-out over
-   duration-fast and out in duration-quick; reduced motion keeps a fade. */
+   hairline edge and shadow-lg; the floating variant sits space-8 in from the
+   edges of the content area that holds it, with a hairline border all round and radius-xl. It slides in on
+   ease-smooth-out over duration-fast (the floating one over duration-slow) and out over duration-quick (the floating
+   one over duration-medium); reduced motion keeps a fade. */
 @layer components {
   .root {
     position: fixed;
@@ -20,10 +21,12 @@
     inline-size: min(100vw, var(--size-panel-wide));
   }
 
-  /* The record panel (spec 0074, AC-7411): over the content area at its full height, below the top bar, inset by the
-     content's own padding, so the top bar and the view's own controls stay in reach and the list never moves. */
+  /* The record panel (spec 0074, AC-7411): over the content area at its full height, inset space-8, never pushing the
+     list. AppShell says where its content area starts (`--shell-panel-top`, under every bar: the top bar, the view's
+     bar, the toolbar, a banner), so the bars stay in reach (AppShell's FloatingInTheView story); outside AppShell it
+     sits space-8 from the window's top. */
   .root[data-variant='floating'] {
-    inset-block: calc(var(--size-topbar) + var(--space-8)) var(--space-8);
+    inset-block: var(--shell-panel-top, var(--space-8)) var(--space-8);
     inset-inline-end: var(--space-8);
     inline-size: min(100vw - 2 * var(--space-8), var(--size-panel));
     overflow: hidden;
@@ -134,7 +137,9 @@
     animation: slide-in var(--duration-fast) var(--ease-smooth-out);
   }
 
+  /* A panel on its way out never takes a click meant for the list it is leaving. */
   .root[data-exiting] {
+    pointer-events: none;
     animation: slide-out var(--duration-quick) var(--ease-smooth-out) forwards;
   }
 

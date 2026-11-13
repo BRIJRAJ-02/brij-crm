@@ -42,6 +42,29 @@ const ARROW_ROLES = new Set([
   'gridcell',
 ]);
 
+/**
+ * Roles that take letters of their own (typeahead in a list, a grid's type to edit, a menu's first letter): J and K
+ * there are theirs. A tab or a tab's panel takes none, so the letters step from there, as the foot line promises.
+ */
+const LETTER_ROLES = new Set([
+  'grid',
+  'treegrid',
+  'gridcell',
+  'row',
+  'listbox',
+  'option',
+  'tree',
+  'treeitem',
+  'menu',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'combobox',
+  'textbox',
+  'searchbox',
+  'spinbutton',
+]);
+
 /** Tags that take typing or arrows of their own. */
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
@@ -74,14 +97,15 @@ const STEP_KEYS: Readonly<Record<string, 'previous' | 'next'>> = {
  */
 export function stepOf(event: StepKey, path: readonly StepTarget[]): 'previous' | 'next' | undefined {
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined;
-  const step = Object.hasOwn(STEP_KEYS, event.key) ? STEP_KEYS[event.key] : undefined;
+  // Caps Lock's J is still J; Shift's is refused above.
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  const step = Object.hasOwn(STEP_KEYS, key) ? STEP_KEYS[key] : undefined;
   if (step === undefined) return undefined;
-  // A tab's panel holding focus itself scrolls with the arrows; a button inside it leaves them to the step.
-  const isOwned =
-    path[0]?.role === 'tabpanel' ||
-    path.some(
-      (each) =>
-        TYPING_TAGS.has(each.tagName) || each.isContentEditable || (each.role !== null && ARROW_ROLES.has(each.role)),
-    );
+  const isLetter = key.length === 1;
+  const isTyping = path.some((each) => TYPING_TAGS.has(each.tagName) || each.isContentEditable);
+  const isOwned = isLetter
+    ? isTyping || path.some((each) => each.role !== null && LETTER_ROLES.has(each.role))
+    : // A tab's panel holding focus itself scrolls with the arrows; a button inside it leaves them to the step.
+      path[0]?.role === 'tabpanel' || isTyping || path.some((each) => each.role !== null && ARROW_ROLES.has(each.role));
   return isOwned ? undefined : step;
 }

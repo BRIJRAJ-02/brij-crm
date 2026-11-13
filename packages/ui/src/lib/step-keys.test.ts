@@ -33,7 +33,12 @@ describe('stepOf', () => {
     expect(stepOf(press('k'), [element('DIV', 'option'), element('DIV', 'listbox')])).toBeUndefined();
     expect(stepOf(press('j'), [element('DIV', 'gridcell'), element('DIV', 'grid')])).toBeUndefined();
     expect(stepOf(press('j'), [element('P', null, true)])).toBeUndefined();
-    // Capital J (Shift) and ⌘J are someone else's.
+    // From a tab or a tab's panel the letters step (neither takes letters), though the arrows stay theirs.
+    expect(stepOf(press('j'), [element('DIV', 'tab'), element('DIV', 'tablist')])).toBe('next');
+    expect(stepOf(press('k'), [element('DIV', 'tabpanel')])).toBe('previous');
+    expect(stepOf(press('ArrowDown'), [element('DIV', 'tab'), element('DIV', 'tablist')])).toBeUndefined();
+    // Caps Lock's J is J; capital J with Shift and ⌘J are someone else's.
+    expect(stepOf(press('J'), button)).toBe('next');
     expect(stepOf(press('J', { shiftKey: true }), button)).toBeUndefined();
     expect(stepOf(press('j', { metaKey: true }), button)).toBeUndefined();
   });

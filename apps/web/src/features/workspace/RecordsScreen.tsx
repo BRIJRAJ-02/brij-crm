@@ -537,7 +537,7 @@ export function RecordsScreen({
   const peekSteps =
     peekIndex === undefined || grouped !== undefined
       ? undefined
-      : stepsAround(peekIndex, state.source.count, (index) => state.source.getItem(index)?.id);
+      : stepsAround(peekIndex, state.source.count, (index) => state.source.getItem(index)?.id, state.count);
   const loadPeekStep = useCallback(
     (direction: 'previous' | 'next', signal: AbortSignal) => {
       const at = peekRecordId === undefined ? undefined : view.indexOf(peekRecordId);

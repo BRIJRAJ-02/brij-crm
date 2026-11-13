@@ -15,12 +15,14 @@ function SampleShell({
   withBanner = false,
   withPushingPanel = false,
   isRail = false,
+  withFloatingPanel = false,
 }: {
   readonly withPanel?: boolean;
   readonly withBanner?: boolean;
   readonly withPushingPanel?: boolean;
   /** The sidebar folded to its rail. */
   readonly isRail?: boolean;
+  readonly withFloatingPanel?: boolean;
 }) {
   return (
     <Stage height="page">
@@ -76,6 +78,11 @@ function SampleShell({
           : {})}
       >
         <EmptyState title="No companies yet">Companies you add or import show here.</EmptyState>
+        {withFloatingPanel && (
+          <Panel title="Northwind Traders" variant="floating" isOpen onClose={() => undefined}>
+            A record opened from its table.
+          </Panel>
+        )}
         {withPushingPanel && (
           <Panel title="Grace Hopper" isOpen onClose={() => undefined} pushesPage>
             A submission opened beside its table.
@@ -112,6 +119,40 @@ export const Rail: Story = {
     await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
     await expect(canvas.getByRole('main')).toContainElement(
       canvas.getByRole('heading', { level: 1, name: 'Companies' }),
+    );
+  },
+};
+
+/**
+ * The record panel's floating Panel over the content area (spec 0074, AC-7411): below every bar (the top bar, the
+ * view's bar and the toolbar stay in reach), at the content area's full height less its inset, at the right, and the
+ * page beside it keeps its width.
+ */
+export const FloatingInTheView: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { withFloatingPanel: true },
+  play: async ({ canvas, canvasElement }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Northwind Traders' }).closest('section') ?? canvasElement;
+    // The page under the panel is hidden from assistive tech while it is open, so it is found by its place instead.
+    const view = canvasElement.querySelector('.ws-app-shell-view');
+    await expect(view).not.toBeNull();
+    const toolbar = (
+      canvasElement.querySelector('[aria-label="View options"]') ?? canvasElement
+    ).getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const area = (view as Element).getBoundingClientRect();
+    // Under the bars, inside the content area, never past its foot or its end.
+    await expect(box.top).toBeGreaterThanOrEqual(toolbar.bottom);
+    await expect(box.top).toBeGreaterThan(area.top);
+    // At the window's foot and end, less its inset: in the app the shell fills the window, so those are the content
+    // area's (the story's stage leaves a margin round the shell).
+    await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight);
+    await expect(box.bottom).toBeGreaterThan(area.top);
+    await expect(box.right).toBeLessThanOrEqual(window.innerWidth);
+    await expect(box.left).toBeGreaterThan(area.left);
+    // The content area keeps its width: the panel floats over it rather than pushing it.
+    await expect(Math.round(area.width)).toBe(
+      Math.round((view as Element).parentElement?.getBoundingClientRect().width ?? 0),
     );
   },
 };

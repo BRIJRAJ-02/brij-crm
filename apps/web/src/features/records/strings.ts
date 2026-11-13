@@ -9,7 +9,8 @@ export const strings = {
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available',
   /** The record panel's place in the list beside it (spec 0074, AC-7412): "People · 3 of 120". */
-  place: (objects: string, at: number, of: number) => `${objects} · ${at.toLocaleString()} of ${of.toLocaleString()}`,
+  place: (objects: string, at: number, of: number, isOfAtLeast: boolean) =>
+    `${objects} · ${at.toLocaleString()} of ${of.toLocaleString()}${isOfAtLeast ? '+' : ''}`,
   /** A panel section whose read failed. */
   sectionFailed: 'This didn’t load',
   /** Under it: what to do next. */
