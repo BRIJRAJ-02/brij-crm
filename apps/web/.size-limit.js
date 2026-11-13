@@ -112,6 +112,10 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 // lines moved by the rule: the hosted form's CSS (19.2 to 19.8 kB) and the booking page's CSS (19.9 to 20 kB). Both
 // grew past AC-8's 20 B: the filled field look (Field, Select, their labels) that every form control draws, reported
 // in the spec's rationale for the owner's call.
+// 13 November 2026, the coordinator's ruling on tier 2 (spec 0072, decision 16): guest pages keep their shipped look
+// and cost; the parts they draw keep their shipped CSS, and the prototype's look for the app loads only in the app. The
+// hosted form's CSS measured 18.54 kB and the booking page's 19.34 against the phase base's 18.57 and 19.37, so both
+// budgets come back to the measurement plus 0.5 kB, rounded up: 19.1 kB and 19.9 kB.
 export default [
   // 300 kB from 2 November 2026 (the owner, "raise it to 300"): the CRM UI pass (follows, sample data, Excel import
   // and export) took the first load to 252.34 kB, and the cars behind it add a little more. Room for those, not a
@@ -140,7 +144,7 @@ export default [
   // 12 November 2026: 18 kB to 18.8 kB for spec 0071 (measured 18.57 kB). The new token set every page carries (the
   // prototype's colours and type styles, the legacy tokens the port still needs, the Geist fallback faces) added about
   // 575 bytes; the app's own sizes live in tokens-app.css, which no public page loads.
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '19.8 kB', gzip: true, running: false },
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '19.1 kB', gzip: true, running: false },
   // Spec 0063's own line: Steps and One at a time together at most 10 kB, loaded only by a form that uses them.
   {
     name: 'Form step layouts, lazy (gzipped)',
@@ -163,7 +167,7 @@ export default [
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).
   // 19.5 kB for spec 0071 (12 Nov 2026, measured 19.37 kB): the same token set as the hosted form's line above.
-  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '20 kB', gzip: true, running: false },
+  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '19.9 kB', gzip: true, running: false },
   // Spec 0061, AC-6126, measured on this build (2 November 2026, gzipped): media 1.15 kB, the picture and gallery
   // chunk 1.68 kB (one chunk: `LinkPageGallery.tsx` re-exports `LinkPageImage`, so a page with either draws from
   // the same code), next times 1.11 kB and the notice sheet 0.49 kB. Each limit is the measurement with a little
