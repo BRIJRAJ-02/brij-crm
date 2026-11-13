@@ -1,5 +1,5 @@
 /* FormPicture: a form in miniature on LinkCard's sheet, BookingPagePicture's sibling. A space-12 inset; a head of
-   the form's mark (a space-16 circle in its dot colour) beside its name (text-label-strong, one line, cut) over its
+   the form's mark (a space-16 circle in its dot colour) beside its name (text-label, one line, cut) over its
    question count (text-label, text-tertiary); then its first questions as shapes, space-6 apart: a label bar
    (space-4 tall, text-tertiary faded into the sheet) over a field (space-12 tall, hairline border-strong, radius-xs;
    space-20 when long), pills (radius-full, the first tinted with the colour, picked), dots (space-8, three lit in

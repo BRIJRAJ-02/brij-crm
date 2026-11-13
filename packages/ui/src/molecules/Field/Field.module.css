@@ -1,5 +1,5 @@
-/* Field: an 11px text-secondary label over a 30px box with a field-border
-   quiet hairline (#eaeaea, below 3:1 by the owner's call, 20 Oct 2026); focus turns it accent-line
+/* Field: an 11px text-secondary label over a 30px box with a border-subtle
+   quiet hairline (#eaeaea, below 3:1 by the owner's call, 20 Oct 2026); focus turns it accent-text
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
    lock; disabled fades it. The search variant is rounded with an icon; the
@@ -52,7 +52,7 @@
     align-items: center;
   }
 
-  /* At rest the quiet field-border; under a pointer it steps up to control-border. */
+  /* At rest the quiet border-subtle; under a pointer it steps up to control-border. */
   @media (hover: hover) and (pointer: fine) {
     .box:hover:not(:focus-within) {
       border-color: var(--control-border);
@@ -155,7 +155,7 @@
   }
 
   /* A wrapping field: one body line in the box's single line height (a body
-     line, the hairlines and space-4 above and below make size-input; space-2
+     line, the hairlines and space-4 above and below make size-control; space-2
      makes the small size), then a line more as its text wraps. */
   .box[data-wrapping] {
     align-items: flex-start;
@@ -456,7 +456,7 @@
   }
 
   /* A read only title reached with Tab shows no caret, so keyboard focus
-     outlines it in accent-line; writing in an editable one stays ring free. */
+     outlines it in accent-text; writing in an editable one stays ring free. */
   .root[data-variant='title'][data-readonly] .box:has([data-focus-visible]) {
     border-radius: var(--radius-sm);
     outline: var(--border-width-thick) solid var(--accent-text);

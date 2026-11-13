@@ -20,7 +20,7 @@ New (20 October 2026). The owner asked for the save bar to be the same family as
 ```
 
 - `placement="inline"` (the default) leaves it where it is put. `footer` centres it in a page's sticky footer (PageColumn's, PreviewLayout's), at the view's foot and in the flow after the last card. `floating` centres it `space-16` above the bottom of its nearest positioned container (the DataGrid's frame), over the rows. Centred, only the bar takes the pointer.
-- It rises `space-8` as it mounts (`duration-popover`, `ease-out`). `isLeaving` sinks it out in `duration-exit`, inert meanwhile, then calls `onLeft` so the owner can unmount it. Reduced motion keeps the fade and drops the movement.
+- It rises `space-8` as it mounts (`duration-fast`, `ease-smooth-out`). `isLeaving` sinks it out in `duration-quick`, inert meanwhile, then calls `onLeft` so the owner can unmount it. Reduced motion keeps the fade and drops the movement.
 - `isInstant` makes it come and go at once, with no rise, sink or fade, and `onLeft` follows in the next frame: a bar opened or closed from the keyboard (BulkActionBar after a Space or Esc in the grid), as the house motion rule asks of anything opened from the keyboard.
 - Content too long for one line wraps onto a second (a save that failed, with its reason, on a phone).
 - On a narrow view (under 480px) it spans the width, inside the gutter.

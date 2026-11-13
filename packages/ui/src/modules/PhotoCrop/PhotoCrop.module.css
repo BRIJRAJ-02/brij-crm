@@ -1,9 +1,9 @@
 /* PhotoCrop: in a window Modal, a 4:3 stage (2:1 for a 3:1 cover) in the dark theme whatever the page's, on
-   surface-sunken, holding the photo, with the scrim over all of it but the frame, the frame's edge in the accent, and
+   surface-subtle, holding the photo, with the scrim over all of it but the frame, the frame's edge in the accent, and
    thirds that show while the photo moves. Under
    it, the zoom's minus, Slider and plus, and a small preview of the crop as it will sit (round for a face). The
    photo is placed by the cropper's arithmetic through four custom properties; keys and Reset ease it there over
-   duration-move, a pointer moves it at once, and reduced motion drops the easing. */
+   duration-fast, a pointer moves it at once, and reduced motion drops the easing. */
 @layer components {
   .root {
     display: flex;

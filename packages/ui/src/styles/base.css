@@ -102,7 +102,7 @@
   }
 
   /* Toasts are view transitions (see provider/toasts.tsx): a new one rises
-     from below over duration-modal, a leaving one drops away faster, and the
+     from below over duration-fast, a leaving one drops away faster, and the
      rest slide to their new places. Reduced motion skips the transition.
      Only the toasts take part: the page itself is never captured (its name is
      none, but for the public pages' own crossfade below), and the transition's overlay lets every click and key through, so
@@ -112,7 +112,7 @@
   }
 
   /* Between the public pages (a booking to its guest page, a form to its booking, a profile to a page) the whole
-     page crossfades where the browser can, over duration-move, instead of swapping at once. The public pages opt in
+     page crossfades where the browser can, over duration-fast, instead of swapping at once. The public pages opt in
      (`@view-transition` in BookingFrame's and FormParts' modules, which only they load) with the `page` type, and
      only that type captures the page, so the app and the toasts' transitions never do. A browser without it simply
      loads the next page. */

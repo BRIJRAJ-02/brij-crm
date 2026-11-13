@@ -22,7 +22,7 @@ New. Settings (#13, #23) and nested record pages show their place the same way. 
 
 ## States
 
-Link, hover (pointer only), focus (the 1px `accent-line` ring just outside, as Link), current, and a group's name (the links' `text-secondary` at rest, as a place on the way, but no hover, no focus and no link; the current page stays the one place in `text`).
+Link, hover (pointer only), focus (the 1px `accent-text` ring just outside, as Link), current, and a group's name (the links' `text-secondary` at rest, as a place on the way, but no hover, no focus and no link; the current page stays the one place in `text`).
 
 Always one line: when the row is short, each label ends in an ellipsis, the places above the current one giving way first. In a container under 480px (TopBar is one, so a phone's top bar) only the current place shows, as the title, and the sidebar is the way back up (21 October 2026: a settings bar with its tile, badge and action wrapped to three lines at 375).
 

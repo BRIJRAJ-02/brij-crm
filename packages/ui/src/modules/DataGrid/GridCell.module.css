@@ -46,7 +46,7 @@
   }
 
   /* A range reads apart from selected rows (accent-soft) and from hover (surface-hover): surface-selected
-     inside, and a hairline accent-line outline around the whole range, drawn by its edge cells. */
+     inside, and a hairline accent-text outline around the whole range, drawn by its edge cells. */
   .root[data-in-range] {
     background: var(--surface-selected);
   }

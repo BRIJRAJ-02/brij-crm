@@ -1,5 +1,5 @@
-/* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
-   edge: the workspace row (size-bar tall, a hairline under it on the same
+/* Sidebar: a size-sidebar column on canvas with a hairline end
+   edge: the workspace row (size-topbar tall, a hairline under it on the same
    pixel row as the page's TopBar's), Quick actions, a scrolling body of
    size-nav-item items and folding sections, and a footer. Collapsed, it is a
    size-sidebar-collapsed rail of centred plain icons in size-nav-item

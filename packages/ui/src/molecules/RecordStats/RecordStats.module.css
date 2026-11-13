@@ -1,6 +1,6 @@
 /* RecordStats: stats side by side in a hairline box with radius-lg, split by
    hairlines; each a label in text-label and text-secondary (its icon muted)
-   over its value in text-heading, as many to a row as fit at 140px. */
+   over its value in text-title, as many to a row as fit at 140px. */
 @layer components {
   /* The box: the hairline and corners, clipping the stats' own outer edges. */
   .frame {

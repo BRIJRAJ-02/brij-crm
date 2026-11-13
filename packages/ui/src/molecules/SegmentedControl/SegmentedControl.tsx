@@ -63,7 +63,7 @@ export interface SegmentedControlProps {
   readonly orientation?: SegmentOrientation;
   /**
    * `md` (the default) sits on its own; `compact` is exactly a button's
-   * `size-control` tall, track and all, so it lines up with the buttons
+   * `size-control-sm` tall, track and all, so it lines up with the buttons
    * beside it in a bar: the view bar's Table and Board.
    */
   readonly size?: SegmentSize;

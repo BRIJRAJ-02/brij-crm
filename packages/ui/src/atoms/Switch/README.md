@@ -20,7 +20,7 @@ Ported from the artifact's Switch card (version 8). Notification preferences, fe
 
 ## States
 
-Off, on (the knob slides with `duration-move`), focus, read only, disabled. Reduced motion moves the knob at once.
+Off, on (the knob slides with `duration-fast`), focus, read only, disabled. Reduced motion moves the knob at once.
 
 ## Keyboard
 

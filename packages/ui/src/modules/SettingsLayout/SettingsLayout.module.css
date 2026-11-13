@@ -1,6 +1,6 @@
 /* SettingsLayout: the settings navigation (a size-menu column of nav items on
    the canvas, a hairline at its end) beside the page, whose header (a tile,
-   the title in text-heading with a badge, a line of description in
+   the title in text-title with a badge, a line of description in
    text-secondary, and the actions at the end) sits over the body. The page
    takes the view's whole width inside the space-16 gutter, like every other
    page (20 Oct 2026): sections put their heading above their cards, one

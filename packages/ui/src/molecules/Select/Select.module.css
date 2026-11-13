@@ -1,5 +1,5 @@
 /* Select: the Field's label above a flat 30px trigger outlined like a Field
-   (field-border, 3:1 on surface-raised), showing
+   (border-subtle, 3:1 on surface-raised), showing
    the value as a tag, a dot or text, then a chevron. Its list opens in the
    Popover at the trigger's width, with Menu sized options and a check on the
    chosen one. */

@@ -1,5 +1,5 @@
 /* BookingPagePicture: a booking page in miniature on LinkCard's sheet. A space-12 inset; a head of the page's mark
-   (a space-16 circle in its dot colour) beside its title (text-label-strong, one line, cut) over its lengths
+   (a space-16 circle in its dot colour) beside its title (text-label, one line, cut) over its lengths
    (text-label, text-tertiary); then a month of seven columns across the sheet, each day a space-16 circle:
    open days tinted with the page's colour, closed ones border-subtle, one open day solid in the colour (the
    pick). Tokens only; it never moves. */

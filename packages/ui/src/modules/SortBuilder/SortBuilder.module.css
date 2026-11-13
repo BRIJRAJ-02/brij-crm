@@ -1,4 +1,4 @@
-/* SortBuilder: a list of size-input tall rows, space-4 apart, laid out as
+/* SortBuilder: a list of size-control tall rows, space-4 apart, laid out as
    FilterBuilder's rows are: the drag handle, the lead ("Sort by" or "then
    by") in FilterBuilder's lead width, then the attribute and the direction
    at fixed widths (shrinking together in a narrow slot), so the rows line up

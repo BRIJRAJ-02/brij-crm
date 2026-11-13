@@ -62,7 +62,7 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 </Sidebar>
 ```
 
-- The head (the workspace row, or the settings variant's back link and title) is `size-bar` tall with a `border-subtle` hairline under it, the same height and line as the page's `TopBar`, so the two read as one line across the sidebar and the page (owner, 20 October 2026).
+- The head (the workspace row, or the settings variant's back link and title) is `size-topbar` tall with a `border-subtle` hairline under it, the same height and line as the page's `TopBar`, so the two read as one line across the sidebar and the page (owner, 20 October 2026).
 - `heading` with `back` replaces the workspace row: a ghost `ButtonLink` (arrow left, named by `back.label`, which is also its tooltip) back to where the person came from, then the title as plain text (not a heading: it comes before the page's h1, and `label` names the landmark). On the rail, the back link alone. The `workspace*` props don't apply.
 - `NavGroup` with `isLabelShown` puts its label on screen in a section label's type, with no fold: settings groups are short and always open. On the rail it draws as a group under a hairline, its label left to its name.
 - `find` puts a field under the head, the sidebar's width, where Quick actions sits in the app's variant: the settings variant's "Find a setting" (a `Field` with `variant="search"`, 5 November 2026, as Vercel's and Linear's settings). The screen filters its own items as the person types; the sidebar places the field, moves focus from it to the list's first item on Down, and leaves it off on the rail. Why a prop: the head and the body are the sidebar's, and a field dropped into the body would scroll away with the items it filters.

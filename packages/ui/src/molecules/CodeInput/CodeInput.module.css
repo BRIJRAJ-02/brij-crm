@@ -1,7 +1,7 @@
 /* CodeInput: one transparent input over a row of boxes outlined in
-   field-border, so a paste or the phone's suggestion fills them all. Large,
+   border-subtle, so a paste or the phone's suggestion fills them all. Large,
    the boxes share the row and stand taller, in two halves. While
-   the field is focused, the next box to fill takes the 1px accent-line border
+   the field is focused, the next box to fill takes the 1px accent-text border
    and the faint focus halo, with a blinking caret bar where the next
    character goes (steady under reduced motion); once all are filled, the
    last box keeps the ring. */
@@ -61,7 +61,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Large: the boxes share the row, size-input plus space-16 tall, with the
+  /* Large: the boxes share the row, size-control plus space-16 tall, with the
      digits in heading type, split in two halves by one more space-8. */
   .root[data-size='lg'] .boxes {
     display: flex;

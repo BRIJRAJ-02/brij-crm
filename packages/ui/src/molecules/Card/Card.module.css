@@ -126,7 +126,7 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* The actions stand on the title's line: their box is one title line tall (1lh of text-title) and centres
+  /* The actions stand on the title's line: their box is one title line tall (1lh of text-heading) and centres
      what it holds, so a control taller than that line ("View all", "Add a task") sits level with the title
      rather than hanging below it, and the header keeps the title's height. Under a title with a description
      they centre on the two lines instead, as a setting's control does. */

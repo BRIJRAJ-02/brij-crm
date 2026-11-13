@@ -1,8 +1,8 @@
 # TextSwap
 
 Words that change in place (spec 0068, AC-6806): Publish → Published, Book → Booked, Add → Added. When `children`
-changes, the old words rise `space-4` out and fade in `duration-exit`, then the new words rise `space-4` in
-from below and fade in, in `duration-popover` (transitions.dev's text states swap). The first value is simply
+changes, the old words rise `space-4` out and fade in `duration-quick`, then the new words rise `space-4` in
+from below and fade in, in `duration-fast` (transitions.dev's text states swap). The first value is simply
 there.
 
 ## Why a new part

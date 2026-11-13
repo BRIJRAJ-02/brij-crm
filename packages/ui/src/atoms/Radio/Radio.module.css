@@ -152,7 +152,7 @@
     display: none;
   }
 
-  /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
+  /* The edge is accent-text, as a checked box's is, so it reads on any surface. */
   .radio[data-selected] .circle {
     border-color: var(--accent-text);
     background: var(--accent);

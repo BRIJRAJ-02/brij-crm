@@ -1,7 +1,7 @@
-/* ReferencePicker: one field. A box drawn like Field's (field-border at rest,
-   control-border under a pointer, accent-line and the focus halo while it
-   holds focus or its menu is open, danger when refused), size-input tall
-   (size-control on a compact surface), holding the chosen chips, each with
+/* ReferencePicker: one field. A box drawn like Field's (border-subtle at rest,
+   control-border under a pointer, accent-text and the focus halo while it
+   holds focus or its menu is open, danger when refused), size-control tall
+   (size-control-sm on a compact surface), holding the chosen chips, each with
    its small Remove, then the button that opens the search, filling the rest
    of the box with the placeholder or only a chevron. In a grid cell's
    popover: the chips over the search and its results, in place. */

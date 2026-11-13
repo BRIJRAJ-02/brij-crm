@@ -1,10 +1,10 @@
 /* LinkCard (the owner's card grid, 20 October 2026; restyled 4 November 2026, "these look like AI"): a raised
    card in Card's own look (hairline border-subtle, radius-lg, surface-raised, shadow-xs), with no colour edge.
    A link with a colour shows it as a small dot-<hue> dot before its title; the dot never says a state.
-   The body: the title (text-title, two lines at most) with a state Badge beside it and the switch at the top
+   The body: the title (text-heading, two lines at most) with a state Badge beside it and the switch at the top
    end; the facts in text-secondary under it.
    The foot, one line on the card's own surface: the public link muted at its start (it truncates first), Copy
-   link and the actions at its end, space-8 apart, every control drawn at size-input (30px) and pressed at 32
+   link and the actions at its end, space-8 apart, every control drawn at size-control (30px) and pressed at 32
    (Button lg's hit area).
    The title is the card's one link: its ::after covers the card's body, so a press there opens it. The
    switch (in a 32px box, so a near miss does nothing rather than opening the card), the address (so it can
@@ -12,10 +12,10 @@
    whole card. An off card's title reads in text-secondary; a pending one in text-tertiary. Nothing moves on
    press.
    A pictured card (5 November 2026, the owner: "make these cards look much prettier"): a stage across its top,
-   surface-sunken (faintly tinted with the link's colour when it has one) over a hairline, holds a sheet the width
+   surface-subtle (faintly tinted with the link's colour when it has one) over a hairline, holds a sheet the width
    of half a panel (a form's thumbnail is laid out at a panel's width and shown at half size), its top corners
    rounded, shadow-md, its foot cut by the stage. On hover (a fine pointer) the sheet lifts space-4 in
-   duration-move with ease-out, so the card answers the pointer; reduced motion keeps it still; an off card's stage
+   duration-fast with ease-smooth-out, so the card answers the pointer; reduced motion keeps it still; an off card's stage
    loses its colour. The facts line can
    start with the link's status as a StatusDot, a middle dot after it; the footer's start can hold one control of
    the card's own (`lead`) in the address's place; the facts line can end with one (`factsEnd`), raised above the

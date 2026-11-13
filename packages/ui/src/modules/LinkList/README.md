@@ -146,7 +146,7 @@ A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:0
 
 ## Rows that come and go (10 November 2026)
 
-- `hasRowMotion` makes the list's changes read where they happen (Bookings › Availability's time off): a row that arrives after the first draw drops in (a fade with a small rise at `duration-popover`, as `media` rows do), and a row marked `isLeaving` fades at `duration-exit` while it closes up at `duration-modal`, so the rows under it rise into its place, then `onLeft(id)` tells the screen to stop drawing it (it goes anyway after 600ms should its motion never run). A leaving row can't be opened or pressed. Reduced motion keeps the fade and drops the rise and the close up. Why a prop: a list whose rows are deleted with Undo in a toast, rather than after a confirm, has to show which row went; a Table's rows can't close up.
+- `hasRowMotion` makes the list's changes read where they happen (Bookings › Availability's time off): a row that arrives after the first draw drops in (a fade with a small rise at `duration-fast`, as `media` rows do), and a row marked `isLeaving` fades at `duration-quick` while it closes up at `duration-fast`, so the rows under it rise into its place, then `onLeft(id)` tells the screen to stop drawing it (it goes anyway after 600ms should its motion never run). A leaving row can't be opened or pressed. Reduced motion keeps the fade and drops the rise and the close up. Why a prop: a list whose rows are deleted with Undo in a toast, rather than after a confirm, has to show which row went; a Table's rows can't close up.
 
 ## States
 

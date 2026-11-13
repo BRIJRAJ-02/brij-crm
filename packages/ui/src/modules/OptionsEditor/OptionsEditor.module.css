@@ -1,5 +1,5 @@
 /* OptionsEditor: the group's label and its "N of 500" over a list of
-   size-input tall rows, space-4 apart: the drag handle, the colour, the
+   size-control tall rows, space-4 apart: the drag handle, the colour, the
    label (and for a stage its outcome and target days), the row's menu.
    A row being dragged fades; the drop target takes the inset ring. Add
    option sits under the list; archived options under it, muted. */

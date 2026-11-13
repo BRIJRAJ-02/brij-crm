@@ -1,6 +1,6 @@
 /* SectionTabs (spec 0065, AC-6529; spec 0068, AC-6806): a row of pills that scrolls sideways, the current one
    filled in the text colour with the surface's colour on it. The fill is one element under the pills that slides to
-   the chosen pill and takes its width, in duration-move on the ease in out curve (transitions.dev's tabs sliding);
+   the chosen pill and takes its width, in duration-fast on the ease in out curve (transitions.dev's tabs sliding);
    its first place is drawn without moving. Reduced motion moves it at once. */
 @layer components {
   .root {

@@ -39,7 +39,7 @@ same control at three sizes and two tones.
   sheet's foot, beside Button's 48px `sheet`). Both draw the − and + in the text colour, not the quiet one, and half
   as bold again (checklabs' 2.25 stroke). Why sizes and not a change to `sm` and `lg`: those keep the library's own
   proportions for any other page; these two are the guest menu's, and its look owns them. The buttons are the same
-  Buttons, drawn at 24px and 32px by the pill's own sizes (`size-control`, `size-input`), so their 44px touch target
+  Buttons, drawn at 24px and 32px by the pill's own sizes (`size-control-sm`, `size-control`), so their 44px touch target
   follows.
 - `tone`: `default` is a hairline pill on the card; `filled` a pill of the chip colour with no line (checklabs' cream).
 - A press that reaches a limit turns its own button off: focus moves to the other button, so it never falls out of
@@ -52,7 +52,7 @@ same control at three sizes and two tones.
 - The count is an `output` that is a polite live region, and its digits pop as it changes (NumberPop).
   `isCountAnnounced={false}` makes it plain text, where the page already says each change in its own words (the
   guest menu's rows), so it isn't said twice.
-- Colours are the surface's own names (`surface-raised`, `surface-sunken`, `border`, `text`), so a page's look wears
+- Colours are the surface's own names (`surface-raised`, `surface-subtle`, `border`, `text`), so a page's look wears
   it.
 
 ## States

@@ -4,7 +4,7 @@ A side panel that slides in from the end and leaves the page usable beside it.
 
 ## Why it exists
 
-New. The record panel (#17), notifications (#28) and the assistant (#54) open beside the table rather than over it, so they can't be a Modal, which blocks the page. Panel gives them one sheet, one slide (`ease-drawer`) and one way to close.
+New. The record panel (#17), notifications (#28) and the assistant (#54) open beside the table rather than over it, so they can't be a Modal, which blocks the page. Panel gives them one sheet, one slide (`ease-smooth-out`) and one way to close.
 
 ## Use
 
@@ -38,7 +38,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 
 Open overlaid; open pushing the page (`pushesPage`, the AppShell story `PushedByPanel`); closing with Back on a phone (`CloseAsBack`).
 
-Opening slides it in over `duration-modal` on `ease-drawer`; closing slides and fades it out in `duration-exit`, and it is removed when that ends. Opened from the keyboard it appears at once. Reduced motion keeps a fade.
+Opening slides it in over `duration-fast` on `ease-smooth-out`; closing slides and fades it out in `duration-quick`, and it is removed when that ends. Opened from the keyboard it appears at once. Reduced motion keeps a fade.
 
 ## Keyboard
 

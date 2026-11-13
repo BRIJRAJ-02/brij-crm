@@ -1,5 +1,5 @@
 /* Disclosure: a 28px title row with a chevron that turns as the section
-   opens; the panel's height animates open over duration-move. Every rule on
+   opens; the panel's height animates open over duration-fast. Every rule on
    a Disclosure's state or variant reads it from its own trigger, panel or
    content (each carries the variant), never from an ancestor, so a
    Disclosure inside another's panel keeps its own look (flow walks, 29

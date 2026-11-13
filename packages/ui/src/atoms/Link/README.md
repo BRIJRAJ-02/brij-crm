@@ -25,7 +25,7 @@ New. Text in notes, descriptions, settings and empty states links somewhere; one
 
 ## States
 
-It is underlined at rest (soft), so it never relies on colour; hover and focus darken the underline, and focus adds the 1px `accent-line` ring just outside the text (the halo alone is under 3:1).
+It is underlined at rest (soft), so it never relies on colour; hover and focus darken the underline, and focus adds the 1px `accent-text` ring just outside the text (the halo alone is under 3:1).
 
 ## Keyboard
 

@@ -1,4 +1,4 @@
-/* ShortcutHelp: groups stacked space-16 apart, each a label-strong title in
+/* ShortcutHelp: groups stacked space-16 apart, each a label title in
    text-secondary over its rows; a row's keycaps sit together, space-2 apart. */
 @layer components {
   .groups {

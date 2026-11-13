@@ -1,7 +1,7 @@
 /* FloatingBar: the shell the bulk bar and the save bar share. A size-toolbar
    tall bar on surface-raised with a hairline, shadow-md and radius-lg, its
    content in one row (a second when it can't fit). It rises space-8 as it
-   mounts (duration-popover, ease-out) and sinks out in duration-exit;
+   mounts (duration-fast, ease-smooth-out) and sinks out in duration-quick;
    reduced motion keeps the fade, and a bar opened from the keyboard comes
    and goes at once. In a page's footer it is centred there;
    floating, it sits centred space-16 above the bottom of its nearest

@@ -41,7 +41,7 @@
 
   /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
      public booking page, which sets it on its own root (1 November 2026). It eases on --ease-press when a page sets
-     one (the guest menu's overshoot, after checklabs), else ease-out. */
+     one (the guest menu's overshoot, after checklabs), else ease-smooth-out. */
   .root[data-pressed]:not([data-disabled]) {
     scale: var(--scale-press);
   }
@@ -126,7 +126,7 @@
     block-size: var(--size-control);
   }
 
-  /* Drawn at 30px (size-input), pressed at 32: an invisible pixel past the border all round (the inset counts
+  /* Drawn at 30px (size-control), pressed at 32: an invisible pixel past the border all round (the inset counts
      from inside the border), so a large control (a link card's footer) can't be missed. Nothing drawn changes. */
   .root[data-size='lg']::after {
     position: absolute;
@@ -153,7 +153,7 @@
   }
 
   /* A hosted form's own button (Continue, OK, Send; the owner, 5 November 2026: "button looks ugly", OK was nearly
-     square): the height of the form's fields beside it (size-input, raised by the public form), room at the sides
+     square): the height of the form's fields beside it (size-control, raised by the public form), room at the sides
      and at least twice its height wide, so a two letter word still reads as a button. Inside the app, nothing is
      this size. */
   .root[data-size='public'] {
@@ -301,8 +301,8 @@
     color: var(--text-secondary);
   }
 
-  /* A picker among Fields (a form question's answer type): a Field's box exactly, its size-input height, quiet
-     field-border edge, raised fill and no drop, the value in body type at the start and the chevrons at the end. */
+  /* A picker among Fields (a form question's answer type): a Field's box exactly, its size-control height, quiet
+     border-subtle edge, raised fill and no drop, the value in body type at the start and the chevrons at the end. */
   .root[data-variant='field'] {
     display: flex;
     inline-size: 100%;

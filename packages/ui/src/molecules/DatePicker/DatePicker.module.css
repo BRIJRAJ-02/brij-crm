@@ -33,7 +33,7 @@
     cursor: text;
   }
 
-  /* At rest the softer field-border, as Field; under a pointer it steps up to control-border. */
+  /* At rest the softer border-subtle, as Field; under a pointer it steps up to control-border. */
   @media (hover: hover) and (pointer: fine) {
     .box:hover:not([data-focus-within]) {
       border-color: var(--control-border);

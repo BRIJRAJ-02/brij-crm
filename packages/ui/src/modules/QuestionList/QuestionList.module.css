@@ -471,7 +471,7 @@
     white-space: nowrap;
   }
 
-  /* The chevron in a size-input square (as the footer's large icon buttons), apart from the text. */
+  /* The chevron in a size-control square (as the footer's large icon buttons), apart from the text. */
   .chevron {
     display: inline-grid;
     flex: none;

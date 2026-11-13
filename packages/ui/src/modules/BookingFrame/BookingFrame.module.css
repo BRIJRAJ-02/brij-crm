@@ -323,7 +323,7 @@
 
   /* The card's body: the month's panes and Book bar, and over them, in exactly their box, another view (List,
      Book by chat). The month always sets the size, so a view switch never moves the page. The views crossfade:
-     the month goes in duration-exit, a view comes in duration-move, and the first paint simply shows. */
+     the month goes in duration-quick, a view comes in duration-fast, and the first paint simply shows. */
   .stage {
     position: relative;
     display: flex;
@@ -346,7 +346,7 @@
     visibility: hidden;
   }
 
-  /* Switching views, the month goes in duration-exit as the view comes in. */
+  /* Switching views, the month goes in duration-quick as the view comes in. */
   .stage[data-moved] .under[inert] {
     transition:
       opacity var(--duration-quick) var(--ease-smooth-out),

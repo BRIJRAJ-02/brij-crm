@@ -1,7 +1,7 @@
 /* AttributeList: rows of a name column (an 11px label with its type's icon,
    and a small lock when it can't change) and a value column, each at least
    size-row tall. Names sit at the top, centred on the first line of their
-   value (a size-control line, space-4 from the row's top), so a value or an
+   value (a size-control-sm line, space-4 from the row's top), so a value or an
    editor growing taller (a textarea, a hint under a field) never moves its
    name. A value that can change takes surface-hover under a pointer, with
    its pencil button showing on hover or focus; an empty one reads "Set
@@ -50,7 +50,7 @@
     overflow-wrap: anywhere;
   }
 
-  /* The value's first line (size-control tall) sits space-4 down: centred in a size-row, level with the name. */
+  /* The value's first line (size-control-sm tall) sits space-4 down: centred in a size-row, level with the name. */
   .cell {
     display: flex;
     flex-direction: column;

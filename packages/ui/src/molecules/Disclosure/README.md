@@ -29,7 +29,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 
 ## States
 
-Closed, open (the chevron turns and the panel's height animates over `duration-move`), hover (pointer only; the quiet variant's pill and text colour fade over `duration-hover`), focus, disabled. Reduced motion opens it at once.
+Closed, open (the chevron turns and the panel's height animates over `duration-fast`), hover (pointer only; the quiet variant's pill and text colour fade over `duration-quick`), focus, disabled. Reduced motion opens it at once.
 
 ## Keyboard
 

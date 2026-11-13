@@ -3,11 +3,11 @@
    foot, which cut it on purpose (so it bleeds off the edge at any width, at
    least twice size-panel wide). Only its visible top start corner is round,
    with a soft lifted shadow. The sidebar is a third of the window's least
-   width (about the app's own) on surface-sidebar, the page beside it on surface, with the
-   app's head height (size-bar) and row heights (size-nav-item, size-row).
+   width (about the app's own) on canvas, the page beside it on surface, with the
+   app's head height (size-topbar) and row heights (size-nav-item, size-row).
    Rows carry the app's labels; names are what the person typed, or the
    sample workspace; the table is still Skeleton bars until there is a
-   sample. The part a step is about takes the focus ring (accent-line and
+   sample. The part a step is about takes the focus ring (accent-text and
    the faint halo), easing to it as the step changes. */
 @layer components {
   .root {

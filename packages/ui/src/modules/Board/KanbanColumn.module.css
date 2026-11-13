@@ -1,4 +1,4 @@
-/* KanbanColumn: a size-board-column column on surface-column with radius-lg:
+/* KanbanColumn: a size-board-column column on surface-subtle with radius-lg:
    its option's dot, title and count (and an optional "+"), then its cards space-8 apart. A card is
    surface-raised with a hairline border and shadow-xs; it fades where it was
    while it moves (its lifted copy rides above, shadow-lg) and takes the inset

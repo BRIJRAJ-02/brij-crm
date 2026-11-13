@@ -1,4 +1,4 @@
-/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-heading over a label
+/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-title over a label
    line (the object, then any detail, space-8 apart in text-secondary), and at
    the end who else is viewing and the actions. Below 480px wide the end wraps
    under the name. The stat strip, when there is one, takes the line below. */

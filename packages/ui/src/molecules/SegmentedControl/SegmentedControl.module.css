@@ -1,8 +1,8 @@
-/* SegmentedControl: equal segments on a surface-sunken track with a hairline,
+/* SegmentedControl: equal segments on a surface-subtle track with a hairline,
    and a flat raised thumb that slides to the chosen one over
-   duration-move (at once for the keyboard and under reduced motion).
+   duration-fast (at once for the keyboard and under reduced motion).
    Vertical, the segments stack and keep only space-4 at their sides, so icon
-   only ones fit the folded sidebar's rail, and each is a full size-control
+   only ones fit the folded sidebar's rail, and each is a full size-control-sm
    square, so a stacked segment is still a 24 px or larger touch target. */
 @layer components {
   .root {
@@ -74,7 +74,7 @@
   }
 
   /* Compact: the whole control, track and hairline included, is a button's
-     size-control tall, so it shares a bar's line with the buttons beside it. */
+     size-control-sm tall, so it shares a bar's line with the buttons beside it. */
   .root[data-size='compact'] .segment {
     block-size: calc(var(--size-control-sm) - 2 * var(--space-2) - 2 * var(--border-width-hairline));
     padding-inline: var(--space-8);

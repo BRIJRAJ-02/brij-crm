@@ -759,7 +759,7 @@
   }
 
   /* The selection bar: a pill in the ink 16px from the sides and the foot, as wide as the column, 14px over and under
-     its 15px semibold words; it rises in with the first pick over checklabs' 320ms (twice duration-press), and held it
+     its 15px semibold words; it rises in with the first pick over checklabs' 320ms (twice duration-quick), and held it
      eases down to 0.98 on the look's overshoot. */
   .picksDock {
     position: fixed;

@@ -68,7 +68,7 @@ DeferredSelect reports `onOpenChange(true)` on the stand in's opening press, sin
 
 ## States
 
-Placeholder, chosen, several chosen (`multiple`), searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-line` border and the faint halo; in a popover the border alone, as a Field's there), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
+Placeholder, chosen, several chosen (`multiple`), searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-text` border and the faint halo; in a popover the border alone, as a Field's there), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
 - `optionDescription="below"` puts each option's `description` under its label, wrapping, in a list exactly a menu wide (Popover `width="list"`) that opens under the trigger's end: an option that needs its line read before choosing. Why a variant: after the label, the longest line set the list's width, so a list of roles with their lines spilled out of the dialog it opened in (the owner, 22 October 2026).
 - `placement` sets where the list opens (under the trigger by default, flipped when there's no room): `top end` keeps a short list above a dialog's footer when the trigger sits just over it, as the Invite dialog's role per row does.

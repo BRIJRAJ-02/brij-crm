@@ -74,7 +74,7 @@ export interface TopBarProps {
 }
 
 /**
- * The size-bar tall bar at the top of a page: the object's tile, the title as
+ * The size-topbar tall bar at the top of a page: the object's tile, the title as
  * the page's h1, and the page's actions. With `crumbs`, the trail shows the
  * title as its current place and the h1 stays for screen readers.
  */
@@ -257,7 +257,7 @@ export type ViewBarProps = (ViewBarSwitcher | ViewBarToolsOnly) & {
 
 /**
  * The bar under the top bar: the view switcher (with the view's own actions in its menu) at the start, and at the
- * end any notices, View settings, then Table or Board, all on one size-control line. Without
+ * end any notices, View settings, then Table or Board, all on one size-control-sm line. Without
  * `views`, a page that has no views (Booking pages, Forms) keeps the same bar for its tools, so its content starts
  * where an object's view does and nothing moves between them.
  */
