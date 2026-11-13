@@ -422,27 +422,27 @@ What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, meas
 
 Tiers 3b to 3d added to the signed in pages' lines (the shell look on every screen, +189 to +231 B of CSS; the week; the settings parts), cut the booking page's and the business page's, and took the public profile page and the captures pages under their `f81623f0c` figures, by the LinkListToolbar split. The menu, reserve and business lines are listed for the first time: they carry tiers 1 to 3a's shared parts (Button, Select, Field, Tag and the like), not tier 3's.
 
-**After the merge of phases 0, 1 and 2** (feat/port-12, af91d9b75; measured the same way, against `f81623f0c`; "phase 1" is the line above, "phase 2" its own change measured from `f81623f0c` to feat/port-2's tip, "main" what phase 0 brought from main after `f81623f0c`, the wallet card):
+**After the merge of phases 0, 1 and 2** (feat/port-12, cd31df024, after phase 2's three additions became parts of their own, see spec 0073's rationale, "Cost per page"; measured the same way against `f81623f0c`; "main" is what phase 0 brought from main after `f81623f0c`, the wallet card):
 
-| Page | JavaScript | CSS | Over the base | Of which |
+| Page | JavaScript | CSS | Over the base | Against port-1's tip (JS / CSS) |
 |---|---|---|---|---|
-| Hosted form | 205.91 -> 206.03 kB (+120 B) | 18.57 -> 19.33 kB (+760 B) | **+880 B** | phase 1 +820, the merge notes' FormParts remaps +41 (CSS), main +10, hash noise |
-| Booking page | 188.89 -> 188.84 kB (-50 B) | 19.37 -> 19.52 kB (+150 B) | **+100 B** | phase 1 +20, BookingFrame's merge note +20 (CSS), phase 2 +11 (StatusDot's words), main +13, hash noise about +40 (JS) |
-| Menu page | 240,259 -> 241,139 B (+880) | 30,098 -> 30,805 B (+707) | **+1,587 B** | phase 1 +514, phase 2 +1,001 (Modal's discard confirm, Reveal's drop, TextSwap), main +14 |
-| Reserve page | 293,645 -> 294,396 B (+751) | 41,875 -> 42,999 B (+1,124) | **+1,875 B** | phase 1 +1,140, phase 2 +612, main +14 |
-| Business page | 253,748 -> 254,292 B (+544) | 29,207 -> 29,560 B (+353) | **+897 B** | phase 1 +180, phase 2 +618, main +17 |
-| Public profile | 270,196 -> 247,278 B (-22,918) | 35,796 -> 33,325 B (-2,471) | **-25,389 B**, under the base | phase 1 -25,903, phase 2 +406 |
-| Sign in | 415,059 -> 415,336 B (+277) | 26,735 -> 27,741 B (+1,006) | **+1,283 B** | phase 1 +999, main +147, phase 2 +23 |
-| Workspace shell (w.$slug) | 472,242 -> 472,950 B (+708) | 34,809 -> 36,302 B (+1,493) | **+2,201 B** | phase 1 +1,515, phase 2 +402, main +152, content hashes (the entry's chunk map) the rest |
-| Workspace index | 449,144 -> 449,803 B (+659) | 28,116 -> 29,305 B (+1,189) | **+1,848 B** | phase 1 +1,189, phase 2 +402, main +152 |
-| An object's records | 457,049 -> 457,715 B (+666) | 29,811 -> 31,041 B (+1,230) | **+1,896 B** | phase 1 +1,246, phase 2 +408, main +154 |
-| Bookings list (the week) | 680,334 -> 681,172 B (+838) | 51,956 -> 54,439 B (+2,483) | **+3,321 B** | phase 1 +2,526, phase 2 +460, main +158 |
-| Settings, an object's tab | 728,001 -> 728,928 B (+927) | 52,932 -> 55,734 B (+2,802) | **+3,729 B** | phase 1 +2,894, phase 2 +452, main +191 |
-| Link page editor | 764,592 -> 766,022 B (+1,430) | 70,798 -> 73,977 B (+3,179) | **+4,609 B** | phase 1 +3,330, phase 2 +883, main +192 |
-| Captures, links | 511,530 -> 498,081 B (-13,449) | 38,565 -> 37,717 B (-848) | **-14,297 B**, under the base | phase 1 -14,966, phase 2 +377, main +148 |
-| Captures, a form | 783,126 -> 781,483 B (-1,643) | 67,524 -> 68,022 B (+498) | **-1,145 B**, under the base | phase 1 -2,052, phase 2 +454, main +194 |
+| Hosted form | 205.91 -> 206.03 kB (+120 B) | 18.57 -> 19.33 kB (+760 B) | **+880 B** | +10 B / +50 B: the merge notes' FormParts remaps +41, main +5 |
+| Booking page | 188.89 -> 188.78 kB (-110 B) | 19.37 -> 19.52 kB (+150 B) | **+40 B** | 0 / +20 B: BookingFrame's merge note |
+| Menu page | 240,259 -> 240,270 B (+11) | 30,098 -> 30,645 B (+547) | **+558 B** | +19 / +25: BookingFrame's note +20, main +6 |
+| Reserve page | 293,645 -> 293,723 B (+78) | 41,875 -> 42,999 B (+1,124) | **+1,202 B** | +14 / +48: BookingFrame's and BookingReceipt's notes +41, main +7 |
+| Business page | 253,748 -> 253,612 B (-136) | 29,207 -> 29,560 B (+353) | **+217 B** | +12 / +25 |
+| Public profile | 270,196 -> 246,961 B (-23,235) | 35,796 -> 33,165 B (-2,631) | **-25,866 B**, under the base | +9 / +28 |
+| Sign in | 415,059 -> 415,206 B (+147) | 26,735 -> 27,741 B (+1,006) | **+1,153 B** | +149 / +5: main +142 and +5 |
+| Workspace shell (w.$slug) | 472,242 -> 472,421 B (+179) | 34,809 -> 36,302 B (+1,493) | **+1,672 B** | +152 / +5: main +147 and +5 |
+| Workspace index | 449,144 -> 449,290 B (+146) | 28,116 -> 29,305 B (+1,189) | **+1,335 B** | +141 / +5: main +147 |
+| An object's records | 457,049 -> 457,201 B (+152) | 29,811 -> 31,041 B (+1,230) | **+1,382 B** | +131 / +5: main +149 |
+| Bookings list (the week) | 680,334 -> 680,537 B (+203) | 51,956 -> 54,433 B (+2,477) | **+2,680 B** | +135 / +19: main +153; Tag's custom property fallbacks +14 (CSS) |
+| Settings, an object's tab | 728,001 -> 728,313 B (+312) | 52,932 -> 55,728 B (+2,796) | **+3,108 B** | +195 / +19: main +186 |
+| Link page editor | 764,592 -> 765,132 B (+540) | 70,798 -> 73,811 B (+3,013) | **+3,553 B** | +184 / +39: main +187; BookingFrame's note +20 (CSS) |
+| Captures, links | 511,530 -> 497,555 B (-13,975) | 38,565 -> 37,717 B (-848) | **-14,823 B**, under the base | +138 / +5: main +143 |
+| Captures, a form | 783,126 -> 780,860 B (-2,266) | 67,524 -> 68,019 B (+495) | **-1,771 B**, under the base | +218 / +63: main +189, ReadyPanel's `invite` +17 (phase 2's, ShareSheet's words), FormParts' note +41 (CSS) |
 
-The merge adds nothing of its own beyond the two merge notes' CSS (FormParts +41 B on the hosted form, BookingFrame +20 B on the booking page) and content-hash noise; phase 2's figures are its own (spec 0073 records Modal's +375 B and Reveal's +232 B chunks, which every page that loads them now carries). The screen phases' rule below applies to these lines.
+The hosted form's and booking page's lines are `pnpm size`'s; the rest are `scratchpad/t3m.mjs`'s, in bytes. Against port-1's tip, every page's JavaScript differs by main's wallet card and content-hash noise only (the entry's chunk map and the minifier's renamed imports, -18 to +29 B a page), and phase 2 adds nothing to any page but ReadyPanel's `invite` (+17 B, on the pages that draw ReadyPanel). The CSS over port-1 is the merge notes' own (FormParts +41 B, BookingFrame +20 B, BookingReceipt +21 B) and Tag's three custom property fallbacks (+14 B, on screens with tags), which carry AiTag's look.
 
 **The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then; on the merged branch, the hosted form's JavaScript at 206.5 kB and the first load's at 297.2 kB (see `.size-limit.js`).
 

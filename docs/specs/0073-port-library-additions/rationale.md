@@ -159,6 +159,30 @@ Every line sits within 0.5 kB of its budget, so none is tightened. The first loa
 
 Per chunk (865 JavaScript and CSS entries, gzipped, keys with their hashes stripped): none grew by 100 bytes or more. The QR helpers' 944 B chunk is the same bytes under its new name; Tag's chunk grew 65 B of JavaScript and 18 B of CSS (the `ai` tone); all chunks together shrank 28 B. ShareSheet and AIAssist are in no chunk yet, since no screen imports them; their cost lands with phases 3 and 5.
 
+### Cost per page (measured in the merge, 13 Nov 2026)
+
+The tables above held only `pnpm size`'s lines, which phase 2 did not move. Measured per page (`scratchpad/t3m.mjs`, gzipped bytes, each page's entry and its route's static imports), phase 2 as first built added to pages that never draw its parts, because three additions lived inside parts every page loads: Modal's `isDirty` guard (375 B of JavaScript, plus a 239 B strings chunk on the guest pages, since Modal's words imported the shared strings), Reveal's `drop` (232 B of JavaScript, 160 B of CSS) and Tag's `ai` tone (67 B of JavaScript, 20 B of CSS, 18 B of words in a chunk every booking page loads). The merge (feat/port-12, c56716ed9) made them `GuardedModal`, `RevealDrop` and `AiTag`, parts of their own that no screen imports yet.
+
+| Page | As first built (port-2's tip against `f81623f0c`, JS / CSS) | Left in feat/port-12 (JS / CSS) |
+|---|---|---|
+| Hosted form | -16 / 0 | 0 / 0 |
+| Booking page | +11 / 0 | 0 / 0 |
+| Menu page | +841 / +160 | 0 / 0 |
+| Reserve page | +612 / 0 | 0 / 0 |
+| Business page | +618 / 0 | 0 / 0 |
+| Public profile | +246 / +160 | 0 / 0 |
+| Sign in | +23 / 0 | 0 / 0 |
+| Workspace shell (w.$slug) | +402 / 0 | 0 / 0 |
+| Workspace index | +402 / 0 | 0 / 0 |
+| An object's records | +408 / 0 | 0 / 0 |
+| Bookings list | +442 / +18 | 0 / +14 (Tag's custom property fallbacks, which carry AiTag's look) |
+| Settings, an object's tab | +434 / +18 | 0 / +14 (the same) |
+| Link page editor | +705 / +178 | 0 / +14 (the same) |
+| Captures, links | +377 / 0 | 0 / 0 |
+| Captures, a form | +436 / +18 | +17 (ReadyPanel's `invite`, ShareSheet's words) / +14 |
+
+"Left" is the merged page against port-1's tip less what main brought through phase 0; what remains besides is content-hash noise (-18 to +29 B a page, the entry's chunk map and renamed imports). Each new part's cost lands with the screen that first draws it (phases 3, 5 and 8), on that screen's route alone.
+
 ### Calls made while building batches 2 and 3
 
 1. **ShareSheet on ReadyPanel's share column.** The mapping said "Modal, Field `copy`, CopyButton, QrCode and Button". ReadyPanel's `share` variant already composes those, in the layout the owner approved on 5 November 2026, and the forms' live dialog already draws it in a Modal. Building the share layout again from its parts would have been a second look for one moment; reuse came first. The design system review agreed (12 November 2026).
