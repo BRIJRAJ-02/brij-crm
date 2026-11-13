@@ -175,7 +175,10 @@ export default [
   // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
   // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
   // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.5 kB', gzip: true, running: false },
+  // 13 November 2026, spec 0074 (port phase 3, AC-7417): the guest pages no longer carry the app's handle code, only an
+  // address's shape (`@crm/contracts/handle-address`), which more than pays for PopupHost. Measured 205.72 kB, so the
+  // line comes down to that plus at most 0.5 kB, as above; the booking page's line likewise (188.71 kB).
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '206.2 kB', gzip: true, running: false },
   // 3 November 2026: 17 kB to 18 kB, for Finish later (spec 0063, AC-6319). The line stood at 16.97 kB with
   // 30 bytes of room, so any new piece of UI on the hosted page breached it; this one is four rules sharing one
   // class and still came to 140 bytes over. A kilobyte of gzipped CSS is about 20 ms on slow 3G, against a
@@ -203,7 +206,7 @@ export default [
   },
   // Spec 0072, tier 3d (13 November 2026): 188.78 kB, 110 B less, once the public profile page imports
   // LinkListToolbar from its own file; the measurement plus 0.5 kB.
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '189.3 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '189.2 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).

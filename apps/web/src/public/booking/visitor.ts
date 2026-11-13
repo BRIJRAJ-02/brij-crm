@@ -4,7 +4,7 @@
 // happened), and the address it then tidies to, so a reload never says it
 // again. Pure, for the page and its tests.
 
-import { handleAddressOf } from '@crm/contracts/handles';
+import { handleAddressOf } from '@crm/contracts/handle-address';
 
 /** What a page chose before leaving for Google. */
 export interface Chosen {

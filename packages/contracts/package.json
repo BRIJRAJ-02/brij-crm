@@ -47,6 +47,7 @@
     "./booking": "./src/booking/index.ts",
     "./visits": "./src/visits-model.ts",
     "./handles": "./src/booking/handles.ts",
+    "./handle-address": "./src/booking/handle-address.ts",
     "./hours": "./src/booking/summary.ts",
     "./roster": "./src/booking/roster.ts",
     "./zones": "./src/booking/zones.ts",

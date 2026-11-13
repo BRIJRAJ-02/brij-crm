@@ -13,7 +13,7 @@
 // address in place once it has one (never inside an embed, never on a return
 // from Google, which comes back to `/b/`).
 import '@crm/ui/styles.css';
-import { handleAddressOf } from '@crm/contracts/handles';
+import { handleAddressOf } from '@crm/contracts/handle-address';
 import { createHandleClient, isDataError } from '@crm/data/booking';
 import { BookingMessage, BookingProfile, BookingProvider, createToasts } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';

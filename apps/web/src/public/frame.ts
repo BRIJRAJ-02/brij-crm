@@ -8,7 +8,7 @@
 // else the `host` the script named (Firefox). A page that names another
 // site's origin gets nothing, since the browser delivers a message only when
 // the parent's origin is the one named. The frame reads no message at all.
-import { handleAddressOf } from '@crm/contracts/handles';
+import { handleAddressOf } from '@crm/contracts/handle-address';
 
 /** How a frame was embedded: inline (its height follows its content) or in the script's dialog. */
 export type EmbedMode = 'inline' | 'popup';
