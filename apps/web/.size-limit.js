@@ -147,7 +147,9 @@ export default [
   { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '297.2 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '8.3 kB', gzip: true, running: false },
   // Spec 0072: the workspace shell's CSS (above), at the measurement plus 0.5 kB (35.86 kB on 13 November 2026, after
-  // phase 1's tiers 1 to 3a and the trim round; 34.61 kB at f81623f0c).
+  // phase 1's tiers 1 to 3a and the trim round; 34.61 kB at f81623f0c). Tier 3b (13 November) took it to 36.08 kB
+  // (AppShell's inset card and Sidebar's pills): left at 36.4 rather than raised to its measurement plus 0.5 kB, so
+  // the rest of phase 1 has 0.3 kB, not more.
   { name: 'Workspace shell CSS (gzipped)', path: inDist(shellCss), limit: '36.4 kB', gzip: true, running: false },
   // 223 kB from 26 October 2026: forms take files (spec 0023's uploads). The question's drop area brings React
   // Aria's drag and drop code, which took the form to 245.52 kB, 24.52 kB over. That is not what a form without a
@@ -185,7 +187,9 @@ export default [
     gzip: true,
     running: false,
   },
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '189.4 kB', gzip: true, running: false },
+  // Spec 0072, tier 3d (13 November 2026): 188.78 kB, 110 B less, once the public profile page imports
+  // LinkListToolbar from its own file; the measurement plus 0.5 kB.
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '189.3 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
   // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
   // grew by 78 B (measured 18.58 kB).

@@ -205,7 +205,7 @@ Tracer Bullet: the thinnest thread is one atom (Button) through every gate (look
 4. Tier 1, batch 1c: Checkbox (+Radio, Switch), Slider, DragHandle, satisfies **AC-1** to **AC-6**
 5. Tier 1 gates: cost table, `pnpm size`, budgets lowered, guardian, `pnpm check`, satisfies **AC-7** to **AC-10**
 6. Tier 2, batches 2a to 2c, then its gates, satisfies **AC-1** to **AC-16** _(built 12 to 13 Nov; sent back by the coordinator on 13 Nov; one look everywhere, the owner's decision 16; then, the owner, 13 Nov: trim, then accept the rest as load debt the screen phases 4 to 9 pay back, see rationale.md, Load debt)_
-7. Tier 3, batches 3a to 3d, then its gates, satisfies **AC-1** to **AC-16** _(3a built 13 Nov; see rationale.md, Tier 3a after: the duplicates keep separate modules, so no bytes folded away)_
+7. Tier 3, batches 3a to 3d, then its gates, satisfies **AC-1** to **AC-16** _(3a built 13 Nov; see rationale.md, Tier 3a after: the duplicates keep separate modules, so no bytes folded away. 3b, 3c and 3d built 13 Nov, each reviewed by the guardian, the state and the interaction reviewers and fixed; see rationale.md, Tiers 3b, 3c and 3d after: no folded part could render its replacer, LinkListToolbar's split took the public profile page and the captures pages under their base figures, and the debt lines are updated)_
 8. Per tier, the landing car reshoots baselines through CI, satisfies **AC-17**
 
 ## Consequences

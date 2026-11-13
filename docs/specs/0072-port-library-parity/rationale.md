@@ -333,20 +333,96 @@ That growth is the prototype look's own rules and nothing else: the shell's +1,2
 
 The owner's decision on phase 1's cost: one focused trim round, then accept what is left as debt that the screen phases pay back. The round went at the biggest causes (Field, Select, CodeInput, EmptyState), rewriting their rules smaller without changing what they draw. Gzip had already folded nearly all of the repetition: Field 2171 -> 2168 B, Select 1885 -> 1887 and CodeInput 1008 -> 1012 B (gzipped, Lightning CSS minified, level 9), and the Field and Select rewrites raised selector weights enough to change which state wins, so those were reverted. EmptyState's well is scoped to the block layouts instead of drawn and undone on a row: 744 -> 732 B, kept (bad345851). What these parts cost is the prototype's look itself (Field's filled box with its hover, focus, invalid and search states; Select's menu rows and phone code chip), not slack.
 
+### Tiers 3b, 3c and 3d after (13 Nov)
+
+Built after the owner's "trim, then accept the rest", under its rule that the accepted debt does not pre-approve more: each tier ported only what visibly differs from the prototype, wrote it compactly, and was measured against `cec3928a0` (its own cost) as well as `f81623f0c`. Each was reviewed by `design-system-guardian`, `state-performance-reviewer` and `ux-interaction-reviewer`, and their findings were fixed in the tier's fix commit (open points below).
+
+- **3b, schema, team and shell** (c252fc6b9, review fixes ff23a6a9c): AppShell's main column is the prototype's inset card on the canvas; Sidebar's items are pills, the current page a surface pill edged in `control-border` (the prototype's `border-subtle` ring was about 1.1:1, so the edge is 3:1 and more, as SegmentedControl's); Disclosure's `label` variant (the sidebar's section labels) starts `space-12` in, in `text-tertiary`; SettingsLayout (+ SectionBar, SectionList), AuthLayout (the 5/6 split, replacing the owner's 27 October 36/64), SignInForm (+ VerifyEmail), PreviewLayout, OptionsEditor, RelationshipSettings, RolePowers, TeamList, InviteRows; AttributeSettings and FormulaEditor draw through their parts and take stories and READMEs only. AppShell publishes `--shell-inset-block`, which PreviewLayout's sticky preview subtracts.
+- **3c, scheduling** (24d93e6a3, fixes 6d79ce958 and 97063690d): WeekCalendar (+ TeamWeek, TeamDay, MatchCalendar) takes the prototype's tinted, ringed blocks, hatched busy time on an opaque fill, the accent now line and a forced colours block; DayStrip the prototype's grey bar, its chosen day kept on the page's accent (decision 2's strong selection, and MonthTiles on the same page fills its chosen day so); HoursEditor (+ RulesEditor), BookingChat, BookingPagePicture (a week of lettered days), EmbedPreview; GuestLook remaps `--focus-ring` to the look's ink so guest rings wear the brand.
+- **3d, pages and forms** (4624239f6, fixes b9baeb7c3 and 97063690d): LinkPage (+ PageColumn), BusinessPage (+ PartyBand), LinkList (+ LinkGrid, LinkCard, SpanCard), FormPicture (+ HostedFormPreview), QuestionList, PhotoCrop. LinkList's `rowsAreLinks` hrefs now pass through `safeHref` (AC-12; they did not). **LinkListToolbar moved to its own file and module** in LinkList's folder (re-exported from LinkList.tsx under the same names; `public-booking/booking.ts` imports it from there), so the pages that draw only the toolbar stop loading LinkList, its stylesheet and GridList.
+
+`node packages/ui/scripts/part-cost.ts --tier 3b|3c|3d --against cec3928a0` on 97063690d (bytes, gzipped, reporting only):
+
+| Tier | CSS before → after | JS before → after | Change |
+|---|---|---|---|
+| 3b (17 folders) | 10,511 → 10,941 | 41,555 → 41,555 | 0.8% |
+| 3c (11 folders) | 12,195 → 12,528 | 30,123 → 30,235 | 1.1% |
+| 3d (12 folders) | 24,095 → 23,919 | 42,857 → 43,135 | 0.2% |
+
+The largest per folder moves: Sidebar CSS +107, AppShell +75 (3b); WeekCalendar +148, HoursEditor +124, BookingPagePicture CSS +94 and JS +125 (its hue blocks and the week's letters), TeamWeek -42, MatchCalendar -51 (3c); LinkPage -229, LinkCard -123, LinkList +174 CSS and +278 JS (the toolbar's split: a second module and file), QuestionList +13 (3d). Disclosure (tier 2) is unchanged in size.
+
+**Folds.** No folded part of 3b to 3d could render its replacer without new props (TeamWeek is a roster table, MatchCalendar a dialog, TeamDay already renders WeekCalendar, LinkGrid already renders LinkCard, PartyBand counts with a Stepper, VerifyEmail already renders CodeInput, PreviewLayout's props match neither shell), so each keeps its module (decision 14), rewritten from its replacer's rules, its overlap listed in its README. The bytes that went came from deleting what the look no longer needs: LinkPage's template copies of the row motion and three name sizes, dead forced colours overrides and a duplicate keyframes (-229 B), LinkCard's stage tint, hover lift and band (-123 B), TeamWeek's and MatchCalendar's retired rules (-93 B). The real cut is the LinkListToolbar split below.
+
+`pnpm size` on 97063690d (tier 3d's tip; tier 3b's and 3c's states built from it with the later tiers' folders at `cec3928a0`):
+
+| Line | Base (f81623f0c) | cec3928a0 | 3b | 3c | 3d | Budget |
+|---|---|---|---|---|---|---|
+| First load JavaScript | 296.64 | 296.62 | 296.65 | 296.62 | 296.61 | 297.2 |
+| First load CSS | 7.86 | 7.87 | 7.87 | 7.87 | 7.87 | 8.3 |
+| Workspace shell CSS | 34.61 | 35.86 | **36.08** | 36.08 | 36.08 | 36.4 (kept) |
+| Hosted form JavaScript | 205.91 | 206.02 | 206.02 | 206.02 | 206.02 | 206.5 |
+| Hosted form CSS | 18.57 | 19.28 | 19.28 | 19.28 | 19.28 | 19.8 |
+| Booking page JavaScript | 188.89 | 188.89 | 188.89 | 188.89 | **188.78** | 189.3 (was 189.4) |
+| Booking page CSS | 19.37 | 19.50 | 19.50 | 19.50 | 19.50 | 20 |
+| Steps, signature, media, picture, times | 5.75, 6.25, 1.14, 1.67, 1.37 | 5.74, 6.32, 1.14, 1.68, 1.37 | same | same | same | as before |
+| Notice sheet chunk | 463 B | 465 B | 465 B | 465 B | 466 B | 1 kB |
+
+The workspace shell's CSS grew 220 B in 3b (AppShell's inset card and Sidebar's pills, after the review's fixes: the current pill's edge, the row's press, the head's inset). Its budget is left at 36.4 kB rather than moved to the measurement plus 0.5 kB (AC-10), so what is left of phase 1 has 0.3 kB there, not more; that is the coordinator's call to confirm. The booking page's JavaScript fell 110 B in 3d (the toolbar's split), and its budget follows AC-10 down to 189.3 kB.
+
+Pages, CSS and JavaScript gzipped (index.html, or the guest page's entry, plus the route's static imports; `scratchpad/t3m.mjs`), each tier against the one before, and the whole of 3b to 3d against `cec3928a0`:
+
+| Page | 3b | 3c | 3d | 3b to 3d against cec3928a0 (CSS, JS) |
+|---|---|---|---|---|
+| Booking page (book.html) | 0, -4 | 0, -2 | 0, -111 | **0, -117** |
+| Hosted form, menu | 0, 0 | 0, 0 | 0, 0 | 0, 0 |
+| Reserve page | +3, -1 | +5, 0 | +5, 0 | **+13, -1** |
+| Public profile (book + ProfilePage) | -1, -4 | 0, -1 | -3,379, -23,319 | **-3,380, -23,324** |
+| Business page (book + BusinessPublicPage) | 0, -3 | +7, -1 | +6, -111 | **+13, -115** |
+| Booking chat (book + ChatPanel) | 0, -4 | -3, 0 | 0, -110 | **-3, -114** |
+| Sign in | +189, +34 | 0, -27 | 0, -7 | +189, 0 |
+| Verify | +201, +37 | 0, -28 | 0, -8 | +201, +1 |
+| Workspace shell (w.$slug) | +231, +28 | 0, -22 | 0, -9 | +231, -3 |
+| Workspace index | +192, +34 | 0, -22 | 0, -8 | +192, +4 |
+| An object's records | +192, +34 | 0, -23 | 0, -8 | +192, +3 |
+| Settings, an object's tab | +302, +19 | +16, -22 | 0, -8 | +318, -11 |
+| Bookings settings, teams | +292, +24 | 0, -26 | 0, -8 | +292, -10 |
+| Bookings list (the week) | +232, +34 | +171, -15 | +8, -12 | +411, +7 |
+| Settings, shifts (TeamWeek, HoursEditor) | +232, +33 | +80, -24 | 0, -14 | +312, -5 |
+| Link page editor | +226, +33 | 0, -23 | +17, +256 | +243, +266 |
+| Captures, links | +193, +39 | 0, -31 | -2,488, -14,146 | **-2,295, -14,138** |
+| Captures, a form | +283, +19 | -3, -34 | -2,368, -2,579 | **-2,088, -2,594** |
+
+Per stylesheet (gzipped, against the tier before): 3b Sidebar +116, AppShell +77, InviteDialog +57 (OptionsEditor's strip in the invite dialog's chunk), OptionsEditor +56, SettingsLayout +39, and the entry chunk +26 (the router's preload names); 3c WeekCalendar +164, HoursEditor +124, PageEditor +96 (BookingPagePicture's hue blocks), TeamWeek -44, the booking page's `visitor` chunk -48 (MatchCalendar's blur keyframes gone); 3d LinkListToolbar +214 CSS and +563 JS (new), BusinessPublicPage +39, LinkList -44 CSS and -304 JS, LinkPage -152, LinkCard -129, LinkPageGallery -46, BusinessGallery -33, HostedFormPreview -25, `book` -111 JS. Route JavaScript moves of 10 to 40 B per tier with no code change are content-hash noise (a changed chunk renames the imports of every chunk that loads it). All of `apps/web/dist/assets`, gzipped: CSS 155,255 → 155,779 B, JavaScript 2,173,271 → 2,173,738 B.
+
+**Guest pages (the +20 B rule).** Against `cec3928a0` no guest page grew past 20 B: the reserve page and the business page +13 B of CSS each (DayStrip's bar and GuestLook's brand ring; BusinessPage's outline rings and the menu's service rows, less its gallery's dead rules), and every guest page's JavaScript fell or held. The public profile page lost 3.4 kB of CSS and 23.3 kB of JavaScript and the booking page 117 B of JavaScript, all by the toolbar's split. **App routes**: 3b's shell look lands on every signed in screen (+189 to +231 B of CSS, the shell's share being AppShell +77 and Sidebar +116); 3c's week adds 171 B to the bookings list; the link page editor carries +256 B of JavaScript (the toolbar's own chunk beside LinkList's); the captures pages, which draw only the toolbar over cards, lost 2.1 to 2.3 kB of CSS and 2.6 to 14.1 kB of JavaScript.
+
+**Open from the reviews (not changed, for the owner or a later phase)**: the prototype's hover on the canvas (Sidebar) is about 1.02:1 in light, the label's colour carrying it; three owner decisions give way to the prototype's look (the sidebar head's hairline of 20 October, the sign in split's 36/64 of 27 October, the settings nav's current pill); LinkPage's bento cards can still flicker at their foot under the pointer (they need a wrapper to key the lift on); the week's today mark (accent words) differs from DatePicker's and MonthTiles' until one today mark is chosen; the now line is the prototype's accent, no longer red; BusinessPage's header rise stays `duration-very-slow` (`duration-public-reveal` is legacy); LinkCard's hover edge is under 3:1 (a hover, not a state); OptionsEditor's label keeps Field's filled box on the prototype's white strip until Field has an inline look; TeamWeek's cell hover is React Aria's `data-hovered` (one cell's render, owed to its screen phase). GuestLook still remaps the legacy `shadow-focus`, `shadow-focus-inset`, `shadow-primary` and reads `shadow-control` for BookingFrame and phase 2's guest parts, so those leave `legacy.json` with them (AC-6's one exception in these tiers).
+
 ### Load debt
 
-What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, measured on bad345851 (the guest pages by `pnpm size`, the app routes by `scratchpad/routecss.mjs`: index.html plus the route's static imports):
+What phase 1 leaves over `f81623f0c`, JavaScript and CSS together, gzipped, measured on 97063690d after tiers 3b to 3d (first measured on bad345851; the hosted form and booking page lines by `pnpm size`, the other pages by `scratchpad/t3m.mjs`: the entry plus the route's static imports, in bytes):
 
 | Page | JavaScript | CSS | Over the base |
 |---|---|---|---|
-| Hosted form | 205.91 -> 206.02 kB (+110 B) | 18.57 -> 19.28 kB (+710 B) | **+820 B** |
-| Booking page | 188.89 -> 188.89 kB (0) | 19.37 -> 19.50 kB (+130 B) | **+130 B** |
-| Sign in | 415,059 -> 415,057 B (-2) | 26,735 -> 27,547 B (+812) | **+810 B** |
-| Workspace shell (w.$slug) | 472,242 -> 472,272 B (+30) | 34,809 -> 36,066 B (+1,257) | **+1,287 B** |
-| Workspace index | 449,144 -> 449,145 B (+1) | 28,116 -> 29,108 B (+992) | **+993 B** |
-| An object's records | 457,049 -> 457,067 B (+18) | 29,811 -> 30,844 B (+1,033) | **+1,051 B** |
+| Hosted form | 205.91 -> 206.02 kB (+110 B) | 18.57 -> 19.28 kB (+710 B) | **+820 B** (unchanged by 3b to 3d) |
+| Booking page | 188.89 -> 188.78 kB (-110 B) | 19.37 -> 19.50 kB (+130 B) | **+20 B** (was +130; 3d's toolbar split) |
+| Menu page | 240,259 -> 240,251 B (-8) | 30,098 -> 30,620 B (+522) | **+514 B** (tiers 1 to 3a; first listed now) |
+| Reserve page | 293,645 -> 293,709 B (+64) | 41,875 -> 42,951 B (+1,076) | **+1,140 B** (3b to 3d: +12) |
+| Business page | 253,748 -> 253,600 B (-148) | 29,207 -> 29,535 B (+328) | **+180 B** (3b to 3d: -102) |
+| Public profile | 270,196 -> 246,952 B (-23,244) | 35,796 -> 33,137 B (-2,659) | **-25,903 B**, under the base |
+| Sign in | 415,059 -> 415,057 B (-2) | 26,735 -> 27,736 B (+1,001) | **+999 B** (was +810) |
+| Workspace shell (w.$slug) | 472,242 -> 472,269 B (+27) | 34,809 -> 36,297 B (+1,488) | **+1,515 B** (was +1,287) |
+| Workspace index | 449,144 -> 449,149 B (+5) | 28,116 -> 29,300 B (+1,184) | **+1,189 B** (was +993) |
+| An object's records | 457,049 -> 457,070 B (+21) | 29,811 -> 31,036 B (+1,225) | **+1,246 B** (was +1,051) |
+| Bookings list (the week) | 680,334 -> 680,402 B (+68) | 51,956 -> 54,414 B (+2,458) | **+2,526 B** (3b to 3d: +418) |
+| Settings, an object's tab | 728,001 -> 728,118 B (+117) | 52,932 -> 55,709 B (+2,777) | **+2,894 B** (3b to 3d: +307) |
+| Link page editor | 764,592 -> 764,948 B (+356) | 70,798 -> 73,772 B (+2,974) | **+3,330 B** (3b to 3d: +509) |
+| Captures, links | 511,530 -> 497,417 B (-14,113) | 38,565 -> 37,712 B (-853) | **-14,966 B**, under the base |
+| Captures, a form | 783,126 -> 780,642 B (-2,484) | 67,524 -> 67,956 B (+432) | **-2,052 B**, under the base |
 
-**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB) and the workspace shell's CSS at 36.4 kB until then.
+Tiers 3b to 3d added to the signed in pages' lines (the shell look on every screen, +189 to +231 B of CSS; the week; the settings parts), cut the booking page's and the business page's, and took the public profile page and the captures pages under their `f81623f0c` figures, by the LinkListToolbar split. The menu, reserve and business lines are listed for the first time: they carry tiers 1 to 3a's shared parts (Button, Select, Field, Tag and the like), not tier 3's.
+
+**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then.
 
 ### Merge notes (phase 1 + 2)
 
@@ -356,3 +432,7 @@ Things phase 1 can't do because they live in phase 2's files, for the merge to p
 - BookingReceipt names no accent, so the manage booking page (a receipt with no BookingFrame round it) draws the app's ink primary; its root's accent name belongs in Button's primary chain (`--form-accent`, `--frame-accent`, `--look-accent`), or it remaps `--primary` itself as LinkPage and GuestLook do.
 - The guest menu's accent count is now the prototype's blue tag tint (`--tag-blue-bg`, `--tag-blue-text`), not the menu's brand fill; MenuList may want its own pill, owed to phase 8.
 - Field's `isTabular`, `aria-keyshortcuts` and the counter's `data-full` (about 64 B of the hosted form's JavaScript) are phase 2's to account for, since its NumberField and SearchField use them.
+- BookingFrame (phase 2's) should remap the focus ring to the brand, as LinkPage and GuestLook do now: in `.layout`, after `--accent-text: var(--frame-accent-line);`, add `--focus-ring: var(--frame-accent-line);` (defined on `.root`, so no cycle; the line colour BookingFrame already guards). Until then the booking page's ported rings (DayStrip's, BookingChat's) are the product's `focus-ring` blue, where they wore the brand at `cec3928a0`. BookingFrame's foot link (`.brandLink:focus-visible`) still reads `--shadow-focus`, which LinkPage no longer remaps to the brand.
+- GuestLook remaps the legacy `shadow-focus`, `shadow-focus-inset` and `shadow-primary` (and reads `shadow-control`) only for BookingFrame, MenuList and the other phase 2 guest parts; they leave when the last of those ports.
+- `apps/web/src/features/booking/page-picture.tsx`'s comment still says the picture draws "a month"; it draws a week since tier 3c (a screen phase's one line fix). BookingPagePicture reads the provider's language, so it must render inside UiProvider (every caller does).
+- `public-booking/booking.ts` now imports `LinkListToolbar` from `modules/LinkList/LinkListToolbar.tsx`; a merge that touches that file keeps the import, or the public profile page loads LinkList again (+3.4 kB CSS, +23 kB JavaScript).
