@@ -83,15 +83,20 @@ export function ShareColumn({
   onSavingChange,
 }: ShareColumnProps) {
   const toasts = useToasts();
+  // While a QR file is made the sheet around it waits (its Done and Esc), so "Put it on your site" waits too: following
+  // it would leave the screen before the file is saved.
+  const [isSaving, setSaving] = useState(false);
   const link = shareableUrl(url);
   if (link === undefined) return <Callout tone="danger">{strings.refused}</Callout>;
   const saveQr = (kind: QrFileKind, code: SVGSVGElement) => {
+    setSaving(true);
     onSavingChange?.(true);
     return downloadQr(code, name, kind)
       .catch(() => {
         toasts.toast({ tone: 'danger', message: strings.qrSaveFailed });
       })
       .finally(() => {
+        setSaving(false);
         onSavingChange?.(false);
       });
   };
@@ -112,6 +117,7 @@ export function ShareColumn({
               label: strings.putOnSite,
               href: embedHref,
               icon: 'code',
+              isDisabled: isSaving,
               ...(onEmbed === undefined ? {} : { onPress: onEmbed }),
             },
           })}
@@ -148,8 +154,9 @@ export function ShareSheet({
 }: ShareSheetProps) {
   const isShareable = shareableUrl(url) !== undefined;
   // A download reads the drawn code (and a centre picture) after the press, so the sheet stays open until the file
-  // is made (spec 0074, the coordinator's call of 13 Nov): Esc, a click outside and Close wait while it runs, and a
-  // Done pressed meanwhile closes the sheet as soon as the file is saved.
+  // is made (spec 0074, the coordinator's call of 13 Nov): Esc, a click outside and Close wait while it runs, a Done
+  // pressed meanwhile closes the sheet as soon as the file is saved, and "Put it on your site" can't be followed until
+  // then (ShareColumn).
   const [isSaving, setSaving] = useState(false);
   // A Done pressed while the file is made: kept in a ref for the download's end, and in state so Done shows it waits.
   const closeAsked = useRef(false);

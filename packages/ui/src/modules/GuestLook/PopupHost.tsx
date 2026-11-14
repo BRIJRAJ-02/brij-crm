@@ -21,7 +21,8 @@ export interface PopupHostProps {
 /**
  * Put inside a guest page's themed root, around its content. A popup in the app (no PopupHost around it) is
  * unchanged: it portals to `document.body` and wears the app's theme (AC-7410). Never inside an `inert` subtree that
- * can open a popup: the popup would be inert too.
+ * can open a popup: the popup would be inert too. An inert preview opens none, so FormParts' and LinkPage's previews,
+ * which put it inside their `inert` roots, keep this rule.
  */
 export function PopupHost({ children, className }: PopupHostProps) {
   // The host in state, as GuestLook has kept it since spec 0065: an overlay already open on the very first render (a

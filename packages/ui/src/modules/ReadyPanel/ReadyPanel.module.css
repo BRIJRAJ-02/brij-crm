@@ -310,6 +310,11 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* Waiting (a QR file being made in the sheet around it): faded, and it can't be followed. */
+  .onward[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
+
   /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
   .visual {
     display: flex;

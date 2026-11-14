@@ -241,6 +241,34 @@ export const DownloadHoldsOpen: Story = {
   },
 };
 
+/** "Put it on your site" waits for a QR file being made, as Done does: it can't be followed until the file is saved. */
+export const DownloadHoldsOnward: Story = {
+  args: { embedHref: '/w/acme/bookings/discovery-call/embed' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ userEvent }) => {
+    const sheet = within(await openSheet());
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const decode = spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(() => held);
+    const save = spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      const onSite = () => sheet.getByRole('link', { name: /Put it on your site/ });
+      await expect(onSite()).not.toHaveAttribute('aria-disabled', 'true');
+      await userEvent.click(sheet.getByRole('button', { name: /^PNG/ }));
+      await waitFor(() => expect(onSite()).toHaveAttribute('aria-disabled', 'true'));
+      release();
+      await waitFor(() => expect(save).toHaveBeenCalled());
+      await waitFor(() => expect(onSite()).not.toHaveAttribute('aria-disabled', 'true'));
+      clearAnnouncer('assertive');
+    } finally {
+      decode.mockRestore();
+      save.mockRestore();
+    }
+  },
+};
+
 /** Each address that could run script, refused before anything is drawn, copied, shared or encoded (AC-7318). */
 async function expectRefused(): Promise<void> {
   const sheet = within(await openSheet());

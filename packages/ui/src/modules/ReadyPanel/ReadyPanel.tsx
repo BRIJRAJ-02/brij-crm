@@ -98,6 +98,8 @@ export interface ReadyPanelOnward {
   readonly href: string;
   readonly icon?: IconName;
   readonly onPress?: () => void;
+  /** Can't be followed for now (a sheet making a QR file waits for it, as its Done does). */
+  readonly isDisabled?: boolean;
 }
 
 /**
@@ -304,6 +306,7 @@ export function ReadyPanel({
           className={styles.onward}
           {...(onwardHref === undefined ? {} : { href: onwardHref })}
           {...(onward.onPress === undefined ? {} : { onPress: onward.onPress })}
+          isDisabled={onward.isDisabled === true}
         >
           <Icon name={onward.icon ?? 'code'} size="sm" />
           <span className={styles.onwardLabel}>{onward.label}</span>
