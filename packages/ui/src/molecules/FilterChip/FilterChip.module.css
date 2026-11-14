@@ -56,7 +56,11 @@
     padding-inline: var(--space-4);
   }
 
+  /* At least a small control wide, centred, so its 24px circle (WCAG 2.5.8) never reaches the value beside it: the
+     ported small icon (spec 0072) is 12px at the app's density, which left it 23px. */
   .segment[data-part='remove'] {
+    justify-content: center;
+    min-inline-size: var(--size-control-sm);
     padding-inline: var(--space-6);
     color: var(--text-secondary);
   }
