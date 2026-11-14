@@ -48,6 +48,8 @@ export const pageStrings = {
   firstAddressText: 'Pick a short address for your page, such as your business’s name.',
   suggestedAddressText: 'We started it from your business’s name. Claim it, or change it first.',
   /** Publish needs. */
+  /** The address problem's fix: the page's own address field. */
+  fixAddress: 'Go to the address',
   fixInBusiness: 'Open Business',
   fixPlace: 'Open place',
   fixServices: 'Open Services',

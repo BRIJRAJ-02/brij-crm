@@ -218,6 +218,12 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   // A Publish refused on the address (another business's first Publish takes it, spec 0065 H7): said on the field.
   const [addressRefused, setAddressRefused] = useState<string | undefined>(undefined);
   const addressRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  // The address problem's fix (the bar's link) asks for the page's own address field; an effect moves focus there, as
+  // the bar's props are read during render.
+  const [addressFocusAsked, setAddressFocusAsked] = useState(0);
+  useEffect(() => {
+    if (addressFocusAsked > 0) focusLater(() => addressRef.current);
+  }, [addressFocusAsked]);
   const crumbs = [{ id: 'business', label: strings.businessTitle, href: businessSettingsHref(slug) }];
   if (state.status === 'error' && state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
   if (state.status === 'error') {
@@ -305,20 +311,33 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
               ? businessSettingsHref(slug)
               : placeTablesHref(slug, view.problem.placeId);
   const fixLabel =
-    view.problem?.fix === 'services'
-      ? words.fixServices
-      : view.problem?.fix === 'staff'
-        ? words.fixStaff
-        : view.problem?.fix === 'shifts'
-          ? words.fixShifts
-          : view.problem?.placeId === undefined
-            ? words.fixInBusiness
-            : words.fixPlace;
+    view.problem?.fix === 'handle'
+      ? words.fixAddress
+      : view.problem?.fix === 'services'
+        ? words.fixServices
+        : view.problem?.fix === 'staff'
+          ? words.fixStaff
+          : view.problem?.fix === 'shifts'
+            ? words.fixShifts
+            : view.problem?.placeId === undefined
+              ? words.fixInBusiness
+              : words.fixPlace;
   // A known problem wins over a refusal the bar said: it is what holds Publish back now, and it carries the way to fix
-  // it, which a refusal's message alone doesn't. Publish is disabled while it holds (below), as the server would refuse.
+  // it, which a refusal's message alone doesn't. Publish is disabled while it holds (below), as the server would refuse,
+  // so it is said whenever it holds: with no address claimed yet the problem is the address, fixed in this page's own
+  // field.
   const problem =
-    view.problem !== undefined && view.handle !== undefined && fixHref !== undefined
-      ? { message: view.problem.message, fix: { label: fixLabel, onFix: () => void navigate({ href: fixHref }) } }
+    view.problem !== undefined
+      ? {
+          message: view.problem.message,
+          fix: {
+            label: fixLabel,
+            onFix:
+              view.problem.fix === 'handle' || fixHref === undefined
+                ? () => setAddressFocusAsked((count) => count + 1)
+                : () => void navigate({ href: fixHref }),
+          },
+        }
       : said?.status === 'error'
         ? { message: said.message }
         : undefined;

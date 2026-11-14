@@ -321,6 +321,21 @@ describe('Settings › Business › Page', () => {
     expect(calls.filter((call) => call.kind === 'publish')).toEqual([]);
   });
 
+  it('says why Publish waits before an address is claimed too, and its fix goes to the address', async () => {
+    // A new business: no address yet, so the server's first problem is the address. Publish is held back, so the bar
+    // says why beside it, whatever the problem is (the combined review of phases 1 to 3: a disabled Publish with no line).
+    const { store } = await editorOf({
+      ...BASE,
+      suggestedHandle: 'somewhere-nowhere',
+      problem: { message: 'Choose the page’s address first.', fix: 'handle' },
+    });
+    await show(store);
+    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    await expect.element(page.getByRole('alert').getByText('Choose the page’s address first.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Go to the address' }));
+    await expect.element(page.getByRole('textbox', { name: 'Page address' })).toHaveFocus();
+  });
+
   it('keeps the way to fix after a refused Publish, once the page knows its problem', async () => {
     const { store } = await editorOf(
       { ...BASE, handle: 'somewhere', published: { at: '2026-11-03T10:00:00.000Z', version: 1 } },
