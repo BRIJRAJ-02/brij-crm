@@ -454,7 +454,101 @@ The hosted form's and booking page's lines are `pnpm size`'s; the rest are `scra
 
 The CSS fall on both lists, and part of every page's JavaScript fall, is the chunk regrouping from BookingFoot's split (Avatar's rules now ship in one file with Callout's), not a cut in those pages' own code; the rule below applies to these three lines as it does to phase 1's, at or under port-12's figure.
 
-**The rule**: each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then; on the merged branch, the hosted form's JavaScript at 206.5 kB and the first load's at 297.2 kB (see `.size-limit.js`).
+**Every route, the payback baseline (phases 1 to 3 combined).** The tables above list 15 pages and leave out the ones that grew most (the combined review of phases 1 to 3, `docs/reviews/0072-0074-port-phases-1-to-3-review.md`). Their "An object's records" row measures `w.$slug.objects.$object`, which is only the loader that sends you on to a view (`apps/web/src/routes/w.$slug.objects.$object.tsx`), so the records table's row is `objects.$object_.views.$viewId` below (+4,706 B), with the record page (`objects.$object_.$recordId.$tab`, +3,620 B), inbox (+2,695 B), tasks (+2,403 B) and the two signed out pages, public insights (+868 B) and status (+101 B). The owner confirmed on 14 November 2026, with these per page numbers in front of them: "trim, then accept the rest". So every route below carries its line as debt, and its `f81623f0c` figure is the one its screen phase pays back to. Measured by `scratchpad/t3m.mjs` over the build of feat/port-3 at 2073bf2cf (the later commits being a story and an empty `[reshoot]`) against `f81623f0c`'s: each route's component chunk with the entry and its static imports, gzipped, in bytes; the four guest pages are their HTML entries.
+
+| Route | CSS | JavaScript | Over the base |
+|---|---|---|---|
+| `book.html (guest page)` | 19,503 → 19,328 (−175) | 189,360 → 188,773 (−587) | **−762** |
+| `form.html (guest page)` | 18,655 → 19,436 (+781) | 206,148 → 205,981 (−167) | **+614** |
+| `menu.html (guest page)` | 30,098 → 26,101 (−3,997) | 240,259 → 234,780 (−5,479) | **−9,476** |
+| `reserve.html (guest page)` | 41,875 → 42,704 (+829) | 293,645 → 293,151 (−494) | **+335** |
+| `email-preferences` | 26,724 → 27,687 (+963) | 415,868 → 415,721 (−147) | **+816** |
+| `embed.$clientId.link-page` | 69,053 → 68,848 (−205) | 760,093 → 759,817 (−276) | **−481** |
+| `embed.$clientId.start` | 28,117 → 29,094 (+977) | 448,505 → 448,392 (−113) | **+864** |
+| `index` | 7,893 → 7,904 (+11) | 297,697 → 297,454 (−243) | **−232** |
+| `invite.$token` | 28,977 → 29,820 (+843) | 419,429 → 419,259 (−170) | **+673** |
+| `join` | 29,270 → 30,153 (+883) | 415,922 → 415,744 (−178) | **+705** |
+| `oauth.partner.authorize` | 16,971 → 17,240 (+269) | 360,322 → 360,097 (−225) | **+44** |
+| `public.insights` | 24,963 → 25,999 (+1,036) | 434,586 → 434,418 (−168) | **+868** |
+| `sign-in` | 26,735 → 27,589 (+854) | 415,059 → 414,897 (−162) | **+692** |
+| `status` | 13,424 → 13,776 (+352) | 324,232 → 323,981 (−251) | **+101** |
+| `two-factor` | 28,104 → 29,207 (+1,103) | 418,877 → 418,728 (−149) | **+954** |
+| `verify` | 27,128 → 28,148 (+1,020) | 414,260 → 414,083 (−177) | **+843** |
+| `w.$slug.bookings.list` | 51,956 → 54,281 (+2,325) | 680,334 → 680,292 (−42) | **+2,283** |
+| `w.$slug.bookings.pages` | 38,565 → 37,565 (−1,000) | 513,377 → 500,406 (−12,971) | **−13,971** |
+| `w.$slug.bookings.routing` | 40,977 → 42,733 (+1,756) | 529,277 → 529,186 (−91) | **+1,665** |
+| `w.$slug.bookings` | 29,440 → 30,477 (+1,037) | 466,681 → 466,503 (−178) | **+859** |
+| `w.$slug.bookings_.settings.brand` | 61,433 → 63,403 (+1,970) | 603,874 → 604,783 (+909) | **+2,879** |
+| `w.$slug.bookings_.settings.calendars` | 38,898 → 40,592 (+1,694) | 494,784 → 494,677 (−107) | **+1,587** |
+| `w.$slug.bookings_.settings.teams` | 42,562 → 44,592 (+2,030) | 582,837 → 582,854 (+17) | **+2,047** |
+| `w.$slug.bookings_.settings` | 24,668 → 25,532 (+864) | 437,247 → 437,139 (−108) | **+756** |
+| `w.$slug.captures.forms.index` | 39,742 → 38,742 (−1,000) | 512,368 → 498,136 (−14,232) | **−15,232** |
+| `w.$slug.captures.links.index` | 38,565 → 37,565 (−1,000) | 511,530 → 498,432 (−13,098) | **−14,098** |
+| `w.$slug.captures` | 35,750 → 37,286 (+1,536) | 492,895 → 493,987 (+1,092) | **+2,628** |
+| `w.$slug.captures_.forms.$formId` | 67,524 → 67,047 (−477) | 783,126 → 776,600 (−6,526) | **−7,003** |
+| `w.$slug.captures_.forms.$formId_.preview` | 41,717 → 43,090 (+1,373) | 470,067 → 470,253 (+186) | **+1,559** |
+| `w.$slug.captures_.links.$pageId` | 66,637 → 68,464 (+1,827) | 746,534 → 743,190 (−3,344) | **−1,517** |
+| `w.$slug.captures_.links.$pageId_.preview` | 28,075 → 28,704 (+629) | 406,879 → 406,642 (−237) | **+392** |
+| `w.$slug.captures_.managed.$templateId` | 37,305 → 38,976 (+1,671) | 532,539 → 532,691 (+152) | **+1,823** |
+| `w.$slug.home` | 32,358 → 33,386 (+1,028) | 467,410 → 467,291 (−119) | **+909** |
+| `w.$slug.inbox` | 43,471 → 46,109 (+2,638) | 650,873 → 650,930 (+57) | **+2,695** |
+| `w.$slug.index` | 28,116 → 29,153 (+1,037) | 449,144 → 449,029 (−115) | **+922** |
+| `w.$slug.insights` | 39,197 → 41,026 (+1,829) | 594,920 → 594,986 (+66) | **+1,895** |
+| `w.$slug.link-page` | 70,798 → 70,653 (−145) | 764,592 → 764,303 (−289) | **−434** |
+| `w.$slug.lists.$list` | 28,116 → 29,153 (+1,037) | 449,887 → 449,769 (−118) | **+919** |
+| `w.$slug.lists.$list_.import` | 48,846 → 51,556 (+2,710) | 721,675 → 721,749 (+74) | **+2,784** |
+| `w.$slug.lists.$list_.views.$viewId` | 50,999 → 53,923 (+2,924) | 759,392 → 759,631 (+239) | **+3,163** |
+| `w.$slug.menus` | 58,637 → 61,440 (+2,803) | 629,069 → 627,343 (−1,726) | **+1,077** |
+| `w.$slug.menus_.design` | 50,933 → 53,007 (+2,074) | 548,859 → 549,031 (+172) | **+2,246** |
+| `w.$slug.notes` | 40,389 → 42,719 (+2,330) | 634,059 → 634,161 (+102) | **+2,432** |
+| `w.$slug.objects.$object` | 29,811 → 30,889 (+1,078) | 457,049 → 456,938 (−111) | **+967** |
+| `w.$slug.objects.$object_.$recordId.$tab` | 58,444 → 61,969 (+3,525) | 784,947 → 785,042 (+95) | **+3,620** |
+| `w.$slug.objects.$object_.duplicates` | 42,458 → 44,672 (+2,214) | 651,269 → 651,395 (+126) | **+2,340** |
+| `w.$slug.objects.$object_.import` | 48,846 → 51,556 (+2,710) | 721,910 → 721,986 (+76) | **+2,786** |
+| `w.$slug.objects.$object_.imports.$importId` | 32,448 → 33,679 (+1,231) | 498,329 → 498,256 (−73) | **+1,158** |
+| `w.$slug.objects.$object_.views.$viewId` | 62,660 → 66,632 (+3,972) | 835,110 → 835,844 (+734) | **+4,706** |
+| `w.$slug.qr` | 36,813 → 38,406 (+1,593) | 545,659 → 545,780 (+121) | **+1,714** |
+| `w.$slug.qr_.print` | 37,370 → 38,903 (+1,533) | 544,273 → 544,392 (+119) | **+1,652** |
+| `w.$slug.reports` | 37,760 → 39,592 (+1,832) | 515,109 → 515,063 (−46) | **+1,786** |
+| `w.$slug.reservations` | 43,974 → 46,067 (+2,093) | 637,621 → 637,698 (+77) | **+2,170** |
+| `w.$slug.settings.account.notifications` | 34,152 → 35,397 (+1,245) | 463,064 → 462,933 (−131) | **+1,114** |
+| `w.$slug.settings.account.preferences` | 36,972 → 38,547 (+1,575) | 494,908 → 494,918 (+10) | **+1,585** |
+| `w.$slug.settings.account.profile` | 71,961 → 72,026 (+65) | 769,361 → 768,408 (−953) | **−888** |
+| `w.$slug.settings.account.sign-in` | 36,657 → 38,058 (+1,401) | 484,662 → 484,535 (−127) | **+1,274** |
+| `w.$slug.settings.admin.booking-pages.$workspaceId.$pageId` | 38,263 → 39,858 (+1,595) | 501,103 → 501,014 (−89) | **+1,506** |
+| `w.$slug.settings.admin.booking-pages.index` | 38,263 → 39,858 (+1,595) | 501,076 → 500,989 (−87) | **+1,508** |
+| `w.$slug.settings.admin.index` | 35,009 → 36,410 (+1,401) | 467,531 → 467,397 (−134) | **+1,267** |
+| `w.$slug.settings.admin.partners` | 41,359 → 44,390 (+3,031) | 541,586 → 545,892 (+4,306) | **+7,337** |
+| `w.$slug.settings.admin.users.$userId` | 38,366 → 39,961 (+1,595) | 508,589 → 508,498 (−91) | **+1,504** |
+| `w.$slug.settings.admin.users.index` | 37,912 → 39,488 (+1,576) | 507,703 → 507,623 (−80) | **+1,496** |
+| `w.$slug.settings.admin.website` | 38,263 → 39,858 (+1,595) | 500,281 → 500,199 (−82) | **+1,513** |
+| `w.$slug.settings.apps` | 33,925 → 35,160 (+1,235) | 462,981 → 462,853 (−128) | **+1,107** |
+| `w.$slug.settings.brand` | 61,433 → 63,403 (+1,970) | 603,872 → 604,782 (+910) | **+2,880** |
+| `w.$slug.settings.business.index` | 39,646 → 41,320 (+1,674) | 531,250 → 531,324 (+74) | **+1,748** |
+| `w.$slug.settings.business.page` | 40,925 → 41,205 (+280) | 513,390 → 512,392 (−998) | **−718** |
+| `w.$slug.settings.business.places.$placeId` | 44,086 → 46,256 (+2,170) | 618,780 → 618,938 (+158) | **+2,328** |
+| `w.$slug.settings.connected-apps` | 37,150 → 38,488 (+1,338) | 506,151 → 506,191 (+40) | **+1,378** |
+| `w.$slug.settings.general` | 37,853 → 39,435 (+1,582) | 496,710 → 496,712 (+2) | **+1,584** |
+| `w.$slug.settings.history.changes` | 36,523 → 37,843 (+1,320) | 506,275 → 506,171 (−104) | **+1,216** |
+| `w.$slug.settings.index` | 9,921 → 10,088 (+167) | 340,060 → 340,015 (−45) | **+122** |
+| `w.$slug.settings.jobs` | 37,303 → 38,633 (+1,330) | 504,618 → 504,526 (−92) | **+1,238** |
+| `w.$slug.settings.lists.$list.$tab` | 52,794 → 55,500 (+2,706) | 718,320 → 718,370 (+50) | **+2,756** |
+| `w.$slug.settings.lists.index` | 36,420 → 37,740 (+1,320) | 494,169 → 494,093 (−76) | **+1,244** |
+| `w.$slug.settings.objects.$object.$tab` | 52,932 → 55,576 (+2,644) | 728,001 → 728,175 (+174) | **+2,818** |
+| `w.$slug.settings.objects.index` | 48,979 → 51,356 (+2,377) | 662,646 → 662,664 (+18) | **+2,395** |
+| `w.$slug.settings.security` | 38,833 → 40,681 (+1,848) | 484,520 → 484,413 (−107) | **+1,741** |
+| `w.$slug.settings.services` | 42,168 → 43,998 (+1,830) | 550,547 → 550,655 (+108) | **+1,938** |
+| `w.$slug.settings.shifts` | 44,584 → 46,664 (+2,080) | 623,013 → 623,071 (+58) | **+2,138** |
+| `w.$slug.settings.staff.$staffId` | 47,292 → 49,889 (+2,597) | 642,989 → 643,087 (+98) | **+2,695** |
+| `w.$slug.settings.staff.index` | 41,823 → 43,545 (+1,722) | 533,273 → 533,418 (+145) | **+1,867** |
+| `w.$slug.settings.trash` | 50,427 → 52,821 (+2,394) | 665,246 → 665,378 (+132) | **+2,526** |
+| `w.$slug.settings` | 24,668 → 25,532 (+864) | 436,400 → 436,289 (−111) | **+753** |
+| `w.$slug.tasks` | 42,607 → 44,931 (+2,324) | 646,377 → 646,456 (+79) | **+2,403** |
+| `w.$slug` | 34,809 → 36,150 (+1,341) | 472,242 → 472,132 (−110) | **+1,231** |
+| `welcome` | 57,859 → 59,600 (+1,741) | 513,986 → 514,191 (+205) | **+1,946** |
+
+
+**The rule** (every row of every table above, the full list included): each screen phase (4 to 9) that rewrites one of these pages' screens pays that page's debt back before it lands: the page's line ends at or under its `f81623f0c` figure above, measured the same way, as well as meeting its own gate. The debt is the prototype look's own rules (the per stylesheet causes are in "One look everywhere" above), so the screen phases pay it the way the owner's 30% goal intended: with the duplicates their rewrites fold away, not by trimming the look again. `.size-limit.js` holds the hosted form's and booking page's CSS at the measurement plus 0.5 kB (19.8 and 20 kB), the booking page's JavaScript at 189.3 kB and the workspace shell's CSS at 36.4 kB (36.08 measured after 3b) until then; on the merged branch, the hosted form's JavaScript at 206.5 kB and the first load's at 297.2 kB (see `.size-limit.js`).
 
 ### Merge notes (phase 1 + 2)
 
