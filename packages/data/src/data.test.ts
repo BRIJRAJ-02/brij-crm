@@ -1933,9 +1933,9 @@ describe('live updates', () => {
     expect(await client.channel().renew()).toBe('subscription-token');
     const gets = count(api.calls, '/api/rpc/records/get');
     client.channel().onPublication(changed(1, [edited.id]));
-    await settled();
-    expect(count(api.calls, '/api/rpc/records/get')).toBe(gets + 1);
-    expect(view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
+    // Polled, not one fixed wait: on a loaded CI runner the refetch landed after 40 ms (run 43536222784).
+    await expect.poll(() => count(api.calls, '/api/rpc/records/get')).toBe(gets + 1);
+    await expect.poll(() => view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
   });
 
   it("skips this tab's own write when it comes back", async () => {
