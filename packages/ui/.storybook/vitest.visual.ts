@@ -8,6 +8,7 @@
 import { configure } from 'storybook/test';
 import { afterEach, beforeAll, expect, inject } from 'vitest';
 import { page } from 'vitest/browser';
+import { waitForAnimations } from '../src/workbench/animations.ts';
 
 // The same waits as the story tests: hover and focus can take a moment in CI.
 configure({ asyncUtilTimeout: 5_000 });
@@ -61,11 +62,9 @@ afterEach(async (context) => {
   try {
     for (const name of ['light', 'dark'] as const) {
       html.dataset.theme = name;
-      // A theme swap starts colour transitions; let the finite ones end so the matcher compares settled frames.
-      const finite = document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity);
-      await Promise.all(finite.map((animation) => animation.finished));
+      // A theme swap starts colour transitions; let the finite ones end so the matcher compares settled frames. A
+      // replaced one (a child inheriting a tweening colour) is cancelled, not failed: the wait rides it out.
+      await waitForAnimations();
       await expect.element(page.getByTestId('story-root')).toMatchScreenshot(name);
     }
   } finally {

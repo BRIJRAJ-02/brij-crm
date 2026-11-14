@@ -27,3 +27,43 @@ export async function settleAnimations(): Promise<void> {
     requestAnimationFrame(resolve);
   });
 }
+
+/** Resolves on the next frame. */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
+/** The finite animations still playing; an endless one (a spinner) never ends, so it never counts. */
+function running(): readonly Animation[] {
+  return document
+    .getAnimations()
+    .filter((animation) => animation.effect?.getTiming().iterations !== Infinity && animation.playState !== 'finished');
+}
+
+/**
+ * Waits until no finite animation is playing, as the screenshot harness does after a theme swap, so the matcher
+ * compares settled frames. A transition replaced mid flight (a new end value, or a colour inherited from a parent
+ * that is itself tweening, which restarts the child's transition every frame) is cancelled, and its `finished`
+ * rejects with an AbortError: that counts as over, and the wait goes on with whatever replaced it. It looks again
+ * one frame after the page seems still, since an inherited tween starts a child's transition only on the next
+ * frame. It gives up after `timeoutMs`, so a page that never settles reaches the matcher, which reports it.
+ */
+export async function waitForAnimations(timeoutMs = 5_000): Promise<void> {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    const playing = running();
+    if (playing.length === 0) {
+      await nextFrame();
+      if (running().length === 0) return;
+      continue;
+    }
+    await Promise.race([
+      Promise.allSettled(playing.map((animation) => animation.finished)),
+      new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline - performance.now()))),
+    ]);
+  }
+}
