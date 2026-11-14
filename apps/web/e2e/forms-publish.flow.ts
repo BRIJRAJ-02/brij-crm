@@ -31,7 +31,10 @@ test.describe('a form’s first publish', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Publish left once the form went live; focus is on More actions, beside where it was.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
-    // The status says it in a plain word, with no version number.
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
+    // The publish bar heads the editor now (spec 0074, AC-7407, in place of the old one word status): it says the form
+    // is live in plain words, with no version number.
+    await expect(
+      page.getByRole('status').getByText('Live: visitors can send this form', { exact: true }),
+    ).toBeVisible();
   });
 });

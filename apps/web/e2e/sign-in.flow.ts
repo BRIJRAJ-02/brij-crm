@@ -198,13 +198,14 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByLabel('Code')).toBeFocused();
   // The column is centred on its own height (the owner, 27 October 2026), so a page a line taller or shorter sits a
-  // few pixels off: at app scale (spec 0071) verify is about 11px shorter than sign in, so it sits 5.5px lower. A
-  // jump under the pointer would be far more than that.
+  // few pixels off: at app scale (spec 0071), in the prototype's size-dialog column (spec 0072, tier 3b: AuthLayout and
+  // SignInForm take the prototype's look), verify is 13px shorter than sign in, so it sits 6.5px lower. A jump under
+  // the pointer would be far more than that.
   const verifyBox = await card.boundingBox();
   expect(verifyBox && { x: verifyBox.x, width: verifyBox.width }).toEqual(
     signInBox && { x: signInBox.x, width: signInBox.width },
   );
-  expect(Math.abs((verifyBox?.y ?? 0) - (signInBox?.y ?? 0))).toBeLessThanOrEqual(6);
+  expect(Math.abs((verifyBox?.y ?? 0) - (signInBox?.y ?? 0))).toBeLessThanOrEqual(8);
   await expect(page).toHaveTitle('Check your email · Timefix');
   await expect(page.getByRole('button', { name: 'Resend code' })).toBeDisabled();
   await expect(page.getByText(/You can resend the code in/)).toBeVisible();
