@@ -1,5 +1,5 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { ButtonLink, EmptyState, LoadingNow, Table, TopBar } from '@crm/ui';
+import { ButtonLink, EmptyState, LoadingNow, PublishBarSkeleton, Table, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
@@ -126,6 +126,8 @@ function FormPending() {
         icon="clipboard-list"
         // The phone in two fifths of the width, as FormEditor draws it, so it shows from the same width.
         previewShare="wide"
+        // The publish bar heads the editor (spec 0074, AC-7407), so its strip stands where the bar will.
+        notices={<PublishBarSkeleton />}
         // Submissions loads as its table does (forms fix a6), not as the Form tab's cards.
         {...(tab === 'submissions'
           ? {
