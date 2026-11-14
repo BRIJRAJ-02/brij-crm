@@ -137,13 +137,17 @@ export function framedUrl(path: string, embed: Embed): string {
 /**
  * A full page layout's own height, without the page's minimum: a booking
  * page's `main` stands at least a viewport tall, so inside a frame it would
- * only ever grow. Its content is its first child's children; their span, plus
- * the page's own padding, is what the frame should be.
+ * only ever grow. Its content is its first child's children (a `display:
+ * contents` one counted by its own children); their span, plus the page's own
+ * padding, is what the frame should be.
  */
 export function naturalHeight(page: Element, view: Pick<Window, 'getComputedStyle'>): number {
   const content = page.firstElementChild;
   if (content === null) return page.getBoundingClientRect().height;
-  const parts = [...content.children].map((child) => child.getBoundingClientRect());
+  // A `display: contents` part draws no box of its own (its rect is all zeros): its children are the parts instead.
+  const boxed = (element: Element): readonly Element[] =>
+    view.getComputedStyle(element).display === 'contents' ? [...element.children].flatMap(boxed) : [element];
+  const parts = [...content.children].flatMap(boxed).map((child) => child.getBoundingClientRect());
   if (parts.length === 0) return page.getBoundingClientRect().height;
   const top = Math.min(...parts.map((part) => part.top));
   const bottom = Math.max(...parts.map((part) => part.bottom));

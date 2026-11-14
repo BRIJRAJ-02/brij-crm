@@ -2,7 +2,7 @@
 // page's `requestAnimationFrame` for about two seconds, so the site's frame kept a booking page's loading
 // height after its times had landed.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { watchTree } from './frame.ts';
+import { naturalHeight, watchTree } from './frame.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -28,5 +28,28 @@ describe('watchTree', () => {
     await Promise.resolve();
     expect(changed).toHaveBeenCalledTimes(1);
     stop();
+  });
+});
+
+describe('naturalHeight', () => {
+  it("counts a part drawn through a display: contents wrapper (the booking page's foot on a phone)", () => {
+    // main > layout > [card, foot wrapper (display: contents) > foot]: BookingFrame below the page breakpoint, where the
+    // rail's foot card is only a wrapper and its "Powered by" draws under the card (spec 0072, 14 Nov 2026: a booking
+    // embed at 320 scrolled 68px inside, the foot left out of its height).
+    const main = document.createElement('main');
+    main.style.cssText = 'padding: 10px 0';
+    const layout = document.createElement('div');
+    layout.style.cssText = 'display: flex; flex-direction: column';
+    const card = document.createElement('section');
+    card.style.cssText = 'block-size: 200px';
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display: contents';
+    const foot = document.createElement('footer');
+    foot.style.cssText = 'block-size: 68px';
+    wrapper.append(foot);
+    layout.append(card, wrapper);
+    main.append(layout);
+    document.body.append(main);
+    expect(naturalHeight(main, window)).toBe(10 + 200 + 68 + 10);
   });
 });
