@@ -2,6 +2,10 @@
 // can't go, or too many were sent, the confirm says so in plain words inside the dialog, which stays open with
 // "Email me a code" ready to try again, never "Something went wrong"; the next send that works asks for the code.
 // Someone without security.manage who opens the address finds no page, and nothing is asked of the server (Q101).
+// The app's stylesheet first, as main.tsx loads it: the dialog is pressed by the pointer, so it has to stand as it does
+// in the app. Without the tokens CodeInput's boxes had no height of their own and took their caret's (spec 0072's 1lh
+// bar) only while focused, so leaving the code for Send a new code moved the button out from under the press.
+import '@crm/ui/app.css';
 import type { AccountSecurityState, AccountSecurityView, DataLayer, StepUpResult } from '@crm/data';
 import { isSessionFresh } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
